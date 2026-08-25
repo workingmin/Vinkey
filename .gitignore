@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+
+# Frontend build and test output
+dist/
+coverage/
+.vite/
+*.tsbuildinfo
+/vite.config.js
+/vite.config.d.ts
+
+# Tauri / Rust
+src-tauri/target/
+target/
+# Cargo.lock is committed for this desktop application.
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.local
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editors
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.swp
+*.swo
+
+# Operating systems
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Packaging artifacts
+release/
+*.dmg
+*.app
+*.exe
+*.msi
+*.app.tar.gz
+*.sig
+src-tauri/gen/schemas/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/

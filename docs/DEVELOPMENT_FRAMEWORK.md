@@ -40,9 +40,9 @@ NoteGen 已验证这条技术路线可同时覆盖 Windows、macOS、本地 Mark
 ```text
 React WebView
   ├─ Workspace UI
+  ├─ AI conversation UI
   ├─ CodeMirror editor + Markdown preview
   ├─ Context picker
-  ├─ Chat UI
   └─ Settings UI
           │ typed invoke/events
 Rust application core

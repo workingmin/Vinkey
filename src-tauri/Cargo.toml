@@ -1,0 +1,20 @@
+[package]
+name = "vinkey"
+version = "0.1.0"
+description = "Local-first AI writing workspace"
+authors = ["Vinkey contributors"]
+edition = "2021"
+
+[lib]
+name = "vinkey_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+rusqlite = { version = "0.38", features = ["bundled"] }
+tempfile = "3"
