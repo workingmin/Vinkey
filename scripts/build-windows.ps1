@@ -6,7 +6,7 @@ if ([System.Environment]::OSVersion.Platform -ne [System.PlatformID]::Win32NT) {
 
 foreach ($CommandName in @("npm", "cargo", "rustc")) {
   if (-not (Get-Command $CommandName -ErrorAction SilentlyContinue)) {
-    throw "缺少必需命令 $CommandName。"
+    throw "缺少必需命令 ${CommandName}。"
   }
 }
 

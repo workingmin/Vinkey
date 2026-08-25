@@ -8,7 +8,7 @@ fi
 
 for command_name in npm cargo rustc; do
   if ! command -v "$command_name" >/dev/null 2>&1; then
-    echo "错误：缺少必需命令 $command_name。" >&2
+    echo "错误：缺少必需命令 ${command_name}。" >&2
     exit 1
   fi
 done
