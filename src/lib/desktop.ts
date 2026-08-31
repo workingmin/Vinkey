@@ -1,6 +1,14 @@
-import { invoke } from '@tauri-apps/api/core'
+import { Channel, invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
-import type { DocumentSnapshot, WorkspaceSnapshot } from '../types'
+import type {
+  ChatMessage, ChatRequest, ChatStreamEvent, Conversation, ConversationSummary,
+  DocumentSnapshot, ModelConnectionResult, ModelProfile, ModelProfileInput, SearchHit,
+  WorkspaceSnapshot,
+} from '../types'
+
+const PROFILE_KEY = 'vinkey.demo.modelProfiles'
+const CONVERSATION_KEY = 'vinkey.demo.conversations'
+const demoCancellations = new Set<string>()
 
 const demoDocuments = new Map<string, DocumentSnapshot>([
   ['00-创作说明.md', {
@@ -118,4 +126,142 @@ export async function createDocument(path: string): Promise<DocumentSnapshot> {
 export async function createDirectory(path: string): Promise<void> {
   if (!isDesktop()) return
   await invoke('create_directory', { path })
+}
+
+export async function searchWorkspace(query: string): Promise<SearchHit[]> {
+  if (!isDesktop()) {
+    const normalized = query.trim().toLocaleLowerCase()
+    if (!normalized) return []
+    return [...demoDocuments.values()].flatMap((document) => document.content.split('\n').flatMap((line, index) =>
+      line.toLocaleLowerCase().includes(normalized) ? [{ path: document.path, line: index + 1, snippet: line.slice(0, 180) }] : []))
+  }
+  return invoke<SearchHit[]>('search_workspace', { query, maxResults: 100 })
+}
+
+function defaultDemoProfile(): ModelProfile {
+  return {
+    id: 'demo-ollama', name: 'Ollama · 浏览器演示', kind: 'ollama', baseUrl: 'http://localhost:11434',
+    model: 'qwen2.5:7b', contextWindow: 32768, hasApiKey: false, updatedAt: Date.now(),
+  }
+}
+
+function readDemoProfiles(): ModelProfile[] {
+  try {
+    const stored = JSON.parse(localStorage.getItem(PROFILE_KEY) ?? '[]') as Array<ModelProfile & {
+      apiKey?: string
+      clearApiKey?: boolean
+    }>
+    const value = stored.map(({ apiKey: _apiKey, clearApiKey: _clearApiKey, ...profile }) => profile)
+    if (stored.some((profile) => 'apiKey' in profile || 'clearApiKey' in profile)) {
+      localStorage.setItem(PROFILE_KEY, JSON.stringify(value))
+    }
+    return value.length > 0 ? value : [defaultDemoProfile()]
+  } catch { return [defaultDemoProfile()] }
+}
+
+export async function listModelProfiles(): Promise<ModelProfile[]> {
+  if (!isDesktop()) return readDemoProfiles()
+  return invoke<ModelProfile[]>('list_model_profiles')
+}
+
+export async function saveModelProfile(input: ModelProfileInput): Promise<ModelProfile> {
+  if (!isDesktop()) {
+    const existing = readDemoProfiles().find((item) => item.id === input.id)
+    const profile: ModelProfile = {
+      id: input.id,
+      name: input.name,
+      kind: input.kind,
+      baseUrl: input.baseUrl,
+      model: input.model,
+      contextWindow: input.contextWindow,
+      hasApiKey: input.clearApiKey ? false : Boolean(input.apiKey) || Boolean(existing?.hasApiKey),
+      updatedAt: Date.now(),
+    }
+    const profiles = readDemoProfiles().filter((item) => item.id !== input.id)
+    localStorage.setItem(PROFILE_KEY, JSON.stringify([profile, ...profiles]))
+    return profile
+  }
+  return invoke<ModelProfile>('save_model_profile', { input })
+}
+
+export async function deleteModelProfile(id: string): Promise<void> {
+  if (!isDesktop()) {
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(readDemoProfiles().filter((item) => item.id !== id)))
+    return
+  }
+  await invoke('delete_model_profile', { id })
+}
+
+export async function testModelConnection(input: ModelProfileInput): Promise<ModelConnectionResult> {
+  if (!isDesktop()) {
+    await new Promise((resolve) => window.setTimeout(resolve, 350))
+    return { ok: true, message: '浏览器演示连接正常', models: input.kind === 'ollama' ? ['qwen2.5:7b', 'qwen2.5:14b', 'llama3.2:latest'] : [input.model || 'custom-model'] }
+  }
+  return invoke<ModelConnectionResult>('test_model_connection', { input })
+}
+
+export async function streamChat(request: ChatRequest, onEvent: (event: ChatStreamEvent) => void): Promise<void> {
+  if (!isDesktop()) {
+    demoCancellations.delete(request.requestId)
+    const contextCount = request.messages.filter((message) => message.content.includes('<document path=')).length
+    const response = `${contextCount > 0 ? '我已读取你明确附加的本地文档。\n\n' : ''}这是浏览器演示流。桌面应用会通过 Rust 连接已配置的 Ollama 或 OpenAI 兼容服务；消息会分段到达，并保存在本机数据库中。`
+    for (const content of response.match(/.{1,8}/gu) ?? []) {
+      if (demoCancellations.has(request.requestId)) throw new Error('请求已停止')
+      await new Promise((resolve) => window.setTimeout(resolve, 45))
+      onEvent({ type: 'chunk', content })
+    }
+    onEvent({ type: 'done' })
+    return
+  }
+  const channel = new Channel<ChatStreamEvent>()
+  channel.onmessage = onEvent
+  await invoke('stream_chat', { request, onEvent: channel })
+}
+
+export async function cancelChat(requestId: string): Promise<void> {
+  if (!isDesktop()) { demoCancellations.add(requestId); return }
+  await invoke('cancel_chat', { requestId })
+}
+
+function readDemoConversations(): Conversation[] {
+  try { return JSON.parse(localStorage.getItem(CONVERSATION_KEY) ?? '[]') as Conversation[] } catch { return [] }
+}
+
+export async function listConversations(): Promise<ConversationSummary[]> {
+  if (!isDesktop()) return readDemoConversations().map((conversation) => ({
+    id: conversation.id, title: conversation.title, updatedAt: conversation.updatedAt, messageCount: conversation.messages.length,
+  })).sort((left, right) => right.updatedAt - left.updatedAt)
+  return invoke<ConversationSummary[]>('list_conversations')
+}
+
+export async function loadConversation(id: string): Promise<Conversation> {
+  if (!isDesktop()) {
+    const conversation = readDemoConversations().find((item) => item.id === id)
+    if (!conversation) throw new Error('找不到该会话')
+    return conversation
+  }
+  return invoke<Conversation>('load_conversation', { id })
+}
+
+export async function saveConversationMessage(conversationId: string, title: string, message: ChatMessage): Promise<void> {
+  if (!isDesktop()) {
+    const values = readDemoConversations()
+    const existing = values.find((item) => item.id === conversationId)
+    if (existing) {
+      existing.title = title
+      existing.updatedAt = message.createdAt
+      existing.messages = [...existing.messages.filter((item) => item.id !== message.id), message]
+    } else values.push({ id: conversationId, title, updatedAt: message.createdAt, messages: [message] })
+    localStorage.setItem(CONVERSATION_KEY, JSON.stringify(values))
+    return
+  }
+  await invoke('save_conversation_message', { conversationId, title, message })
+}
+
+export async function deleteConversation(id: string): Promise<void> {
+  if (!isDesktop()) {
+    localStorage.setItem(CONVERSATION_KEY, JSON.stringify(readDemoConversations().filter((item) => item.id !== id)))
+    return
+  }
+  await invoke('delete_conversation', { id })
 }
