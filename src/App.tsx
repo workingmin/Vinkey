@@ -485,6 +485,11 @@ export function App() {
   const [contentPage, setContentPage] = useState<ContentPage>('chat')
   const macMenuInstalled = useRef(false)
 
+  useEffect(() => {
+    if (!isDesktop() || !isMacPlatform()) return
+    void getCurrentWindow().setTheme(theme).catch(() => undefined)
+  }, [theme])
+
   const openWorkspaceFromMenu = useCallback(async () => {
     try {
       const next = await chooseWorkspace()
