@@ -27,12 +27,13 @@ type ContentPage = 'chat' | 'file'
 
 type MenuItem = { label: string; shortcut?: string; icon?: React.ComponentType<{ size?: number }>; disabled?: boolean; action: () => void }
 
-function TitleBar({ onPageChange, onOpenWorkspace, onNewDocument, onSave, onShowShortcuts }: {
+function TitleBar({ onPageChange, onOpenWorkspace, onNewDocument, onSave, onShowShortcuts, onShowAbout }: {
   onPageChange: (page: ContentPage) => void
   onOpenWorkspace: () => void
   onNewDocument: () => void
   onSave: () => void
   onShowShortcuts: () => void
+  onShowAbout: () => void
 }) {
   const workspace = useAppStore((state) => state.workspace)
   const activeModelId = useAppStore((state) => state.activeModelId)
@@ -96,7 +97,7 @@ function TitleBar({ onPageChange, onOpenWorkspace, onNewDocument, onSave, onShow
     ] },
     { label: '帮助', items: [
       { label: '查看快捷键', icon: Keyboard, action: onShowShortcuts },
-      { label: '关于 Vinkey', icon: Bot, action: onShowShortcuts },
+      { label: '关于 Vinkey', icon: Bot, action: onShowAbout },
     ] },
   ]
 
@@ -435,6 +436,10 @@ export function App() {
     window.alert('快捷键\n\n⌘/Ctrl + S  保存文档\n⌘/Ctrl + N  新建会话\n⌘/Ctrl + O  打开工作区\n⌘/Ctrl + W  关闭窗口\nEnter  发送消息\nShift + Enter  换行')
   }, [])
 
+  const showAbout = useCallback(() => {
+    window.alert('Vinkey 0.1.0\n\n本地优先的 AI 文学创作工作台\n文档和会话数据保存在本机。')
+  }, [])
+
   useEffect(() => {
     if (!isDesktop() && !workspace) void chooseWorkspace().then((next) => next && setWorkspace(next))
   }, [setWorkspace, workspace])
@@ -485,7 +490,7 @@ export function App() {
   const hasActiveDocument = useMemo(() => tabs.some((tab) => tab.path === activePath), [activePath, tabs])
 
   return <div className="app-frame" data-theme={theme}>
-    <TitleBar onPageChange={setContentPage} onOpenWorkspace={() => void openWorkspaceFromMenu()} onNewDocument={() => void newDocumentFromMenu()} onSave={() => void saveActive()} onShowShortcuts={showShortcuts} />
+    <TitleBar onPageChange={setContentPage} onOpenWorkspace={() => void openWorkspaceFromMenu()} onNewDocument={() => void newDocumentFromMenu()} onSave={() => void saveActive()} onShowShortcuts={showShortcuts} onShowAbout={showAbout} />
     <div className="app-shell" data-theme={theme}>
       <ActivityRail />
       {settingsOpen ? <SettingsPage /> : <>
