@@ -4,7 +4,7 @@ import {
   Save, Search, Send, Settings, Square, X, Minus, Maximize2, Minimize2,
   RotateCcw, RotateCw, Copy, Scissors, Clipboard, Moon, Sun, Keyboard,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize from 'rehype-sanitize'
@@ -22,10 +22,68 @@ import { flattenWorkspaceFiles } from './lib/tree'
 import { useAppStore } from './store'
 import type { DocumentSnapshot, ViewMode } from './types'
 import { getCurrentWindow } from '@tauri-apps/api/window'
+import { Menu, MenuItem, PredefinedMenuItem, Submenu } from '@tauri-apps/api/menu'
 
 type ContentPage = 'chat' | 'file'
 
-type MenuItem = { label: string; shortcut?: string; icon?: React.ComponentType<{ size?: number }>; disabled?: boolean; action: () => void }
+const isMacPlatform = () => typeof navigator !== 'undefined' && /mac/i.test(navigator.platform)
+
+async function installMacMenu(callbacks: {
+  newConversation: () => void
+  openWorkspace: () => void
+  newDocument: () => void
+  save: () => void
+  changePage: (page: ContentPage) => void
+  toggleTheme: () => void
+  openSettings: () => void
+  showShortcuts: () => void
+  showAbout: () => void
+}) {
+  const menuItem = (text: string, action: () => void, accelerator?: string) => MenuItem.new({ text, accelerator, action: () => action() })
+  const file = await Submenu.new({ text: '文件', items: [
+    await menuItem('新建会话', callbacks.newConversation, 'CmdOrCtrl+N'),
+    await menuItem('打开工作区…', callbacks.openWorkspace, 'CmdOrCtrl+O'),
+    await menuItem('新建文档…', callbacks.newDocument),
+    await menuItem('保存文档', callbacks.save, 'CmdOrCtrl+S'),
+  ] })
+  const edit = await Submenu.new({ text: '编辑', items: [
+    await PredefinedMenuItem.new({ item: 'Undo' }),
+    await PredefinedMenuItem.new({ item: 'Redo' }),
+    await PredefinedMenuItem.new({ item: 'Cut' }),
+    await PredefinedMenuItem.new({ item: 'Copy' }),
+    await PredefinedMenuItem.new({ item: 'Paste' }),
+    await PredefinedMenuItem.new({ item: 'SelectAll' }),
+  ] })
+  const view = await Submenu.new({ text: '查看', items: [
+    await menuItem('对话页', () => callbacks.changePage('chat')),
+    await menuItem('文件页', () => callbacks.changePage('file')),
+    await menuItem('切换浅色/深色主题', callbacks.toggleTheme),
+    await menuItem('模型与应用设置', callbacks.openSettings),
+  ] })
+  const windowMenu = await Submenu.new({ text: '窗口', items: [
+    await PredefinedMenuItem.new({ item: 'Minimize' }),
+    await PredefinedMenuItem.new({ item: 'Fullscreen' }),
+    await PredefinedMenuItem.new({ item: 'CloseWindow' }),
+  ] })
+  const help = await Submenu.new({ text: '帮助', items: [
+    await menuItem('查看快捷键', callbacks.showShortcuts),
+    await menuItem('关于 Vinkey', callbacks.showAbout),
+  ] })
+  const appMenu = await Submenu.new({ text: 'Vinkey', items: [
+    await PredefinedMenuItem.new({ item: { About: { name: 'Vinkey', version: '0.1.0', comments: '本地优先的 AI 文学创作工作台' } } }),
+    await PredefinedMenuItem.new({ item: 'Services' }),
+    await PredefinedMenuItem.new({ item: 'Hide' }),
+    await PredefinedMenuItem.new({ item: 'HideOthers' }),
+    await PredefinedMenuItem.new({ item: 'ShowAll' }),
+    await PredefinedMenuItem.new({ item: 'Quit' }),
+  ] })
+  const menu = await Menu.new({ items: [appMenu, file, edit, view, windowMenu, help] })
+  await menu.setAsAppMenu()
+  await windowMenu.setAsWindowsMenuForNSApp()
+  await help.setAsHelpMenuForNSApp()
+}
+
+type AppMenuItem = { label: string; shortcut?: string; icon?: React.ComponentType<{ size?: number }>; disabled?: boolean; action: () => void }
 
 function TitleBar({ onPageChange, onOpenWorkspace, onNewDocument, onSave, onShowShortcuts, onShowAbout }: {
   onPageChange: (page: ContentPage) => void
@@ -45,7 +103,7 @@ function TitleBar({ onPageChange, onOpenWorkspace, onNewDocument, onSave, onShow
   const [openMenu, setOpenMenu] = useState<string | null>(null)
   const [maximized, setMaximized] = useState(false)
   const activeModel = modelProfiles.find((profile) => profile.id === activeModelId)
-  const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform)
+  const isMac = isMacPlatform()
   const mod = isMac ? '⌘' : 'Ctrl'
 
   useEffect(() => {
@@ -70,7 +128,7 @@ function TitleBar({ onPageChange, onOpenWorkspace, onNewDocument, onSave, onShow
   }
 
   const editAction = (command: string) => { if (typeof document !== 'undefined') document.execCommand(command) }
-  const menus: Array<{ label: string; items: MenuItem[] }> = [
+  const menus: Array<{ label: string; items: AppMenuItem[] }> = [
     { label: '文件', items: [
       { label: '新建会话', shortcut: `${mod} N`, icon: CirclePlus, action: newConversation },
       { label: '打开工作区…', shortcut: `${mod} O`, icon: FolderOpen, action: onOpenWorkspace },
@@ -101,6 +159,7 @@ function TitleBar({ onPageChange, onOpenWorkspace, onNewDocument, onSave, onShow
     ] },
   ]
 
+  if (isMac) return null
   return <header className="title-bar" data-tauri-drag-region onDoubleClick={() => void windowAction('toggle')}>
     <div className="title-bar-brand" data-tauri-drag-region><span className="title-bar-mark">V</span><strong>Vinkey</strong><span className="title-bar-context">{workspace?.name ?? '本地工作台'}{activeModel ? ` · ${activeModel.name}` : ''}</span></div>
     <nav className="app-menus" aria-label="应用菜单" onClick={(event) => event.stopPropagation()}>
@@ -411,6 +470,7 @@ export function App() {
   const setModelProfiles = useAppStore((state) => state.setModelProfiles)
   const setConversations = useAppStore((state) => state.setConversations)
   const [contentPage, setContentPage] = useState<ContentPage>('chat')
+  const macMenuInstalled = useRef(false)
 
   const openWorkspaceFromMenu = useCallback(async () => {
     try {
@@ -480,6 +540,23 @@ export function App() {
   }, [markSaved, setError])
 
   useEffect(() => {
+    if (!isDesktop() || !isMacPlatform() || macMenuInstalled.current) return
+    macMenuInstalled.current = true
+    void getCurrentWindow().setDecorations(true).catch(() => undefined)
+    void installMacMenu({
+      newConversation: () => useAppStore.getState().newConversation(),
+      openWorkspace: () => void openWorkspaceFromMenu(),
+      newDocument: () => void newDocumentFromMenu(),
+      save: () => void saveActive(),
+      changePage: setContentPage,
+      toggleTheme: () => { const current = useAppStore.getState().theme; useAppStore.getState().setTheme(current === 'dark' ? 'light' : 'dark') },
+      openSettings: () => useAppStore.getState().setSettingsOpen(true),
+      showShortcuts,
+      showAbout,
+    }).catch((cause) => { macMenuInstalled.current = false; setError(`macOS 菜单初始化失败：${String(cause)}`) })
+  }, [newDocumentFromMenu, openWorkspaceFromMenu, saveActive, setError, showAbout, showShortcuts])
+
+  useEffect(() => {
     const listener = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); void saveActive() }
     }
@@ -489,7 +566,7 @@ export function App() {
 
   const hasActiveDocument = useMemo(() => tabs.some((tab) => tab.path === activePath), [activePath, tabs])
 
-  return <div className="app-frame" data-theme={theme}>
+  return <div className="app-frame" data-theme={theme} data-platform={isMacPlatform() ? 'mac' : 'desktop'}>
     <TitleBar onPageChange={setContentPage} onOpenWorkspace={() => void openWorkspaceFromMenu()} onNewDocument={() => void newDocumentFromMenu()} onSave={() => void saveActive()} onShowShortcuts={showShortcuts} onShowAbout={showAbout} />
     <div className="app-shell" data-theme={theme}>
       <ActivityRail />
