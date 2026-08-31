@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import rehypeRaw from 'rehype-raw'
 import rehypeSanitize from 'rehype-sanitize'
 import remarkGfm from 'remark-gfm'
 import { CodeEditor } from './components/CodeEditor'
@@ -212,7 +213,7 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
           <div className="avatar">{message.role === 'assistant' ? <Bot /> : '你'}</div>
           <div className="message-body">
             <div className="message-meta">{message.role === 'assistant' ? 'Vinkey' : '你'}</div>
-            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{message.content}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw, rehypeSanitize]}>{message.content}</ReactMarkdown>
           </div>
         </article>)}
         {busy && <article className="message assistant"><div className="avatar"><Bot /></div><div className="message-body"><div className="message-meta">Vinkey</div><div className="typing"><i /><i /><i /></div></div></article>}
@@ -264,7 +265,7 @@ function EditorPanel({ onSave, onClose }: { onSave: () => Promise<void>; onClose
     </div>
     <div className={`editor-content mode-${viewMode}`}>
       {viewMode !== 'preview' && <CodeEditor key={`${document.path}:${theme}`} value={document.content} markdownEnabled={document.kind === 'markdown'} themeMode={theme} onChange={(content) => updateContent(document.path, content)} />}
-      {viewMode !== 'edit' && document.kind === 'markdown' && <div className="markdown-preview"><ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{document.content}</ReactMarkdown></div>}
+      {viewMode !== 'edit' && document.kind === 'markdown' && <div className="markdown-preview"><ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw, rehypeSanitize]}>{document.content}</ReactMarkdown></div>}
     </div>
     <footer className="editor-status"><span>行 {lines}</span><span>{document.content.length} 字符</span><span>{words} 词</span><span>UTF-8</span><span>{document.lineEnding.toUpperCase()}</span><span className={dirty ? 'unsaved' : 'saved'}>{dirty ? '未保存' : <><Check />已保存</>}</span></footer>
   </aside>
