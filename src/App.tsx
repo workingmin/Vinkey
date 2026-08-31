@@ -44,6 +44,8 @@ function TitleBar({ onPageChange, onOpenWorkspace, onNewDocument, onSave, onShow
   const [openMenu, setOpenMenu] = useState<string | null>(null)
   const [maximized, setMaximized] = useState(false)
   const activeModel = modelProfiles.find((profile) => profile.id === activeModelId)
+  const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform)
+  const mod = isMac ? '⌘' : 'Ctrl'
 
   useEffect(() => {
     if (!isDesktop()) return
@@ -69,17 +71,17 @@ function TitleBar({ onPageChange, onOpenWorkspace, onNewDocument, onSave, onShow
   const editAction = (command: string) => { if (typeof document !== 'undefined') document.execCommand(command) }
   const menus: Array<{ label: string; items: MenuItem[] }> = [
     { label: '文件', items: [
-      { label: '新建会话', shortcut: '⌘ N', icon: CirclePlus, action: newConversation },
-      { label: '打开工作区…', shortcut: '⌘ O', icon: FolderOpen, action: onOpenWorkspace },
+      { label: '新建会话', shortcut: `${mod} N`, icon: CirclePlus, action: newConversation },
+      { label: '打开工作区…', shortcut: `${mod} O`, icon: FolderOpen, action: onOpenWorkspace },
       { label: '新建文档…', icon: FileText, action: onNewDocument },
-      { label: '保存文档', shortcut: '⌘ S', icon: Save, action: onSave },
+      { label: '保存文档', shortcut: `${mod} S`, icon: Save, action: onSave },
     ] },
     { label: '编辑', items: [
-      { label: '撤销', shortcut: '⌘ Z', icon: RotateCcw, action: () => editAction('undo') },
-      { label: '重做', shortcut: '⇧ ⌘ Z', icon: RotateCw, action: () => editAction('redo') },
-      { label: '剪切', shortcut: '⌘ X', icon: Scissors, action: () => editAction('cut') },
-      { label: '复制', shortcut: '⌘ C', icon: Copy, action: () => editAction('copy') },
-      { label: '粘贴', shortcut: '⌘ V', icon: Clipboard, action: () => editAction('paste') },
+      { label: '撤销', shortcut: `${mod} Z`, icon: RotateCcw, action: () => editAction('undo') },
+      { label: '重做', shortcut: isMac ? '⇧ ⌘ Z' : 'Ctrl Y', icon: RotateCw, action: () => editAction('redo') },
+      { label: '剪切', shortcut: `${mod} X`, icon: Scissors, action: () => editAction('cut') },
+      { label: '复制', shortcut: `${mod} C`, icon: Copy, action: () => editAction('copy') },
+      { label: '粘贴', shortcut: `${mod} V`, icon: Clipboard, action: () => editAction('paste') },
     ] },
     { label: '查看', items: [
       { label: '对话页', icon: MessageSquareText, action: () => onPageChange('chat') },
@@ -88,9 +90,9 @@ function TitleBar({ onPageChange, onOpenWorkspace, onNewDocument, onSave, onShow
       { label: '模型与应用设置', icon: Settings, action: () => setSettingsOpen(true) },
     ] },
     { label: '窗口', items: [
-      { label: '最小化', shortcut: '⌘ M', icon: Minus, action: () => void windowAction('minimize') },
+      { label: '最小化', shortcut: `${mod} M`, icon: Minus, action: () => void windowAction('minimize') },
       { label: maximized ? '还原窗口' : '最大化', icon: maximized ? Minimize2 : Maximize2, action: () => void windowAction('toggle') },
-      { label: '关闭窗口', shortcut: '⌘ W', icon: X, action: () => void windowAction('close') },
+      { label: '关闭窗口', shortcut: `${mod} W`, icon: X, action: () => void windowAction('close') },
     ] },
     { label: '帮助', items: [
       { label: '查看快捷键', icon: Keyboard, action: onShowShortcuts },
