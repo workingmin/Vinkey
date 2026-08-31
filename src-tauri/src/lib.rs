@@ -1,4 +1,3 @@
-use rusqlite::Connection;
 use serde::Serialize;
 use std::{
     collections::hash_map::DefaultHasher,
@@ -11,14 +10,18 @@ use std::{
 };
 use tauri::{Manager, State};
 
+mod database;
+mod models;
+mod search;
+
 #[derive(Default)]
-struct WorkspaceState(Mutex<Option<Workspace>>);
+pub(crate) struct WorkspaceState(Mutex<Option<Workspace>>);
 
 #[derive(Clone)]
-struct Workspace {
+pub(crate) struct Workspace {
     id: String,
     name: String,
-    root: PathBuf,
+    pub(crate) root: PathBuf,
 }
 
 #[derive(Serialize)]
@@ -51,7 +54,7 @@ struct DocumentSnapshot {
     has_bom: bool,
 }
 
-fn lock_workspace(state: &State<'_, WorkspaceState>) -> Result<Workspace, String> {
+pub(crate) fn lock_workspace(state: &State<'_, WorkspaceState>) -> Result<Workspace, String> {
     state
         .0
         .lock()
@@ -78,8 +81,13 @@ fn validate_relative(path: &str) -> Result<PathBuf, String> {
     Ok(clean)
 }
 
-fn ensure_document_extension(path: &Path) -> Result<&'static str, String> {
-    match path.extension().and_then(|value| value.to_str()).map(str::to_ascii_lowercase).as_deref() {
+pub(crate) fn ensure_document_extension(path: &Path) -> Result<&'static str, String> {
+    match path
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(str::to_ascii_lowercase)
+        .as_deref()
+    {
         Some("md") | Some("markdown") => Ok("markdown"),
         Some("txt") => Ok("text"),
         _ => Err("首版仅支持 Markdown 和 TXT 文档".into()),
@@ -89,7 +97,9 @@ fn ensure_document_extension(path: &Path) -> Result<&'static str, String> {
 fn resolve_existing(workspace: &Workspace, relative: &str) -> Result<(PathBuf, PathBuf), String> {
     let clean = validate_relative(relative)?;
     let target = workspace.root.join(&clean);
-    let canonical = target.canonicalize().map_err(|error| format!("无法访问路径：{error}"))?;
+    let canonical = target
+        .canonicalize()
+        .map_err(|error| format!("无法访问路径：{error}"))?;
     if !canonical.starts_with(&workspace.root) {
         return Err("路径超出已授权工作区".into());
     }
@@ -103,7 +113,9 @@ fn resolve_for_create(workspace: &Workspace, relative: &str) -> Result<(PathBuf,
     while !existing.exists() {
         existing = existing.parent().ok_or_else(|| "无效路径".to_string())?;
     }
-    let canonical_parent = existing.canonicalize().map_err(|error| format!("无法检查路径：{error}"))?;
+    let canonical_parent = existing
+        .canonicalize()
+        .map_err(|error| format!("无法检查路径：{error}"))?;
     if !canonical_parent.starts_with(&workspace.root) {
         return Err("路径超出已授权工作区".into());
     }
@@ -111,24 +123,36 @@ fn resolve_for_create(workspace: &Workspace, relative: &str) -> Result<(PathBuf,
 }
 
 fn modified_ms(metadata: &fs::Metadata) -> u64 {
-    metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH)
-        .duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64
+    metadata
+        .modified()
+        .unwrap_or(SystemTime::UNIX_EPOCH)
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
 }
 
-fn relative_label(path: &Path) -> String {
-    path.components().map(|part| part.as_os_str().to_string_lossy()).collect::<Vec<_>>().join("/")
+pub(crate) fn relative_label(path: &Path) -> String {
+    path.components()
+        .map(|part| part.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/")
 }
 
 fn list_entries(root: &Path, directory: &Path) -> Result<Vec<WorkspaceEntry>, String> {
     let mut entries = Vec::new();
-    for item in fs::read_dir(directory).map_err(|error| format!("无法读取工作区：{error}"))? {
+    for item in fs::read_dir(directory).map_err(|error| format!("无法读取工作区：{error}"))?
+    {
         let item = item.map_err(|error| format!("无法读取目录项：{error}"))?;
-        let file_type = item.file_type().map_err(|error| format!("无法识别目录项：{error}"))?;
+        let file_type = item
+            .file_type()
+            .map_err(|error| format!("无法识别目录项：{error}"))?;
         if file_type.is_symlink() {
             continue;
         }
         let path = item.path();
-        let relative = path.strip_prefix(root).map_err(|_| "目录越界".to_string())?;
+        let relative = path
+            .strip_prefix(root)
+            .map_err(|_| "目录越界".to_string())?;
         let name = item.file_name().to_string_lossy().into_owned();
         if file_type.is_dir() {
             entries.push(WorkspaceEntry {
@@ -171,13 +195,18 @@ fn read_document_at(workspace: &Workspace, relative: &str) -> Result<DocumentSna
     let bytes = fs::read(&target).map_err(|error| format!("无法读取文档：{error}"))?;
     let has_bom = bytes.starts_with(&[0xef, 0xbb, 0xbf]);
     let body = if has_bom { &bytes[3..] } else { &bytes };
-    let raw = String::from_utf8(body.to_vec()).map_err(|_| "文档不是有效的 UTF-8 文本".to_string())?;
+    let raw =
+        String::from_utf8(body.to_vec()).map_err(|_| "文档不是有效的 UTF-8 文本".to_string())?;
     let line_ending = if raw.contains("\r\n") { "crlf" } else { "lf" };
     let content = raw.replace("\r\n", "\n").replace('\r', "\n");
     let metadata = fs::metadata(&target).map_err(|error| format!("无法读取文档信息：{error}"))?;
     Ok(DocumentSnapshot {
         path: relative_label(&clean),
-        name: clean.file_name().unwrap_or_default().to_string_lossy().into_owned(),
+        name: clean
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned(),
         content,
         kind,
         modified_ms: modified_ms(&metadata),
@@ -187,8 +216,13 @@ fn read_document_at(workspace: &Workspace, relative: &str) -> Result<DocumentSna
 }
 
 #[tauri::command]
-fn authorize_workspace(root: String, state: State<'_, WorkspaceState>) -> Result<WorkspaceSnapshot, String> {
-    let canonical = PathBuf::from(root).canonicalize().map_err(|error| format!("无法打开目录：{error}"))?;
+fn authorize_workspace(
+    root: String,
+    state: State<'_, WorkspaceState>,
+) -> Result<WorkspaceSnapshot, String> {
+    let canonical = PathBuf::from(root)
+        .canonicalize()
+        .map_err(|error| format!("无法打开目录：{error}"))?;
     if !canonical.is_dir() {
         return Err("选择的路径不是目录".into());
     }
@@ -196,7 +230,11 @@ fn authorize_workspace(root: String, state: State<'_, WorkspaceState>) -> Result
     canonical.hash(&mut hasher);
     let workspace = Workspace {
         id: format!("{:016x}", hasher.finish()),
-        name: canonical.file_name().unwrap_or(canonical.as_os_str()).to_string_lossy().into_owned(),
+        name: canonical
+            .file_name()
+            .unwrap_or(canonical.as_os_str())
+            .to_string_lossy()
+            .into_owned(),
         root: canonical,
     };
     let snapshot = workspace_snapshot(&workspace)?;
@@ -210,7 +248,10 @@ fn get_workspace(state: State<'_, WorkspaceState>) -> Result<WorkspaceSnapshot, 
 }
 
 #[tauri::command]
-fn read_document(path: String, state: State<'_, WorkspaceState>) -> Result<DocumentSnapshot, String> {
+fn read_document(
+    path: String,
+    state: State<'_, WorkspaceState>,
+) -> Result<DocumentSnapshot, String> {
     read_document_at(&lock_workspace(&state)?, &path)
 }
 
@@ -234,20 +275,37 @@ fn save_document(
         return Err("不支持的换行格式".into());
     }
     let normalized = content.replace("\r\n", "\n").replace('\r', "\n");
-    let encoded = if line_ending == "crlf" { normalized.replace('\n', "\r\n") } else { normalized };
+    let encoded = if line_ending == "crlf" {
+        normalized.replace('\n', "\r\n")
+    } else {
+        normalized
+    };
     let parent = target.parent().ok_or_else(|| "无效文档路径".to_string())?;
-    let mut temporary = tempfile::NamedTempFile::new_in(parent).map_err(|error| format!("无法创建临时文件：{error}"))?;
+    let mut temporary = tempfile::NamedTempFile::new_in(parent)
+        .map_err(|error| format!("无法创建临时文件：{error}"))?;
     if has_bom {
-        temporary.write_all(&[0xef, 0xbb, 0xbf]).map_err(|error| format!("无法写入文档：{error}"))?;
+        temporary
+            .write_all(&[0xef, 0xbb, 0xbf])
+            .map_err(|error| format!("无法写入文档：{error}"))?;
     }
-    temporary.write_all(encoded.as_bytes()).map_err(|error| format!("无法写入文档：{error}"))?;
-    temporary.as_file().sync_all().map_err(|error| format!("无法同步文档：{error}"))?;
-    temporary.persist(&target).map_err(|error| format!("无法替换文档：{}", error.error))?;
+    temporary
+        .write_all(encoded.as_bytes())
+        .map_err(|error| format!("无法写入文档：{error}"))?;
+    temporary
+        .as_file()
+        .sync_all()
+        .map_err(|error| format!("无法同步文档：{error}"))?;
+    temporary
+        .persist(&target)
+        .map_err(|error| format!("无法替换文档：{}", error.error))?;
     read_document_at(&workspace, &path)
 }
 
 #[tauri::command]
-fn create_document(path: String, state: State<'_, WorkspaceState>) -> Result<DocumentSnapshot, String> {
+fn create_document(
+    path: String,
+    state: State<'_, WorkspaceState>,
+) -> Result<DocumentSnapshot, String> {
     let workspace = lock_workspace(&state)?;
     let (_, target) = resolve_for_create(&workspace, &path)?;
     ensure_document_extension(&target)?;
@@ -256,7 +314,10 @@ fn create_document(path: String, state: State<'_, WorkspaceState>) -> Result<Doc
     }
     let parent = target.parent().ok_or_else(|| "无效文档路径".to_string())?;
     fs::create_dir_all(parent).map_err(|error| format!("无法创建上级目录：{error}"))?;
-    fs::OpenOptions::new().write(true).create_new(true).open(&target)
+    fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&target)
         .map_err(|error| format!("无法创建文档：{error}"))?;
     read_document_at(&workspace, &path)
 }
@@ -271,38 +332,18 @@ fn create_directory(path: String, state: State<'_, WorkspaceState>) -> Result<()
     fs::create_dir_all(target).map_err(|error| format!("无法创建文件夹：{error}"))
 }
 
-fn init_database(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    let connection = Connection::open(path)?;
-    connection.execute_batch(
-        "PRAGMA journal_mode = WAL;
-         PRAGMA foreign_keys = ON;
-         CREATE TABLE IF NOT EXISTS conversations (
-           id TEXT PRIMARY KEY,
-           title TEXT NOT NULL,
-           created_at INTEGER NOT NULL,
-           updated_at INTEGER NOT NULL
-         );
-         CREATE TABLE IF NOT EXISTS messages (
-           id TEXT PRIMARY KEY,
-           conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
-           role TEXT NOT NULL CHECK(role IN ('user', 'assistant', 'system')),
-           content TEXT NOT NULL,
-           created_at INTEGER NOT NULL
-         );
-         CREATE INDEX IF NOT EXISTS messages_conversation_id ON messages(conversation_id, created_at);"
-    )?;
-    Ok(())
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(WorkspaceState::default())
+        .manage(models::ChatCancellation::default())
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             fs::create_dir_all(&data_dir)?;
-            init_database(&data_dir.join("vinkey.sqlite3"))?;
+            let database_path = data_dir.join("vinkey.sqlite3");
+            database::init(&database_path)?;
+            app.manage(database::DatabaseState(database_path));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -312,6 +353,17 @@ pub fn run() {
             save_document,
             create_document,
             create_directory,
+            search::search_workspace,
+            models::list_model_profiles,
+            models::save_model_profile,
+            models::delete_model_profile,
+            models::test_model_connection,
+            models::stream_chat,
+            models::cancel_chat,
+            database::list_conversations,
+            database::load_conversation,
+            database::save_conversation_message,
+            database::delete_conversation,
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Vinkey");
@@ -330,8 +382,14 @@ mod tests {
 
     #[test]
     fn accepts_supported_relative_documents() {
-        assert_eq!(ensure_document_extension(Path::new("chapters/one.MD")).unwrap(), "markdown");
-        assert_eq!(ensure_document_extension(Path::new("notes.txt")).unwrap(), "text");
+        assert_eq!(
+            ensure_document_extension(Path::new("chapters/one.MD")).unwrap(),
+            "markdown"
+        );
+        assert_eq!(
+            ensure_document_extension(Path::new("notes.txt")).unwrap(),
+            "text"
+        );
         assert!(ensure_document_extension(Path::new("image.png")).is_err());
     }
 }
