@@ -1,7 +1,8 @@
 import {
   Bot, Check, ChevronDown, CirclePlus, FileText, Files, FolderOpen, History,
   MessageSquareText, PanelRightClose, Paperclip,
-  Save, Search, Send, Settings, Square, X,
+  Save, Search, Send, Settings, Square, X, Minus, Maximize2, Minimize2,
+  RotateCcw, RotateCw, Copy, Scissors, Clipboard, Moon, Sun, Keyboard,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
@@ -20,8 +21,99 @@ import { buildContextMessage, calculateContextBudget, selectRecentMessages } fro
 import { flattenWorkspaceFiles } from './lib/tree'
 import { useAppStore } from './store'
 import type { DocumentSnapshot, ViewMode } from './types'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 
 type ContentPage = 'chat' | 'file'
+
+type MenuItem = { label: string; shortcut?: string; icon?: React.ComponentType<{ size?: number }>; disabled?: boolean; action: () => void }
+
+function TitleBar({ onPageChange, onOpenWorkspace, onNewDocument, onSave, onShowShortcuts }: {
+  onPageChange: (page: ContentPage) => void
+  onOpenWorkspace: () => void
+  onNewDocument: () => void
+  onSave: () => void
+  onShowShortcuts: () => void
+}) {
+  const workspace = useAppStore((state) => state.workspace)
+  const activeModelId = useAppStore((state) => state.activeModelId)
+  const modelProfiles = useAppStore((state) => state.modelProfiles)
+  const theme = useAppStore((state) => state.theme)
+  const setTheme = useAppStore((state) => state.setTheme)
+  const newConversation = useAppStore((state) => state.newConversation)
+  const setSettingsOpen = useAppStore((state) => state.setSettingsOpen)
+  const [openMenu, setOpenMenu] = useState<string | null>(null)
+  const [maximized, setMaximized] = useState(false)
+  const activeModel = modelProfiles.find((profile) => profile.id === activeModelId)
+
+  useEffect(() => {
+    if (!isDesktop()) return
+    void getCurrentWindow().isMaximized().then(setMaximized).catch(() => undefined)
+  }, [])
+
+  useEffect(() => {
+    const close = () => setOpenMenu(null)
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') close() }
+    window.addEventListener('click', close)
+    window.addEventListener('keydown', onKeyDown)
+    return () => { window.removeEventListener('click', close); window.removeEventListener('keydown', onKeyDown) }
+  }, [])
+
+  const windowAction = async (action: 'minimize' | 'toggle' | 'close') => {
+    if (!isDesktop()) return
+    const win = getCurrentWindow()
+    if (action === 'minimize') await win.minimize()
+    if (action === 'toggle') { await win.toggleMaximize(); setMaximized(await win.isMaximized()) }
+    if (action === 'close') await win.close()
+  }
+
+  const editAction = (command: string) => { if (typeof document !== 'undefined') document.execCommand(command) }
+  const menus: Array<{ label: string; items: MenuItem[] }> = [
+    { label: '文件', items: [
+      { label: '新建会话', shortcut: '⌘ N', icon: CirclePlus, action: newConversation },
+      { label: '打开工作区…', shortcut: '⌘ O', icon: FolderOpen, action: onOpenWorkspace },
+      { label: '新建文档…', icon: FileText, action: onNewDocument },
+      { label: '保存文档', shortcut: '⌘ S', icon: Save, action: onSave },
+    ] },
+    { label: '编辑', items: [
+      { label: '撤销', shortcut: '⌘ Z', icon: RotateCcw, action: () => editAction('undo') },
+      { label: '重做', shortcut: '⇧ ⌘ Z', icon: RotateCw, action: () => editAction('redo') },
+      { label: '剪切', shortcut: '⌘ X', icon: Scissors, action: () => editAction('cut') },
+      { label: '复制', shortcut: '⌘ C', icon: Copy, action: () => editAction('copy') },
+      { label: '粘贴', shortcut: '⌘ V', icon: Clipboard, action: () => editAction('paste') },
+    ] },
+    { label: '查看', items: [
+      { label: '对话页', icon: MessageSquareText, action: () => onPageChange('chat') },
+      { label: '文件页', icon: FileText, action: () => onPageChange('file') },
+      { label: theme === 'dark' ? '切换浅色主题' : '切换深色主题', icon: theme === 'dark' ? Sun : Moon, action: () => setTheme(theme === 'dark' ? 'light' : 'dark') },
+      { label: '模型与应用设置', icon: Settings, action: () => setSettingsOpen(true) },
+    ] },
+    { label: '窗口', items: [
+      { label: '最小化', shortcut: '⌘ M', icon: Minus, action: () => void windowAction('minimize') },
+      { label: maximized ? '还原窗口' : '最大化', icon: maximized ? Minimize2 : Maximize2, action: () => void windowAction('toggle') },
+      { label: '关闭窗口', shortcut: '⌘ W', icon: X, action: () => void windowAction('close') },
+    ] },
+    { label: '帮助', items: [
+      { label: '查看快捷键', icon: Keyboard, action: onShowShortcuts },
+      { label: '关于 Vinkey', icon: Bot, action: onShowShortcuts },
+    ] },
+  ]
+
+  return <header className="title-bar" data-tauri-drag-region onDoubleClick={() => void windowAction('toggle')}>
+    <div className="title-bar-brand" data-tauri-drag-region><span className="title-bar-mark">V</span><strong>Vinkey</strong><span className="title-bar-context">{workspace?.name ?? '本地工作台'}{activeModel ? ` · ${activeModel.name}` : ''}</span></div>
+    <nav className="app-menus" aria-label="应用菜单" onClick={(event) => event.stopPropagation()}>
+      {menus.map((menu) => <div className="app-menu" key={menu.label}>
+        <button className={`app-menu-trigger ${openMenu === menu.label ? 'active' : ''}`} aria-expanded={openMenu === menu.label} onClick={() => setOpenMenu(openMenu === menu.label ? null : menu.label)}>{menu.label}</button>
+        {openMenu === menu.label && <div className="app-menu-dropdown" role="menu">{menu.items.map((item) => <button key={item.label} role="menuitem" disabled={item.disabled} onClick={() => { item.action(); setOpenMenu(null) }}>{item.icon && <item.icon size={14} />}<span>{item.label}</span>{item.shortcut && <kbd>{item.shortcut}</kbd>}</button>)}</div>}
+      </div>)}
+    </nav>
+    <div className="title-bar-spacer" data-tauri-drag-region />
+    <div className="window-controls" onClick={(event) => event.stopPropagation()}>
+      <button aria-label="最小化窗口" title="最小化" onClick={() => void windowAction('minimize')}><Minus /></button>
+      <button aria-label={maximized ? '还原窗口' : '最大化窗口'} title={maximized ? '还原' : '最大化'} onClick={() => void windowAction('toggle')}>{maximized ? <Minimize2 /> : <Maximize2 />}</button>
+      <button className="close-window" aria-label="关闭窗口" title="关闭" onClick={() => void windowAction('close')}><X /></button>
+    </div>
+  </header>
+}
 
 function IconButton({ label, active = false, children, onClick, disabled = false }: {
   label: string; active?: boolean; children: React.ReactNode; onClick?: () => void; disabled?: boolean
@@ -317,6 +409,30 @@ export function App() {
   const setConversations = useAppStore((state) => state.setConversations)
   const [contentPage, setContentPage] = useState<ContentPage>('chat')
 
+  const openWorkspaceFromMenu = useCallback(async () => {
+    try {
+      const next = await chooseWorkspace()
+      if (next) setWorkspace(next)
+    } catch (cause) { setError(String(cause)) }
+  }, [setError, setWorkspace])
+
+  const newDocumentFromMenu = useCallback(async () => {
+    if (!workspace) return openWorkspaceFromMenu()
+    const value = window.prompt('文档相对路径（.md / .txt）')?.trim()
+    if (!value) return
+    try {
+      const path = /\.(md|markdown|txt)$/i.test(value) ? value : `${value}.md`
+      const document = await createDocument(path)
+      setWorkspace(await refreshWorkspace())
+      openTab({ ...document, savedContent: document.content })
+      setContentPage('file')
+    } catch (cause) { setError(String(cause)) }
+  }, [openWorkspaceFromMenu, setError, setWorkspace, workspace, openTab])
+
+  const showShortcuts = useCallback(() => {
+    window.alert('快捷键\n\n⌘/Ctrl + S  保存文档\n⌘/Ctrl + N  新建会话\n⌘/Ctrl + O  打开工作区\n⌘/Ctrl + W  关闭窗口\nEnter  发送消息\nShift + Enter  换行')
+  }, [])
+
   useEffect(() => {
     if (!isDesktop() && !workspace) void chooseWorkspace().then((next) => next && setWorkspace(next))
   }, [setWorkspace, workspace])
@@ -366,12 +482,15 @@ export function App() {
 
   const hasActiveDocument = useMemo(() => tabs.some((tab) => tab.path === activePath), [activePath, tabs])
 
-  return <div className="app-shell" data-theme={theme}>
-    <ActivityRail />
-    {settingsOpen ? <SettingsPage /> : <>
-      <WorkspacePanel onOpenDocument={openDocument} onToggleContext={toggleDocumentContext} />
-      <ContentPanel page={contentPage} onPageChange={setContentPage} hasDocument={hasActiveDocument} onSave={saveActive} onClose={() => setContentPage('chat')} onToggleContext={toggleDocumentContext} />
-    </>}
-    {error && <div className="error-banner" role="alert"><span>{error}</span><button aria-label="关闭错误提示" onClick={() => setError(null)}><X /></button></div>}
+  return <div className="app-frame" data-theme={theme}>
+    <TitleBar onPageChange={setContentPage} onOpenWorkspace={() => void openWorkspaceFromMenu()} onNewDocument={() => void newDocumentFromMenu()} onSave={() => void saveActive()} onShowShortcuts={showShortcuts} />
+    <div className="app-shell" data-theme={theme}>
+      <ActivityRail />
+      {settingsOpen ? <SettingsPage /> : <>
+        <WorkspacePanel onOpenDocument={openDocument} onToggleContext={toggleDocumentContext} />
+        <ContentPanel page={contentPage} onPageChange={setContentPage} hasDocument={hasActiveDocument} onSave={saveActive} onClose={() => setContentPage('chat')} onToggleContext={toggleDocumentContext} />
+      </>}
+      {error && <div className="error-banner" role="alert"><span>{error}</span><button aria-label="关闭错误提示" onClick={() => setError(null)}><X /></button></div>}
+    </div>
   </div>
 }

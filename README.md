@@ -51,4 +51,5 @@ npm run package:mac
 
 - [开发框架与技术选型](docs/DEVELOPMENT_FRAMEWORK.md)
 - [UI 设计方案](docs/UI_DESIGN.md)
+- [系统标题栏与功能菜单设计](docs/TITLE_BAR_DESIGN.md)
 - [GitHub 同类项目调研与功能取舍](docs/GITHUB_REFERENCE.md)
