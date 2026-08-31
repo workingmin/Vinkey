@@ -45,7 +45,13 @@ macOS 应在 macOS 构建机执行：
 npm run package:mac
 ```
 
-产物为 `.app` 和 `.dmg`。公开分发前需要配置 Apple Developer ID 证书、公证凭据；Windows 公开分发建议配置代码签名证书。脚本不会内置或读取仓库中的签名密钥。
+产物为 `.app` 和 `.dmg`。需要更新本机安装版本并启动新应用时执行：
+
+```bash
+npm run package:mac -- --install --open
+```
+
+其中 `--install` 会将新生成的 `.app` 更新到 `/Applications/Vinkey.app`，`--open` 会启动该版本；不带参数时脚本只构建，不修改 `/Applications`。公开分发前需要配置 Apple Developer ID 证书、公证凭据；Windows 公开分发建议配置代码签名证书。脚本不会内置或读取仓库中的签名密钥。
 
 ## 开发文档
 
