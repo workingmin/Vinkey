@@ -8,7 +8,7 @@ use std::{
     sync::Mutex,
     time::{SystemTime, UNIX_EPOCH},
 };
-use tauri::{Manager, State};
+use tauri::{AppHandle, Manager, State, WebviewWindow};
 
 mod database;
 mod models;
@@ -332,6 +332,117 @@ fn create_directory(path: String, state: State<'_, WorkspaceState>) -> Result<()
     fs::create_dir_all(target).map_err(|error| format!("无法创建文件夹：{error}"))
 }
 
+fn append_window_diagnostic(app: &AppHandle, message: &str) -> Result<PathBuf, String> {
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?;
+    fs::create_dir_all(&data_dir).map_err(|error| error.to_string())?;
+    let log_path = data_dir.join("vinkey-window.log");
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let mut log = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+        .map_err(|error| error.to_string())?;
+    writeln!(log, "[{timestamp}] {message}").map_err(|error| error.to_string())?;
+    Ok(log_path)
+}
+
+fn window_build_diagnostic(app: &AppHandle) -> String {
+    let executable = std::env::current_exe()
+        .map(|path| path.display().to_string())
+        .unwrap_or_else(|error| format!("无法读取：{error}"));
+    let window_config = app
+        .config()
+        .app
+        .windows
+        .iter()
+        .find(|config| config.label == "main")
+        .map(|config| {
+            format!(
+                "config-decorations={}, config-title-bar={:?}, config-hidden-title={}, config-traffic-light={:?}",
+                config.decorations,
+                config.title_bar_style,
+                config.hidden_title,
+                config.traffic_light_position
+            )
+        })
+        .unwrap_or_else(|| "config-main-window=missing".into());
+    format!(
+        "build-marker=mac-overlay-v1, package-version={}, executable={executable}, {window_config}",
+        app.package_info().version
+    )
+}
+
+#[tauri::command]
+fn sync_native_window_theme(
+    theme: String,
+    window: WebviewWindow,
+    app: AppHandle,
+) -> Result<String, String> {
+    #[cfg(target_os = "macos")]
+    let theme_result = {
+        let native_theme = match theme.as_str() {
+            "dark" => tauri::Theme::Dark,
+            "light" => tauri::Theme::Light,
+            _ => return Err(format!("不支持的窗口主题：{theme}")),
+        };
+        window
+            .set_theme(Some(native_theme))
+            .map_err(|error| format!("设置原生窗口主题失败：{error}"))
+    };
+    #[cfg(not(target_os = "macos"))]
+    let theme_result: Result<(), String> = Ok(());
+
+    let theme_status = theme_result
+        .as_ref()
+        .map(|_| "ok".to_string())
+        .unwrap_or_else(|error| format!("error={error}"));
+    let decorated = window
+        .is_decorated()
+        .map(|value| value.to_string())
+        .unwrap_or_else(|error| format!("error={error}"));
+    let actual_theme = window
+        .theme()
+        .map(|value| format!("{value:?}"))
+        .unwrap_or_else(|error| format!("error={error}"));
+    let inner_size = window
+        .inner_size()
+        .map(|value| format!("{value:?}"))
+        .unwrap_or_else(|error| format!("error={error}"));
+    let outer_size = window
+        .outer_size()
+        .map(|value| format!("{value:?}"))
+        .unwrap_or_else(|error| format!("error={error}"));
+    let message = format!(
+        "theme-request={theme}, theme-sync={theme_status}, native-theme={actual_theme}, decorated={decorated}, inner-size={inner_size}, outer-size={outer_size}, {}",
+        window_build_diagnostic(&app)
+    );
+    let log_path = append_window_diagnostic(&app, &message)?;
+    theme_result.map_err(|error| format!("{error}\n窗口诊断日志：{}", log_path.display()))?;
+    Ok(format!("{message}\n日志：{}", log_path.display()))
+}
+
+#[tauri::command]
+fn get_window_diagnostics(app: AppHandle) -> Result<String, String> {
+    let log_path = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?
+        .join("vinkey-window.log");
+    let contents = fs::read_to_string(&log_path).unwrap_or_else(|_| "暂无窗口诊断记录。".into());
+    let recent = contents.lines().rev().take(12).collect::<Vec<_>>();
+    Ok(format!(
+        "窗口诊断日志：{}\n\n{}",
+        log_path.display(),
+        recent.into_iter().rev().collect::<Vec<_>>().join("\n")
+    ))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -339,11 +450,20 @@ pub fn run() {
         .manage(WorkspaceState::default())
         .manage(models::ChatCancellation::default())
         .setup(|app| {
-            // macOS must opt into native decorations before the webview is shown;
-            // Windows keeps the custom title bar declared in tauri.conf.json.
+            // macOS window chrome is configured before creation in tauri.macos.conf.json.
             #[cfg(target_os = "macos")]
             if let Some(window) = app.get_webview_window("main") {
-                window.set_decorations(true)?;
+                let decorated = window.is_decorated()?;
+                let theme = window.theme()?;
+                let inner_size = window.inner_size()?;
+                let outer_size = window.outer_size()?;
+                let message = format!(
+                    "startup native-theme={theme:?}, decorated={decorated}, inner-size={inner_size:?}, outer-size={outer_size:?}, {}",
+                    window_build_diagnostic(app.handle())
+                );
+                if let Err(error) = append_window_diagnostic(app.handle(), &message) {
+                    eprintln!("无法写入 macOS 窗口诊断日志：{error}");
+                }
             }
             let data_dir = app.path().app_data_dir()?;
             fs::create_dir_all(&data_dir)?;
@@ -359,6 +479,8 @@ pub fn run() {
             save_document,
             create_document,
             create_directory,
+            sync_native_window_theme,
+            get_window_diagnostics,
             search::search_workspace,
             models::list_model_profiles,
             models::save_model_profile,

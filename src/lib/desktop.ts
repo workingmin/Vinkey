@@ -3,7 +3,7 @@ import { open } from '@tauri-apps/plugin-dialog'
 import type {
   ChatMessage, ChatRequest, ChatStreamEvent, Conversation, ConversationSummary,
   DocumentSnapshot, ModelConnectionResult, ModelProfile, ModelProfileInput, SearchHit,
-  WorkspaceSnapshot,
+  ThemeMode, WorkspaceSnapshot,
 } from '../types'
 
 const PROFILE_KEY = 'vinkey.demo.modelProfiles'
@@ -72,6 +72,16 @@ function demoWorkspace(): WorkspaceSnapshot {
 }
 
 export const isDesktop = () => '__TAURI_INTERNALS__' in window
+
+export async function syncNativeWindowTheme(theme: ThemeMode): Promise<string | null> {
+  if (!isDesktop()) return null
+  return invoke<string>('sync_native_window_theme', { theme })
+}
+
+export async function getWindowDiagnostics(): Promise<string> {
+  if (!isDesktop()) return '窗口诊断仅在桌面应用中可用。'
+  return invoke<string>('get_window_diagnostics')
+}
 
 export async function chooseWorkspace(): Promise<WorkspaceSnapshot | null> {
   if (!isDesktop()) return demoWorkspace()

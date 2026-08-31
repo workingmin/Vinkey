@@ -14,8 +14,8 @@ import { SettingsPage } from './components/SettingsPage'
 import { WorkspaceTree, workspaceActions } from './components/WorkspaceTree'
 import {
   cancelChat, chooseWorkspace, createDirectory, createDocument, isDesktop, listConversations,
-  listModelProfiles, loadConversation, readDocument, refreshWorkspace, saveConversationMessage,
-  saveDocument, searchWorkspace, streamChat,
+  getWindowDiagnostics, listModelProfiles, loadConversation, readDocument, refreshWorkspace,
+  saveConversationMessage, saveDocument, searchWorkspace, streamChat, syncNativeWindowTheme,
 } from './lib/desktop'
 import { buildContextMessage, calculateContextBudget, selectRecentMessages } from './lib/context'
 import { flattenWorkspaceFiles } from './lib/tree'
@@ -40,7 +40,7 @@ async function installMacMenu(callbacks: {
   toggleTheme: () => void
   openSettings: () => void
   showShortcuts: () => void
-  showAbout: () => void
+  showWindowDiagnostics: () => void
 }) {
   const menuItem = (text: string, action: () => void, accelerator?: string) => MenuItem.new({ text, accelerator, action: () => action() })
   const nativeItem = (item: PredefinedMenuItemOptions['item'], text: string) => PredefinedMenuItem.new({ item, text })
@@ -74,7 +74,7 @@ async function installMacMenu(callbacks: {
   ] })
   const help = await Submenu.new({ text: '帮助', items: [
     await menuItem('查看快捷键', callbacks.showShortcuts),
-    await menuItem('关于 Vinkey', callbacks.showAbout),
+    await menuItem('窗口诊断信息', callbacks.showWindowDiagnostics),
   ] })
   const appMenu = await Submenu.new({ text: 'Vinkey', items: [
     await PredefinedMenuItem.new({ item: { About: { name: 'Vinkey', version: '0.1.0', comments: '本地优先的 AI 文学创作工作台' } }, text: '关于 Vinkey' }),
@@ -92,7 +92,7 @@ async function installMacMenu(callbacks: {
 
 type AppMenuItem = { label: string; shortcut?: string; icon?: React.ComponentType<{ size?: number }>; disabled?: boolean; action: () => void }
 
-function TitleBar({ onPageChange, onOpenWorkspace, onNewDocument, onRefreshWorkspace, onCloseDocument, onSave, onShowShortcuts, onShowAbout }: {
+function TitleBar({ onPageChange, onOpenWorkspace, onNewDocument, onRefreshWorkspace, onCloseDocument, onSave, onShowShortcuts, onShowAbout, onShowWindowDiagnostics }: {
   onPageChange: (page: ContentPage) => void
   onOpenWorkspace: () => void
   onNewDocument: () => void
@@ -101,6 +101,7 @@ function TitleBar({ onPageChange, onOpenWorkspace, onNewDocument, onRefreshWorks
   onSave: () => void
   onShowShortcuts: () => void
   onShowAbout: () => void
+  onShowWindowDiagnostics: () => void
 }) {
   const workspace = useAppStore((state) => state.workspace)
   const activeModelId = useAppStore((state) => state.activeModelId)
@@ -167,6 +168,7 @@ function TitleBar({ onPageChange, onOpenWorkspace, onNewDocument, onRefreshWorks
     ] },
     { label: '帮助', items: [
       { label: '查看快捷键', icon: Keyboard, action: onShowShortcuts },
+      { label: '窗口诊断信息', icon: Settings, action: onShowWindowDiagnostics },
       { label: '关于 Vinkey', icon: Bot, action: onShowAbout },
     ] },
   ]
@@ -201,7 +203,7 @@ function ActivityRail() {
   const setMode = useAppStore((state) => state.setLeftMode)
   const setSettingsOpen = useAppStore((state) => state.setSettingsOpen)
   const openMode = (next: typeof mode) => { setSettingsOpen(false); setMode(next) }
-  return <nav className="activity-rail" aria-label="主要功能">
+  return <nav className="activity-rail" aria-label="主要功能" data-tauri-drag-region>
     <div className="rail-logo" title="Vinkey">V</div>
     <IconButton label="工作区文件" active={!settingsOpen && mode === 'files'} onClick={() => openMode('files')}><Files /></IconButton>
     <IconButton label="全局搜索" active={!settingsOpen && mode === 'search'} onClick={() => openMode('search')}><Search /></IconButton>
@@ -487,8 +489,10 @@ export function App() {
 
   useEffect(() => {
     if (!isDesktop() || !isMacPlatform()) return
-    void getCurrentWindow().setTheme(theme).catch(() => undefined)
-  }, [theme])
+    void syncNativeWindowTheme(theme)
+      .then((diagnostic) => { if (diagnostic) console.info(`[Vinkey window] ${diagnostic}`) })
+      .catch((cause) => setError(`macOS 原生窗口主题同步失败：${String(cause)}`))
+  }, [setError, theme])
 
   const openWorkspaceFromMenu = useCallback(async () => {
     try {
@@ -517,6 +521,10 @@ export function App() {
   const showAbout = useCallback(() => {
     window.alert('Vinkey 0.1.0\n\n本地优先的 AI 文学创作工作台\n文档和会话数据保存在本机。')
   }, [])
+
+  const showWindowDiagnostics = useCallback(() => {
+    void getWindowDiagnostics().then((diagnostics) => window.alert(diagnostics)).catch((cause) => setError(`读取窗口诊断失败：${String(cause)}`))
+  }, [setError])
 
   const refreshWorkspaceFromMenu = useCallback(async () => {
     if (!workspace) return openWorkspaceFromMenu()
@@ -582,9 +590,9 @@ export function App() {
       toggleTheme: () => { const current = useAppStore.getState().theme; useAppStore.getState().setTheme(current === 'dark' ? 'light' : 'dark') },
       openSettings: () => useAppStore.getState().setSettingsOpen(true),
       showShortcuts,
-      showAbout,
+      showWindowDiagnostics,
     }).catch((cause) => { macMenuInstalled.current = false; setError(`macOS 菜单初始化失败：${String(cause)}`) })
-  }, [closeDocumentFromMenu, newDocumentFromMenu, openWorkspaceFromMenu, refreshWorkspaceFromMenu, saveActive, setError, showAbout, showShortcuts])
+  }, [closeDocumentFromMenu, newDocumentFromMenu, openWorkspaceFromMenu, refreshWorkspaceFromMenu, saveActive, setError, showShortcuts, showWindowDiagnostics])
 
   useEffect(() => {
     const listener = (event: KeyboardEvent) => {
@@ -597,7 +605,7 @@ export function App() {
   const hasActiveDocument = useMemo(() => tabs.some((tab) => tab.path === activePath), [activePath, tabs])
 
   return <div className="app-frame" data-theme={theme} data-platform={isMacPlatform() ? 'mac' : 'desktop'}>
-    <TitleBar onPageChange={setContentPage} onOpenWorkspace={() => void openWorkspaceFromMenu()} onNewDocument={() => void newDocumentFromMenu()} onRefreshWorkspace={() => void refreshWorkspaceFromMenu()} onCloseDocument={closeDocumentFromMenu} onSave={() => void saveActive()} onShowShortcuts={showShortcuts} onShowAbout={showAbout} />
+    <TitleBar onPageChange={setContentPage} onOpenWorkspace={() => void openWorkspaceFromMenu()} onNewDocument={() => void newDocumentFromMenu()} onRefreshWorkspace={() => void refreshWorkspaceFromMenu()} onCloseDocument={closeDocumentFromMenu} onSave={() => void saveActive()} onShowShortcuts={showShortcuts} onShowAbout={showAbout} onShowWindowDiagnostics={showWindowDiagnostics} />
     <div className="app-shell" data-theme={theme}>
       <ActivityRail />
       {settingsOpen ? <SettingsPage /> : <>

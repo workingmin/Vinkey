@@ -85,10 +85,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 1px
 .window-controls button.close-window:hover { background: #b94c56; color: #fff; }
 .window-controls svg { width: 14px; height: 14px; }
 .app-shell { display: grid; grid-template-columns: 48px 260px minmax(480px, 1fr); width: 100%; height: calc(100% - 36px); min-height: 0; min-width: 800px; background: var(--bg-app); position: relative; }
-.app-frame[data-platform="mac"] .app-shell { height: 100%; }
+.app-frame[data-platform="mac"] .app-shell { height: 100%; grid-template-columns: 76px 260px minmax(480px, 1fr); }
 .app-shell:has(.settings-page) { grid-template-columns: 48px minmax(0, 1fr); }
+.app-frame[data-platform="mac"] .app-shell:has(.settings-page) { grid-template-columns: 76px minmax(0, 1fr); }
 
 .activity-rail { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px; background: var(--bg-rail); border-right: 1px solid var(--border); z-index: 4; }
+.app-frame[data-platform="mac"] .activity-rail { padding: 42px 8px 8px; }
 .rail-logo { display: grid; place-items: center; width: 32px; height: 36px; margin-bottom: 7px; color: var(--accent); font-weight: 750; font-size: 17px; }
 .rail-spacer { flex: 1; }
 .icon-button { width: 28px; height: 28px; flex: 0 0 28px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 5px; color: var(--text-muted); background: transparent; cursor: pointer; }
