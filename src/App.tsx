@@ -2,7 +2,7 @@ import {
   Bot, Check, ChevronDown, CirclePlus, FileText, Files, FolderOpen, History,
   MessageSquareText, PanelRightClose, Paperclip,
   Save, Search, Send, Settings, Square, X, Minus, Maximize2, Minimize2,
-  RotateCcw, RotateCw, Copy, Scissors, Clipboard, Moon, Sun, Keyboard,
+  RotateCcw, RotateCw, Copy, Scissors, Clipboard, Moon, Sun, Keyboard, ListChecks, RefreshCw,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
@@ -23,6 +23,7 @@ import { useAppStore } from './store'
 import type { DocumentSnapshot, ViewMode } from './types'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { Menu, MenuItem, PredefinedMenuItem, Submenu } from '@tauri-apps/api/menu'
+import type { PredefinedMenuItemOptions } from '@tauri-apps/api/menu'
 
 type ContentPage = 'chat' | 'file'
 
@@ -32,6 +33,8 @@ async function installMacMenu(callbacks: {
   newConversation: () => void
   openWorkspace: () => void
   newDocument: () => void
+  refreshWorkspace: () => void
+  closeDocument: () => void
   save: () => void
   changePage: (page: ContentPage) => void
   toggleTheme: () => void
@@ -40,19 +43,22 @@ async function installMacMenu(callbacks: {
   showAbout: () => void
 }) {
   const menuItem = (text: string, action: () => void, accelerator?: string) => MenuItem.new({ text, accelerator, action: () => action() })
+  const nativeItem = (item: PredefinedMenuItemOptions['item'], text: string) => PredefinedMenuItem.new({ item, text })
   const file = await Submenu.new({ text: '文件', items: [
     await menuItem('新建会话', callbacks.newConversation, 'CmdOrCtrl+N'),
     await menuItem('打开工作区…', callbacks.openWorkspace, 'CmdOrCtrl+O'),
     await menuItem('新建文档…', callbacks.newDocument),
+    await menuItem('刷新工作区', callbacks.refreshWorkspace, 'CmdOrCtrl+R'),
     await menuItem('保存文档', callbacks.save, 'CmdOrCtrl+S'),
+    await menuItem('关闭文档', callbacks.closeDocument),
   ] })
   const edit = await Submenu.new({ text: '编辑', items: [
-    await PredefinedMenuItem.new({ item: 'Undo' }),
-    await PredefinedMenuItem.new({ item: 'Redo' }),
-    await PredefinedMenuItem.new({ item: 'Cut' }),
-    await PredefinedMenuItem.new({ item: 'Copy' }),
-    await PredefinedMenuItem.new({ item: 'Paste' }),
-    await PredefinedMenuItem.new({ item: 'SelectAll' }),
+    await nativeItem('Undo', '撤销'),
+    await nativeItem('Redo', '重做'),
+    await nativeItem('Cut', '剪切'),
+    await nativeItem('Copy', '复制'),
+    await nativeItem('Paste', '粘贴'),
+    await nativeItem('SelectAll', '全选'),
   ] })
   const view = await Submenu.new({ text: '查看', items: [
     await menuItem('对话页', () => callbacks.changePage('chat')),
@@ -61,21 +67,22 @@ async function installMacMenu(callbacks: {
     await menuItem('模型与应用设置', callbacks.openSettings),
   ] })
   const windowMenu = await Submenu.new({ text: '窗口', items: [
-    await PredefinedMenuItem.new({ item: 'Minimize' }),
-    await PredefinedMenuItem.new({ item: 'Fullscreen' }),
-    await PredefinedMenuItem.new({ item: 'CloseWindow' }),
+    await nativeItem('Minimize', '最小化'),
+    await nativeItem('Maximize', '缩放窗口'),
+    await nativeItem('Fullscreen', '进入全屏'),
+    await nativeItem('CloseWindow', '关闭窗口'),
   ] })
   const help = await Submenu.new({ text: '帮助', items: [
     await menuItem('查看快捷键', callbacks.showShortcuts),
     await menuItem('关于 Vinkey', callbacks.showAbout),
   ] })
   const appMenu = await Submenu.new({ text: 'Vinkey', items: [
-    await PredefinedMenuItem.new({ item: { About: { name: 'Vinkey', version: '0.1.0', comments: '本地优先的 AI 文学创作工作台' } } }),
-    await PredefinedMenuItem.new({ item: 'Services' }),
-    await PredefinedMenuItem.new({ item: 'Hide' }),
-    await PredefinedMenuItem.new({ item: 'HideOthers' }),
-    await PredefinedMenuItem.new({ item: 'ShowAll' }),
-    await PredefinedMenuItem.new({ item: 'Quit' }),
+    await PredefinedMenuItem.new({ item: { About: { name: 'Vinkey', version: '0.1.0', comments: '本地优先的 AI 文学创作工作台' } }, text: '关于 Vinkey' }),
+    await nativeItem('Services', '服务'),
+    await nativeItem('Hide', '隐藏 Vinkey'),
+    await nativeItem('HideOthers', '隐藏其他'),
+    await nativeItem('ShowAll', '显示全部'),
+    await nativeItem('Quit', '退出 Vinkey'),
   ] })
   const menu = await Menu.new({ items: [appMenu, file, edit, view, windowMenu, help] })
   await menu.setAsAppMenu()
@@ -85,10 +92,12 @@ async function installMacMenu(callbacks: {
 
 type AppMenuItem = { label: string; shortcut?: string; icon?: React.ComponentType<{ size?: number }>; disabled?: boolean; action: () => void }
 
-function TitleBar({ onPageChange, onOpenWorkspace, onNewDocument, onSave, onShowShortcuts, onShowAbout }: {
+function TitleBar({ onPageChange, onOpenWorkspace, onNewDocument, onRefreshWorkspace, onCloseDocument, onSave, onShowShortcuts, onShowAbout }: {
   onPageChange: (page: ContentPage) => void
   onOpenWorkspace: () => void
   onNewDocument: () => void
+  onRefreshWorkspace: () => void
+  onCloseDocument: () => void
   onSave: () => void
   onShowShortcuts: () => void
   onShowAbout: () => void
@@ -133,7 +142,9 @@ function TitleBar({ onPageChange, onOpenWorkspace, onNewDocument, onSave, onShow
       { label: '新建会话', shortcut: `${mod} N`, icon: CirclePlus, action: newConversation },
       { label: '打开工作区…', shortcut: `${mod} O`, icon: FolderOpen, action: onOpenWorkspace },
       { label: '新建文档…', icon: FileText, action: onNewDocument },
+      { label: '刷新工作区', shortcut: `${mod} R`, icon: RefreshCw, action: onRefreshWorkspace },
       { label: '保存文档', shortcut: `${mod} S`, icon: Save, action: onSave },
+      { label: '关闭文档', icon: X, action: onCloseDocument },
     ] },
     { label: '编辑', items: [
       { label: '撤销', shortcut: `${mod} Z`, icon: RotateCcw, action: () => editAction('undo') },
@@ -141,6 +152,7 @@ function TitleBar({ onPageChange, onOpenWorkspace, onNewDocument, onSave, onShow
       { label: '剪切', shortcut: `${mod} X`, icon: Scissors, action: () => editAction('cut') },
       { label: '复制', shortcut: `${mod} C`, icon: Copy, action: () => editAction('copy') },
       { label: '粘贴', shortcut: `${mod} V`, icon: Clipboard, action: () => editAction('paste') },
+      { label: '全选', shortcut: `${mod} A`, icon: ListChecks, action: () => editAction('selectAll') },
     ] },
     { label: '查看', items: [
       { label: '对话页', icon: MessageSquareText, action: () => onPageChange('chat') },
@@ -464,6 +476,7 @@ export function App() {
   const theme = useAppStore((state) => state.theme)
   const setWorkspace = useAppStore((state) => state.setWorkspace)
   const openTab = useAppStore((state) => state.openTab)
+  const closeTab = useAppStore((state) => state.closeTab)
   const toggleContext = useAppStore((state) => state.toggleContext)
   const markSaved = useAppStore((state) => state.markSaved)
   const setError = useAppStore((state) => state.setError)
@@ -499,6 +512,17 @@ export function App() {
   const showAbout = useCallback(() => {
     window.alert('Vinkey 0.1.0\n\n本地优先的 AI 文学创作工作台\n文档和会话数据保存在本机。')
   }, [])
+
+  const refreshWorkspaceFromMenu = useCallback(async () => {
+    if (!workspace) return openWorkspaceFromMenu()
+    try { setWorkspace(await refreshWorkspace()) } catch (cause) { setError(`刷新工作区失败：${String(cause)}`) }
+  }, [openWorkspaceFromMenu, setError, setWorkspace, workspace])
+
+  const closeDocumentFromMenu = useCallback(() => {
+    const path = useAppStore.getState().activePath
+    if (path) closeTab(path)
+    setContentPage('chat')
+  }, [closeTab])
 
   useEffect(() => {
     if (!isDesktop() && !workspace) void chooseWorkspace().then((next) => next && setWorkspace(next))
@@ -547,6 +571,8 @@ export function App() {
       newConversation: () => useAppStore.getState().newConversation(),
       openWorkspace: () => void openWorkspaceFromMenu(),
       newDocument: () => void newDocumentFromMenu(),
+      refreshWorkspace: () => void refreshWorkspaceFromMenu(),
+      closeDocument: closeDocumentFromMenu,
       save: () => void saveActive(),
       changePage: setContentPage,
       toggleTheme: () => { const current = useAppStore.getState().theme; useAppStore.getState().setTheme(current === 'dark' ? 'light' : 'dark') },
@@ -554,7 +580,7 @@ export function App() {
       showShortcuts,
       showAbout,
     }).catch((cause) => { macMenuInstalled.current = false; setError(`macOS 菜单初始化失败：${String(cause)}`) })
-  }, [newDocumentFromMenu, openWorkspaceFromMenu, saveActive, setError, showAbout, showShortcuts])
+  }, [closeDocumentFromMenu, newDocumentFromMenu, openWorkspaceFromMenu, refreshWorkspaceFromMenu, saveActive, setError, showAbout, showShortcuts])
 
   useEffect(() => {
     const listener = (event: KeyboardEvent) => {
@@ -567,7 +593,7 @@ export function App() {
   const hasActiveDocument = useMemo(() => tabs.some((tab) => tab.path === activePath), [activePath, tabs])
 
   return <div className="app-frame" data-theme={theme} data-platform={isMacPlatform() ? 'mac' : 'desktop'}>
-    <TitleBar onPageChange={setContentPage} onOpenWorkspace={() => void openWorkspaceFromMenu()} onNewDocument={() => void newDocumentFromMenu()} onSave={() => void saveActive()} onShowShortcuts={showShortcuts} onShowAbout={showAbout} />
+    <TitleBar onPageChange={setContentPage} onOpenWorkspace={() => void openWorkspaceFromMenu()} onNewDocument={() => void newDocumentFromMenu()} onRefreshWorkspace={() => void refreshWorkspaceFromMenu()} onCloseDocument={closeDocumentFromMenu} onSave={() => void saveActive()} onShowShortcuts={showShortcuts} onShowAbout={showAbout} />
     <div className="app-shell" data-theme={theme}>
       <ActivityRail />
       {settingsOpen ? <SettingsPage /> : <>
