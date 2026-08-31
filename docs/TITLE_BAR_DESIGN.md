@@ -114,7 +114,7 @@ Windows 自绘标题栏 36px；macOS 使用原生窗口标题栏与屏幕顶部�
 ### 3.2 窗口与平台
 
 - Windows 标题栏中央空白区标记为 Tauri 拖拽区域；双击标题栏切换最大化。
-- macOS 通过 `tauri.macos.conf.json` 在窗口创建前启用 `decorations: true`、`titleBarStyle: overlay` 和 `trafficLightPosition`。原生红黄绿按钮位于 76px 左侧工具轨顶部，WebView 延伸到标题栏区域，不再出现独立白色顶部栏。
+- macOS 通过 `tauri.macos.conf.json` 在窗口创建前启用 `decorations: true`、`titleBarStyle: Overlay` 和 `trafficLightPosition`。原生红黄绿按钮位于 76px 左侧工具轨顶部，WebView 延伸到标题栏区域，不再出现独立白色顶部栏。
 - macOS 原生窗口主题必须随 Vinkey 深色/浅色主题同步；同步结果写入应用数据目录下的 `vinkey-window.log`，可从“帮助 → 窗口诊断信息”查看。
 - 诊断记录包含实际可执行文件路径、构建标识、Tauri 合并后的窗口配置、主题同步结果及窗口尺寸。`build-marker=mac-overlay-v1` 且 `config-title-bar=Overlay` 表示新构建和 macOS 专用配置已生效；`theme-sync=error` 表示原生主题同步失败，错误原因保留在同一行。
 - Windows 桌面端调用 `minimize`、`toggleMaximize`、`close`；浏览器开发模式不调用窗口 API。
