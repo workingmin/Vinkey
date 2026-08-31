@@ -566,7 +566,6 @@ export function App() {
   useEffect(() => {
     if (!isDesktop() || !isMacPlatform() || macMenuInstalled.current) return
     macMenuInstalled.current = true
-    void getCurrentWindow().setDecorations(true).catch(() => undefined)
     void installMacMenu({
       newConversation: () => useAppStore.getState().newConversation(),
       openWorkspace: () => void openWorkspaceFromMenu(),

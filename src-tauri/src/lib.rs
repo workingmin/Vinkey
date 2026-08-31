@@ -339,6 +339,12 @@ pub fn run() {
         .manage(WorkspaceState::default())
         .manage(models::ChatCancellation::default())
         .setup(|app| {
+            // macOS must opt into native decorations before the webview is shown;
+            // Windows keeps the custom title bar declared in tauri.conf.json.
+            #[cfg(target_os = "macos")]
+            if let Some(window) = app.get_webview_window("main") {
+                window.set_decorations(true)?;
+            }
             let data_dir = app.path().app_data_dir()?;
             fs::create_dir_all(&data_dir)?;
             let database_path = data_dir.join("vinkey.sqlite3");
