@@ -281,11 +281,11 @@ function ProjectSessionSidebar({ onPageChange, onOpenWorkspace, onRefreshWorkspa
           {(hasQuery || projectExpanded) && <div className="sidebar-project-content">
             <div className="project-session-label"><span>{hasQuery ? '匹配会话' : '会话'}</span><small>{hasQuery ? conversationMatches.length : conversationCount}</small></div>
             <div className="conversation-list">
+              {!hasQuery && <button className="project-new-session" onClick={startConversation}><CirclePlus />新建会话</button>}
               {!hasQuery && !conversationId && <button className="conversation-item active" onClick={startConversation}><MessageSquareText /><span><b>新会话</b><small>{Math.max(0, messages.length - 1)} 条消息 · 尚未保存</small></span></button>}
               {conversationMatches.map((conversation) => <button key={conversation.id} className={`conversation-item ${conversationId === conversation.id ? 'active' : ''}`} onClick={() => void selectConversation(conversation.id)}><MessageSquareText /><span><b>{conversation.title}</b><small>{conversation.messageCount} 条消息 · {new Date(conversation.updatedAt).toLocaleString()}</small></span></button>)}
               {hasQuery && conversationMatches.length === 0 && <div className="empty-small compact">没有匹配的会话</div>}
               {!hasQuery && conversations.length === 0 && conversationId && <div className="empty-small compact">还没有其他会话</div>}
-              {!hasQuery && <button className="project-new-session" onClick={startConversation}><CirclePlus />新建会话</button>}
             </div>
             {hasQuery && <div className="sidebar-document-results">
               <div className="project-session-label"><span>文档内容</span><small>{searchHits.length}</small></div>
