@@ -13,12 +13,12 @@ interface AppState {
   conversationId: string | null
   conversationTitle: string
   conversations: ConversationSummary[]
+  chatRuns: Record<string, ChatRun>
   modelProfiles: ModelProfile[]
   activeModelId: string | null
   settingsOpen: boolean
   theme: ThemeMode
   viewMode: ViewMode
-  busy: boolean
   error: string | null
   setWorkspace: (workspace: WorkspaceSnapshot) => void
   openTab: (tab: DocumentTab) => void
@@ -27,9 +27,9 @@ interface AppState {
   markSaved: (path: string, content: string, modifiedMs: number) => void
   setViewMode: (mode: ViewMode) => void
   toggleContext: (document: ContextDocument) => void
-  addMessage: (message: ChatMessage) => void
-  removeMessage: (id: string) => void
-  appendAssistantChunk: (id: string, chunk: string) => void
+  beginChatRun: (run: ChatRun) => void
+  appendChatRunChunk: (conversationId: string, chunk: string) => void
+  endChatRun: (conversationId: string, discardAssistant: boolean) => void
   setConversation: (conversation: Conversation) => void
   newConversation: () => void
   setConversations: (conversations: ConversationSummary[]) => void
@@ -37,8 +37,15 @@ interface AppState {
   setActiveModelId: (id: string | null) => void
   setSettingsOpen: (open: boolean) => void
   setTheme: (theme: ThemeMode) => void
-  setBusy: (busy: boolean) => void
   setError: (error: string | null) => void
+}
+
+export interface ChatRun {
+  conversationId: string
+  conversationTitle: string
+  requestId: string
+  userMessage: ChatMessage
+  assistantMessage: ChatMessage
 }
 
 const initialMessages: ChatMessage[] = [
@@ -47,6 +54,17 @@ const initialMessages: ChatMessage[] = [
     content: '晚上好。你可以从文件页选取文档作为上下文，然后让我续写、改稿，或者一起梳理人物和情节。',
   },
 ]
+
+function mergeRunMessages(messages: ChatMessage[], run: ChatRun | undefined): ChatMessage[] {
+  if (!run) return messages
+  const runMessages = [run.userMessage, run.assistantMessage]
+  const replacements = new Map(runMessages.map((message) => [message.id, message]))
+  const merged = messages.map((message) => replacements.get(message.id) ?? message)
+  for (const message of runMessages) {
+    if (!messages.some((item) => item.id === message.id)) merged.push(message)
+  }
+  return merged
+}
 
 export const useAppStore = create<AppState>((set) => ({
   workspace: null,
@@ -57,12 +75,12 @@ export const useAppStore = create<AppState>((set) => ({
   conversationId: null,
   conversationTitle: '新会话',
   conversations: [],
+  chatRuns: {},
   modelProfiles: [],
   activeModelId: localStorage.getItem('vinkey.activeModelId'),
   settingsOpen: false,
   theme: localStorage.getItem('vinkey.theme') === 'light' ? 'light' : 'dark',
   viewMode: 'edit',
-  busy: false,
   error: null,
   setWorkspace: (workspace) => set({ workspace }),
   openTab: (tab) => set((state) => ({
@@ -87,15 +105,44 @@ export const useAppStore = create<AppState>((set) => ({
       ? state.contextDocuments.filter((item) => item.path !== document.path)
       : [...state.contextDocuments, document],
   })),
-  addMessage: (message) => set((state) => ({ messages: [...state.messages, message] })),
-  removeMessage: (id) => set((state) => ({ messages: state.messages.filter((message) => message.id !== id) })),
-  appendAssistantChunk: (id, chunk) => set((state) => ({
-    messages: state.messages.map((message) => message.id === id ? { ...message, content: message.content + chunk } : message),
+  beginChatRun: (run) => set((state) => ({
+    chatRuns: { ...state.chatRuns, [run.conversationId]: run },
+    messages: state.conversationId === run.conversationId
+      ? mergeRunMessages(state.messages, run)
+      : state.messages,
   })),
-  setConversation: (conversation) => set({
-    conversationId: conversation.id, conversationTitle: conversation.title, messages: conversation.messages,
-    settingsOpen: false,
+  appendChatRunChunk: (conversationId, chunk) => set((state) => {
+    const run = state.chatRuns[conversationId]
+    if (!run) return state
+    const nextRun = {
+      ...run,
+      assistantMessage: { ...run.assistantMessage, content: run.assistantMessage.content + chunk },
+    }
+    return {
+      chatRuns: { ...state.chatRuns, [conversationId]: nextRun },
+      messages: state.conversationId === conversationId
+        ? mergeRunMessages(state.messages, nextRun)
+        : state.messages,
+    }
   }),
+  endChatRun: (conversationId, discardAssistant) => set((state) => {
+    const run = state.chatRuns[conversationId]
+    if (!run) return state
+    const chatRuns = { ...state.chatRuns }
+    delete chatRuns[conversationId]
+    return {
+      chatRuns,
+      messages: discardAssistant && state.conversationId === conversationId
+        ? state.messages.filter((message) => message.id !== run.assistantMessage.id)
+        : state.messages,
+    }
+  }),
+  setConversation: (conversation) => set((state) => ({
+    conversationId: conversation.id,
+    conversationTitle: conversation.title,
+    messages: mergeRunMessages(conversation.messages, state.chatRuns[conversation.id]),
+    settingsOpen: false,
+  })),
   newConversation: () => set({ conversationId: null, conversationTitle: '新会话', messages: initialMessages, contextDocuments: [] }),
   setConversations: (conversations) => set({ conversations }),
   setModelProfiles: (modelProfiles) => set((state) => ({
@@ -105,6 +152,5 @@ export const useAppStore = create<AppState>((set) => ({
   setActiveModelId: (activeModelId) => { if (activeModelId) localStorage.setItem('vinkey.activeModelId', activeModelId); set({ activeModelId }) },
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   setTheme: (theme) => { localStorage.setItem('vinkey.theme', theme); set({ theme }) },
-  setBusy: (busy) => set({ busy }),
   setError: (error) => set({ error }),
 }))

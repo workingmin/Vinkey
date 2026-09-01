@@ -210,6 +210,7 @@ function ProjectSessionSidebar({ onPageChange, onOpenWorkspace, onRefreshWorkspa
 }) {
   const workspace = useAppStore((state) => state.workspace)
   const conversations = useAppStore((state) => state.conversations)
+  const chatRuns = useAppStore((state) => state.chatRuns)
   const conversationId = useAppStore((state) => state.conversationId)
   const messages = useAppStore((state) => state.messages)
   const newConversation = useAppStore((state) => state.newConversation)
@@ -283,7 +284,7 @@ function ProjectSessionSidebar({ onPageChange, onOpenWorkspace, onRefreshWorkspa
             <div className="conversation-list">
               {!hasQuery && <button className="project-new-session" onClick={startConversation}><CirclePlus />新建会话</button>}
               {!hasQuery && !conversationId && <button className="conversation-item active" onClick={startConversation}><MessageSquareText /><span><b>新会话</b><small>{Math.max(0, messages.length - 1)} 条消息 · 尚未保存</small></span></button>}
-              {conversationMatches.map((conversation) => <button key={conversation.id} className={`conversation-item ${conversationId === conversation.id ? 'active' : ''}`} onClick={() => void selectConversation(conversation.id)}><MessageSquareText /><span><b>{conversation.title}</b><small>{conversation.messageCount} 条消息 · {new Date(conversation.updatedAt).toLocaleString()}</small></span></button>)}
+              {conversationMatches.map((conversation) => <button key={conversation.id} className={`conversation-item ${conversationId === conversation.id ? 'active' : ''}`} onClick={() => void selectConversation(conversation.id)}><MessageSquareText /><span><b>{conversation.title}</b><small>{chatRuns[conversation.id] ? '正在生成 · ' : ''}{conversation.messageCount} 条消息 · {new Date(conversation.updatedAt).toLocaleString()}</small></span></button>)}
               {hasQuery && conversationMatches.length === 0 && <div className="empty-small compact">没有匹配的会话</div>}
               {!hasQuery && conversations.length === 0 && conversationId && <div className="empty-small compact">还没有其他会话</div>}
             </div>
@@ -348,25 +349,25 @@ function FileBrowserPanel({ onOpenDocument, onToggleContext, onOpenWorkspace }: 
 function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Promise<void> }) {
   const messages = useAppStore((state) => state.messages)
   const contextDocuments = useAppStore((state) => state.contextDocuments)
-  const busy = useAppStore((state) => state.busy)
+  const chatRuns = useAppStore((state) => state.chatRuns)
   const workspace = useAppStore((state) => state.workspace)
   const conversationId = useAppStore((state) => state.conversationId)
   const conversationTitle = useAppStore((state) => state.conversationTitle)
   const modelProfiles = useAppStore((state) => state.modelProfiles)
   const activeModelId = useAppStore((state) => state.activeModelId)
-  const addMessage = useAppStore((state) => state.addMessage)
-  const removeMessage = useAppStore((state) => state.removeMessage)
-  const appendAssistantChunk = useAppStore((state) => state.appendAssistantChunk)
+  const beginChatRun = useAppStore((state) => state.beginChatRun)
+  const appendChatRunChunk = useAppStore((state) => state.appendChatRunChunk)
+  const endChatRun = useAppStore((state) => state.endChatRun)
   const setConversation = useAppStore((state) => state.setConversation)
   const setActiveModelId = useAppStore((state) => state.setActiveModelId)
   const setConversations = useAppStore((state) => state.setConversations)
   const setSettingsOpen = useAppStore((state) => state.setSettingsOpen)
   const setError = useAppStore((state) => state.setError)
-  const setBusy = useAppStore((state) => state.setBusy)
   const [prompt, setPrompt] = useState('')
-  const [requestId, setRequestId] = useState<string | null>(null)
   const [contextPickerOpen, setContextPickerOpen] = useState(false)
   const activeModel = modelProfiles.find((profile) => profile.id === activeModelId) ?? null
+  const activeChatRun = conversationId ? chatRuns[conversationId] : undefined
+  const busy = Boolean(activeChatRun)
   const budget = calculateContextBudget(messages, contextDocuments, prompt, activeModel?.contextWindow ?? 32768)
   const workspaceFiles = workspace ? flattenWorkspaceFiles(workspace.entries) : []
 
@@ -382,13 +383,17 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
     setPrompt('')
     const userMessage = { id: crypto.randomUUID(), role: 'user' as const, content: value, createdAt: now }
     const assistantMessage = { id: crypto.randomUUID(), role: 'assistant' as const, content: '', createdAt: now + 1 }
-    addMessage(userMessage)
-    addMessage(assistantMessage)
-    setBusy(true)
     const nextRequestId = crypto.randomUUID()
-    setRequestId(nextRequestId)
+    beginChatRun({
+      conversationId: nextConversationId,
+      conversationTitle: nextTitle,
+      requestId: nextRequestId,
+      userMessage,
+      assistantMessage,
+    })
     try {
       await saveConversationMessage(nextConversationId, nextTitle, userMessage)
+      setConversations(await listConversations())
       const recent = selectRecentMessages([...messages.filter((message) => message.id !== 'welcome'), userMessage], contextDocuments, value, activeModel.contextWindow)
       const context = buildContextMessage(contextDocuments)
       await streamChat({
@@ -396,25 +401,25 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
         profileId: activeModel.id,
         messages: [...(context ? [{ role: 'user' as const, content: context }] : []), ...recent.map(({ role, content }) => ({ role, content }))],
       }, (event) => {
-        if (event.type === 'chunk') appendAssistantChunk(assistantMessage.id, event.content)
+        if (event.type === 'chunk') appendChatRunChunk(nextConversationId, event.content)
         if (event.type === 'error') setError(event.message)
       })
-      const completed = useAppStore.getState().messages.find((message) => message.id === assistantMessage.id)
-      if (completed?.content) await saveConversationMessage(nextConversationId, nextTitle, completed)
-      setConversations(await listConversations())
     } catch (error) {
       const message = String(error)
-      if (!useAppStore.getState().messages.find((item) => item.id === assistantMessage.id)?.content) {
-        removeMessage(assistantMessage.id)
-      }
       if (!message.includes('请求已停止')) setError(message)
     } finally {
-      setBusy(false)
-      setRequestId(null)
+      const completed = useAppStore.getState().chatRuns[nextConversationId]?.assistantMessage
+      if (completed?.content) {
+        try {
+          await saveConversationMessage(nextConversationId, nextTitle, completed)
+          setConversations(await listConversations())
+        } catch (error) { setError(String(error)) }
+      }
+      endChatRun(nextConversationId, !completed?.content)
     }
   }
 
-  const stop = async () => { if (requestId) await cancelChat(requestId) }
+  const stop = async () => { if (activeChatRun) await cancelChat(activeChatRun.requestId) }
 
   return <main className="chat-panel">
     <header className="chat-header">
