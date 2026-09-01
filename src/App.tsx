@@ -570,9 +570,13 @@ export function App() {
   const openWorkspaceFromMenu = useCallback(async () => {
     try {
       const next = await chooseWorkspace()
-      if (next) setWorkspace(next)
+      if (next) {
+        useAppStore.getState().newConversation()
+        setConversations([])
+        setWorkspace(next)
+      }
     } catch (cause) { setError(String(cause)) }
-  }, [setError, setWorkspace])
+  }, [setConversations, setError, setWorkspace])
 
   const newDocumentFromMenu = useCallback(async () => {
     if (!workspace) return openWorkspaceFromMenu()
@@ -613,15 +617,25 @@ export function App() {
   }, [closeTab])
 
   useEffect(() => {
-    if (!isDesktop() && !workspace) void chooseWorkspace().then((next) => next && setWorkspace(next))
-  }, [setWorkspace, workspace])
+    if (!workspace) {
+      if (!isDesktop()) void chooseWorkspace().then((next) => next && setWorkspace(next))
+      else void refreshWorkspace().then(setWorkspace).catch((cause) => {
+        if (!String(cause).includes('请先选择工作目录')) setError(`恢复上次工作区失败：${String(cause)}`)
+      })
+    }
+  }, [setError, setWorkspace, workspace])
 
   useEffect(() => {
-    void Promise.all([listModelProfiles(), listConversations()]).then(([profiles, history]) => {
-      setModelProfiles(profiles)
-      setConversations(history)
-    }).catch((cause) => setError(String(cause)))
-  }, [setConversations, setError, setModelProfiles])
+    void listModelProfiles().then(setModelProfiles).catch((cause) => setError(String(cause)))
+  }, [setError, setModelProfiles])
+
+  useEffect(() => {
+    if (!workspace) {
+      setConversations([])
+      return
+    }
+    void listConversations().then(setConversations).catch((cause) => setError(String(cause)))
+  }, [setConversations, setError, workspace])
 
   const openDocument = useCallback(async (path: string) => {
     try {

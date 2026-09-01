@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::hash_map::DefaultHasher,
     fs,
@@ -31,6 +31,11 @@ struct WorkspaceSnapshot {
     name: String,
     path_label: String,
     entries: Vec<WorkspaceEntry>,
+}
+
+#[derive(Deserialize, Serialize)]
+struct WorkspacePreference {
+    root: String,
 }
 
 #[derive(Serialize)]
@@ -186,6 +191,47 @@ fn workspace_snapshot(workspace: &Workspace) -> Result<WorkspaceSnapshot, String
     })
 }
 
+fn workspace_from_root(canonical: PathBuf) -> Workspace {
+    let mut hasher = DefaultHasher::new();
+    canonical.hash(&mut hasher);
+    Workspace {
+        id: format!("{:016x}", hasher.finish()),
+        name: canonical
+            .file_name()
+            .unwrap_or(canonical.as_os_str())
+            .to_string_lossy()
+            .into_owned(),
+        root: canonical,
+    }
+}
+
+fn workspace_preference_path(app: &AppHandle) -> Result<PathBuf, String> {
+    app.path()
+        .app_data_dir()
+        .map(|path| path.join("workspace.json"))
+        .map_err(|error| error.to_string())
+}
+
+fn persist_workspace_preference(app: &AppHandle, workspace: &Workspace) -> Result<(), String> {
+    let path = workspace_preference_path(app)?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| format!("无法创建应用数据目录：{error}"))?;
+    }
+    let content = serde_json::to_vec_pretty(&WorkspacePreference {
+        root: workspace.root.to_string_lossy().into_owned(),
+    })
+    .map_err(|error| format!("无法保存工作区记录：{error}"))?;
+    fs::write(path, content).map_err(|error| format!("无法保存工作区记录：{error}"))
+}
+
+fn restore_workspace_preference(app: &AppHandle) -> Option<Workspace> {
+    let path = workspace_preference_path(app).ok()?;
+    let content = fs::read(path).ok()?;
+    let preference = serde_json::from_slice::<WorkspacePreference>(&content).ok()?;
+    let canonical = PathBuf::from(preference.root).canonicalize().ok()?;
+    canonical.is_dir().then(|| workspace_from_root(canonical))
+}
+
 fn read_document_at(workspace: &Workspace, relative: &str) -> Result<DocumentSnapshot, String> {
     let (clean, target) = resolve_existing(workspace, relative)?;
     let kind = ensure_document_extension(&target)?;
@@ -218,6 +264,7 @@ fn read_document_at(workspace: &Workspace, relative: &str) -> Result<DocumentSna
 #[tauri::command]
 fn authorize_workspace(
     root: String,
+    app: AppHandle,
     state: State<'_, WorkspaceState>,
 ) -> Result<WorkspaceSnapshot, String> {
     let canonical = PathBuf::from(root)
@@ -226,18 +273,9 @@ fn authorize_workspace(
     if !canonical.is_dir() {
         return Err("选择的路径不是目录".into());
     }
-    let mut hasher = DefaultHasher::new();
-    canonical.hash(&mut hasher);
-    let workspace = Workspace {
-        id: format!("{:016x}", hasher.finish()),
-        name: canonical
-            .file_name()
-            .unwrap_or(canonical.as_os_str())
-            .to_string_lossy()
-            .into_owned(),
-        root: canonical,
-    };
+    let workspace = workspace_from_root(canonical);
     let snapshot = workspace_snapshot(&workspace)?;
+    persist_workspace_preference(&app, &workspace)?;
     *state.0.lock().map_err(|_| "工作区状态不可用".to_string())? = Some(workspace);
     Ok(snapshot)
 }
@@ -470,6 +508,11 @@ pub fn run() {
             let database_path = data_dir.join("vinkey.sqlite3");
             database::init(&database_path)?;
             app.manage(database::DatabaseState(database_path));
+            if let Some(workspace) = restore_workspace_preference(app.handle()) {
+                if let Ok(mut state) = app.state::<WorkspaceState>().0.lock() {
+                    *state = Some(workspace);
+                }
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
