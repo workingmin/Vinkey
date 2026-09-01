@@ -1,6 +1,6 @@
 import {
   Bot, Check, ChevronDown, ChevronRight, CirclePlus, FileText, Folder, FolderOpen,
-  MessageSquareText, PanelRightClose, Paperclip,
+  MessageSquareText, PanelRightClose,
   Save, Search, Send, Settings, Square, X, Minus, Maximize2, Minimize2,
   RotateCcw, RotateCw, Copy, Scissors, Clipboard, Moon, Sun, Keyboard, ListChecks, RefreshCw,
 } from 'lucide-react'
@@ -18,9 +18,8 @@ import {
   saveConversationMessage, saveDocument, searchWorkspace, streamChat, syncNativeWindowTheme,
 } from './lib/desktop'
 import { buildContextMessage, calculateContextBudget, selectRecentMessages } from './lib/context'
-import { flattenWorkspaceFiles } from './lib/tree'
 import { useAppStore } from './store'
-import type { DocumentSnapshot, ViewMode } from './types'
+import type { ChatMessage, DocumentSnapshot, ViewMode } from './types'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { Menu, MenuItem, PredefinedMenuItem, Submenu } from '@tauri-apps/api/menu'
 import type { PredefinedMenuItemOptions } from '@tauri-apps/api/menu'
@@ -346,11 +345,55 @@ function FileBrowserPanel({ onOpenDocument, onToggleContext, onOpenWorkspace }: 
   </section>
 }
 
+function ChatMessageItem({ message, streaming, onCopyError }: {
+  message: ChatMessage
+  streaming: boolean
+  onCopyError: (message: string) => void
+}) {
+  const [copied, setCopied] = useState(false)
+  const copyTimer = useRef<number | null>(null)
+
+  useEffect(() => () => {
+    if (copyTimer.current) window.clearTimeout(copyTimer.current)
+  }, [])
+
+  const copyMessage = async () => {
+    if (!message.content.trim()) return
+    try {
+      await navigator.clipboard.writeText(message.content)
+      setCopied(true)
+      if (copyTimer.current) window.clearTimeout(copyTimer.current)
+      copyTimer.current = window.setTimeout(() => setCopied(false), 1600)
+    } catch (error) { onCopyError(`复制消息失败：${String(error)}`) }
+  }
+
+  const isAssistant = message.role === 'assistant'
+  const timestamp = new Date(message.createdAt)
+  const formattedTime = timestamp.toLocaleString('zh-CN', {
+    month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
+  })
+
+  return <article className={`message ${message.role}`}>
+    {isAssistant && <div className="avatar" aria-hidden="true"><Bot /></div>}
+    <div className="message-stack">
+      {isAssistant && <div className="message-author">Vinkey</div>}
+      <div className="message-bubble">
+        {message.content ? <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw, rehypeSanitize]}>{message.content}</ReactMarkdown>
+          : streaming ? <div className="typing" aria-label="正在生成"><i /><i /><i /></div> : null}
+      </div>
+      <div className="message-actions">
+        {message.content && <button type="button" onClick={() => void copyMessage()} title={copied ? '已复制' : '复制消息'} aria-label={copied ? '已复制' : '复制消息'}>{copied ? <Check /> : <Copy />}<span>{copied ? '已复制' : '复制'}</span></button>}
+        <time dateTime={timestamp.toISOString()}>{formattedTime}</time>
+      </div>
+    </div>
+    {!isAssistant && <div className="avatar user-avatar" aria-hidden="true">你</div>}
+  </article>
+}
+
 function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Promise<void> }) {
   const messages = useAppStore((state) => state.messages)
   const contextDocuments = useAppStore((state) => state.contextDocuments)
   const chatRuns = useAppStore((state) => state.chatRuns)
-  const workspace = useAppStore((state) => state.workspace)
   const conversationId = useAppStore((state) => state.conversationId)
   const conversationTitle = useAppStore((state) => state.conversationTitle)
   const modelProfiles = useAppStore((state) => state.modelProfiles)
@@ -364,12 +407,10 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
   const setSettingsOpen = useAppStore((state) => state.setSettingsOpen)
   const setError = useAppStore((state) => state.setError)
   const [prompt, setPrompt] = useState('')
-  const [contextPickerOpen, setContextPickerOpen] = useState(false)
   const activeModel = modelProfiles.find((profile) => profile.id === activeModelId) ?? null
   const activeChatRun = conversationId ? chatRuns[conversationId] : undefined
   const busy = Boolean(activeChatRun)
   const budget = calculateContextBudget(messages, contextDocuments, prompt, activeModel?.contextWindow ?? 32768)
-  const workspaceFiles = workspace ? flattenWorkspaceFiles(workspace.entries) : []
 
   const send = async () => {
     const value = prompt.trim()
@@ -422,36 +463,27 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
   const stop = async () => { if (activeChatRun) await cancelChat(activeChatRun.requestId) }
 
   return <main className="chat-panel">
-    <header className="chat-header">
-      <div><h1>AI 对话区</h1><span>{conversationTitle}</span></div>
-      {modelProfiles.length > 0 ? <label className="model-selector" title="选择模型"><span className="status-dot" /><select aria-label="当前模型" value={activeModelId ?? ''} onChange={(event) => setActiveModelId(event.target.value)}>{modelProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name} · {profile.model}</option>)}</select><ChevronDown /></label>
-        : <button className="model-selector missing" onClick={() => setSettingsOpen(true)}>添加模型</button>}
-    </header>
-    <div className="context-strip">
-      <span className="context-label">上下文</span>
-      {contextDocuments.length === 0 ? <span className="context-empty">在文件列表右键文档，或点击回形针添加</span> : contextDocuments.map((document) =>
-        <button className="context-chip" key={document.path} title={`${document.path} · ${document.size} 字符`} onClick={() => void onToggleContext(document.path)}><FileText />{document.name}<X /></button>)}
-    </div>
     <div className="message-stream">
       <div className="message-inner">
-        {messages.map((message) => <article className={`message ${message.role}`} key={message.id}>
-          <div className="avatar">{message.role === 'assistant' ? <Bot /> : '你'}</div>
-          <div className="message-body">
-            <div className="message-meta">{message.role === 'assistant' ? 'Vinkey' : '你'}</div>
-            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw, rehypeSanitize]}>{message.content}</ReactMarkdown>
-          </div>
-        </article>)}
-        {busy && <article className="message assistant"><div className="avatar"><Bot /></div><div className="message-body"><div className="message-meta">Vinkey</div><div className="typing"><i /><i /><i /></div></div></article>}
+        {messages.map((message) => <ChatMessageItem
+          key={message.id}
+          message={message}
+          streaming={Boolean(activeChatRun?.assistantMessage.id === message.id && !message.content)}
+          onCopyError={setError}
+        />)}
       </div>
     </div>
     <div className="composer-wrap">
       <div className="composer">
+        {contextDocuments.length > 0 && <div className="composer-context-list" aria-label="已引用文档">
+          {contextDocuments.map((document) => <button className="composer-context-chip" key={document.path} title={`移除引用：${document.path}`} onClick={() => void onToggleContext(document.path)}><FileText /><span>{document.name}</span><X /></button>)}
+        </div>}
         <textarea aria-label="对话输入" value={prompt} onChange={(event) => setPrompt(event.target.value)} onKeyDown={(event) => {
           if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); send() }
         }} placeholder="描述你想续写、修改或梳理的内容..." />
         <div className="composer-tools">
-          <div className="context-picker-anchor"><IconButton label="添加上下文文档" onClick={() => setContextPickerOpen(!contextPickerOpen)}><Paperclip /></IconButton>{contextPickerOpen && <div className="context-picker">{workspaceFiles.map((file) => <button key={file.path} onClick={() => { void onToggleContext(file.path); setContextPickerOpen(false) }}><FileText /><span>{file.path}</span>{contextDocuments.some((item) => item.path === file.path) && <Check />}</button>)}{workspaceFiles.length === 0 && <div className="empty-small">请先打开工作区</div>}</div>}</div>
-          <button className="mode-button">创作模式<ChevronDown /></button>
+          {modelProfiles.length > 0 ? <label className="composer-model-selector" title="切换模型"><Bot /><select aria-label="当前模型" value={activeModelId ?? ''} onChange={(event) => setActiveModelId(event.target.value)}>{modelProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name} · {profile.model}</option>)}</select><ChevronDown /></label>
+            : <button className="composer-model-selector missing" onClick={() => setSettingsOpen(true)}><Bot /><span>添加模型</span></button>}
           <span className={`composer-hint ${budget.exceedsLimit ? 'over-limit' : ''}`} title={`预计 ${budget.estimatedTokens} / ${budget.limit} tokens`}>上下文 {budget.usedPercent}% · Enter 发送</span>
           <button className="send-button" aria-label={busy ? '停止生成' : '发送'} disabled={!prompt.trim() && !busy} onClick={busy ? () => void stop() : () => void send()}>{busy ? <Square /> : <Send />}</button>
         </div>
@@ -520,9 +552,18 @@ function ContentPanel({ page, onPageChange, showFileEditor, onOpenDocument, onOp
   onCloseEditor: () => void
   onToggleContext: (path: string) => Promise<void>
 }) {
+  const workspace = useAppStore((state) => state.workspace)
+  const conversationTitle = useAppStore((state) => state.conversationTitle)
+  const modelProfiles = useAppStore((state) => state.modelProfiles)
+  const activeModelId = useAppStore((state) => state.activeModelId)
+  const activeModel = modelProfiles.find((profile) => profile.id === activeModelId)
+
   return <section className="content-panel" aria-label="内容区">
     <header className="content-panel-header">
-      <span className="content-panel-title">工作台</span>
+      <div className="content-panel-summary">
+        <strong title={conversationTitle}>{conversationTitle || '新会话'}</strong>
+        <span title={`${workspace?.name ?? '未打开项目'} · ${activeModel?.model ?? '未选择模型'}`}>{workspace?.name ?? '未打开项目'} · {activeModel?.model ?? '未选择模型'}</span>
+      </div>
       <div className="content-switcher" role="tablist" aria-label="内容页面">
         <button role="tab" aria-selected={page === 'chat'} className={page === 'chat' ? 'active' : ''} onClick={() => onPageChange('chat')}><MessageSquareText />对话</button>
         <button role="tab" aria-selected={page === 'file'} className={page === 'file' ? 'active' : ''} onClick={() => onPageChange('file')}><FileText />文件</button>
