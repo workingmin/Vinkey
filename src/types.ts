@@ -1,7 +1,6 @@
 export type EntryKind = 'directory' | 'file'
 export type DocumentKind = 'markdown' | 'text'
 export type ViewMode = 'edit' | 'split' | 'preview'
-export type LeftPanelMode = 'files' | 'search' | 'conversations'
 export type ProviderKind = 'ollama' | 'openai-compatible'
 export type ThemeMode = 'dark' | 'light'
 

@@ -1,5 +1,5 @@
 import {
-  Bot, Check, ChevronDown, CirclePlus, FileText, Files, FolderOpen, History,
+  Bot, Check, ChevronDown, CirclePlus, FileText, FolderOpen,
   MessageSquareText, PanelRightClose, Paperclip,
   Save, Search, Send, Settings, Square, X, Minus, Maximize2, Minimize2,
   RotateCcw, RotateCw, Copy, Scissors, Clipboard, Moon, Sun, Keyboard, ListChecks, RefreshCw,
@@ -115,6 +115,11 @@ function TitleBar({ onPageChange, onOpenWorkspace, onNewDocument, onRefreshWorks
   const activeModel = modelProfiles.find((profile) => profile.id === activeModelId)
   const isMac = isMacPlatform()
   const mod = isMac ? '⌘' : 'Ctrl'
+  const startNewConversation = () => {
+    newConversation()
+    setSettingsOpen(false)
+    onPageChange('chat')
+  }
 
   useEffect(() => {
     if (!isDesktop()) return
@@ -140,7 +145,7 @@ function TitleBar({ onPageChange, onOpenWorkspace, onNewDocument, onRefreshWorks
   const editAction = (command: string) => { if (typeof document !== 'undefined') document.execCommand(command) }
   const menus: Array<{ label: string; items: AppMenuItem[] }> = [
     { label: '文件', items: [
-      { label: '新建会话', shortcut: `${mod} N`, icon: CirclePlus, action: newConversation },
+      { label: '新建会话', shortcut: `${mod} N`, icon: CirclePlus, action: startNewConversation },
       { label: '打开工作区…', shortcut: `${mod} O`, icon: FolderOpen, action: onOpenWorkspace },
       { label: '新建文档…', icon: FileText, action: onNewDocument },
       { label: '刷新工作区', shortcut: `${mod} R`, icon: RefreshCw, action: onRefreshWorkspace },
@@ -197,67 +202,110 @@ function IconButton({ label, active = false, children, onClick, disabled = false
   return <button className={`icon-button ${active ? 'active' : ''}`} title={label} aria-label={label} onClick={onClick} disabled={disabled}>{children}</button>
 }
 
-function ActivityRail() {
-  const mode = useAppStore((state) => state.leftMode)
-  const settingsOpen = useAppStore((state) => state.settingsOpen)
-  const setMode = useAppStore((state) => state.setLeftMode)
-  const setSettingsOpen = useAppStore((state) => state.setSettingsOpen)
-  const openMode = (next: typeof mode) => { setSettingsOpen(false); setMode(next) }
-  return <nav className="activity-rail" aria-label="主要功能" data-tauri-drag-region>
-    <div className="rail-logo" title="Vinkey">V</div>
-    <IconButton label="工作区文件" active={!settingsOpen && mode === 'files'} onClick={() => openMode('files')}><Files /></IconButton>
-    <IconButton label="全局搜索" active={!settingsOpen && mode === 'search'} onClick={() => openMode('search')}><Search /></IconButton>
-    <IconButton label="历史会话" active={!settingsOpen && mode === 'conversations'} onClick={() => openMode('conversations')}><History /></IconButton>
-    <div className="rail-spacer" />
-    <IconButton label="设置" active={settingsOpen} onClick={() => setSettingsOpen(true)}><Settings /></IconButton>
-  </nav>
-}
-
-function WorkspacePanel({ onOpenDocument, onToggleContext }: {
+function SessionSidebar({ onPageChange, onOpenWorkspace, onRefreshWorkspace, onOpenDocument }: {
+  onPageChange: (page: ContentPage) => void
+  onOpenWorkspace: () => void
+  onRefreshWorkspace: () => void
   onOpenDocument: (path: string) => Promise<void>
-  onToggleContext: (path: string) => Promise<void>
 }) {
   const workspace = useAppStore((state) => state.workspace)
-  const mode = useAppStore((state) => state.leftMode)
-  const activePath = useAppStore((state) => state.activePath)
-  const setWorkspace = useAppStore((state) => state.setWorkspace)
   const conversations = useAppStore((state) => state.conversations)
   const conversationId = useAppStore((state) => state.conversationId)
+  const messages = useAppStore((state) => state.messages)
+  const newConversation = useAppStore((state) => state.newConversation)
   const setConversation = useAppStore((state) => state.setConversation)
+  const settingsOpen = useAppStore((state) => state.settingsOpen)
+  const setSettingsOpen = useAppStore((state) => state.setSettingsOpen)
   const setError = useAppStore((state) => state.setError)
   const [query, setQuery] = useState('')
   const [searchHits, setSearchHits] = useState<Awaited<ReturnType<typeof searchWorkspace>>>([])
   const [searching, setSearching] = useState(false)
 
   useEffect(() => {
-    if (mode !== 'search' || !workspace || !query.trim()) { setSearchHits([]); setSearching(false); return }
+    if (!workspace || !query.trim()) { setSearchHits([]); setSearching(false); return }
     let active = true
     setSearching(true)
     const timer = window.setTimeout(() => void searchWorkspace(query).then((hits) => {
       if (active) setSearchHits(hits)
     }).catch((error) => setError(String(error))).finally(() => { if (active) setSearching(false) }), 220)
     return () => { active = false; window.clearTimeout(timer) }
-  }, [mode, query, setError, workspace])
+  }, [query, setError, workspace])
 
-  const openWorkspace = async () => {
+  const conversationMatches = useMemo(() => {
+    const value = query.trim().toLocaleLowerCase()
+    return value ? conversations.filter((conversation) => conversation.title.toLocaleLowerCase().includes(value)) : conversations
+  }, [conversations, query])
+
+  const selectConversation = async (id: string) => {
     try {
-      const next = await chooseWorkspace()
-      if (next) setWorkspace(next)
+      setConversation(await loadConversation(id))
+      setSettingsOpen(false)
+      onPageChange('chat')
     } catch (error) { setError(String(error)) }
   }
 
+  const startConversation = () => {
+    newConversation()
+    setSettingsOpen(false)
+    onPageChange('chat')
+  }
+
+  const hasQuery = Boolean(query.trim())
+
+  return <aside className="session-sidebar" aria-label="会话栏">
+    <header className="session-sidebar-header" data-tauri-drag-region>
+      <div className="session-brand-row" data-tauri-drag-region>
+        <div className="session-brand" data-tauri-drag-region><span>V</span><strong>Vinkey</strong></div>
+        <div className="session-header-actions">
+          {workspace && <IconButton label="刷新工作区" onClick={onRefreshWorkspace}><RefreshCw /></IconButton>}
+          <IconButton label={workspace ? '切换工作区' : '打开工作区'} onClick={onOpenWorkspace}><FolderOpen /></IconButton>
+        </div>
+      </div>
+      <div className="sidebar-workspace" title={workspace?.pathLabel}><strong>{workspace?.name ?? '未打开工作区'}</strong><span>{workspace?.pathLabel ?? '选择本机目录后开始创作'}</span></div>
+      <button className="new-conversation-button" onClick={startConversation}><CirclePlus />新建会话</button>
+      <label className="sidebar-search"><Search /><input aria-label="搜索会话或文档" placeholder="搜索会话或文档" value={query} onChange={(event) => setQuery(event.target.value)} />{query && <button type="button" aria-label="清除搜索" onClick={() => setQuery('')}><X /></button>}</label>
+    </header>
+    <div className="session-sidebar-body">
+      <div className="sidebar-section-label"><span>{hasQuery ? '搜索结果' : '最近会话'}</span><small>{hasQuery ? conversationMatches.length + searchHits.length : conversations.length}</small></div>
+      <div className="conversation-list">
+        {!hasQuery && !conversationId && <button className="conversation-item active" onClick={startConversation}><MessageSquareText /><span><b>新会话</b><small>{Math.max(0, messages.length - 1)} 条消息 · 尚未保存</small></span></button>}
+        {conversationMatches.map((conversation) => <button key={conversation.id} className={`conversation-item ${conversationId === conversation.id ? 'active' : ''}`} onClick={() => void selectConversation(conversation.id)}><MessageSquareText /><span><b>{conversation.title}</b><small>{conversation.messageCount} 条消息 · {new Date(conversation.updatedAt).toLocaleString()}</small></span></button>)}
+        {hasQuery && searchHits.length > 0 && <div className="sidebar-result-label">文档内容</div>}
+        {hasQuery && searchHits.map((hit) => <button className="document-search-item" key={`${hit.path}:${hit.line}:${hit.snippet}`} onClick={() => void onOpenDocument(hit.path)}><FileText /><span><b>{hit.path}</b><small>第 {hit.line} 行 · {hit.snippet}</small></span></button>)}
+        {hasQuery && searching && <div className="empty-small">正在搜索文档...</div>}
+        {hasQuery && !searching && conversationMatches.length === 0 && searchHits.length === 0 && <div className="empty-small">没有匹配的会话或文档</div>}
+        {!hasQuery && conversations.length === 0 && conversationId && <div className="empty-small">还没有其他会话</div>}
+      </div>
+    </div>
+    <footer className="session-sidebar-footer">
+      <button className={settingsOpen ? 'active' : ''} onClick={() => setSettingsOpen(true)}><Settings /><span>模型与应用设置</span></button>
+    </footer>
+  </aside>
+}
+
+function FileBrowserPanel({ onOpenDocument, onToggleContext, onOpenWorkspace }: {
+  onOpenDocument: (path: string) => Promise<void>
+  onToggleContext: (path: string) => Promise<void>
+  onOpenWorkspace: () => void
+}) {
+  const workspace = useAppStore((state) => state.workspace)
+  const activePath = useAppStore((state) => state.activePath)
+  const setWorkspace = useAppStore((state) => state.setWorkspace)
+  const setError = useAppStore((state) => state.setError)
+  const [query, setQuery] = useState('')
+
   const runAction = async (id: typeof workspaceActions[number]['id']) => {
-    if (!workspace) return openWorkspace()
+    if (!workspace) { onOpenWorkspace(); return }
     try {
-      if (id === 'refresh') return setWorkspace(await refreshWorkspace())
+      if (id === 'refresh') { setWorkspace(await refreshWorkspace()); return }
       const label = id === 'file' ? '文档相对路径（.md / .txt）' : '文件夹相对路径'
       const value = window.prompt(label)?.trim()
       if (!value) return
       if (id === 'file') {
         const path = /\.(md|markdown|txt)$/i.test(value) ? value : `${value}.md`
-        const document = await createDocument(path)
+        await createDocument(path)
         setWorkspace(await refreshWorkspace())
-        useAppStore.getState().openTab({ ...document, savedContent: document.content })
+        await onOpenDocument(path)
       } else {
         await createDirectory(value)
         setWorkspace(await refreshWorkspace())
@@ -265,30 +313,16 @@ function WorkspacePanel({ onOpenDocument, onToggleContext }: {
     } catch (error) { setError(String(error)) }
   }
 
-  return <aside className="workspace-panel">
-    <header className="panel-header">
-      <div className="workspace-title">
-        <span>{mode === 'files' ? workspace?.name ?? '本地工作区' : mode === 'search' ? '搜索' : '历史会话'}</span>
-        {workspace && mode === 'files' && <small title={workspace.pathLabel}>{workspace.pathLabel}</small>}
-      </div>
-      {mode === 'files' && <div className="header-actions">
-        {workspaceActions.map(({ id, label, icon: Icon }) => <IconButton key={id} label={label} onClick={() => void runAction(id)}><Icon /></IconButton>)}
-      </div>}
+  return <section className="file-browser-panel" aria-label="文件列表">
+    <header className="file-browser-header">
+      <div className="workspace-title"><span>{workspace?.name ?? '工作区文件'}</span>{workspace && <small title={workspace.pathLabel}>{workspace.pathLabel}</small>}</div>
+      <div className="header-actions">{workspaceActions.map(({ id, label, icon: Icon }) => <IconButton key={id} label={label} onClick={() => void runAction(id)}><Icon /></IconButton>)}</div>
     </header>
-    {!workspace ? <div className="workspace-empty">
-      <FolderOpen />
-      <p>选择一个本机目录开始创作</p>
-      <button className="primary-button" onClick={() => void openWorkspace()}><FolderOpen />打开文件夹</button>
-      {!isDesktop() && <small>浏览器中将载入演示工作区</small>}
-    </div> : mode === 'conversations' ? <div className="conversation-list">
-      {conversations.map((conversation) => <button key={conversation.id} className={`conversation-item ${conversationId === conversation.id ? 'active' : ''}`} onClick={() => void loadConversation(conversation.id).then(setConversation).catch((error) => setError(String(error)))}><MessageSquareText /><span><b>{conversation.title}</b><small>{conversation.messageCount} 条消息 · {new Date(conversation.updatedAt).toLocaleString()}</small></span></button>)}
-      {conversations.length === 0 && <div className="empty-small">还没有保存的会话</div>}
-    </div> : <>
-      <div className="tree-search"><Search /><input aria-label={mode === 'search' ? '搜索工作区内容' : '筛选工作区文件'} placeholder={mode === 'search' ? '搜索所有 Markdown / TXT' : '筛选文件'} value={query} onChange={(event) => setQuery(event.target.value)} /></div>
-      {mode === 'search' ? <div className="search-results">{searching && <div className="empty-small">正在搜索...</div>}{!searching && query.trim() && searchHits.map((hit) => <button key={`${hit.path}:${hit.line}:${hit.snippet}`} onClick={() => void onOpenDocument(hit.path)}><FileText /><span><b>{hit.path}</b><small>第 {hit.line} 行 · {hit.snippet}</small></span></button>)}{!searching && query.trim() && searchHits.length === 0 && <div className="empty-small">没有匹配内容</div>}{!query.trim() && <div className="empty-small">输入关键词搜索授权工作区</div>}</div>
-        : <WorkspaceTree entries={workspace.entries} activePath={activePath} query={query} onOpen={(path) => void onOpenDocument(path)} onContext={(path) => void onToggleContext(path)} />}
+    {!workspace ? <div className="workspace-empty"><FolderOpen /><p>选择一个本机目录开始创作</p><button className="primary-button" onClick={onOpenWorkspace}><FolderOpen />打开文件夹</button>{!isDesktop() && <small>浏览器中将载入演示工作区</small>}</div> : <>
+      <label className="tree-search"><Search /><input aria-label="筛选工作区文件" placeholder="筛选 Markdown / TXT" value={query} onChange={(event) => setQuery(event.target.value)} />{query && <button type="button" aria-label="清除筛选" onClick={() => setQuery('')}><X /></button>}</label>
+      <WorkspaceTree entries={workspace.entries} activePath={activePath} query={query} onOpen={(path) => void onOpenDocument(path)} onContext={(path) => void onToggleContext(path)} />
     </>}
-  </aside>
+  </section>
 }
 
 function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Promise<void> }) {
@@ -304,7 +338,6 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
   const removeMessage = useAppStore((state) => state.removeMessage)
   const appendAssistantChunk = useAppStore((state) => state.appendAssistantChunk)
   const setConversation = useAppStore((state) => state.setConversation)
-  const newConversation = useAppStore((state) => state.newConversation)
   const setActiveModelId = useAppStore((state) => state.setActiveModelId)
   const setConversations = useAppStore((state) => state.setConversations)
   const setSettingsOpen = useAppStore((state) => state.setSettingsOpen)
@@ -368,11 +401,10 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
       <div><h1>AI 对话区</h1><span>{conversationTitle}</span></div>
       {modelProfiles.length > 0 ? <label className="model-selector" title="选择模型"><span className="status-dot" /><select aria-label="当前模型" value={activeModelId ?? ''} onChange={(event) => setActiveModelId(event.target.value)}>{modelProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name} · {profile.model}</option>)}</select><ChevronDown /></label>
         : <button className="model-selector missing" onClick={() => setSettingsOpen(true)}>添加模型</button>}
-      <IconButton label="新建会话" onClick={newConversation}><CirclePlus /></IconButton>
     </header>
     <div className="context-strip">
       <span className="context-label">上下文</span>
-      {contextDocuments.length === 0 ? <span className="context-empty">右键左侧文档，或点击回形针添加</span> : contextDocuments.map((document) =>
+      {contextDocuments.length === 0 ? <span className="context-empty">在文件列表右键文档，或点击回形针添加</span> : contextDocuments.map((document) =>
         <button className="context-chip" key={document.path} title={`${document.path} · ${document.size} 字符`} onClick={() => void onToggleContext(document.path)}><FileText />{document.name}<X /></button>)}
     </div>
     <div className="message-stream">
@@ -429,7 +461,7 @@ function EditorPanel({ onSave, onClose }: { onSave: () => Promise<void>; onClose
       <div className="segmented" aria-label="文档视图">
         {modes.map((mode) => <button key={mode} className={viewMode === mode ? 'active' : ''} disabled={document.kind === 'text' && mode !== 'edit'} onClick={() => setViewMode(mode)}>{modeLabels[mode]}</button>)}
       </div>
-      <IconButton label="返回对话" onClick={onClose}><PanelRightClose /></IconButton>
+      <IconButton label="收起编辑器" onClick={onClose}><PanelRightClose /></IconButton>
     </div>
     <div className={`editor-content mode-${viewMode}`}>
       {viewMode !== 'preview' && <CodeEditor key={`${document.path}:${theme}`} value={document.content} markdownEnabled={document.kind === 'markdown'} themeMode={theme} onChange={(content) => updateContent(document.path, content)} />}
@@ -439,20 +471,28 @@ function EditorPanel({ onSave, onClose }: { onSave: () => Promise<void>; onClose
   </aside>
 }
 
-function FilePageEmpty() {
-  return <div className="file-page-empty">
-    <FileText />
-    <strong>文件</strong>
-    <p>从左侧工作区选择文档，在这里查看和编辑。</p>
+function FileWorkspace({ showEditor, onOpenDocument, onToggleContext, onOpenWorkspace, onSave, onCloseEditor }: {
+  showEditor: boolean
+  onOpenDocument: (path: string) => Promise<void>
+  onToggleContext: (path: string) => Promise<void>
+  onOpenWorkspace: () => void
+  onSave: () => Promise<void>
+  onCloseEditor: () => void
+}) {
+  return <div className={`file-workspace ${showEditor ? 'with-editor' : 'list-only'}`}>
+    <FileBrowserPanel onOpenDocument={onOpenDocument} onToggleContext={onToggleContext} onOpenWorkspace={onOpenWorkspace} />
+    {showEditor && <EditorPanel onSave={onSave} onClose={onCloseEditor} />}
   </div>
 }
 
-function ContentPanel({ page, onPageChange, hasDocument, onSave, onClose, onToggleContext }: {
+function ContentPanel({ page, onPageChange, showFileEditor, onOpenDocument, onOpenWorkspace, onSave, onCloseEditor, onToggleContext }: {
   page: ContentPage
   onPageChange: (page: ContentPage) => void
-  hasDocument: boolean
+  showFileEditor: boolean
+  onOpenDocument: (path: string) => Promise<void>
+  onOpenWorkspace: () => void
   onSave: () => Promise<void>
-  onClose: () => void
+  onCloseEditor: () => void
   onToggleContext: (path: string) => Promise<void>
 }) {
   return <section className="content-panel" aria-label="内容区">
@@ -464,7 +504,7 @@ function ContentPanel({ page, onPageChange, hasDocument, onSave, onClose, onTogg
       </div>
     </header>
     <div className="content-panel-body">
-      {page === 'chat' ? <ChatPanel onToggleContext={onToggleContext} /> : hasDocument ? <EditorPanel onSave={onSave} onClose={onClose} /> : <FilePageEmpty />}
+      {page === 'chat' ? <ChatPanel onToggleContext={onToggleContext} /> : <FileWorkspace showEditor={showFileEditor} onOpenDocument={onOpenDocument} onToggleContext={onToggleContext} onOpenWorkspace={onOpenWorkspace} onSave={onSave} onCloseEditor={onCloseEditor} />}
     </div>
   </section>
 }
@@ -484,8 +524,16 @@ export function App() {
   const setError = useAppStore((state) => state.setError)
   const setModelProfiles = useAppStore((state) => state.setModelProfiles)
   const setConversations = useAppStore((state) => state.setConversations)
+  const setSettingsOpen = useAppStore((state) => state.setSettingsOpen)
   const [contentPage, setContentPage] = useState<ContentPage>('chat')
+  const [fileEditorVisible, setFileEditorVisible] = useState(false)
   const macMenuInstalled = useRef(false)
+
+  const changeContentPage = useCallback((page: ContentPage) => {
+    setContentPage(page)
+    setSettingsOpen(false)
+    if (page === 'file') setFileEditorVisible(false)
+  }, [setSettingsOpen])
 
   useEffect(() => {
     if (!isDesktop() || !isMacPlatform()) return
@@ -511,8 +559,10 @@ export function App() {
       setWorkspace(await refreshWorkspace())
       openTab({ ...document, savedContent: document.content })
       setContentPage('file')
+      setFileEditorVisible(true)
+      setSettingsOpen(false)
     } catch (cause) { setError(String(cause)) }
-  }, [openWorkspaceFromMenu, setError, setWorkspace, workspace, openTab])
+  }, [openWorkspaceFromMenu, openTab, setError, setSettingsOpen, setWorkspace, workspace])
 
   const showShortcuts = useCallback(() => {
     window.alert('快捷键\n\n⌘/Ctrl + S  保存文档\n⌘/Ctrl + N  新建会话\n⌘/Ctrl + O  打开工作区\n⌘/Ctrl + W  关闭窗口\nEnter  发送消息\nShift + Enter  换行')
@@ -534,7 +584,7 @@ export function App() {
   const closeDocumentFromMenu = useCallback(() => {
     const path = useAppStore.getState().activePath
     if (path) closeTab(path)
-    setContentPage('chat')
+    setFileEditorVisible(false)
   }, [closeTab])
 
   useEffect(() => {
@@ -551,12 +601,14 @@ export function App() {
   const openDocument = useCallback(async (path: string) => {
     try {
       const existing = useAppStore.getState().tabs.find((tab) => tab.path === path)
-      if (existing) { openTab(existing); setContentPage('file'); return }
+      if (existing) { openTab(existing); setContentPage('file'); setFileEditorVisible(true); setSettingsOpen(false); return }
       const document = await readDocument(path)
       openTab({ ...document, savedContent: document.content })
       setContentPage('file')
+      setFileEditorVisible(true)
+      setSettingsOpen(false)
     } catch (cause) { setError(String(cause)) }
-  }, [openTab, setError])
+  }, [openTab, setError, setSettingsOpen])
 
   const toggleDocumentContext = useCallback(async (path: string) => {
     try {
@@ -580,19 +632,19 @@ export function App() {
     if (!isDesktop() || !isMacPlatform() || macMenuInstalled.current) return
     macMenuInstalled.current = true
     void installMacMenu({
-      newConversation: () => useAppStore.getState().newConversation(),
+      newConversation: () => { useAppStore.getState().newConversation(); changeContentPage('chat') },
       openWorkspace: () => void openWorkspaceFromMenu(),
       newDocument: () => void newDocumentFromMenu(),
       refreshWorkspace: () => void refreshWorkspaceFromMenu(),
       closeDocument: closeDocumentFromMenu,
       save: () => void saveActive(),
-      changePage: setContentPage,
+      changePage: changeContentPage,
       toggleTheme: () => { const current = useAppStore.getState().theme; useAppStore.getState().setTheme(current === 'dark' ? 'light' : 'dark') },
       openSettings: () => useAppStore.getState().setSettingsOpen(true),
       showShortcuts,
       showWindowDiagnostics,
     }).catch((cause) => { macMenuInstalled.current = false; setError(`macOS 菜单初始化失败：${String(cause)}`) })
-  }, [closeDocumentFromMenu, newDocumentFromMenu, openWorkspaceFromMenu, refreshWorkspaceFromMenu, saveActive, setError, showShortcuts, showWindowDiagnostics])
+  }, [changeContentPage, closeDocumentFromMenu, newDocumentFromMenu, openWorkspaceFromMenu, refreshWorkspaceFromMenu, saveActive, setError, showShortcuts, showWindowDiagnostics])
 
   useEffect(() => {
     const listener = (event: KeyboardEvent) => {
@@ -605,13 +657,10 @@ export function App() {
   const hasActiveDocument = useMemo(() => tabs.some((tab) => tab.path === activePath), [activePath, tabs])
 
   return <div className="app-frame" data-theme={theme} data-platform={isMacPlatform() ? 'mac' : 'desktop'}>
-    <TitleBar onPageChange={setContentPage} onOpenWorkspace={() => void openWorkspaceFromMenu()} onNewDocument={() => void newDocumentFromMenu()} onRefreshWorkspace={() => void refreshWorkspaceFromMenu()} onCloseDocument={closeDocumentFromMenu} onSave={() => void saveActive()} onShowShortcuts={showShortcuts} onShowAbout={showAbout} onShowWindowDiagnostics={showWindowDiagnostics} />
+    <TitleBar onPageChange={changeContentPage} onOpenWorkspace={() => void openWorkspaceFromMenu()} onNewDocument={() => void newDocumentFromMenu()} onRefreshWorkspace={() => void refreshWorkspaceFromMenu()} onCloseDocument={closeDocumentFromMenu} onSave={() => void saveActive()} onShowShortcuts={showShortcuts} onShowAbout={showAbout} onShowWindowDiagnostics={showWindowDiagnostics} />
     <div className="app-shell" data-theme={theme}>
-      <ActivityRail />
-      {settingsOpen ? <SettingsPage /> : <>
-        <WorkspacePanel onOpenDocument={openDocument} onToggleContext={toggleDocumentContext} />
-        <ContentPanel page={contentPage} onPageChange={setContentPage} hasDocument={hasActiveDocument} onSave={saveActive} onClose={() => setContentPage('chat')} onToggleContext={toggleDocumentContext} />
-      </>}
+      <SessionSidebar onPageChange={changeContentPage} onOpenWorkspace={() => void openWorkspaceFromMenu()} onRefreshWorkspace={() => void refreshWorkspaceFromMenu()} onOpenDocument={openDocument} />
+      {settingsOpen ? <SettingsPage /> : <ContentPanel page={contentPage} onPageChange={changeContentPage} showFileEditor={fileEditorVisible && hasActiveDocument} onOpenDocument={openDocument} onOpenWorkspace={() => void openWorkspaceFromMenu()} onSave={saveActive} onCloseEditor={() => setFileEditorVisible(false)} onToggleContext={toggleDocumentContext} />}
       {error && <div className="error-banner" role="alert"><span>{error}</span><button aria-label="关闭错误提示" onClick={() => setError(null)}><X /></button></div>}
     </div>
   </div>
