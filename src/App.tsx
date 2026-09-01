@@ -1,5 +1,5 @@
 import {
-  Bot, Check, ChevronDown, CirclePlus, FileText, FolderOpen,
+  Bot, Check, ChevronDown, ChevronRight, CirclePlus, FileText, Folder, FolderOpen,
   MessageSquareText, PanelRightClose, Paperclip,
   Save, Search, Send, Settings, Square, X, Minus, Maximize2, Minimize2,
   RotateCcw, RotateCw, Copy, Scissors, Clipboard, Moon, Sun, Keyboard, ListChecks, RefreshCw,
@@ -202,7 +202,7 @@ function IconButton({ label, active = false, children, onClick, disabled = false
   return <button className={`icon-button ${active ? 'active' : ''}`} title={label} aria-label={label} onClick={onClick} disabled={disabled}>{children}</button>
 }
 
-function SessionSidebar({ onPageChange, onOpenWorkspace, onRefreshWorkspace, onOpenDocument }: {
+function ProjectSessionSidebar({ onPageChange, onOpenWorkspace, onRefreshWorkspace, onOpenDocument }: {
   onPageChange: (page: ContentPage) => void
   onOpenWorkspace: () => void
   onRefreshWorkspace: () => void
@@ -220,6 +220,7 @@ function SessionSidebar({ onPageChange, onOpenWorkspace, onRefreshWorkspace, onO
   const [query, setQuery] = useState('')
   const [searchHits, setSearchHits] = useState<Awaited<ReturnType<typeof searchWorkspace>>>([])
   const [searching, setSearching] = useState(false)
+  const [projectExpanded, setProjectExpanded] = useState(true)
 
   useEffect(() => {
     if (!workspace || !query.trim()) { setSearchHits([]); setSearching(false); return }
@@ -251,30 +252,49 @@ function SessionSidebar({ onPageChange, onOpenWorkspace, onRefreshWorkspace, onO
   }
 
   const hasQuery = Boolean(query.trim())
+  const conversationCount = conversations.length + (!conversationId ? 1 : 0)
+  const visibleResultCount = conversationMatches.length + searchHits.length
 
-  return <aside className="session-sidebar" aria-label="会话栏">
+  return <aside className="session-sidebar" aria-label="项目与会话栏">
     <header className="session-sidebar-header" data-tauri-drag-region>
       <div className="session-brand-row" data-tauri-drag-region>
-        <div className="session-brand" data-tauri-drag-region><span>V</span><strong>Vinkey</strong></div>
+        <div className="session-brand" data-tauri-drag-region><span>V</span><div><strong>Vinkey</strong><small>本地创作工作台</small></div></div>
         <div className="session-header-actions">
-          {workspace && <IconButton label="刷新工作区" onClick={onRefreshWorkspace}><RefreshCw /></IconButton>}
-          <IconButton label={workspace ? '切换工作区' : '打开工作区'} onClick={onOpenWorkspace}><FolderOpen /></IconButton>
+          {workspace && <IconButton label="刷新项目" onClick={onRefreshWorkspace}><RefreshCw /></IconButton>}
+          <IconButton label={workspace ? '切换项目' : '打开项目'} onClick={onOpenWorkspace}><FolderOpen /></IconButton>
         </div>
       </div>
-      <div className="sidebar-workspace" title={workspace?.pathLabel}><strong>{workspace?.name ?? '未打开工作区'}</strong><span>{workspace?.pathLabel ?? '选择本机目录后开始创作'}</span></div>
-      <button className="new-conversation-button" onClick={startConversation}><CirclePlus />新建会话</button>
       <label className="sidebar-search"><Search /><input aria-label="搜索会话或文档" placeholder="搜索会话或文档" value={query} onChange={(event) => setQuery(event.target.value)} />{query && <button type="button" aria-label="清除搜索" onClick={() => setQuery('')}><X /></button>}</label>
     </header>
     <div className="session-sidebar-body">
-      <div className="sidebar-section-label"><span>{hasQuery ? '搜索结果' : '最近会话'}</span><small>{hasQuery ? conversationMatches.length + searchHits.length : conversations.length}</small></div>
-      <div className="conversation-list">
-        {!hasQuery && !conversationId && <button className="conversation-item active" onClick={startConversation}><MessageSquareText /><span><b>新会话</b><small>{Math.max(0, messages.length - 1)} 条消息 · 尚未保存</small></span></button>}
-        {conversationMatches.map((conversation) => <button key={conversation.id} className={`conversation-item ${conversationId === conversation.id ? 'active' : ''}`} onClick={() => void selectConversation(conversation.id)}><MessageSquareText /><span><b>{conversation.title}</b><small>{conversation.messageCount} 条消息 · {new Date(conversation.updatedAt).toLocaleString()}</small></span></button>)}
-        {hasQuery && searchHits.length > 0 && <div className="sidebar-result-label">文档内容</div>}
-        {hasQuery && searchHits.map((hit) => <button className="document-search-item" key={`${hit.path}:${hit.line}:${hit.snippet}`} onClick={() => void onOpenDocument(hit.path)}><FileText /><span><b>{hit.path}</b><small>第 {hit.line} 行 · {hit.snippet}</small></span></button>)}
-        {hasQuery && searching && <div className="empty-small">正在搜索文档...</div>}
-        {hasQuery && !searching && conversationMatches.length === 0 && searchHits.length === 0 && <div className="empty-small">没有匹配的会话或文档</div>}
-        {!hasQuery && conversations.length === 0 && conversationId && <div className="empty-small">还没有其他会话</div>}
+      <div className="sidebar-section-label"><span>{hasQuery ? '搜索结果' : '项目'}</span><small>{hasQuery ? visibleResultCount : workspace ? 1 : 0}</small></div>
+      <div className="sidebar-project-list">
+        {!workspace ? <div className="sidebar-project-empty"><Folder /><strong>还没有打开项目</strong><span>选择一个本机目录作为创作项目</span><button onClick={onOpenWorkspace}><FolderOpen />打开项目</button></div> : <section className="sidebar-project">
+          <div className="sidebar-project-row">
+            <button className="sidebar-project-toggle" aria-expanded={hasQuery || projectExpanded} onClick={() => setProjectExpanded(!projectExpanded)} title={workspace.pathLabel}>
+              {(hasQuery || projectExpanded) ? <ChevronDown /> : <ChevronRight />}
+              {(hasQuery || projectExpanded) ? <FolderOpen /> : <Folder />}
+              <span><b>{workspace.name}</b><small>{workspace.pathLabel}</small></span>
+            </button>
+            <IconButton label="在当前项目中新建会话" onClick={startConversation}><CirclePlus /></IconButton>
+          </div>
+          {(hasQuery || projectExpanded) && <div className="sidebar-project-content">
+            <div className="project-session-label"><span>{hasQuery ? '匹配会话' : '会话'}</span><small>{hasQuery ? conversationMatches.length : conversationCount}</small></div>
+            <div className="conversation-list">
+              {!hasQuery && !conversationId && <button className="conversation-item active" onClick={startConversation}><MessageSquareText /><span><b>新会话</b><small>{Math.max(0, messages.length - 1)} 条消息 · 尚未保存</small></span></button>}
+              {conversationMatches.map((conversation) => <button key={conversation.id} className={`conversation-item ${conversationId === conversation.id ? 'active' : ''}`} onClick={() => void selectConversation(conversation.id)}><MessageSquareText /><span><b>{conversation.title}</b><small>{conversation.messageCount} 条消息 · {new Date(conversation.updatedAt).toLocaleString()}</small></span></button>)}
+              {hasQuery && conversationMatches.length === 0 && <div className="empty-small compact">没有匹配的会话</div>}
+              {!hasQuery && conversations.length === 0 && conversationId && <div className="empty-small compact">还没有其他会话</div>}
+              {!hasQuery && <button className="project-new-session" onClick={startConversation}><CirclePlus />新建会话</button>}
+            </div>
+            {hasQuery && <div className="sidebar-document-results">
+              <div className="project-session-label"><span>文档内容</span><small>{searchHits.length}</small></div>
+              {searchHits.map((hit) => <button className="document-search-item" key={`${hit.path}:${hit.line}:${hit.snippet}`} onClick={() => void onOpenDocument(hit.path)}><FileText /><span><b>{hit.path}</b><small>第 {hit.line} 行 · {hit.snippet}</small></span></button>)}
+              {searching && <div className="empty-small compact">正在搜索文档...</div>}
+              {!searching && searchHits.length === 0 && <div className="empty-small compact">没有匹配的文档</div>}
+            </div>}
+          </div>}
+        </section>}
       </div>
     </div>
     <footer className="session-sidebar-footer">
@@ -659,7 +679,7 @@ export function App() {
   return <div className="app-frame" data-theme={theme} data-platform={isMacPlatform() ? 'mac' : 'desktop'}>
     <TitleBar onPageChange={changeContentPage} onOpenWorkspace={() => void openWorkspaceFromMenu()} onNewDocument={() => void newDocumentFromMenu()} onRefreshWorkspace={() => void refreshWorkspaceFromMenu()} onCloseDocument={closeDocumentFromMenu} onSave={() => void saveActive()} onShowShortcuts={showShortcuts} onShowAbout={showAbout} onShowWindowDiagnostics={showWindowDiagnostics} />
     <div className="app-shell" data-theme={theme}>
-      <SessionSidebar onPageChange={changeContentPage} onOpenWorkspace={() => void openWorkspaceFromMenu()} onRefreshWorkspace={() => void refreshWorkspaceFromMenu()} onOpenDocument={openDocument} />
+      <ProjectSessionSidebar onPageChange={changeContentPage} onOpenWorkspace={() => void openWorkspaceFromMenu()} onRefreshWorkspace={() => void refreshWorkspaceFromMenu()} onOpenDocument={openDocument} />
       {settingsOpen ? <SettingsPage /> : <ContentPanel page={contentPage} onPageChange={changeContentPage} showFileEditor={fileEditorVisible && hasActiveDocument} onOpenDocument={openDocument} onOpenWorkspace={() => void openWorkspaceFromMenu()} onSave={saveActive} onCloseEditor={() => setFileEditorVisible(false)} onToggleContext={toggleDocumentContext} />}
       {error && <div className="error-banner" role="alert"><span>{error}</span><button aria-label="关闭错误提示" onClick={() => setError(null)}><X /></button></div>}
     </div>
