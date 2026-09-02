@@ -1,5 +1,5 @@
 import {
-  Bot, Check, ChevronDown, ChevronRight, CirclePlus, FileText, Folder, FolderOpen,
+  Bot, Check, ChevronDown, ChevronRight, CirclePlus, Download, Eye, FileText, Folder, FolderOpen,
   MessageSquareText, PanelLeftClose, PanelLeftOpen, PanelRightClose,
   Save, Search, Send, Settings, Square, X, Minus, Maximize2, Minimize2,
   RotateCcw, RotateCw, Copy, Scissors, Clipboard, Moon, Sun, Keyboard, ListChecks, RefreshCw,
@@ -10,16 +10,18 @@ import rehypeRaw from 'rehype-raw'
 import rehypeSanitize from 'rehype-sanitize'
 import remarkGfm from 'remark-gfm'
 import { CodeEditor } from './components/CodeEditor'
+import { FilePreview, downloadBytes } from './components/FilePreview'
 import { SettingsPage } from './components/SettingsPage'
 import { WorkspaceTree, workspaceActions } from './components/WorkspaceTree'
 import {
   cancelChat, chooseWorkspace, createDirectory, createDocument, isDesktop, listConversations,
-  getWindowDiagnostics, listModelProfiles, loadConversation, readDocument, refreshWorkspace,
+  getWindowDiagnostics, listModelProfiles, loadConversation, readDocument, readFileBytes, refreshWorkspace,
   saveConversationMessage, saveDocument, searchWorkspace, streamChat, syncNativeWindowTheme,
 } from './lib/desktop'
 import { buildContextMessage, calculateContextBudget, selectRecentMessages } from './lib/context'
 import { useAppStore } from './store'
 import type { ChatMessage, DocumentSnapshot, ViewMode } from './types'
+import { getLanguageName, isEditableDocument } from './lib/fileTypes'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { Menu, MenuItem, PredefinedMenuItem, Submenu } from '@tauri-apps/api/menu'
 import type { PredefinedMenuItemOptions } from '@tauri-apps/api/menu'
@@ -342,7 +344,7 @@ function FileBrowserPanel({ onOpenDocument, onToggleContext, onOpenWorkspace }: 
       <div className="header-actions">{workspaceActions.map(({ id, label, icon: Icon }) => <IconButton key={id} label={label} onClick={() => void runAction(id)}><Icon /></IconButton>)}</div>
     </header>
     {!workspace ? <div className="workspace-empty"><FolderOpen /><p>选择一个本机目录开始创作</p><button className="primary-button" onClick={onOpenWorkspace}><FolderOpen />打开文件夹</button>{!isDesktop() && <small>浏览器中将载入演示工作区</small>}</div> : <>
-      <label className="tree-search"><Search /><input aria-label="筛选工作区文件" placeholder="筛选 Markdown / TXT" value={query} onChange={(event) => setQuery(event.target.value)} />{query && <button type="button" aria-label="清除筛选" onClick={() => setQuery('')}><X /></button>}</label>
+      <label className="tree-search"><Search /><input aria-label="筛选工作区文件" placeholder="筛选工作区文件" value={query} onChange={(event) => setQuery(event.target.value)} />{query && <button type="button" aria-label="清除筛选" onClick={() => setQuery('')}><X /></button>}</label>
       <WorkspaceTree entries={workspace.entries} activePath={activePath} query={query} onOpen={(path) => void onOpenDocument(path)} onContext={(path) => void onToggleContext(path)} />
     </>}
   </section>
@@ -503,13 +505,35 @@ function EditorPanel({ onSave, onClose }: { onSave: () => Promise<void>; onClose
   const updateContent = useAppStore((state) => state.updateContent)
   const setViewMode = useAppStore((state) => state.setViewMode)
   const theme = useAppStore((state) => state.theme)
+  const setError = useAppStore((state) => state.setError)
   const document = tabs.find((tab) => tab.path === activePath)
   if (!document) return null
-  const dirty = document.content !== document.savedContent
+  const editable = isEditableDocument(document.kind)
+  const dirty = editable && document.content !== document.savedContent
   const modes: ViewMode[] = ['edit', 'split', 'preview']
   const modeLabels: Record<ViewMode, string> = { edit: '编辑', split: '分栏', preview: '预览' }
   const lines = document.content.split('\n').length
   const words = document.content.trim() ? document.content.trim().split(/\s+/).length : 0
+  const markdown = document.kind === 'markdown'
+  const html = getLanguageName(document.name) === 'html'
+
+  const download = async () => {
+    try {
+      if (editable) {
+        downloadBytes(new TextEncoder().encode(document.content), document.name, 'text/plain;charset=utf-8')
+      } else {
+        downloadBytes(await readFileBytes(document.path), document.name, document.mimeType ?? 'application/octet-stream')
+      }
+    } catch (error) { setError(`下载文件失败：${String(error)}`) }
+  }
+
+  const openHtmlPreview = () => {
+    if (!html) return
+    const url = URL.createObjectURL(new Blob([document.content], { type: 'text/html' }))
+    const previewWindow = window.open(url, '_blank', 'noopener,noreferrer')
+    if (!previewWindow) URL.revokeObjectURL(url)
+    else window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  }
 
   return <aside className="editor-panel">
     <div className="document-tabs">
@@ -517,17 +541,20 @@ function EditorPanel({ onSave, onClose }: { onSave: () => Promise<void>; onClose
     </div>
     <div className="editor-toolbar">
       <span className="document-path" title={document.path}>{document.path}</span>
-      <IconButton label="保存文档" onClick={() => void onSave()} disabled={!dirty}><Save /></IconButton>
-      <div className="segmented" aria-label="文档视图">
-        {modes.map((mode) => <button key={mode} className={viewMode === mode ? 'active' : ''} disabled={document.kind === 'text' && mode !== 'edit'} onClick={() => setViewMode(mode)}>{modeLabels[mode]}</button>)}
-      </div>
+      {editable && <IconButton label="保存文档" onClick={() => void onSave()} disabled={!dirty}><Save /></IconButton>}
+      {editable && markdown && <div className="segmented" aria-label="文档视图">
+        {modes.map((mode) => <button key={mode} className={viewMode === mode ? 'active' : ''} onClick={() => setViewMode(mode)}>{modeLabels[mode]}</button>)}
+      </div>}
+      <IconButton label="下载文件" onClick={() => void download()}><Download /></IconButton>
+      {html && <IconButton label="在新窗口预览 HTML" onClick={openHtmlPreview}><Eye /></IconButton>}
       <IconButton label="收起编辑器" onClick={onClose}><PanelRightClose /></IconButton>
     </div>
     <div className={`editor-content mode-${viewMode}`}>
-      {viewMode !== 'preview' && <CodeEditor key={`${document.path}:${theme}`} value={document.content} markdownEnabled={document.kind === 'markdown'} themeMode={theme} onChange={(content) => updateContent(document.path, content)} />}
-      {viewMode !== 'edit' && document.kind === 'markdown' && <div className="markdown-preview"><ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw, rehypeSanitize]}>{document.content}</ReactMarkdown></div>}
+      {editable && (viewMode !== 'preview' || !markdown) && <CodeEditor key={`${document.path}:${theme}:${document.kind}`} value={document.content} filename={document.name} editable themeMode={theme} onChange={(content) => updateContent(document.path, content)} />}
+      {editable && viewMode !== 'edit' && markdown && <div className="markdown-preview"><ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw, rehypeSanitize]}>{document.content}</ReactMarkdown></div>}
+      {!editable && <FilePreview document={document} onError={setError} />}
     </div>
-    <footer className="editor-status"><span>行 {lines}</span><span>{document.content.length} 字符</span><span>{words} 词</span><span>UTF-8</span><span>{document.lineEnding.toUpperCase()}</span><span className={dirty ? 'unsaved' : 'saved'}>{dirty ? '未保存' : <><Check />已保存</>}</span></footer>
+    <footer className="editor-status">{editable ? <><span>语言 {getLanguageName(document.name)}</span><span>行 {lines}</span><span>{document.content.length} 字符</span><span>{words} 词</span><span>UTF-8</span><span>{document.lineEnding.toUpperCase()}</span><span className={dirty ? 'unsaved' : 'saved'}>{dirty ? '未保存' : <><Check />已保存</>}</span></> : <><span>{document.kind === 'binary' ? '不可编辑' : '仅预览'}</span><span>{document.sizeBytes ? `${Math.ceil(document.sizeBytes / 1024)} KB` : ''}</span></>}</footer>
   </aside>
 }
 

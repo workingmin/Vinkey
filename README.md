@@ -5,7 +5,7 @@
 
 ## 当前能力
 
-- 浏览、新建、编辑和保存授权目录内的 Markdown / TXT 文档
+- 浏览、新建、编辑和保存授权目录内的 Markdown、TXT、代码和配置文本文件；图片、PDF、音视频可预览，二进制文件可下载
 - 连接本机或局域网 Ollama，以及 OpenAI 协议兼容服务
 - 测试连接、发现模型并以流式响应进行 AI 对话
 - 显式选取本地文档作为上下文，并在发送前估算上下文预算
@@ -57,6 +57,13 @@ npm run package:mac -- --install --open
 ## 开发文档
 
 - [开发框架与技术选型](docs/DEVELOPMENT_FRAMEWORK.md)
-- [UI 设计方案](docs/UI_DESIGN.md)
-- [系统标题栏与功能菜单设计](docs/TITLE_BAR_DESIGN.md)
+- [UI 设计总览](docs/UI_DESIGN.md)
+- [UI 现状盘点](docs/UI_INVENTORY.md)
+- [UI 设计：应用壳层](docs/UI_DESIGN_SHELL.md)
+- [标题栏与功能菜单设计](docs/TITLE_BAR_DESIGN.md)
+- [UI 设计：对话页](docs/UI_DESIGN_CHAT.md)
+- [UI 设计：文件与编辑器](docs/UI_DESIGN_EDITOR.md)
+- [UI 设计：设置页](docs/UI_DESIGN_SETTINGS.md)
+- [UI 设计：视觉与组件系统](docs/UI_DESIGN_SYSTEM.md)
+- [UI 设计：状态、流程与验收](docs/UI_DESIGN_STATES.md)
 - [GitHub 同类项目调研与功能取舍](docs/GITHUB_REFERENCE.md)

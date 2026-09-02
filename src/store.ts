@@ -93,7 +93,7 @@ export const useAppStore = create<AppState>((set) => ({
   openTab: (tab) => set((state) => ({
     tabs: state.tabs.some((item) => item.path === tab.path) ? state.tabs : [...state.tabs, tab],
     activePath: tab.path,
-    viewMode: tab.kind === 'text' && state.viewMode === 'preview' ? 'edit' : state.viewMode,
+    viewMode: tab.kind !== 'markdown' && state.viewMode !== 'edit' ? 'edit' : state.viewMode,
   })),
   closeTab: (path) => set((state) => {
     const tabs = state.tabs.filter((tab) => tab.path !== path)

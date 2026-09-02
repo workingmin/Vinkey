@@ -45,6 +45,8 @@ struct WorkspaceEntry {
     path: String,
     kind: &'static str,
     children: Vec<WorkspaceEntry>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    document_kind: Option<&'static str>,
 }
 
 #[derive(Serialize)]
@@ -57,6 +59,8 @@ struct DocumentSnapshot {
     modified_ms: u64,
     line_ending: &'static str,
     has_bom: bool,
+    mime_type: Option<String>,
+    size_bytes: u64,
 }
 
 pub(crate) fn lock_workspace(state: &State<'_, WorkspaceState>) -> Result<Workspace, String> {
@@ -87,16 +91,84 @@ fn validate_relative(path: &str) -> Result<PathBuf, String> {
 }
 
 pub(crate) fn ensure_document_extension(path: &Path) -> Result<&'static str, String> {
-    match path
+    let kind = classify_file(path);
+    if matches!(kind, "image" | "pdf" | "audio" | "video" | "binary") {
+        return Err("该文件是预览或二进制文件，不能作为文本编辑文档".into());
+    }
+    Ok(kind)
+}
+
+fn classify_file(path: &Path) -> &'static str {
+    let name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if name == ".env" || name.starts_with(".env.") {
+        return "code";
+    }
+    let extension = path
         .extension()
         .and_then(|value| value.to_str())
-        .map(str::to_ascii_lowercase)
-        .as_deref()
-    {
-        Some("md") | Some("markdown") => Ok("markdown"),
-        Some("txt") => Ok("text"),
-        _ => Err("首版仅支持 Markdown 和 TXT 文档".into()),
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    match extension.as_str() {
+        "md" | "markdown" | "mdx" => "markdown",
+        "png" | "jpg" | "jpeg" | "gif" | "svg" | "webp" | "ico" | "bmp" | "avif" | "apng"
+        | "tiff" | "tif" => "image",
+        "pdf" => "pdf",
+        "mp4" | "webm" | "ogv" | "mov" | "m4v" => "video",
+        "mp3" | "wav" | "m4a" | "aac" | "flac" | "opus" | "oga" | "ogg" | "weba" => "audio",
+        "zip" | "tar" | "gz" | "rar" | "7z" | "bz2" | "xz" | "exe" | "dll" | "so" | "dylib"
+        | "app" | "dmg" | "msi" | "doc" | "docx" | "xls" | "xlsx" | "ppt" | "pptx" | "odt"
+        | "ods" | "odp" | "ttf" | "otf" | "woff" | "woff2" | "eot" | "db" | "sqlite"
+        | "sqlite3" | "bin" | "dat" | "iso" | "img" | "class" | "jar" | "war" | "pyc" | "pyo" => {
+            "binary"
+        }
+        "js" | "jsx" | "mjs" | "cjs" | "ts" | "tsx" | "mts" | "cts" | "py" | "pyw" | "pyi"
+        | "html" | "htm" | "css" | "scss" | "sass" | "less" | "json" | "jsonc" | "json5"
+        | "xml" | "yaml" | "yml" | "toml" | "ini" | "cfg" | "conf" | "go" | "rs" | "rb" | "erb"
+        | "php" | "java" | "kt" | "kts" | "c" | "h" | "cc" | "cpp" | "hpp" | "cs" | "swift"
+        | "lua" | "r" | "sql" | "graphql" | "gql" | "proto" | "sh" | "bash" | "zsh" | "fish"
+        | "ps1" | "bat" | "cmd" | "log" => "code",
+        _ => "text",
     }
+}
+
+fn mime_for_kind(path: &Path, kind: &str) -> Option<String> {
+    let extension = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let mime = match (kind, extension.as_str()) {
+        ("image", "svg") => "image/svg+xml",
+        ("image", "jpg") | ("image", "jpeg") => "image/jpeg",
+        ("image", "png") => "image/png",
+        ("image", "gif") => "image/gif",
+        ("image", "webp") => "image/webp",
+        ("image", "ico") => "image/x-icon",
+        ("image", "bmp") => "image/bmp",
+        ("image", "avif") => "image/avif",
+        ("image", "apng") => "image/apng",
+        ("image", "tif") | ("image", "tiff") => "image/tiff",
+        ("pdf", _) => "application/pdf",
+        ("video", "mp4") => "video/mp4",
+        ("video", "webm") => "video/webm",
+        ("video", "ogv") => "video/ogg",
+        ("video", "mov") => "video/quicktime",
+        ("video", "m4v") => "video/x-m4v",
+        ("audio", "mp3") => "audio/mpeg",
+        ("audio", "wav") => "audio/wav",
+        ("audio", "m4a") => "audio/mp4",
+        ("audio", "aac") => "audio/aac",
+        ("audio", "flac") => "audio/flac",
+        ("audio", "opus") => "audio/opus",
+        ("audio", "oga") | ("audio", "ogg") => "audio/ogg",
+        ("audio", "weba") => "audio/webm",
+        _ => return None,
+    };
+    Some(mime.to_string())
 }
 
 fn resolve_existing(workspace: &Workspace, relative: &str) -> Result<(PathBuf, PathBuf), String> {
@@ -159,19 +231,29 @@ fn list_entries(root: &Path, directory: &Path) -> Result<Vec<WorkspaceEntry>, St
             .strip_prefix(root)
             .map_err(|_| "目录越界".to_string())?;
         let name = item.file_name().to_string_lossy().into_owned();
+        if name == ".vinkey"
+            || name == "node_modules"
+            || name == "target"
+            || name == "dist"
+            || (name.starts_with('.') && !name.starts_with(".env"))
+        {
+            continue;
+        }
         if file_type.is_dir() {
             entries.push(WorkspaceEntry {
                 name,
                 path: relative_label(relative),
                 kind: "directory",
                 children: list_entries(root, &path)?,
+                document_kind: None,
             });
-        } else if file_type.is_file() && ensure_document_extension(&path).is_ok() {
+        } else if file_type.is_file() {
             entries.push(WorkspaceEntry {
                 name,
                 path: relative_label(relative),
                 kind: "file",
                 children: Vec::new(),
+                document_kind: Some(classify_file(&path)),
             });
         }
     }
@@ -234,15 +316,37 @@ fn restore_workspace_preference(app: &AppHandle) -> Option<Workspace> {
 
 fn read_document_at(workspace: &Workspace, relative: &str) -> Result<DocumentSnapshot, String> {
     let (clean, target) = resolve_existing(workspace, relative)?;
-    let kind = ensure_document_extension(&target)?;
     if !target.is_file() {
         return Err("目标不是文档".into());
     }
+    let mut kind = classify_file(&target);
     let bytes = fs::read(&target).map_err(|error| format!("无法读取文档：{error}"))?;
+    let size_bytes = bytes.len() as u64;
+    if matches!(kind, "image" | "pdf" | "audio" | "video" | "binary") {
+        let metadata =
+            fs::metadata(&target).map_err(|error| format!("无法读取文档信息：{error}"))?;
+        return Ok(DocumentSnapshot {
+            path: relative_label(&clean),
+            name: clean
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned(),
+            content: String::new(),
+            kind,
+            modified_ms: modified_ms(&metadata),
+            line_ending: "lf",
+            has_bom: false,
+            mime_type: mime_for_kind(&target, kind),
+            size_bytes,
+        });
+    }
     let has_bom = bytes.starts_with(&[0xef, 0xbb, 0xbf]);
     let body = if has_bom { &bytes[3..] } else { &bytes };
-    let raw =
-        String::from_utf8(body.to_vec()).map_err(|_| "文档不是有效的 UTF-8 文本".to_string())?;
+    let raw = String::from_utf8(body.to_vec()).unwrap_or_else(|_| {
+        kind = "binary";
+        String::new()
+    });
     let line_ending = if raw.contains("\r\n") { "crlf" } else { "lf" };
     let content = raw.replace("\r\n", "\n").replace('\r', "\n");
     let metadata = fs::metadata(&target).map_err(|error| format!("无法读取文档信息：{error}"))?;
@@ -258,6 +362,8 @@ fn read_document_at(workspace: &Workspace, relative: &str) -> Result<DocumentSna
         modified_ms: modified_ms(&metadata),
         line_ending,
         has_bom,
+        mime_type: None,
+        size_bytes,
     })
 }
 
@@ -291,6 +397,20 @@ fn read_document(
     state: State<'_, WorkspaceState>,
 ) -> Result<DocumentSnapshot, String> {
     read_document_at(&lock_workspace(&state)?, &path)
+}
+
+#[tauri::command]
+fn read_file_bytes(path: String, state: State<'_, WorkspaceState>) -> Result<Vec<u8>, String> {
+    let workspace = lock_workspace(&state)?;
+    let (_, target) = resolve_existing(&workspace, &path)?;
+    if !target.is_file() {
+        return Err("目标不是文件".into());
+    }
+    let metadata = fs::metadata(&target).map_err(|error| format!("无法读取文件信息：{error}"))?;
+    if metadata.len() > 32 * 1024 * 1024 {
+        return Err("预览文件不能超过 32 MB".into());
+    }
+    fs::read(&target).map_err(|error| format!("无法读取文件：{error}"))
 }
 
 #[tauri::command]
@@ -519,6 +639,7 @@ pub fn run() {
             authorize_workspace,
             get_workspace,
             read_document,
+            read_file_bytes,
             save_document,
             create_document,
             create_directory,
@@ -552,7 +673,7 @@ mod tests {
     }
 
     #[test]
-    fn accepts_supported_relative_documents() {
+    fn classifies_editor_file_types() {
         assert_eq!(
             ensure_document_extension(Path::new("chapters/one.MD")).unwrap(),
             "markdown"
@@ -560,6 +681,10 @@ mod tests {
         assert_eq!(
             ensure_document_extension(Path::new("notes.txt")).unwrap(),
             "text"
+        );
+        assert_eq!(
+            ensure_document_extension(Path::new("src/main.ts")).unwrap(),
+            "code"
         );
         assert!(ensure_document_extension(Path::new("image.png")).is_err());
     }

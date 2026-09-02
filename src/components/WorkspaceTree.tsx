@@ -1,7 +1,8 @@
-import { ChevronDown, ChevronRight, FileText, FileType2, Folder, FolderOpen, Plus, FolderPlus, RefreshCw } from 'lucide-react'
+import { Archive, Braces, ChevronDown, ChevronRight, FileCode2, FileText, Folder, FolderOpen, Image, Music2, Plus, FolderPlus, RefreshCw, Video } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import type { WorkspaceEntry } from '../types'
 import { filterWorkspaceTree } from '../lib/tree'
+import { getDocumentKind, getLanguageName } from '../lib/fileTypes'
 
 interface WorkspaceTreeProps {
   entries: WorkspaceEntry[]
@@ -24,13 +25,21 @@ function TreeItem({ entry, depth, activePath, onOpen, onContext }: {
       {expanded && entry.children.map((child) => <TreeItem key={child.path} entry={child} depth={depth + 1} activePath={activePath} onOpen={onOpen} onContext={onContext} />)}
     </>
   }
-  const Icon = entry.name.endsWith('.txt') ? FileType2 : FileText
+  const kind = entry.documentKind ?? getDocumentKind(entry.name)
+  const Icon = kind === 'markdown' ? FileText
+    : kind === 'code' ? FileCode2
+      : kind === 'image' ? Image
+        : kind === 'audio' ? Music2
+          : kind === 'video' ? Video
+            : kind === 'pdf' || kind === 'binary' ? Archive
+              : kind === 'text' ? FileText : Braces
+  const kindLabel = kind === 'binary' ? '二进制文件' : kind === 'pdf' ? 'PDF 预览' : kind === 'image' ? '图片预览' : kind === 'audio' ? '音频预览' : kind === 'video' ? '视频预览' : `${getLanguageName(entry.name)} 文件`
   return <button
     className={`tree-row file ${activePath === entry.path ? 'active' : ''}`}
     style={{ paddingLeft: 27 + depth * 14 }}
     onClick={() => onOpen(entry.path)}
     onContextMenu={(event) => { event.preventDefault(); onContext(entry.path) }}
-    title="打开文档；右键添加到对话上下文"
+    title={`${kindLabel}；左键打开，右键添加到对话上下文`}
   ><Icon /><span>{entry.name}</span></button>
 }
 

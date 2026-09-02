@@ -5,6 +5,7 @@ import type {
   DocumentSnapshot, ModelConnectionResult, ModelProfile, ModelProfileInput, SearchHit,
   ThemeMode, WorkspaceSnapshot,
 } from '../types'
+import { getDocumentKind } from './fileTypes'
 
 const PROFILE_KEY = 'vinkey.demo.modelProfiles'
 const CONVERSATION_KEY = 'vinkey.demo.conversations'
@@ -47,6 +48,25 @@ const demoDocuments = new Map<string, DocumentSnapshot>([
     lineEnding: 'lf',
     hasBom: false,
   }],
+  ['代码/线索.ts', {
+    path: '代码/线索.ts',
+    name: '线索.ts',
+    content: "export const clues = ['停在五点四十分的钟楼', '没有邮戳的信']\n",
+    kind: 'code',
+    modifiedMs: 1724860800000,
+    lineEnding: 'lf',
+    hasBom: false,
+  }],
+  ['素材/雾港标记.svg', {
+    path: '素材/雾港标记.svg',
+    name: '雾港标记.svg',
+    content: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 80"><rect width="120" height="80" fill="#182326"/><path d="M20 60L48 20l18 24 12-14 22 30z" fill="#36b8c4"/></svg>',
+    kind: 'image',
+    mimeType: 'image/svg+xml',
+    modifiedMs: 1724947200000,
+    lineEnding: 'lf',
+    hasBom: false,
+  }],
 ])
 
 function demoWorkspace(): WorkspaceSnapshot {
@@ -65,6 +85,16 @@ function demoWorkspace(): WorkspaceSnapshot {
         name: '设定', path: '设定', kind: 'directory', children: [
           { name: '人物.md', path: '设定/人物.md', kind: 'file', children: [] },
           { name: '时间线.txt', path: '设定/时间线.txt', kind: 'file', children: [] },
+        ],
+      },
+      {
+        name: '代码', path: '代码', kind: 'directory', children: [
+          { name: '线索.ts', path: '代码/线索.ts', kind: 'file', children: [], documentKind: 'code' },
+        ],
+      },
+      {
+        name: '素材', path: '素材', kind: 'directory', children: [
+          { name: '雾港标记.svg', path: '素材/雾港标记.svg', kind: 'file', children: [], documentKind: 'image' },
         ],
       },
     ],
@@ -119,12 +149,22 @@ export async function saveDocument(document: DocumentSnapshot): Promise<Document
   })
 }
 
+export async function readFileBytes(path: string): Promise<Uint8Array> {
+  if (!isDesktop()) {
+    const document = demoDocuments.get(path)
+    if (!document) throw new Error(`找不到文件：${path}`)
+    return new TextEncoder().encode(document.content)
+  }
+  const bytes = await invoke<number[]>('read_file_bytes', { path })
+  return Uint8Array.from(bytes)
+}
+
 export async function createDocument(path: string): Promise<DocumentSnapshot> {
   if (!isDesktop()) {
     if (demoDocuments.has(path)) throw new Error('同名文件已存在')
     const name = path.split('/').at(-1) ?? path
     const document: DocumentSnapshot = {
-      path, name, content: '', kind: path.endsWith('.txt') ? 'text' : 'markdown',
+      path, name, content: '', kind: getDocumentKind(path),
       modifiedMs: Date.now(), lineEnding: 'lf', hasBom: false,
     }
     demoDocuments.set(path, document)

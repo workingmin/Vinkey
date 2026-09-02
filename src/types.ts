@@ -1,5 +1,5 @@
 export type EntryKind = 'directory' | 'file'
-export type DocumentKind = 'markdown' | 'text'
+export type DocumentKind = 'markdown' | 'text' | 'code' | 'image' | 'pdf' | 'audio' | 'video' | 'binary'
 export type ViewMode = 'edit' | 'split' | 'preview'
 export type ProviderKind = 'ollama' | 'openai-compatible'
 export type ThemeMode = 'dark' | 'light'
@@ -9,6 +9,7 @@ export interface WorkspaceEntry {
   path: string
   kind: EntryKind
   children: WorkspaceEntry[]
+  documentKind?: DocumentKind
 }
 export interface WorkspaceSnapshot {
   id: string
@@ -25,6 +26,8 @@ export interface DocumentSnapshot {
   modifiedMs: number
   lineEnding: 'lf' | 'crlf'
   hasBom: boolean
+  mimeType?: string | null
+  sizeBytes?: number
 }
 
 export interface DocumentTab extends DocumentSnapshot {
