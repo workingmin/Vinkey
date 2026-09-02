@@ -67,3 +67,4 @@ npm run package:mac -- --install --open
 - [UI 设计：视觉与组件系统](docs/UI_DESIGN_SYSTEM.md)
 - [UI 设计：状态、流程与验收](docs/UI_DESIGN_STATES.md)
 - [GitHub 同类项目调研与功能取舍](docs/GITHUB_REFERENCE.md)
+- [Agent 与 Skill 建设计划](docs/AGENT_SKILL_PLAN.md)
