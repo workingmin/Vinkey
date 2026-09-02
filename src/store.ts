@@ -17,6 +17,9 @@ interface AppState {
   modelProfiles: ModelProfile[]
   activeModelId: string | null
   settingsOpen: boolean
+  sidebarCollapsed: boolean
+  settingsSidebarBeforeOpen: boolean | null
+  settingsSidebarUserOverride: boolean
   theme: ThemeMode
   viewMode: ViewMode
   error: string | null
@@ -35,6 +38,7 @@ interface AppState {
   setConversations: (conversations: ConversationSummary[]) => void
   setModelProfiles: (profiles: ModelProfile[]) => void
   setActiveModelId: (id: string | null) => void
+  setSidebarCollapsed: (collapsed: boolean) => void
   setSettingsOpen: (open: boolean) => void
   setTheme: (theme: ThemeMode) => void
   setError: (error: string | null) => void
@@ -79,6 +83,9 @@ export const useAppStore = create<AppState>((set) => ({
   modelProfiles: [],
   activeModelId: localStorage.getItem('vinkey.activeModelId'),
   settingsOpen: false,
+  sidebarCollapsed: localStorage.getItem('vinkey.sidebarCollapsed') === 'true',
+  settingsSidebarBeforeOpen: null,
+  settingsSidebarUserOverride: false,
   theme: localStorage.getItem('vinkey.theme') === 'light' ? 'light' : 'dark',
   viewMode: 'edit',
   error: null,
@@ -142,6 +149,11 @@ export const useAppStore = create<AppState>((set) => ({
     conversationTitle: conversation.title,
     messages: mergeRunMessages(conversation.messages, state.chatRuns[conversation.id]),
     settingsOpen: false,
+    sidebarCollapsed: state.settingsOpen && !state.settingsSidebarUserOverride
+      ? state.settingsSidebarBeforeOpen ?? state.sidebarCollapsed
+      : state.sidebarCollapsed,
+    settingsSidebarBeforeOpen: null,
+    settingsSidebarUserOverride: false,
   })),
   newConversation: () => set({ conversationId: null, conversationTitle: '新会话', messages: initialMessages, contextDocuments: [] }),
   setConversations: (conversations) => set({ conversations }),
@@ -150,7 +162,32 @@ export const useAppStore = create<AppState>((set) => ({
     activeModelId: modelProfiles.some((profile) => profile.id === state.activeModelId) ? state.activeModelId : modelProfiles[0]?.id ?? null,
   })),
   setActiveModelId: (activeModelId) => { if (activeModelId) localStorage.setItem('vinkey.activeModelId', activeModelId); set({ activeModelId }) },
-  setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
+  setSidebarCollapsed: (sidebarCollapsed) => {
+    localStorage.setItem('vinkey.sidebarCollapsed', String(sidebarCollapsed))
+    set((state) => ({
+      sidebarCollapsed,
+      settingsSidebarUserOverride: state.settingsOpen ? true : state.settingsSidebarUserOverride,
+    }))
+  },
+  setSettingsOpen: (settingsOpen) => set((state) => {
+    if (settingsOpen === state.settingsOpen) return state
+    if (settingsOpen) {
+      return {
+        settingsOpen: true,
+        settingsSidebarBeforeOpen: state.sidebarCollapsed,
+        settingsSidebarUserOverride: false,
+        sidebarCollapsed: true,
+      }
+    }
+    return {
+      settingsOpen: false,
+      sidebarCollapsed: state.settingsSidebarUserOverride
+        ? state.sidebarCollapsed
+        : state.settingsSidebarBeforeOpen ?? state.sidebarCollapsed,
+      settingsSidebarBeforeOpen: null,
+      settingsSidebarUserOverride: false,
+    }
+  }),
   setTheme: (theme) => { localStorage.setItem('vinkey.theme', theme); set({ theme }) },
   setError: (error) => set({ error }),
 }))

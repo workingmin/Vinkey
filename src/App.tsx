@@ -1,6 +1,6 @@
 import {
   Bot, Check, ChevronDown, ChevronRight, CirclePlus, FileText, Folder, FolderOpen,
-  MessageSquareText, PanelRightClose,
+  MessageSquareText, PanelLeftClose, PanelLeftOpen, PanelRightClose,
   Save, Search, Send, Settings, Square, X, Minus, Maximize2, Minimize2,
   RotateCcw, RotateCw, Copy, Scissors, Clipboard, Moon, Sun, Keyboard, ListChecks, RefreshCw,
 } from 'lucide-react'
@@ -215,6 +215,8 @@ function ProjectSessionSidebar({ onPageChange, onOpenWorkspace, onRefreshWorkspa
   const newConversation = useAppStore((state) => state.newConversation)
   const setConversation = useAppStore((state) => state.setConversation)
   const settingsOpen = useAppStore((state) => state.settingsOpen)
+  const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed)
+  const setSidebarCollapsed = useAppStore((state) => state.setSidebarCollapsed)
   const setSettingsOpen = useAppStore((state) => state.setSettingsOpen)
   const setError = useAppStore((state) => state.setError)
   const [query, setQuery] = useState('')
@@ -255,13 +257,14 @@ function ProjectSessionSidebar({ onPageChange, onOpenWorkspace, onRefreshWorkspa
   const conversationCount = conversations.length + (!conversationId ? 1 : 0)
   const visibleResultCount = conversationMatches.length + searchHits.length
 
-  return <aside className="session-sidebar" aria-label="项目与会话栏">
+  return <aside className={`session-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`} aria-label="项目与会话栏">
     <header className="session-sidebar-header" data-tauri-drag-region>
       <div className="session-brand-row" data-tauri-drag-region>
         <div className="session-brand" data-tauri-drag-region><span>V</span><div><strong>Vinkey</strong><small>本地创作工作台</small></div></div>
         <div className="session-header-actions">
           {workspace && <IconButton label="刷新项目" onClick={onRefreshWorkspace}><RefreshCw /></IconButton>}
           <IconButton label={workspace ? '切换项目' : '打开项目'} onClick={onOpenWorkspace}><FolderOpen /></IconButton>
+          <button className="icon-button sidebar-collapse-button" title={sidebarCollapsed ? '展开会话栏' : '折叠会话栏'} aria-label={sidebarCollapsed ? '展开会话栏' : '折叠会话栏'} onClick={() => setSidebarCollapsed(!sidebarCollapsed)}>{sidebarCollapsed ? <PanelLeftOpen /> : <PanelLeftClose />}</button>
         </div>
       </div>
       <label className="sidebar-search"><Search /><input aria-label="搜索会话或文档" placeholder="搜索会话或文档" value={query} onChange={(event) => setQuery(event.target.value)} />{query && <button type="button" aria-label="清除搜索" onClick={() => setQuery('')}><X /></button>}</label>
@@ -581,6 +584,7 @@ export function App() {
   const tabs = useAppStore((state) => state.tabs)
   const error = useAppStore((state) => state.error)
   const settingsOpen = useAppStore((state) => state.settingsOpen)
+  const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed)
   const theme = useAppStore((state) => state.theme)
   const setWorkspace = useAppStore((state) => state.setWorkspace)
   const openTab = useAppStore((state) => state.openTab)
@@ -738,7 +742,7 @@ export function App() {
 
   return <div className="app-frame" data-theme={theme} data-platform={isMacPlatform() ? 'mac' : 'desktop'}>
     <TitleBar onPageChange={changeContentPage} onOpenWorkspace={() => void openWorkspaceFromMenu()} onNewDocument={() => void newDocumentFromMenu()} onRefreshWorkspace={() => void refreshWorkspaceFromMenu()} onCloseDocument={closeDocumentFromMenu} onSave={() => void saveActive()} onShowShortcuts={showShortcuts} onShowAbout={showAbout} onShowWindowDiagnostics={showWindowDiagnostics} />
-    <div className="app-shell" data-theme={theme}>
+    <div className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`} data-theme={theme}>
       <ProjectSessionSidebar onPageChange={changeContentPage} onOpenWorkspace={() => void openWorkspaceFromMenu()} onRefreshWorkspace={() => void refreshWorkspaceFromMenu()} onOpenDocument={openDocument} />
       {settingsOpen ? <SettingsPage /> : <ContentPanel page={contentPage} onPageChange={changeContentPage} showFileEditor={fileEditorVisible && hasActiveDocument} onOpenDocument={openDocument} onOpenWorkspace={() => void openWorkspaceFromMenu()} onSave={saveActive} onCloseEditor={() => setFileEditorVisible(false)} onToggleContext={toggleDocumentContext} />}
       {error && <div className="error-banner" role="alert"><span>{error}</span><button aria-label="关闭错误提示" onClick={() => setError(null)}><X /></button></div>}

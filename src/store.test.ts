@@ -75,3 +75,43 @@ describe('conversation chat runs', () => {
     expect(useAppStore.getState().messages.some((item) => item.id === 'assistant-a')).toBe(false)
   })
 })
+
+describe('settings sidebar behavior', () => {
+  beforeEach(() => {
+    useAppStore.setState({
+      settingsOpen: false,
+      sidebarCollapsed: false,
+      settingsSidebarBeforeOpen: null,
+      settingsSidebarUserOverride: false,
+    })
+  })
+
+  it('collapses an expanded sidebar and restores it when settings closes', () => {
+    const store = useAppStore.getState()
+
+    store.setSettingsOpen(true)
+    expect(useAppStore.getState().sidebarCollapsed).toBe(true)
+
+    store.setSettingsOpen(false)
+    expect(useAppStore.getState().sidebarCollapsed).toBe(false)
+  })
+
+  it('keeps a sidebar that was already collapsed before settings', () => {
+    const store = useAppStore.getState()
+    store.setSidebarCollapsed(true)
+
+    store.setSettingsOpen(true)
+    store.setSettingsOpen(false)
+
+    expect(useAppStore.getState().sidebarCollapsed).toBe(true)
+  })
+
+  it('respects a manual sidebar change made while settings is open', () => {
+    const store = useAppStore.getState()
+    store.setSettingsOpen(true)
+    store.setSidebarCollapsed(false)
+    store.setSettingsOpen(false)
+
+    expect(useAppStore.getState().sidebarCollapsed).toBe(false)
+  })
+})

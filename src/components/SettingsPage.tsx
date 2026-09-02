@@ -1,4 +1,4 @@
-import { Bot, Check, Palette, PlugZap, Plus, Save, Settings, Trash2, X } from 'lucide-react'
+import { ArrowLeft, Bot, Check, Palette, PlugZap, Plus, Save, Settings, Trash2, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { deleteModelProfile, listModelProfiles, saveModelProfile, testModelConnection } from '../lib/desktop'
 import { useAppStore } from '../store'
@@ -30,6 +30,14 @@ export function SettingsPage() {
   const [testing, setTesting] = useState(false)
   const [saving, setSaving] = useState(false)
   const [connection, setConnection] = useState<ModelConnectionResult | null>(null)
+
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSettingsOpen(false)
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [setSettingsOpen])
 
   const selected = useMemo(() => profiles.find((profile) => profile.id === selectedId), [profiles, selectedId])
   useEffect(() => {
@@ -86,7 +94,7 @@ export function SettingsPage() {
     <div className="settings-content">
       <header className="settings-toolbar">
         <div><h1>{section === 'models' ? '模型与连接' : '外观'}</h1><p>{section === 'models' ? '配置本机、局域网或 OpenAI 兼容模型服务' : '界面偏好仅保存在本机'}</p></div>
-        <button className="icon-button" title="关闭设置" aria-label="关闭设置" onClick={() => setSettingsOpen(false)}><X /></button>
+        <button className="icon-button" title="返回工作区" aria-label="返回工作区" onClick={() => setSettingsOpen(false)}><ArrowLeft /></button>
       </header>
       {section === 'general' ? <div className="settings-form narrow">
         <div className="setting-row">
