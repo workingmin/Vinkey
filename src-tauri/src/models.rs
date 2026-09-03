@@ -1,4 +1,7 @@
-use crate::database::{self, DatabaseState};
+use crate::{
+    database::{self, DatabaseState},
+    runtime_log::RuntimeLogState,
+};
 use futures_util::StreamExt;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
@@ -9,7 +12,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex,
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tauri::{ipc::Channel, State};
 
@@ -198,6 +201,7 @@ pub fn list_model_profiles(state: State<'_, DatabaseState>) -> Result<Vec<ModelP
 pub fn save_model_profile(
     input: ModelProfileInput,
     state: State<'_, DatabaseState>,
+    runtime: State<'_, RuntimeLogState>,
 ) -> Result<ModelProfile, String> {
     validate_id(&input.id)?;
     let base_url = normalize_base(&input.kind, &input.base_url)?;
@@ -237,16 +241,40 @@ pub fn save_model_profile(
          model=excluded.model, context_window=excluded.context_window, has_api_key=excluded.has_api_key, updated_at=excluded.updated_at",
         params![input.id, input.name.trim(), input.kind, base_url, input.model.trim(), input.context_window, has_api_key as i32, updated_at as i64],
     ).map_err(|error| format!("无法保存模型配置：{error}"))?;
-    load_profile(&input.id, &state)
+    let profile = load_profile(&input.id, &state)?;
+    runtime.info(
+        "model.profile_saved",
+        serde_json::json!({
+            "profileId": profile.id.clone(),
+            "provider": profile.kind.clone(),
+            "model": profile.model.clone(),
+            "hasApiKey": profile.has_api_key,
+        })
+        .as_object()
+        .cloned()
+        .unwrap_or_default(),
+    );
+    Ok(profile)
 }
 
 #[tauri::command]
-pub fn delete_model_profile(id: String, state: State<'_, DatabaseState>) -> Result<(), String> {
+pub fn delete_model_profile(
+    id: String,
+    state: State<'_, DatabaseState>,
+    runtime: State<'_, RuntimeLogState>,
+) -> Result<(), String> {
     validate_id(&id)?;
     delete_secret(&id)?;
     database::open(&state)?
-        .execute("DELETE FROM model_profiles WHERE id = ?1", [id])
+        .execute("DELETE FROM model_profiles WHERE id = ?1", [&id])
         .map_err(|error| format!("无法删除模型配置：{error}"))?;
+    runtime.info(
+        "model.profile_deleted",
+        serde_json::json!({ "profileId": id })
+            .as_object()
+            .cloned()
+            .unwrap_or_default(),
+    );
     Ok(())
 }
 
@@ -308,7 +336,20 @@ async fn discover(profile: &ModelProfile, api_key: Option<&str>) -> Result<Vec<S
 pub async fn test_model_connection(
     input: ModelProfileInput,
     state: State<'_, DatabaseState>,
+    runtime: State<'_, RuntimeLogState>,
 ) -> Result<ConnectionResult, String> {
+    let started = Instant::now();
+    runtime.info(
+        "model.connection_test_started",
+        serde_json::json!({
+            "profileId": input.id.clone(),
+            "provider": input.kind.clone(),
+            "model": input.model.clone(),
+        })
+        .as_object()
+        .cloned()
+        .unwrap_or_default(),
+    );
     let base_url = normalize_base(&input.kind, &input.base_url)?;
     let stored = input
         .api_key
@@ -332,20 +373,36 @@ pub async fn test_model_connection(
         updated_at: now_ms(),
     };
     match discover(&profile, stored.as_deref()).await {
-        Ok(models) => Ok(ConnectionResult {
-            ok: true,
-            message: if models.is_empty() {
-                "连接成功，但服务未返回模型".into()
-            } else {
-                format!("连接成功，发现 {} 个模型", models.len())
-            },
-            models,
-        }),
-        Err(message) => Ok(ConnectionResult {
-            ok: false,
-            message,
-            models: Vec::new(),
-        }),
+        Ok(models) => {
+            runtime.info(
+                "model.connection_tested",
+                serde_json::json!({
+                    "ok": true,
+                    "modelCount": models.len(),
+                    "durationMs": started.elapsed().as_millis(),
+                })
+                .as_object()
+                .cloned()
+                .unwrap_or_default(),
+            );
+            Ok(ConnectionResult {
+                ok: true,
+                message: if models.is_empty() {
+                    "连接成功，但服务未返回模型".into()
+                } else {
+                    format!("连接成功，发现 {} 个模型", models.len())
+                },
+                models,
+            })
+        }
+        Err(message) => {
+            runtime.error("model.connection_tested", &message);
+            Ok(ConnectionResult {
+                ok: false,
+                message,
+                models: Vec::new(),
+            })
+        }
     }
 }
 
@@ -460,8 +517,24 @@ pub async fn stream_chat(
     on_event: Channel<ChatStreamEvent>,
     database: State<'_, DatabaseState>,
     cancellations: State<'_, ChatCancellation>,
+    runtime: State<'_, RuntimeLogState>,
 ) -> Result<(), String> {
+    let started = Instant::now();
     let profile = load_profile(&request.profile_id, &database)?;
+    let request_id = request.request_id.clone();
+    runtime.info(
+        "chat.started",
+        serde_json::json!({
+            "requestId": request_id.clone(),
+            "profileId": profile.id.clone(),
+            "provider": profile.kind.clone(),
+            "model": profile.model.clone(),
+            "messageCount": request.messages.len(),
+        })
+        .as_object()
+        .cloned()
+        .unwrap_or_default(),
+    );
     let key = if profile.has_api_key {
         Some(get_secret(&profile.id)?)
     } else {
@@ -481,6 +554,29 @@ pub async fn stream_chat(
         let _ = on_event.send(ChatStreamEvent::Error {
             message: message.clone(),
         });
+    }
+    match &result {
+        Ok(()) => runtime.info(
+            "chat.completed",
+            serde_json::json!({
+                "requestId": request_id.clone(),
+                "durationMs": started.elapsed().as_millis(),
+            })
+            .as_object()
+            .cloned()
+            .unwrap_or_default(),
+        ),
+        Err(message) if message == "请求已停止" => runtime.info(
+            "chat.cancelled",
+            serde_json::json!({
+                "requestId": request_id,
+                "durationMs": started.elapsed().as_millis(),
+            })
+            .as_object()
+            .cloned()
+            .unwrap_or_default(),
+        ),
+        Err(message) => runtime.error("chat.failed", message),
     }
     result
 }

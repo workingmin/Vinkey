@@ -11,6 +11,13 @@ const PROFILE_KEY = 'vinkey.demo.modelProfiles'
 const CONVERSATION_KEY = 'vinkey.demo.conversations'
 const demoCancellations = new Set<string>()
 
+export interface RuntimeDiagnostics {
+  path: string
+  platform: string
+  version: string
+  lines: string[]
+}
+
 const demoDocuments = new Map<string, DocumentSnapshot>([
   ['00-创作说明.md', {
     path: '00-创作说明.md',
@@ -111,6 +118,16 @@ export async function syncNativeWindowTheme(theme: ThemeMode): Promise<string | 
 export async function getWindowDiagnostics(): Promise<string> {
   if (!isDesktop()) return '窗口诊断仅在桌面应用中可用。'
   return invoke<string>('get_window_diagnostics')
+}
+
+export async function getRuntimeDiagnostics(): Promise<RuntimeDiagnostics> {
+  if (!isDesktop()) return { path: '浏览器演示模式', platform: 'web', version: '0.1.0', lines: [] }
+  return invoke<RuntimeDiagnostics>('get_runtime_diagnostics')
+}
+
+export async function recordRuntimeEvent(event: string, message?: string): Promise<void> {
+  if (!isDesktop()) return
+  await invoke('record_runtime_event', { event, message })
 }
 
 export async function chooseWorkspace(): Promise<WorkspaceSnapshot | null> {

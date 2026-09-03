@@ -3,6 +3,7 @@ import {
   MessageSquareText, PanelLeftClose, PanelLeftOpen, PanelRightClose,
   Save, Search, Send, Settings, Square, X, Minus, Maximize2, Minimize2,
   RotateCcw, RotateCw, Copy, Scissors, Clipboard, Moon, Sun, Keyboard, ListChecks, RefreshCw,
+  ScrollText,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
@@ -15,7 +16,8 @@ import { SettingsPage } from './components/SettingsPage'
 import { WorkspaceTree, workspaceActions } from './components/WorkspaceTree'
 import {
   cancelChat, chooseWorkspace, createDirectory, createDocument, isDesktop, listConversations,
-  getWindowDiagnostics, listModelProfiles, loadConversation, readDocument, readFileBytes, refreshWorkspace,
+  getWindowDiagnostics, getRuntimeDiagnostics, listModelProfiles, loadConversation, readDocument, readFileBytes, refreshWorkspace,
+  recordRuntimeEvent,
   saveConversationMessage, saveDocument, searchWorkspace, streamChat, syncNativeWindowTheme,
 } from './lib/desktop'
 import { buildContextMessage, calculateContextBudget, selectRecentMessages } from './lib/context'
@@ -43,6 +45,7 @@ async function installMacMenu(callbacks: {
   openSettings: () => void
   showShortcuts: () => void
   showWindowDiagnostics: () => void
+  showRuntimeDiagnostics: () => void
 }) {
   const menuItem = (text: string, action: () => void, accelerator?: string) => MenuItem.new({ text, accelerator, action: () => action() })
   const nativeItem = (item: PredefinedMenuItemOptions['item'], text: string) => PredefinedMenuItem.new({ item, text })
@@ -77,6 +80,7 @@ async function installMacMenu(callbacks: {
   const help = await Submenu.new({ text: '帮助', items: [
     await menuItem('查看快捷键', callbacks.showShortcuts),
     await menuItem('窗口诊断信息', callbacks.showWindowDiagnostics),
+    await menuItem('运行日志', callbacks.showRuntimeDiagnostics),
   ] })
   const appMenu = await Submenu.new({ text: 'Vinkey', items: [
     await PredefinedMenuItem.new({ item: { About: { name: 'Vinkey', version: '0.1.0', comments: '本地优先的 AI 文学创作工作台' } }, text: '关于 Vinkey' }),
@@ -94,7 +98,7 @@ async function installMacMenu(callbacks: {
 
 type AppMenuItem = { label: string; shortcut?: string; icon?: React.ComponentType<{ size?: number }>; disabled?: boolean; action: () => void }
 
-function TitleBar({ onPageChange, onOpenWorkspace, onNewDocument, onRefreshWorkspace, onCloseDocument, onSave, onShowShortcuts, onShowAbout, onShowWindowDiagnostics }: {
+function TitleBar({ onPageChange, onOpenWorkspace, onNewDocument, onRefreshWorkspace, onCloseDocument, onSave, onShowShortcuts, onShowAbout, onShowWindowDiagnostics, onShowRuntimeDiagnostics }: {
   onPageChange: (page: ContentPage) => void
   onOpenWorkspace: () => void
   onNewDocument: () => void
@@ -104,6 +108,7 @@ function TitleBar({ onPageChange, onOpenWorkspace, onNewDocument, onRefreshWorks
   onShowShortcuts: () => void
   onShowAbout: () => void
   onShowWindowDiagnostics: () => void
+  onShowRuntimeDiagnostics: () => void
 }) {
   const workspace = useAppStore((state) => state.workspace)
   const activeModelId = useAppStore((state) => state.activeModelId)
@@ -176,6 +181,7 @@ function TitleBar({ onPageChange, onOpenWorkspace, onNewDocument, onRefreshWorks
     { label: '帮助', items: [
       { label: '查看快捷键', icon: Keyboard, action: onShowShortcuts },
       { label: '窗口诊断信息', icon: Settings, action: onShowWindowDiagnostics },
+      { label: '运行日志', icon: ScrollText, action: onShowRuntimeDiagnostics },
       { label: '关于 Vinkey', icon: Bot, action: onShowAbout },
     ] },
   ]
@@ -670,6 +676,10 @@ export function App() {
   const setPendingNewFiles = useAppStore((state) => state.setPendingNewFiles)
   const [contentPage, setContentPage] = useState<ContentPage>('chat')
   const [fileEditorVisible, setFileEditorVisible] = useState(false)
+  const [runtimeDiagnostics, setRuntimeDiagnostics] = useState<Awaited<ReturnType<typeof getRuntimeDiagnostics>> | null>(null)
+  const [runtimeDiagnosticsOpen, setRuntimeDiagnosticsOpen] = useState(false)
+  const [runtimeDiagnosticsLoading, setRuntimeDiagnosticsLoading] = useState(false)
+  const [runtimeCopyState, setRuntimeCopyState] = useState<'idle' | 'copied'>('idle')
   const macMenuInstalled = useRef(false)
 
   const applyWorkspaceSnapshot = useCallback((next: Awaited<ReturnType<typeof refreshWorkspace>>, discover = true) => {
@@ -742,6 +752,37 @@ export function App() {
   const showWindowDiagnostics = useCallback(() => {
     void getWindowDiagnostics().then((diagnostics) => window.alert(diagnostics)).catch((cause) => setError(`读取窗口诊断失败：${String(cause)}`))
   }, [setError])
+
+  const showRuntimeDiagnostics = useCallback(async () => {
+    setRuntimeDiagnosticsOpen(true)
+    setRuntimeDiagnosticsLoading(true)
+    setRuntimeCopyState('idle')
+    try {
+      setRuntimeDiagnostics(await getRuntimeDiagnostics())
+    } catch (cause) {
+      setError(`读取运行日志失败：${String(cause)}`)
+      setRuntimeDiagnosticsOpen(false)
+    } finally {
+      setRuntimeDiagnosticsLoading(false)
+    }
+  }, [setError])
+
+  const copyRuntimeDiagnostics = useCallback(async () => {
+    if (!runtimeDiagnostics) return
+    const text = [`日志路径：${runtimeDiagnostics.path}`, `平台：${runtimeDiagnostics.platform}`, `版本：${runtimeDiagnostics.version}`, '', ...runtimeDiagnostics.lines].join('\n')
+    try {
+      await navigator.clipboard.writeText(text)
+      setRuntimeCopyState('copied')
+      window.setTimeout(() => setRuntimeCopyState('idle'), 1800)
+    } catch (cause) {
+      setError(`复制运行日志失败：${String(cause)}`)
+    }
+  }, [runtimeDiagnostics, setError])
+
+  useEffect(() => {
+    if (!error || !isDesktop()) return
+    void recordRuntimeEvent('frontend.error', error).catch(() => undefined)
+  }, [error])
 
   const refreshWorkspaceFromMenu = useCallback(async () => {
     if (!workspace) return openWorkspaceFromMenu()
@@ -820,8 +861,9 @@ export function App() {
       openSettings: () => useAppStore.getState().setSettingsOpen(true),
       showShortcuts,
       showWindowDiagnostics,
+      showRuntimeDiagnostics: () => void showRuntimeDiagnostics(),
     }).catch((cause) => { macMenuInstalled.current = false; setError(`macOS 菜单初始化失败：${String(cause)}`) })
-  }, [changeContentPage, closeDocumentFromMenu, newDocumentFromMenu, openWorkspaceFromMenu, refreshWorkspaceFromMenu, saveActive, setError, showShortcuts, showWindowDiagnostics])
+  }, [changeContentPage, closeDocumentFromMenu, newDocumentFromMenu, openWorkspaceFromMenu, refreshWorkspaceFromMenu, saveActive, setError, showRuntimeDiagnostics, showShortcuts, showWindowDiagnostics])
 
   useEffect(() => {
     const listener = (event: KeyboardEvent) => {
@@ -834,11 +876,21 @@ export function App() {
   const hasActiveDocument = useMemo(() => tabs.some((tab) => tab.path === activePath), [activePath, tabs])
 
   return <div className="app-frame" data-theme={theme} data-platform={isMacPlatform() ? 'mac' : 'desktop'}>
-    <TitleBar onPageChange={changeContentPage} onOpenWorkspace={() => void openWorkspaceFromMenu()} onNewDocument={() => void newDocumentFromMenu()} onRefreshWorkspace={() => void refreshWorkspaceFromMenu()} onCloseDocument={closeDocumentFromMenu} onSave={() => void saveActive()} onShowShortcuts={showShortcuts} onShowAbout={showAbout} onShowWindowDiagnostics={showWindowDiagnostics} />
+    <TitleBar onPageChange={changeContentPage} onOpenWorkspace={() => void openWorkspaceFromMenu()} onNewDocument={() => void newDocumentFromMenu()} onRefreshWorkspace={() => void refreshWorkspaceFromMenu()} onCloseDocument={closeDocumentFromMenu} onSave={() => void saveActive()} onShowShortcuts={showShortcuts} onShowAbout={showAbout} onShowWindowDiagnostics={showWindowDiagnostics} onShowRuntimeDiagnostics={() => void showRuntimeDiagnostics()} />
     <div className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`} data-theme={theme}>
       <ProjectSessionSidebar onPageChange={changeContentPage} onOpenWorkspace={() => void openWorkspaceFromMenu()} onRefreshWorkspace={() => void refreshWorkspaceFromMenu()} onOpenDocument={openDocument} />
       {settingsOpen ? <SettingsPage /> : <ContentPanel page={contentPage} onPageChange={changeContentPage} showFileEditor={fileEditorVisible && hasActiveDocument} onOpenDocument={openDocument} onOpenWorkspace={() => void openWorkspaceFromMenu()} onRefreshWorkspace={refreshWorkspaceFromMenu} onSave={saveActive} onCloseEditor={() => setFileEditorVisible(false)} onToggleContext={toggleDocumentContext} />}
       {error && <div className="error-banner" role="alert"><span>{error}</span><button aria-label="关闭错误提示" onClick={() => setError(null)}><X /></button></div>}
     </div>
+    {runtimeDiagnosticsOpen && <div className="runtime-diagnostics-backdrop" role="presentation" onClick={() => setRuntimeDiagnosticsOpen(false)}>
+      <section className="runtime-diagnostics-modal" role="dialog" aria-modal="true" aria-labelledby="runtime-diagnostics-title" onClick={(event) => event.stopPropagation()}>
+        <header><div><h2 id="runtime-diagnostics-title"><ScrollText />运行日志</h2><p>{runtimeDiagnostics?.path ?? '正在读取日志路径…'}</p></div><button className="icon-button" aria-label="关闭运行日志" title="关闭" onClick={() => setRuntimeDiagnosticsOpen(false)}><X /></button></header>
+        {runtimeDiagnosticsLoading ? <div className="runtime-diagnostics-empty">正在读取最近运行事件…</div> : runtimeDiagnostics && <>
+          <div className="runtime-diagnostics-meta"><span>平台 {runtimeDiagnostics.platform}</span><span>版本 {runtimeDiagnostics.version}</span><span>{runtimeDiagnostics.lines.length} 条最近事件</span></div>
+          <pre className="runtime-diagnostics-log">{runtimeDiagnostics.lines.length > 0 ? runtimeDiagnostics.lines.join('\n') : '暂无运行日志。'}</pre>
+          <footer><button className="secondary-button" onClick={() => void showRuntimeDiagnostics()}><RefreshCw />刷新</button><button className="primary-button" onClick={() => void copyRuntimeDiagnostics()}><Copy />{runtimeCopyState === 'copied' ? '已复制' : '复制日志'}</button></footer>
+        </>}
+      </section>
+    </div>}
   </div>
 }

@@ -1,6 +1,8 @@
+use crate::runtime_log::RuntimeLogState;
 use crate::{lock_workspace, WorkspaceState};
 use serde::Serialize;
 use std::fs;
+use std::time::Instant;
 use tauri::State;
 use walkdir::{DirEntry, WalkDir};
 
@@ -25,9 +27,12 @@ pub async fn search_workspace(
     query: String,
     max_results: usize,
     state: State<'_, WorkspaceState>,
+    runtime: State<'_, RuntimeLogState>,
 ) -> Result<Vec<SearchHit>, String> {
     let workspace = lock_workspace(&state)?;
     let limit = max_results.clamp(1, 200);
+    let started = Instant::now();
+    let runtime = runtime.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         let needle = query.trim().to_lowercase();
         if needle.is_empty() {
@@ -72,6 +77,16 @@ pub async fn search_workspace(
                 }
             }
         }
+        runtime.info(
+            "search.completed",
+            serde_json::json!({
+                "resultCount": hits.len(),
+                "durationMs": started.elapsed().as_millis(),
+            })
+            .as_object()
+            .cloned()
+            .unwrap_or_default(),
+        );
         Ok(hits)
     })
     .await

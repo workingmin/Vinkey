@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 use std::{
     collections::hash_map::DefaultHasher,
     fs,
@@ -13,6 +14,7 @@ use tauri::{AppHandle, Manager, State, WebviewWindow};
 mod database;
 mod long_text;
 mod models;
+mod runtime_log;
 mod search;
 
 #[derive(Default)]
@@ -71,6 +73,13 @@ pub(crate) fn lock_workspace(state: &State<'_, WorkspaceState>) -> Result<Worksp
         .map_err(|_| "工作区状态不可用".to_string())?
         .clone()
         .ok_or_else(|| "请先选择工作目录".to_string())
+}
+
+fn log_fields(values: impl IntoIterator<Item = (&'static str, Value)>) -> Map<String, Value> {
+    values
+        .into_iter()
+        .map(|(key, value)| (key.to_string(), value))
+        .collect()
 }
 
 fn validate_relative(path: &str) -> Result<PathBuf, String> {
@@ -373,6 +382,7 @@ fn authorize_workspace(
     root: String,
     app: AppHandle,
     state: State<'_, WorkspaceState>,
+    runtime: State<'_, runtime_log::RuntimeLogState>,
 ) -> Result<WorkspaceSnapshot, String> {
     let canonical = PathBuf::from(root)
         .canonicalize()
@@ -383,21 +393,48 @@ fn authorize_workspace(
     let workspace = workspace_from_root(canonical);
     let snapshot = workspace_snapshot(&workspace)?;
     persist_workspace_preference(&app, &workspace)?;
+    runtime.set_workspace_root(workspace.root.clone());
+    runtime.info(
+        "workspace.authorized",
+        log_fields([
+            ("workspaceId", Value::String(workspace.id.clone())),
+            ("name", Value::String(workspace.name.clone())),
+        ]),
+    );
     *state.0.lock().map_err(|_| "工作区状态不可用".to_string())? = Some(workspace);
     Ok(snapshot)
 }
 
 #[tauri::command]
-fn get_workspace(state: State<'_, WorkspaceState>) -> Result<WorkspaceSnapshot, String> {
-    workspace_snapshot(&lock_workspace(&state)?)
+fn get_workspace(
+    state: State<'_, WorkspaceState>,
+    runtime: State<'_, runtime_log::RuntimeLogState>,
+) -> Result<WorkspaceSnapshot, String> {
+    let workspace = lock_workspace(&state)?;
+    let snapshot = workspace_snapshot(&workspace)?;
+    runtime.info(
+        "workspace.refresh",
+        log_fields([("workspaceId", Value::String(workspace.id))]),
+    );
+    Ok(snapshot)
 }
 
 #[tauri::command]
 fn read_document(
     path: String,
     state: State<'_, WorkspaceState>,
+    runtime: State<'_, runtime_log::RuntimeLogState>,
 ) -> Result<DocumentSnapshot, String> {
-    read_document_at(&lock_workspace(&state)?, &path)
+    let document = read_document_at(&lock_workspace(&state)?, &path)?;
+    runtime.info(
+        "document.read",
+        log_fields([
+            ("path", Value::String(document.path.clone())),
+            ("kind", Value::String(document.kind.into())),
+            ("sizeBytes", Value::from(document.size_bytes)),
+        ]),
+    );
+    Ok(document)
 }
 
 #[tauri::command]
@@ -406,18 +443,28 @@ fn chunk_document(
     max_tokens: Option<usize>,
     overlap_tokens: Option<usize>,
     state: State<'_, WorkspaceState>,
+    runtime: State<'_, runtime_log::RuntimeLogState>,
 ) -> Result<long_text::ChunkManifest, String> {
     let workspace = lock_workspace(&state)?;
     let document = read_document_at(&workspace, &path)?;
     if !matches!(document.kind, "markdown" | "text" | "code") {
         return Err("只有文本类文档可以进行分块".into());
     }
-    long_text::chunk_text(
+    let manifest = long_text::chunk_text(
         document.path,
         &document.content,
         max_tokens.unwrap_or(2048),
         overlap_tokens.unwrap_or(128),
-    )
+    )?;
+    runtime.info(
+        "document.chunk",
+        log_fields([
+            ("path", Value::String(manifest.source_id.clone())),
+            ("sourceTokens", Value::from(manifest.source_tokens)),
+            ("chunkCount", Value::from(manifest.chunks.len())),
+        ]),
+    );
+    Ok(manifest)
 }
 
 #[tauri::command]
@@ -442,6 +489,7 @@ fn save_document(
     line_ending: String,
     has_bom: bool,
     state: State<'_, WorkspaceState>,
+    runtime: State<'_, runtime_log::RuntimeLogState>,
 ) -> Result<DocumentSnapshot, String> {
     let workspace = lock_workspace(&state)?;
     let (_, target) = resolve_existing(&workspace, &path)?;
@@ -477,13 +525,22 @@ fn save_document(
     temporary
         .persist(&target)
         .map_err(|error| format!("无法替换文档：{}", error.error))?;
-    read_document_at(&workspace, &path)
+    let document = read_document_at(&workspace, &path)?;
+    runtime.info(
+        "document.save",
+        log_fields([
+            ("path", Value::String(document.path.clone())),
+            ("sizeBytes", Value::from(document.size_bytes)),
+        ]),
+    );
+    Ok(document)
 }
 
 #[tauri::command]
 fn create_document(
     path: String,
     state: State<'_, WorkspaceState>,
+    runtime: State<'_, runtime_log::RuntimeLogState>,
 ) -> Result<DocumentSnapshot, String> {
     let workspace = lock_workspace(&state)?;
     let (_, target) = resolve_for_create(&workspace, &path)?;
@@ -498,17 +555,31 @@ fn create_document(
         .create_new(true)
         .open(&target)
         .map_err(|error| format!("无法创建文档：{error}"))?;
-    read_document_at(&workspace, &path)
+    let document = read_document_at(&workspace, &path)?;
+    runtime.info(
+        "document.created",
+        log_fields([("path", Value::String(document.path.clone()))]),
+    );
+    Ok(document)
 }
 
 #[tauri::command]
-fn create_directory(path: String, state: State<'_, WorkspaceState>) -> Result<(), String> {
+fn create_directory(
+    path: String,
+    state: State<'_, WorkspaceState>,
+    runtime: State<'_, runtime_log::RuntimeLogState>,
+) -> Result<(), String> {
     let workspace = lock_workspace(&state)?;
-    let (_, target) = resolve_for_create(&workspace, &path)?;
+    let (clean, target) = resolve_for_create(&workspace, &path)?;
     if target.exists() {
         return Err("同名路径已存在".into());
     }
-    fs::create_dir_all(target).map_err(|error| format!("无法创建文件夹：{error}"))
+    fs::create_dir_all(target).map_err(|error| format!("无法创建文件夹：{error}"))?;
+    runtime.info(
+        "workspace.directory_created",
+        log_fields([("path", Value::String(relative_label(&clean)))]),
+    );
+    Ok(())
 }
 
 fn append_window_diagnostic(app: &AppHandle, message: &str) -> Result<PathBuf, String> {
@@ -562,6 +633,7 @@ fn sync_native_window_theme(
     theme: String,
     window: WebviewWindow,
     app: AppHandle,
+    runtime: State<'_, runtime_log::RuntimeLogState>,
 ) -> Result<String, String> {
     #[cfg(target_os = "macos")]
     let theme_result = {
@@ -602,6 +674,14 @@ fn sync_native_window_theme(
         window_build_diagnostic(&app)
     );
     let log_path = append_window_diagnostic(&app, &message)?;
+    runtime.info(
+        "window.theme_synced",
+        log_fields([
+            ("theme", Value::String(theme)),
+            ("status", Value::String(theme_status)),
+            ("decorated", Value::String(decorated)),
+        ]),
+    );
     theme_result.map_err(|error| format!("{error}\n窗口诊断日志：{}", log_path.display()))?;
     Ok(format!("{message}\n日志：{}", log_path.display()))
 }
@@ -622,6 +702,31 @@ fn get_window_diagnostics(app: AppHandle) -> Result<String, String> {
     ))
 }
 
+#[tauri::command]
+fn get_runtime_diagnostics(
+    app: AppHandle,
+    runtime: State<'_, runtime_log::RuntimeLogState>,
+) -> runtime_log::RuntimeDiagnostics {
+    runtime.diagnostics(&app.package_info().version.to_string())
+}
+
+#[tauri::command]
+fn record_runtime_event(
+    event: String,
+    message: Option<String>,
+    runtime: State<'_, runtime_log::RuntimeLogState>,
+) -> Result<(), String> {
+    if event.trim().is_empty() || event.len() > 80 {
+        return Err("运行日志事件名无效".into());
+    }
+    let mut fields = Map::new();
+    if let Some(message) = message.filter(|value| !value.trim().is_empty()) {
+        fields.insert("message".into(), Value::String(message));
+    }
+    runtime.info(event.trim(), fields);
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -629,6 +734,15 @@ pub fn run() {
         .manage(WorkspaceState::default())
         .manage(models::ChatCancellation::default())
         .setup(|app| {
+            let data_dir = app.path().app_data_dir()?;
+            fs::create_dir_all(&data_dir)?;
+            let runtime = runtime_log::RuntimeLogState::open(data_dir.join("vinkey-runtime.jsonl"))
+                .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
+            runtime.info("app.start", log_fields([
+                ("platform", Value::String(std::env::consts::OS.into())),
+                ("arch", Value::String(std::env::consts::ARCH.into())),
+            ]));
+            app.manage(runtime.clone());
             // macOS window chrome is configured before creation in tauri.macos.conf.json.
             #[cfg(target_os = "macos")]
             if let Some(window) = app.get_webview_window("main") {
@@ -644,16 +758,20 @@ pub fn run() {
                     eprintln!("无法写入 macOS 窗口诊断日志：{error}");
                 }
             }
-            let data_dir = app.path().app_data_dir()?;
-            fs::create_dir_all(&data_dir)?;
             let database_path = data_dir.join("vinkey.sqlite3");
             database::init(&database_path)?;
             app.manage(database::DatabaseState(database_path));
             if let Some(workspace) = restore_workspace_preference(app.handle()) {
+                runtime.set_workspace_root(workspace.root.clone());
+                runtime.info("workspace.restored", log_fields([
+                    ("workspaceId", Value::String(workspace.id.clone())),
+                    ("name", Value::String(workspace.name.clone())),
+                ]));
                 if let Ok(mut state) = app.state::<WorkspaceState>().0.lock() {
                     *state = Some(workspace);
                 }
             }
+            runtime.info("app.ready", Map::new());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -667,6 +785,8 @@ pub fn run() {
             create_directory,
             sync_native_window_theme,
             get_window_diagnostics,
+            get_runtime_diagnostics,
+            record_runtime_event,
             search::search_workspace,
             models::list_model_profiles,
             models::save_model_profile,
