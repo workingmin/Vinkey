@@ -17,6 +17,7 @@ use std::{
 use tauri::{ipc::Channel, State};
 
 const KEYRING_SERVICE: &str = "com.vinkey.desktop";
+const CHAT_TIMEOUT_SECS: u64 = 300;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -286,6 +287,14 @@ fn client() -> Result<reqwest::Client, String> {
         .map_err(|error| format!("无法创建模型连接：{error}"))
 }
 
+fn chat_client() -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(5))
+        .timeout(Duration::from_secs(CHAT_TIMEOUT_SECS))
+        .build()
+        .map_err(|error| format!("无法创建模型连接：{error}"))
+}
+
 async fn discover(profile: &ModelProfile, api_key: Option<&str>) -> Result<Vec<String>, String> {
     let url = if profile.kind == "ollama" {
         format!("{}/api/tags", profile.base_url)
@@ -481,16 +490,20 @@ async fn run_stream(
             json!({"model": profile.model, "messages": messages, "stream": true}),
         )
     };
-    let mut builder = client()?.post(url).json(&body);
+    let mut builder = chat_client()?.post(url).json(&body);
     if let Some(value) = key.as_deref().filter(|value| !value.is_empty()) {
         builder = builder.bearer_auth(value);
     }
-    let response = response_or_error(
-        builder
-            .send()
-            .await
-            .map_err(|error| format!("模型请求失败：{error}"))?,
-    )
+    let response = response_or_error(builder.send().await.map_err(|error| {
+        if error.is_timeout() {
+            format!(
+                "模型请求超时：{} 秒内未收到完整响应，请检查模型推理速度或缩短上下文",
+                CHAT_TIMEOUT_SECS
+            )
+        } else {
+            format!("模型请求失败：{error}")
+        }
+    })?)
     .await?;
     let mut stream = response.bytes_stream();
     let mut buffer = Vec::<u8>::new();
@@ -498,7 +511,20 @@ async fn run_stream(
         if cancel.load(Ordering::Relaxed) {
             return Err("请求已停止".into());
         }
-        buffer.extend_from_slice(&chunk.map_err(|error| format!("读取模型响应失败：{error}"))?);
+        buffer.extend_from_slice(&chunk.map_err(|error| {
+            if error.is_timeout() {
+                format!(
+                    "模型响应超时：{} 秒内未完成响应，请检查模型推理速度或缩短上下文",
+                    CHAT_TIMEOUT_SECS
+                )
+            } else if error.is_decode() {
+                format!("模型响应解码失败：{error}，服务可能提前关闭了响应流")
+            } else if error.is_body() {
+                format!("模型响应连接中断：{error}")
+            } else {
+                format!("读取模型响应失败：{error}")
+            }
+        })?);
         while let Some(position) = buffer.iter().position(|byte| *byte == b'\n') {
             let line = buffer.drain(..=position).collect::<Vec<_>>();
             emit_stream_line(&line, &profile.kind, &channel)?;

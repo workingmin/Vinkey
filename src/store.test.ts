@@ -17,6 +17,7 @@ const run = (conversationId: string): ChatRun => ({
   conversationTitle: `会话 ${conversationId}`,
   requestId: `request-${conversationId}`,
   status: 'thinking',
+  statusMessage: null,
   userMessage: message(`user-${conversationId}`, 'user', '问题', 2),
   assistantMessage: message(`assistant-${conversationId}`, 'assistant', '', 3),
 })
@@ -81,9 +82,10 @@ describe('conversation chat runs', () => {
     store.setConversation(conversation('a'))
     store.beginChatRun(run('a'))
     store.appendChatRunChunk('a', '已收到')
-    store.setChatRunStatus('a', 'streaming')
+    store.setChatRunStatus('a', 'streaming', '已收到模型响应')
 
     expect(useAppStore.getState().chatRuns.a.status).toBe('streaming')
+    expect(useAppStore.getState().chatRuns.a.statusMessage).toBe('已收到模型响应')
     expect(useAppStore.getState().chatRuns.a.assistantMessage.content).toBe('已收到')
   })
 })

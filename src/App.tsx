@@ -228,7 +228,6 @@ function ProjectSessionSidebar({ onPageChange, onOpenWorkspace, onRefreshWorkspa
 }) {
   const workspace = useAppStore((state) => state.workspace)
   const conversations = useAppStore((state) => state.conversations)
-  const chatRuns = useAppStore((state) => state.chatRuns)
   const conversationId = useAppStore((state) => state.conversationId)
   const messages = useAppStore((state) => state.messages)
   const newConversation = useAppStore((state) => state.newConversation)
@@ -306,16 +305,11 @@ function ProjectSessionSidebar({ onPageChange, onOpenWorkspace, onRefreshWorkspa
               {!hasQuery && <button className="project-new-session" onClick={startConversation}><CirclePlus />新建会话</button>}
               {!hasQuery && !conversationId && <button className="conversation-item active" onClick={startConversation}><MessageSquareText /><span><b>新会话</b><small>{Math.max(0, messages.length - 1)} 条消息 · 尚未保存</small></span></button>}
               {conversationMatches.map((conversation) => {
-                const run = chatRuns[conversation.id]
-                const status = run ? chatStatusMeta[run.status] : null
-                return <button key={conversation.id} className={`conversation-item ${conversationId === conversation.id ? 'active' : ''} ${run ? 'is-running' : ''}`} onClick={() => void selectConversation(conversation.id)}>
+                return <button key={conversation.id} className={`conversation-item ${conversationId === conversation.id ? 'active' : ''}`} onClick={() => void selectConversation(conversation.id)}>
                   <MessageSquareText />
                   <span>
                     <b>{conversation.title}</b>
-                    <small className={status ? 'conversation-item-meta has-status' : 'conversation-item-meta'}>
-                      {status && <span className={`conversation-live-status status-${run.status}`} title={status.title} role="status"><i aria-hidden="true" />{status.label}</span>}
-                      {status && <span aria-hidden="true"> · </span>}{conversation.messageCount} 条消息 · {new Date(conversation.updatedAt).toLocaleString()}
-                    </small>
+                    <small className="conversation-item-meta">{conversation.messageCount} 条消息 · {new Date(conversation.updatedAt).toLocaleString()}</small>
                   </span>
                 </button>
               })}
@@ -381,9 +375,9 @@ function FileBrowserPanel({ onOpenDocument, onToggleContext, onOpenWorkspace, on
   </section>
 }
 
-function ChatMessageItem({ message, streaming, onCopyError }: {
+function ChatMessageItem({ message, activity, onCopyError }: {
   message: ChatMessage
-  streaming: boolean
+  activity?: { status: ChatRunStatus; statusMessage: string | null }
   onCopyError: (message: string) => void
 }) {
   const [copied, setCopied] = useState(false)
@@ -413,9 +407,10 @@ function ChatMessageItem({ message, streaming, onCopyError }: {
     {isAssistant && <div className="avatar" aria-hidden="true"><Bot /></div>}
     <div className="message-stack">
       {isAssistant && <div className="message-author">Vinkey</div>}
+      {isAssistant && activity && <div className={`message-activity status-${activity.status}`} role="status" aria-live="polite"><i aria-hidden="true" /><span>{activity.statusMessage ?? chatStatusMeta[activity.status].label}</span></div>}
       <div className="message-bubble">
         {message.content ? <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw, rehypeSanitize]}>{message.content}</ReactMarkdown>
-          : streaming ? <div className="typing" aria-label="正在生成"><i /><i /><i /></div> : null}
+          : activity ? <div className="typing" aria-label={activity.statusMessage ?? chatStatusMeta[activity.status].label}><i /><i /><i /></div> : null}
       </div>
       <div className="message-actions">
         {message.content && <button type="button" onClick={() => void copyMessage()} title={copied ? '已复制' : '复制消息'} aria-label={copied ? '已复制' : '复制消息'}>{copied ? <Check /> : <Copy />}<span>{copied ? '已复制' : '复制'}</span></button>}
@@ -526,19 +521,21 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
       conversationTitle: nextTitle,
       requestId: nextRequestId,
       status: 'sending',
+      statusMessage: null,
       userMessage,
       assistantMessage,
     })
     try {
       await saveConversationMessage(nextConversationId, nextTitle, userMessage)
       setConversations(await listConversations())
-      setChatRunStatus(nextConversationId, 'thinking')
+      setChatRunStatus(nextConversationId, 'thinking', null)
       if (useLongTextPipeline) {
-        setChatRunStatus(nextConversationId, 'fetching')
+        setChatRunStatus(nextConversationId, 'fetching', '正在准备长文本分析…')
         setAnalysisStatus('正在准备长文本分析…')
         const result = await analyzeLongText(requestContextDocuments, value, activeModel, nextRequestId, (progress) => {
-          setChatRunStatus(nextConversationId, progress.stage === 'chunking' ? 'fetching' : 'tool_calling')
-          setAnalysisStatus(`${progress.message} · ${progress.completed}/${progress.total}`)
+          const message = `${progress.message} · ${progress.completed}/${progress.total}`
+          setChatRunStatus(nextConversationId, progress.stage === 'chunking' ? 'fetching' : 'tool_calling', message)
+          setAnalysisStatus(message)
         })
         appendChatRunChunk(nextConversationId, result.content)
       } else {
@@ -550,7 +547,7 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
           messages: [...(context ? [{ role: 'user' as const, content: context }] : []), ...recent.map(({ role, content }) => ({ role, content }))],
         }, (event) => {
           if (event.type === 'chunk') {
-            setChatRunStatus(nextConversationId, 'streaming')
+            setChatRunStatus(nextConversationId, 'streaming', null)
             appendChatRunChunk(nextConversationId, event.content)
           }
           if (event.type === 'error') setError(event.message)
@@ -574,7 +571,7 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
 
   const stop = async () => {
     if (!activeChatRun || activeChatRun.status === 'stopping') return
-    setChatRunStatus(activeChatRun.conversationId, 'stopping')
+    setChatRunStatus(activeChatRun.conversationId, 'stopping', null)
     if (analysisStatus) cancelLongTextAnalysis(activeChatRun.requestId)
     await cancelChat(activeChatRun.requestId)
   }
@@ -608,7 +605,7 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
         {messages.map((message) => <ChatMessageItem
           key={message.id}
           message={message}
-          streaming={Boolean(activeChatRun?.assistantMessage.id === message.id && !message.content)}
+          activity={activeChatRun?.assistantMessage.id === message.id ? activeChatRun : undefined}
           onCopyError={setError}
         />)}
       </div>

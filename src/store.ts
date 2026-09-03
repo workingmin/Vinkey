@@ -35,7 +35,7 @@ interface AppState {
   setPendingNewFiles: (paths: string[]) => void
   clearPendingNewFiles: () => void
   beginChatRun: (run: ChatRun) => void
-  setChatRunStatus: (conversationId: string, status: ChatRunStatus) => void
+  setChatRunStatus: (conversationId: string, status: ChatRunStatus, message?: string | null) => void
   appendChatRunChunk: (conversationId: string, chunk: string) => void
   endChatRun: (conversationId: string, discardAssistant: boolean) => void
   setConversation: (conversation: Conversation) => void
@@ -54,6 +54,7 @@ export interface ChatRun {
   conversationTitle: string
   requestId: string
   status: ChatRunStatus
+  statusMessage: string | null
   userMessage: ChatMessage
   assistantMessage: ChatMessage
 }
@@ -127,10 +128,10 @@ export const useAppStore = create<AppState>((set) => ({
       ? mergeRunMessages(state.messages, run)
       : state.messages,
   })),
-  setChatRunStatus: (conversationId, status) => set((state) => {
+  setChatRunStatus: (conversationId, status, statusMessage = null) => set((state) => {
     const run = state.chatRuns[conversationId]
-    if (!run || run.status === status) return state
-    return { chatRuns: { ...state.chatRuns, [conversationId]: { ...run, status } } }
+    if (!run || (run.status === status && run.statusMessage === statusMessage)) return state
+    return { chatRuns: { ...state.chatRuns, [conversationId]: { ...run, status, statusMessage } } }
   }),
   appendChatRunChunk: (conversationId, chunk) => set((state) => {
     const run = state.chatRuns[conversationId]
