@@ -17,11 +17,13 @@ import { WorkspaceTree, workspaceActions } from './components/WorkspaceTree'
 import {
   cancelChat, chooseWorkspace, createDirectory, createDocument, isDesktop, listConversations,
   getWindowDiagnostics, getRuntimeDiagnostics, listModelProfiles, loadConversation, readDocument, readFileBytes, refreshWorkspace,
-  recordRuntimeEvent,
+  recordRuntimeEvent, writeStructureOutputs,
   saveConversationMessage, saveDocument, searchWorkspace, streamChat, syncNativeWindowTheme,
 } from './lib/desktop'
 import { buildContextMessage, calculateContextBudget, selectRecentMessages } from './lib/context'
 import { analyzeLongText, cancelLongTextAnalysis } from './lib/longTextAnalysis'
+import { classifyTask } from './lib/intent'
+import { formatStructureResult, segmentDocument } from './lib/structureSegmentation'
 import { useAppStore } from './store'
 import type { ChatActivity, ChatMessage, ChatRunStatus, DocumentSnapshot, ViewMode, WorkspaceEntry } from './types'
 import { getDocumentKind, getLanguageName, isEditableDocument } from './lib/fileTypes'
@@ -471,6 +473,7 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
   const setConversation = useAppStore((state) => state.setConversation)
   const setActiveModelId = useAppStore((state) => state.setActiveModelId)
   const setConversations = useAppStore((state) => state.setConversations)
+  const setWorkspace = useAppStore((state) => state.setWorkspace)
   const setSettingsOpen = useAppStore((state) => state.setSettingsOpen)
   const activePath = useAppStore((state) => state.activePath)
   const tabs = useAppStore((state) => state.tabs)
@@ -527,17 +530,33 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
   const send = async () => {
     const value = prompt.trim()
     if (!value || busy) return
-    if (!activeModel) { setSettingsOpen(true); return }
     let requestContextDocuments = contextDocuments
-    const explicitFileAnalysis = /(分析(?:当前|这个)?(?:文档|文件|文本)|拆分(?:章节|场景)|故事主线|人物线|章节结构|提取人物)/.test(value)
     const activeDocument = activePath ? tabs.find((tab) => tab.path === activePath) : undefined
-    if (explicitFileAnalysis && requestContextDocuments.length === 0 && activeDocument) {
+    let taskPlan = classifyTask(value, requestContextDocuments.length > 0 || Boolean(activeDocument))
+    if (taskPlan.intent !== 'general-chat' && requestContextDocuments.length === 0 && activeDocument) {
       addContextDocument({ path: activeDocument.path, name: activeDocument.name, content: activeDocument.content, size: activeDocument.content.length })
       requestContextDocuments = useAppStore.getState().contextDocuments
+      taskPlan = classifyTask(value, requestContextDocuments.length > 0)
     }
-    const requestBudget = calculateContextBudget(messages, requestContextDocuments, value, activeModel.contextWindow)
-    const useLongTextPipeline = requestBudget.exceedsLimit && explicitFileAnalysis && requestContextDocuments.length > 0
-    if (requestBudget.exceedsLimit && !useLongTextPipeline) {
+
+    if (taskPlan.intent === 'structure-segmentation' && requestContextDocuments.length === 0) {
+      setError('章节和场景拆分需要先选择或打开文档。')
+      return
+    }
+    const selectedModel = activeModel
+    if (taskPlan.requiresModel && !selectedModel) { setSettingsOpen(true); return }
+
+    const requestBudget = taskPlan.requiresModel
+      ? calculateContextBudget(messages, requestContextDocuments, value, selectedModel?.contextWindow ?? 32768)
+      : null
+    const useLongTextPipeline = Boolean(requestBudget?.exceedsLimit)
+      && taskPlan.intent !== 'general-chat'
+      && requestContextDocuments.length > 0
+    void recordRuntimeEvent(
+      'task.routed',
+      `intent=${taskPlan.intent}, operation=${taskPlan.operation}, scope=${taskPlan.scope}, requiresModel=${taskPlan.requiresModel}, contextDocuments=${requestContextDocuments.length}, estimatedTokens=${requestBudget?.estimatedTokens ?? 0}, limit=${requestBudget?.limit ?? 0}, longText=${useLongTextPipeline}`,
+    )
+    if (requestBudget?.exceedsLimit && !useLongTextPipeline) {
       setError('当前消息和上下文超过模型可用窗口。请缩短输入，或使用“分析文本”让系统自动分块汇总。')
       return
     }
@@ -564,21 +583,35 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
       await saveConversationMessage(nextConversationId, nextTitle, userMessage)
       setConversations(await listConversations())
       setChatRunStatus(nextConversationId, 'thinking', null)
-      if (useLongTextPipeline) {
+      if (taskPlan.intent === 'structure-segmentation') {
+        setChatRunStatus(nextConversationId, 'fetching', '正在读取文档结构…')
+        const structureDocuments = requestContextDocuments.filter((document) => document.content.trim().length > 0)
+        if (structureDocuments.length === 0) throw new Error('当前选择的文件没有可解析的文本内容。')
+        const proposals = structureDocuments.map((document) => segmentDocument(document))
+        const outputPaths = await writeStructureOutputs(structureDocuments, proposals)
+        setWorkspace(await refreshWorkspace())
+        appendChatRunChunk(nextConversationId, formatStructureResult(proposals, outputPaths))
+        await recordRuntimeEvent(
+          'structure.segmented',
+          `documents=${proposals.length}, outputs=${outputPaths.length}, segments=${proposals.reduce((sum, proposal) => sum + proposal.segments.length, 0)}, model=none`,
+        )
+      } else if (useLongTextPipeline) {
+        if (!selectedModel) throw new Error('未配置模型')
         setChatRunStatus(nextConversationId, 'fetching', '正在准备长文本分析…')
         setAnalysisStatus('正在准备长文本分析…')
-        const result = await analyzeLongText(requestContextDocuments, value, activeModel, nextRequestId, (progress) => {
+        const result = await analyzeLongText(requestContextDocuments, value, selectedModel, nextRequestId, (progress) => {
           const message = `${progress.message} · ${progress.completed}/${progress.total}`
           setChatRunStatus(nextConversationId, progress.stage === 'chunking' ? 'fetching' : 'tool_calling', message)
           setAnalysisStatus(message)
         })
         appendChatRunChunk(nextConversationId, result.content)
       } else {
-        const recent = selectRecentMessages([...messages.filter((message) => message.id !== 'welcome'), userMessage], requestContextDocuments, value, activeModel.contextWindow)
+        if (!selectedModel) throw new Error('未配置模型')
+        const recent = selectRecentMessages([...messages.filter((message) => message.id !== 'welcome'), userMessage], requestContextDocuments, value, selectedModel.contextWindow)
         const context = buildContextMessage(requestContextDocuments)
         await streamChat({
           requestId: nextRequestId,
-          profileId: activeModel.id,
+          profileId: selectedModel.id,
           messages: [...(context ? [{ role: 'user' as const, content: context }] : []), ...recent.map(({ role, content }) => ({ role, content }))],
         }, (event) => {
           if (event.type === 'chunk') {

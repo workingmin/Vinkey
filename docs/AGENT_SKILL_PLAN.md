@@ -81,7 +81,7 @@ confidence   路由置信度
 | `IdeaDevelopment` | “完善这个想法”“给几个故事方向” | 将灵感发展为题材、主题、冲突、人物目标和完整故事梗概 | `ConceptDraft` |
 | `DocumentTriage` | 指定文件或选中文本 | 判断文件类型、文学体裁、语言、长度和可分析性 | `DocumentClassification` |
 | `StoryDeconstruction` | “分析这篇小说”“提取主线和人物线” | 编排长文本分析、章节摘要、主线、人物线、伏笔和结构提取 | `AnalysisReport` |
-| `StructureSegmentation` | “拆分章节/场景” | 识别章节和场景边界，生成切分提案，不改原文 | `ChapterSplitProposal` |
+| `StructureSegmentation` | “拆分章节/场景” | 识别章节和场景边界，在项目目录生成粗略拆分文件，不覆盖原文 | `ChapterSplitResult`（文件路径和边界元数据） |
 | `OutlineArchitect` | “规划三卷大纲”“拆章” | 作品、卷、章、场景的层级规划和重规划 | `OutlineDraft` |
 | `ScenePlanner` | 生成正文前、重写场景前 | 明确场景目标、冲突、转折、视角和角色意图 | `SceneBrief` |
 | `DraftWriter` | 续写、按章纲写正文 | 仅生成草稿或文本插入提案，不直接覆盖正文 | `Draft` / `DiffProposal` |
@@ -228,6 +228,12 @@ ModelAssistedChunker        仅处理模糊的场景边界
 
 第三方库不能成为核心导入路径的强依赖，也不能替代原文章节切分的人工预览和确认。
 
+结构拆分采用本地优先策略：显式章节标题、Markdown 层级、场景分隔线和段落边界由确定性解析器直接生成 `ChapterSplitResult` 并写入拆分文件，不要求配置模型。对无显式标记、置信度较低的场景边界，才允许按用户选择调用 `ModelAssistedChunker` 复核；模型不可用时仍完成首轮粗分。
+
+首轮“拆分章节”实施会直接在源文档同级创建可见目录 `<源文件名>-章节拆分/`，保留源文件扩展名；文件命名为 `001-章节-<标题>.<ext>`，无标题时使用 `未命名章节-<序号>`，场景-only 结果使用 `001-场景-<序号>.<ext>`。目录和文件均通过 WorkspaceGuard/文件写入 Tool 创建，禁止覆盖源文档或同名既有文件。消息流只报告已写入的路径，不把全文或拆分提案作为最终结果返回。
+
+本地输出完成后，消息流询问是否需要“重新梳理章节结构”。用户确认后才进入 `structure-enhancement`/`StoryDeconstruction` 的模型增强链路，用于隐含场景边界、章节命名和剧情阶段归纳；增强结果默认仍是草稿或二次提案，不自动覆盖首轮拆分文件。
+
 ### 6.4 长文本持久化产物
 
 建议增加以下 SQLite 表或等价存储：
@@ -369,7 +375,7 @@ quality_profile
 - 普通聊天不会修改文件、正式大纲或长期记忆。
 - 灵感任务能输出完整梗概，并允许用户选择方向后再生成大纲。
 - 指定文学文本能输出分类、概要、主线、人物线、章节结构和伏笔报告。
-- 拆章不会覆盖原文，必须支持预览、接受、拒绝和恢复。
+- 拆章不会覆盖原文；显式执行后直接生成同级拆分目录和编号文件，并支持从源文档重新生成或清理输出。
 - 所有分析结论可回溯到原文位置。
 - 超长文本任务可分块、暂停、恢复和重试。
 - 模型能力变化只需更新模型注册表和策略，不需要重写 Agent。
@@ -386,10 +392,10 @@ quality_profile
   → React 状态与编辑器
 
 聊天输入
-  → context budget
-  → stream_chat
-  → Ollama/OpenAI-compatible Provider
-  → SQLite 会话消息
+  → TaskRouter（先判断 intent / scope / operation / side_effect）
+  ├─ StructureSegmentation → 本地 StructureParser/ChunkService → ChapterSplitResult + 输出文件
+  └─ 其他任务 → context budget → stream_chat → Ollama/OpenAI-compatible Provider
+       → SQLite 会话消息
 
 指定文本分块（底层能力）
   → read_document
@@ -397,14 +403,14 @@ quality_profile
   → ChunkManifest
 ```
 
-`chunk_document` 已实现 Rust 逻辑、Tauri 命令、前端类型和调用封装；文件分析快捷入口和新增文件提示已经可以将文本加入上下文并预填分析问题，但当前仍由普通 `stream_chat` 处理，尚未连接结构化分析 Agent、长文本分析任务和 Proposal 审核。
+`chunk_document` 已实现 Rust 逻辑、Tauri 命令、前端类型和调用封装；当前新增的本地 `structureSegmentation` 服务会在模型请求前识别章节/场景候选，并通过文件写入 Tool 在源文档同级生成粗略拆分文件。文件分析快捷入口仍进入长文本分析和模型摘要；章节拆分不修改源文档，后续需接入输出清理/重生成和章节索引持久化。
 
 ### 11.2 尚未实现
 
-1. Tool Registry、Skill Registry 和 IntentRouter。
+1. Tool Registry、Skill Registry 和完整 IntentRouter（当前仅有确定性 TaskRouter）。
 2. `AnalysisJob`、后台进度、暂停/恢复、缓存和增量失效。
 3. `DocumentTriage`、`StoryDeconstruction` 和分层摘要。
 4. `Proposal`/diff 审核以及 canon、记忆更新确认。
 5. 模型能力注册表和本地模型基准测试。
 
-后续业务实现必须先补齐这些边界，再把 `chunk_document` 从当前的上下文预填入口升级为“分析文本/拆章”任务；不能直接在聊天组件中复制分块和汇总逻辑。
+后续业务实现必须将本地 `structureSegmentation` 输出提升为统一的 `StructureSegmentation` Service，并接入输出清理/重生成和章节索引；不能把全文直接组装进普通聊天，也不能在聊天组件中复制分块和汇总逻辑。
