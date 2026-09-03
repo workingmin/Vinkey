@@ -276,7 +276,7 @@ pub fn chunk_text(
             start_char: text[..span.start].chars().count(),
             end_char: text[..span.end].chars().count(),
             line_start: line_number(text, span.start),
-            line_end: line_number(text, span.end.saturating_sub(1)),
+            line_end: line_number(text, span.end),
             heading: units[start].heading.clone(),
             estimated_tokens: actual_tokens,
             split_reason: if end == units.len() {
@@ -360,5 +360,14 @@ mod tests {
     fn rejects_invalid_budget() {
         assert!(chunk_text("doc", "text", 0, 0).is_err());
         assert!(chunk_text("doc", "text", 4, 4).is_err());
+    }
+
+    #[test]
+    fn handles_multibyte_text_at_chunk_end() {
+        let manifest = chunk_text("doc", "中文内容\nemoji 😀", 16, 0).unwrap();
+
+        assert_eq!(manifest.chunks.len(), 1);
+        assert_eq!(manifest.chunks[0].line_start, 1);
+        assert_eq!(manifest.chunks[0].line_end, 2);
     }
 }
