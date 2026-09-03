@@ -348,6 +348,8 @@ fn cache_manifest_is_valid(
             && !chunk.text.is_empty()
             && chunk.start_char <= chunk.end_char
             && chunk.end_char <= character_count
+            && chunk.line_start > 0
+            && chunk.line_end >= chunk.line_start
             && start_byte <= end_byte
             && content.get(start_byte..end_byte) == Some(chunk.text.as_str())
             && chunk.estimated_tokens == long_text::estimate_tokens(&chunk.text)
