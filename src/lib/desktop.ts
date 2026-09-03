@@ -175,6 +175,11 @@ export async function chunkDocument(
   return invoke<ChunkManifest>('chunk_document', { path, maxTokens, overlapTokens })
 }
 
+export async function writeAnalysisArtifact(jobId: string, name: string, content: string): Promise<string | null> {
+  if (!isDesktop()) return null
+  return invoke<string>('write_analysis_artifact', { jobId, name, content })
+}
+
 export async function saveDocument(document: DocumentSnapshot): Promise<DocumentSnapshot> {
   if (!isDesktop()) {
     const saved = { ...document, modifiedMs: Date.now() }

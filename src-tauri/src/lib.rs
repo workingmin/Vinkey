@@ -468,6 +468,69 @@ fn chunk_document(
 }
 
 #[tauri::command]
+fn write_analysis_artifact(
+    job_id: String,
+    name: String,
+    content: String,
+    state: State<'_, WorkspaceState>,
+    runtime: State<'_, runtime_log::RuntimeLogState>,
+) -> Result<String, String> {
+    if job_id.is_empty()
+        || job_id.len() > 100
+        || !job_id
+            .chars()
+            .all(|value| value.is_ascii_alphanumeric() || matches!(value, '-' | '_'))
+    {
+        return Err("分析任务 ID 无效".into());
+    }
+    let artifact_name = Path::new(&name);
+    if name.is_empty()
+        || name.len() > 180
+        || artifact_name.is_absolute()
+        || artifact_name.components().any(|component| {
+            matches!(
+                component,
+                Component::ParentDir | Component::RootDir | Component::Prefix(_)
+            )
+        })
+        || !artifact_name
+            .file_name()
+            .map(|value| !value.is_empty())
+            .unwrap_or(false)
+    {
+        return Err("分析产物名称无效".into());
+    }
+    if content.len() > 16 * 1024 * 1024 {
+        return Err("分析产物超过 16 MB 限制".into());
+    }
+    let workspace = lock_workspace(&state)?;
+    let artifact_dir = workspace
+        .root
+        .join("tmp")
+        .join("vinkey-analysis")
+        .join(&job_id);
+    fs::create_dir_all(&artifact_dir).map_err(|error| format!("无法创建分析临时目录：{error}"))?;
+    let target = artifact_dir.join(artifact_name);
+    if target.exists() {
+        return Err("分析产物已存在，拒绝覆盖".into());
+    }
+    fs::write(&target, content).map_err(|error| format!("无法写入分析产物：{error}"))?;
+    let relative = relative_label(
+        target
+            .strip_prefix(&workspace.root)
+            .map_err(|_| "分析产物路径越界".to_string())?,
+    );
+    runtime.info(
+        "analysis.artifact_written",
+        log_fields([
+            ("path", Value::String(relative.clone())),
+            ("jobId", Value::String(job_id)),
+        ]),
+    );
+    Ok(relative)
+}
+
+#[tauri::command]
 fn read_file_bytes(path: String, state: State<'_, WorkspaceState>) -> Result<Vec<u8>, String> {
     let workspace = lock_workspace(&state)?;
     let (_, target) = resolve_existing(&workspace, &path)?;
@@ -779,6 +842,7 @@ pub fn run() {
             get_workspace,
             read_document,
             chunk_document,
+            write_analysis_artifact,
             read_file_bytes,
             save_document,
             create_document,

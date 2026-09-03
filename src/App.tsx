@@ -21,6 +21,7 @@ import {
   saveConversationMessage, saveDocument, searchWorkspace, streamChat, syncNativeWindowTheme,
 } from './lib/desktop'
 import { buildContextMessage, calculateContextBudget, selectRecentMessages } from './lib/context'
+import { analyzeLongText, cancelLongTextAnalysis } from './lib/longTextAnalysis'
 import { useAppStore } from './store'
 import type { ChatMessage, DocumentSnapshot, ViewMode } from './types'
 import { getDocumentKind, getLanguageName, isEditableDocument } from './lib/fileTypes'
@@ -425,6 +426,7 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
   const pendingNewFiles = useAppStore((state) => state.pendingNewFiles)
   const clearPendingNewFiles = useAppStore((state) => state.clearPendingNewFiles)
   const [prompt, setPrompt] = useState('')
+  const [analysisStatus, setAnalysisStatus] = useState<string | null>(null)
   const promptRef = useRef<HTMLTextAreaElement>(null)
   const activeModel = modelProfiles.find((profile) => profile.id === activeModelId) ?? null
   const activeChatRun = conversationId ? chatRuns[conversationId] : undefined
@@ -443,7 +445,11 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
       requestContextDocuments = useAppStore.getState().contextDocuments
     }
     const requestBudget = calculateContextBudget(messages, requestContextDocuments, value, activeModel.contextWindow)
-    if (requestBudget.exceedsLimit) { setError('当前消息和上下文超过模型可用窗口，请移除文档或缩短输入'); return }
+    const useLongTextPipeline = requestBudget.exceedsLimit && explicitFileAnalysis && requestContextDocuments.length > 0
+    if (requestBudget.exceedsLimit && !useLongTextPipeline) {
+      setError('当前消息和上下文超过模型可用窗口。请缩短输入，或使用“分析文本”让系统自动分块汇总。')
+      return
+    }
     const now = Date.now()
     const nextConversationId = conversationId ?? crypto.randomUUID()
     const nextTitle = conversationId ? conversationTitle : value.replace(/\s+/g, ' ').slice(0, 28)
@@ -462,20 +468,29 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
     try {
       await saveConversationMessage(nextConversationId, nextTitle, userMessage)
       setConversations(await listConversations())
-      const recent = selectRecentMessages([...messages.filter((message) => message.id !== 'welcome'), userMessage], requestContextDocuments, value, activeModel.contextWindow)
-      const context = buildContextMessage(requestContextDocuments)
-      await streamChat({
-        requestId: nextRequestId,
-        profileId: activeModel.id,
-        messages: [...(context ? [{ role: 'user' as const, content: context }] : []), ...recent.map(({ role, content }) => ({ role, content }))],
-      }, (event) => {
-        if (event.type === 'chunk') appendChatRunChunk(nextConversationId, event.content)
-        if (event.type === 'error') setError(event.message)
-      })
+      if (useLongTextPipeline) {
+        setAnalysisStatus('正在准备长文本分析…')
+        const result = await analyzeLongText(requestContextDocuments, value, activeModel, nextRequestId, (progress) => {
+          setAnalysisStatus(`${progress.message} · ${progress.completed}/${progress.total}`)
+        })
+        appendChatRunChunk(nextConversationId, result.content)
+      } else {
+        const recent = selectRecentMessages([...messages.filter((message) => message.id !== 'welcome'), userMessage], requestContextDocuments, value, activeModel.contextWindow)
+        const context = buildContextMessage(requestContextDocuments)
+        await streamChat({
+          requestId: nextRequestId,
+          profileId: activeModel.id,
+          messages: [...(context ? [{ role: 'user' as const, content: context }] : []), ...recent.map(({ role, content }) => ({ role, content }))],
+        }, (event) => {
+          if (event.type === 'chunk') appendChatRunChunk(nextConversationId, event.content)
+          if (event.type === 'error') setError(event.message)
+        })
+      }
     } catch (error) {
       const message = String(error)
       if (!message.includes('请求已停止')) setError(message)
     } finally {
+      setAnalysisStatus(null)
       const completed = useAppStore.getState().chatRuns[nextConversationId]?.assistantMessage
       if (completed?.content) {
         try {
@@ -487,7 +502,11 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
     }
   }
 
-  const stop = async () => { if (activeChatRun) await cancelChat(activeChatRun.requestId) }
+  const stop = async () => {
+    if (!activeChatRun) return
+    if (analysisStatus) cancelLongTextAnalysis(activeChatRun.requestId)
+    await cancelChat(activeChatRun.requestId)
+  }
 
   const prepareAnalysis = async (paths: string[], instruction: string) => {
     try {
@@ -538,7 +557,7 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
         <div className="composer-tools">
           {modelProfiles.length > 0 ? <label className="composer-model-selector" title="切换模型"><Bot /><select aria-label="当前模型" value={activeModelId ?? ''} onChange={(event) => setActiveModelId(event.target.value)}>{modelProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name} · {profile.model}</option>)}</select><ChevronDown /></label>
             : <button className="composer-model-selector missing" onClick={() => setSettingsOpen(true)}><Bot /><span>添加模型</span></button>}
-          <span className={`composer-hint ${budget.exceedsLimit ? 'over-limit' : ''}`} title={`预计 ${budget.estimatedTokens} / ${budget.limit} tokens`}>上下文 {budget.usedPercent}% · Enter 发送</span>
+          <span className={`composer-hint ${budget.exceedsLimit && !analysisStatus ? 'over-limit' : ''}`} title={`预计 ${budget.estimatedTokens} / ${budget.limit} tokens`}>{analysisStatus ?? `上下文 ${budget.usedPercent}% · Enter 发送`}</span>
           <button className="send-button" aria-label={busy ? '停止生成' : '发送'} disabled={!prompt.trim() && !busy} onClick={busy ? () => void stop() : () => void send()}>{busy ? <Square /> : <Send />}</button>
         </div>
       </div>
