@@ -34,6 +34,28 @@ export interface DocumentTab extends DocumentSnapshot {
   savedContent: string
 }
 
+export interface TextChunk {
+  id: string
+  sourceId: string
+  text: string
+  startChar: number
+  endChar: number
+  lineStart: number
+  lineEnd: number
+  heading?: string | null
+  estimatedTokens: number
+  splitReason: string
+  overlapFromPrevious: boolean
+}
+
+export interface ChunkManifest {
+  sourceId: string
+  sourceTokens: number
+  maxTokens: number
+  overlapTokens: number
+  chunks: TextChunk[]
+}
+
 export interface ContextDocument {
   path: string
   name: string

@@ -48,6 +48,23 @@ React WebView
 Rust application core
   ├─ WorkspaceGuard
   ├─ FileService
+  ├─ LongTextServices
+  │   ├─ DocumentIngestionService
+  │   ├─ StructureParserService
+  │   ├─ ChunkService
+  │   ├─ TokenBudgetService
+  │   ├─ SummaryCompressionService
+  │   ├─ LongTextAnalysisService
+  │   ├─ ArtifactCacheService
+  │   ├─ EvidenceService
+  │   ├─ ModelCapabilityService
+  │   └─ JobService
+  ├─ AgentRuntime
+  │   ├─ IntentRouter
+  │   ├─ TaskPlanner
+  │   ├─ ToolRegistry
+  │   ├─ SkillRegistry
+  │   └─ Approval/Checkpoint
   ├─ ModelService
   │   ├─ OllamaProvider
   │   └─ OpenAICompatibleProvider
@@ -134,6 +151,19 @@ Vinkey/
 │  └─ src/
 │     ├─ workspace/
 │     ├─ files/
+│     ├─ long_text/
+│     │  ├─ ingestion.rs
+│     │  ├─ structure.rs
+│     │  ├─ chunking.rs
+│     │  ├─ budget.rs
+│     │  ├─ summaries.rs
+│     │  ├─ analysis.rs
+│     │  ├─ cache.rs
+│     │  ├─ evidence.rs
+│     │  ├─ capabilities.rs
+│     │  └─ jobs.rs
+│     ├─ agents/
+│     ├─ skills/
 │     ├─ models/
 │     ├─ context/
 │     ├─ conversations/

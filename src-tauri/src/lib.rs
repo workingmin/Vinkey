@@ -11,6 +11,7 @@ use std::{
 use tauri::{AppHandle, Manager, State, WebviewWindow};
 
 mod database;
+mod long_text;
 mod models;
 mod search;
 
@@ -400,6 +401,26 @@ fn read_document(
 }
 
 #[tauri::command]
+fn chunk_document(
+    path: String,
+    max_tokens: Option<usize>,
+    overlap_tokens: Option<usize>,
+    state: State<'_, WorkspaceState>,
+) -> Result<long_text::ChunkManifest, String> {
+    let workspace = lock_workspace(&state)?;
+    let document = read_document_at(&workspace, &path)?;
+    if !matches!(document.kind, "markdown" | "text" | "code") {
+        return Err("只有文本类文档可以进行分块".into());
+    }
+    long_text::chunk_text(
+        document.path,
+        &document.content,
+        max_tokens.unwrap_or(2048),
+        overlap_tokens.unwrap_or(128),
+    )
+}
+
+#[tauri::command]
 fn read_file_bytes(path: String, state: State<'_, WorkspaceState>) -> Result<Vec<u8>, String> {
     let workspace = lock_workspace(&state)?;
     let (_, target) = resolve_existing(&workspace, &path)?;
@@ -639,6 +660,7 @@ pub fn run() {
             authorize_workspace,
             get_workspace,
             read_document,
+            chunk_document,
             read_file_bytes,
             save_document,
             create_document,

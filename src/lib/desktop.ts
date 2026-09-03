@@ -2,7 +2,7 @@ import { Channel, invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
 import type {
   ChatMessage, ChatRequest, ChatStreamEvent, Conversation, ConversationSummary,
-  DocumentSnapshot, ModelConnectionResult, ModelProfile, ModelProfileInput, SearchHit,
+  ChunkManifest, DocumentSnapshot, ModelConnectionResult, ModelProfile, ModelProfileInput, SearchHit,
   ThemeMode, WorkspaceSnapshot,
 } from '../types'
 import { getDocumentKind } from './fileTypes'
@@ -132,6 +132,30 @@ export async function readDocument(path: string): Promise<DocumentSnapshot> {
     return { ...document }
   }
   return invoke<DocumentSnapshot>('read_document', { path })
+}
+
+export async function chunkDocument(
+  path: string,
+  maxTokens = 2048,
+  overlapTokens = 128,
+): Promise<ChunkManifest> {
+  if (!isDesktop()) {
+    const document = await readDocument(path)
+    return {
+      sourceId: path,
+      sourceTokens: document.content.length,
+      maxTokens,
+      overlapTokens,
+      chunks: [{
+        id: `${path}:chunk-0`, sourceId: path, text: document.content,
+        startChar: 0, endChar: document.content.length, lineStart: 1,
+        lineEnd: document.content.split('\n').length, heading: null,
+        estimatedTokens: document.content.length, splitReason: 'demo',
+        overlapFromPrevious: false,
+      }],
+    }
+  }
+  return invoke<ChunkManifest>('chunk_document', { path, maxTokens, overlapTokens })
 }
 
 export async function saveDocument(document: DocumentSnapshot): Promise<DocumentSnapshot> {

@@ -15,7 +15,28 @@
 
 Agent 不应拥有通用文件系统权限。所有文件写入、设定变更和长期记忆更新都通过受限 Skill 生成 Proposal，再由用户确认后提交。
 
-### 1.2 副作用等级
+### 1.2 Tool 的定义
+
+- **Tool**：Runtime 暴露给 Skill 的最小可执行接口，例如 `read_document`、`chunk_document`、`search_workspace` 和 `stream_chat`。
+- Tool 不负责理解用户意图，也不自行编排多个步骤；它只执行一个受权限、超时、取消和审计约束的动作。
+- Skill 可以组合多个 Tool；Agent 只能通过 Skill 或受控 Runtime 调用 Tool，不能拼接任意 Tauri command。
+
+每个 Tool 至少声明：
+
+```text
+name
+input_schema
+output_schema
+permission
+side_effects
+timeout
+cancellable
+audit_fields
+```
+
+现有代码中的 Tauri command 是 Tool 的第一批实现，但在 Tool Registry 建立前仍属于受控的底层接口。
+
+### 1.3 副作用等级
 
 | 等级 | 含义 | 默认策略 |
 | --- | --- | --- |
@@ -158,9 +179,76 @@ evaluation_cases
 
 结构化输出必须经过 JSON Schema 校验。模型输出无法解析时，Runtime 应保留原始响应、允许重试或降级为纯文本回答，不能部分提交数据。
 
-## 6. 文本处理与模型能力适配
+## 6. Service 架构
 
-### 6.1 不把模型名当作真实能力
+Agent 不直接处理长文本，也不自行管理重试、缓存和文件写入。长文本能力由 Rust 进程内 Service 提供统一接口；只有需要独立运行时的 embedding、OCR 或第三方库才允许使用可选 sidecar。
+
+### 6.1 Service 职责
+
+| Service | 职责 | 关键产物 |
+| --- | --- | --- |
+| `DocumentIngestionService` | 读取、编码和换行规范化、文档哈希、行号/字符偏移 | `DocumentRevision` |
+| `StructureParserService` | 识别作品、卷、章、段落、场景和标题 | `DocumentStructure` |
+| `ChunkService` | 结构切分、句子切分、预算切分、overlap 和来源元数据 | `ChunkManifest` |
+| `TokenBudgetService` | 按模型能力计算安全输入、输出预留和汇总层级 | `BudgetDecision` |
+| `SummaryCompressionService` | 局部、章节、卷级和全书摘要压缩 | `SummaryNode` |
+| `LongTextAnalysisService` | Map-Reduce 编排人物、事件、主线、伏笔和设定提取 | `AnalysisArtifact` |
+| `ArtifactCacheService` | 按文档/算法/模型/Prompt/schema 版本缓存和增量失效 | 缓存记录 |
+| `EvidenceService` | 将分析结果映射回原文位置 | `EvidenceReference` |
+| `ModelCapabilityService` | 测量有效上下文、速度、格式稳定性和长距离召回 | `ModelCapability` |
+| `JobService` | 后台队列、进度、取消、暂停、恢复、重试和幂等 | `AnalysisJob` |
+
+### 6.2 长文本流水线
+
+```text
+DocumentIngestion
+  → StructureParser
+  → ChunkService
+  → TokenBudget
+  → 局部分析/摘要
+  → 章节汇总
+  → 卷级汇总
+  → 全书综合
+  → Evidence 校验
+  → AnalysisArtifact / Proposal
+```
+
+每个阶段完成一个最小持久化单元。模型不可用或速度过慢时，保留已完成结果，并允许从失败阶段恢复。
+
+### 6.3 可替换分块后端
+
+`ChunkService` 对外保持稳定接口，内部可以选择：
+
+```text
+RustStructureChunker       默认，标题/段落/句子/预算切分
+MSchunkerCompatible        参考其确定性层级分块和元数据
+ChonkieAdapter              可选，语义或 RAG 分块
+ModelAssistedChunker        仅处理模糊的场景边界
+```
+
+第三方库不能成为核心导入路径的强依赖，也不能替代原文章节切分的人工预览和确认。
+
+### 6.4 长文本持久化产物
+
+建议增加以下 SQLite 表或等价存储：
+
+```text
+document_revisions
+document_structures
+text_chunks
+chunk_artifacts
+summary_nodes
+analysis_jobs
+analysis_steps
+evidence_references
+model_capabilities
+```
+
+`summary_nodes` 保存父子摘要关系；`text_chunks` 保存原文位置和切分原因；所有模型结果保存模型、Prompt、schema 和算法版本，便于回归与增量失效。
+
+## 7. 文本处理与模型能力适配
+
+### 7.1 不把模型名当作真实能力
 
 以 `glm4-9b-1m-q4km` 为例，名称中的 `1m` 可以作为标称上下文能力的线索，但实际可用能力还受以下因素影响：
 
@@ -186,7 +274,7 @@ supports_long_range_recall
 quality_profile
 ```
 
-### 6.2 分块策略
+### 7.2 分块策略
 
 采用分层 Map-Reduce，而不是把整本书一次塞给模型：
 
@@ -219,7 +307,7 @@ quality_profile
 
 如果实测模型能稳定处理更大的上下文，可以放大块大小；如果长文召回或结构化输出明显下降，应减少单块长度并增加汇总层级，而不是盲目使用标称 1M 上下文。
 
-### 6.3 汇总策略
+### 7.3 汇总策略
 
 - **摘要任务**：局部摘要 → 章节摘要 → 卷摘要 → 全书摘要。
 - **主线任务**：先提取事件和目标，再按时间排序和因果关系汇总。
@@ -227,7 +315,7 @@ quality_profile
 - **伏笔任务**：保存首次出现、相关线索、预期回收和实际回收证据。
 - **风格任务**：使用代表性片段采样，避免把整本正文作为单一 Prompt。
 
-## 7. 模型能力评测计划
+## 8. 模型能力评测计划
 
 在建设复杂 Agent 前，先实现一个离线模型评测命令。至少测试：
 
@@ -242,7 +330,7 @@ quality_profile
 
 评测结果写入本地模型能力注册表，供 `model-router` 和 `context-budget` 使用。没有评测数据时，只启用短上下文、低并发和人工确认流程。
 
-## 8. 分阶段实施计划
+## 9. 分阶段实施计划
 
 ### 阶段 A：合同和运行时底座
 
@@ -276,7 +364,7 @@ quality_profile
 - 增加研究和翻译能力，并对联网请求单独授权。
 - 增加模型能力注册表和回归评测集。
 
-## 9. 验收门槛
+## 10. 验收门槛
 
 - 普通聊天不会修改文件、正式大纲或长期记忆。
 - 灵感任务能输出完整梗概，并允许用户选择方向后再生成大纲。
@@ -286,3 +374,37 @@ quality_profile
 - 超长文本任务可分块、暂停、恢复和重试。
 - 模型能力变化只需更新模型注册表和策略，不需要重写 Agent。
 - 未配置模型时，文件浏览、编辑、搜索和日常聊天仍可用。
+
+## 11. 当前代码链路盘点
+
+### 11.1 已实现
+
+```text
+文件树/编辑器
+  → WorkspaceGuard
+  → read_document / search_workspace
+  → React 状态与编辑器
+
+聊天输入
+  → context budget
+  → stream_chat
+  → Ollama/OpenAI-compatible Provider
+  → SQLite 会话消息
+
+指定文本分块（底层能力）
+  → read_document
+  → chunk_document
+  → ChunkManifest
+```
+
+`chunk_document` 已实现 Rust 逻辑、Tauri 命令、前端类型和调用封装；当前尚未连接到文件树菜单、编辑器命令面板或长文本分析任务，因此属于“可调用底层能力”，不是完整用户流程。
+
+### 11.2 尚未实现
+
+1. Tool Registry、Skill Registry 和 IntentRouter。
+2. `AnalysisJob`、后台进度、暂停/恢复、缓存和增量失效。
+3. `DocumentTriage`、`StoryDeconstruction` 和分层摘要。
+4. `Proposal`/diff 审核以及 canon、记忆更新确认。
+5. 模型能力注册表和本地模型基准测试。
+
+后续业务实现必须先补齐这些边界，再把 `chunk_document` 接入“分析文本/拆章”入口；不能直接在聊天组件中复制分块和汇总逻辑。
