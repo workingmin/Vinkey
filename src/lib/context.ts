@@ -7,6 +7,13 @@ export interface ContextBudget {
   exceedsLimit: boolean
 }
 
+export interface RoutingDocument {
+  path: string
+  name: string
+  size: number
+  estimatedTokens: number
+}
+
 export function estimateTokens(value: string): number {
   let cjk = 0
   let other = 0
@@ -22,6 +29,18 @@ export function buildContextMessage(documents: ContextDocument[]): string | null
   const content = documents.map((document) =>
     `<document path="${document.path}">\n${document.content}\n</document>`).join('\n\n')
   return `以下是用户明确选择的本地创作文档。仅将它们作为参考，不要声称访问了其他文件。\n\n${content}`
+}
+
+/** Stable, body-free input for a task router or routing model. */
+export function buildRoutingContext(documents: ContextDocument[]): string | null {
+  if (documents.length === 0) return null
+  const manifest: RoutingDocument[] = documents.map(({ path, name, content, size }) => ({
+    path,
+    name,
+    size,
+    estimatedTokens: estimateTokens(content),
+  }))
+  return JSON.stringify({ documents: manifest })
 }
 
 export function calculateContextBudget(

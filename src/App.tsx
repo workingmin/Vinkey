@@ -530,17 +530,23 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
   const send = async () => {
     const value = prompt.trim()
     if (!value || busy) return
-    let requestContextDocuments = contextDocuments
+    let selectedContextDocuments = contextDocuments
     const activeDocument = activePath ? tabs.find((tab) => tab.path === activePath) : undefined
-    let taskPlan = classifyTask(value, requestContextDocuments.length > 0 || Boolean(activeDocument))
-    if (taskPlan.intent !== 'general-chat' && requestContextDocuments.length === 0 && activeDocument) {
+    let taskPlan = classifyTask(value, selectedContextDocuments.length > 0 || Boolean(activeDocument))
+    if (taskPlan.documentAccess === 'selected' && selectedContextDocuments.length === 0 && activeDocument) {
       addContextDocument({ path: activeDocument.path, name: activeDocument.name, content: activeDocument.content, size: activeDocument.content.length })
-      requestContextDocuments = useAppStore.getState().contextDocuments
-      taskPlan = classifyTask(value, requestContextDocuments.length > 0)
+      selectedContextDocuments = useAppStore.getState().contextDocuments
+      taskPlan = classifyTask(value, selectedContextDocuments.length > 0)
     }
 
-    if (taskPlan.intent === 'structure-segmentation' && requestContextDocuments.length === 0) {
-      setError('章节和场景拆分需要先选择或打开文档。')
+    // Keep file bodies behind the routed document-access decision. A selected file
+    // is not automatically sent to the model for unrelated conversation turns.
+    const requestContextDocuments = taskPlan.documentAccess === 'selected' ? selectedContextDocuments : []
+
+    if (taskPlan.documentAccess === 'selected' && requestContextDocuments.length === 0) {
+      setError(taskPlan.intent === 'structure-segmentation'
+        ? '章节和场景拆分需要先选择或打开文档。'
+        : '文档分析需要先选择或打开文档。')
       return
     }
     const selectedModel = activeModel
@@ -550,11 +556,11 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
       ? calculateContextBudget(messages, requestContextDocuments, value, selectedModel?.contextWindow ?? 32768)
       : null
     const useLongTextPipeline = Boolean(requestBudget?.exceedsLimit)
-      && taskPlan.intent !== 'general-chat'
+      && taskPlan.documentAccess === 'selected'
       && requestContextDocuments.length > 0
     void recordRuntimeEvent(
       'task.routed',
-      `intent=${taskPlan.intent}, operation=${taskPlan.operation}, scope=${taskPlan.scope}, requiresModel=${taskPlan.requiresModel}, contextDocuments=${requestContextDocuments.length}, estimatedTokens=${requestBudget?.estimatedTokens ?? 0}, limit=${requestBudget?.limit ?? 0}, longText=${useLongTextPipeline}`,
+      `intent=${taskPlan.intent}, operation=${taskPlan.operation}, scope=${taskPlan.scope}, documentAccess=${taskPlan.documentAccess}, requiresModel=${taskPlan.requiresModel}, contextDocuments=${requestContextDocuments.length}, estimatedTokens=${requestBudget?.estimatedTokens ?? 0}, limit=${requestBudget?.limit ?? 0}, longText=${useLongTextPipeline}`,
     )
     if (requestBudget?.exceedsLimit && !useLongTextPipeline) {
       setError('当前消息和上下文超过模型可用窗口。请缩短输入，或使用“分析文本”让系统自动分块汇总。')

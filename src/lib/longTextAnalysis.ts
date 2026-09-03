@@ -95,6 +95,10 @@ function clipToTokens(value: string, limit: number): string {
   return `${value.slice(0, end).trim()}\n[该阶段摘要已按上下文预算截断]`
 }
 
+function isCreativeTask(instruction: string): boolean {
+  return /(?:续写|改写|润色|校对|修改|创作|生成)/u.test(instruction)
+}
+
 export function batchSummaries(records: SummaryRecord[], contextWindow: number): SummaryRecord[][] {
   const limit = batchBudget(contextWindow)
   const batches: SummaryRecord[][] = []
@@ -127,12 +131,18 @@ async function collectResponse(requestId: string, profileId: string, messages: A
 
 function chunkPrompt(instruction: string, chunk: TextChunk): string {
   const heading = chunk.heading ? `章节/标题：${chunk.heading}\n` : ''
-  return `你是长文本分析 Agent 的局部分析 Skill。请只依据下面这个原文分块，为后续汇总提取可核验的事实，不要臆测未出现的内容。\n\n用户任务：${instruction}\n${heading}来源：${chunk.sourceId}，行 ${chunk.lineStart}-${chunk.lineEnd}\n\n<chunk id="${chunk.id}">\n${chunk.text}\n</chunk>\n\n请输出简洁的结构化要点：内容概要、事件/冲突、人物及其目标或变化、线索/伏笔、可引用的原文证据。`
+  const creativeGuidance = isCreativeTask(instruction)
+    ? '这是创作或改写任务。请提取与任务相关的原文片段、人物状态、语气风格、连续性约束和可执行素材，暂不脱离证据完成最终创作。'
+    : '请为后续汇总提取可核验的事实，不要臆测未出现的内容。'
+  return `你是长文本任务 Agent 的局部 Map Skill。只依据下面这个原文分块处理用户任务。\n\n用户任务：${instruction}\n${heading}来源：${chunk.sourceId}，行 ${chunk.lineStart}-${chunk.lineEnd}\n\n<chunk id="${chunk.id}">\n${chunk.text}\n</chunk>\n\n${creativeGuidance}\n请输出简洁的结构化要点：内容概要、事件/冲突、人物及其目标或变化、线索/伏笔、可引用的原文证据，以及与用户任务直接相关的素材。`
 }
 
 function summaryPrompt(instruction: string, records: SummaryRecord[], final: boolean): string {
   const material = records.map((record) => `[${record.sourceId} ${record.chunkId}${record.heading ? ` · ${record.heading}` : ''}]\n${record.text}`).join('\n\n')
-  return `${final ? '你是长文本分析 Agent 的最终综合 Skill。' : '你是长文本分析 Agent 的阶段汇总 Skill。'}\n用户任务：${instruction}\n\n以下是已经由局部分析生成的摘要。它们不是原文，请合并重复事实并标记不确定或相互矛盾之处，不要补写没有依据的情节。\n\n${material}\n\n${final ? '请给出完整回答，覆盖文档类型、概要、结构、故事主线和人物线；按章节或阶段组织，保留来源分块标记作为证据。' : '请压缩为更高层级的摘要，保留故事阶段、人物变化、因果关系、伏笔和来源标记。'}`
+  const finalGuidance = isCreativeTask(instruction)
+    ? '请根据这些阶段摘要完成用户的创作或改写任务，遵循原文人物、语气和连续性约束；不要把摘要过程本身当作回答。'
+    : '请给出完整回答，覆盖文档类型、概要、结构、故事主线和人物线；按章节或阶段组织，保留来源分块标记作为证据。'
+  return `${final ? '你是长文本任务 Agent 的最终 Synthesis Skill。' : '你是长文本任务 Agent 的阶段 Reduce Skill。'}\n用户任务：${instruction}\n\n以下是已经由局部 Map Skill 生成的摘要。它们不是原文，请合并重复事实并标记不确定或相互矛盾之处，不要补写没有依据的情节。\n\n${material}\n\n${final ? finalGuidance : '请压缩为更高层级的摘要，保留故事阶段、人物变化、因果关系、伏笔、任务相关素材和来源标记。'}`
 }
 
 export async function analyzeLongText(
@@ -189,10 +199,10 @@ export async function analyzeLongText(
     }
 
     assertNotCancelled(requestId)
-    onProgress?.({ stage: 'synthesis', completed: 0, total: 1, message: `正在综合 ${formatCount(current.length)} 条阶段摘要，整理最终报告…` })
+    onProgress?.({ stage: 'synthesis', completed: 0, total: 1, message: `正在综合 ${formatCount(current.length)} 条阶段摘要，完成最终任务…` })
     const content = await collectResponse(requestId, profile.id, [{ role: 'user', content: summaryPrompt(instruction, current, true) }])
     await writeAnalysisArtifact(jobId, 'analysis.md', content)
-    onProgress?.({ stage: 'synthesis', completed: 1, total: 1, message: '长文本分析完成' })
+    onProgress?.({ stage: 'synthesis', completed: 1, total: 1, message: '长文本任务完成' })
     return { content, jobId, chunkCount: chunks.length, summaryCount: summaries.length }
   } finally {
     cancelledAnalyses.delete(requestId)

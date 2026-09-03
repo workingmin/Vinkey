@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildContextMessage, calculateContextBudget, estimateTokens, selectRecentMessages } from './context'
+import { buildContextMessage, buildRoutingContext, calculateContextBudget, estimateTokens, selectRecentMessages } from './context'
 
 describe('conversation context budget', () => {
   it('estimates CJK text more densely than ASCII text', () => {
@@ -11,6 +11,12 @@ describe('conversation context budget', () => {
     const result = buildContextMessage([{ path: '设定/人物.md', name: '人物.md', content: '林晚', size: 2 }])
     expect(result).toContain('path="设定/人物.md"')
     expect(result).toContain('林晚')
+  })
+
+  it('builds a body-free document manifest for routing', () => {
+    const result = buildRoutingContext([{ path: '小说.txt', name: '小说.txt', content: '林晚回乡', size: 12 }])
+    expect(result).toBe(JSON.stringify({ documents: [{ path: '小说.txt', name: '小说.txt', size: 12, estimatedTokens: 4 }] }))
+    expect(result).not.toContain('林晚回乡')
   })
 
   it('marks requests that exceed the available input window', () => {

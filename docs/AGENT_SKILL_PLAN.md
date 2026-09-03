@@ -394,9 +394,11 @@ quality_profile
   → React 状态与编辑器
 
 聊天输入
-  → TaskRouter（先判断 intent / scope / operation / side_effect）
+  → TaskRouter（指令 + 不含正文的文档清单，先判断 intent / scope / operation / side_effect / document_access）
   ├─ StructureSegmentation → 本地 StructureParser/ChunkService → ChapterSplitResult + 输出文件
-  └─ 其他任务 → context budget → stream_chat → Ollama/OpenAI-compatible Provider
+  ├─ 文档分析 → LongTextAnalysis Service → Chunk/Map/Reduce/Synthesis → Ollama/OpenAI-compatible Provider
+  ├─ 明确引用文档的创作请求 → context budget → 小文本 stream_chat / 超长文本 Chunk/Map/Reduce/Synthesis
+  └─ 普通聊天 → 不读取所选文档正文 → stream_chat → Ollama/OpenAI-compatible Provider
        → SQLite 会话消息
 
 指定文本分块（底层能力）

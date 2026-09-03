@@ -19,12 +19,27 @@ describe('task routing', () => {
   it('keeps ordinary conversation model-backed', () => {
     const plan = classifyTask('帮我把这段话写得更克制一些。', false)
     expect(plan.intent).toBe('general-chat')
+    expect(plan.documentAccess).toBe('none')
     expect(plan.requiresModel).toBe(true)
+  })
+
+  it('does not attach unrelated selected documents to ordinary chat', () => {
+    expect(classifyTask('帮我想三个标题。', true).documentAccess).toBe('none')
+    expect(classifyTask('帮我写一篇文章。', true).documentAccess).toBe('none')
+    expect(classifyTask('根据这个文件改写一版。', true).documentAccess).toBe('selected')
   })
 
   it('routes optional semantic restructuring back to the model', () => {
     const plan = classifyTask('重新梳理章节结构，补充隐含场景和剧情阶段。', true)
     expect(plan.intent).toBe('structure-enhancement')
+    expect(plan.requiresModel).toBe(true)
+  })
+
+  it('routes novel summary questions to document analysis', () => {
+    const plan = classifyTask('这个小说说了什么', true)
+    expect(plan.intent).toBe('document-analysis')
+    expect(plan.operation).toBe('analyze')
+    expect(plan.scope).toBe('selected-documents')
     expect(plan.requiresModel).toBe(true)
   })
 })
