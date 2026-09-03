@@ -17,17 +17,15 @@
 
 ## 2. 当前真实业务链路
 
-当前 MVP 尚未实现 Tool Registry、Skill Registry、IntentRouter 和 JobService。现有链路是：
+当前 MVP 尚未实现完整的 Tool Registry、Skill Registry、IntentRouter 和 JobService；已先落地一个确定性的前置任务路由器和本地结构拆分路径。现有链路是：
 
 ```text
 聊天输入
-  → 前端 context budget
-  → Tauri stream_chat
-  → Rust run_stream
-  → Ollama / OpenAI-compatible Provider
-  → bytes stream
-  → chunk / done / error
-  → SQLite 会话消息
+  → 本地 TaskRouter（意图/范围/是否需要模型）
+  ├─ structure-segmentation → 本地结构解析 → 项目目录拆分文件 → SQLite 会话消息
+  └─ 其他任务 → context budget → Tauri stream_chat
+       → Rust run_stream → Ollama / OpenAI-compatible Provider
+       → bytes stream → chunk / done / error → SQLite 会话消息
 ```
 
 长文本入口目前由前端 `analyzeLongText` 编排：
@@ -59,7 +57,7 @@ read_document
 | `stream_paused` | 输出暂时停顿 | 暂缓 | 需要流心跳、最后 chunk 时间和恢复协议 | 单纯等待 60 秒不能区分慢模型与断线 |
 | `rate_limit` | 限流等待 | 暂缓 | Provider 返回 429 和 Retry-After | 当前错误映射未暴露该结构化信息 |
 | `parsing` | 解析文档 | 目标态 | DocumentIngestion/OCR 事件 | 当前文本读取和分块是同步受控命令 |
-| `routing` | 判断任务类型 | 目标态 | IntentRouter | Agent Runtime 建成后再启用 |
+| `routing` | 判断任务类型 | 部分实现 | 本地 TaskRouter；完整 IntentRouter 待 Agent Runtime | 当前仅覆盖确定性文档操作，歧义输入回退普通聊天 |
 | `planning` | 制定执行步骤 | 目标态 | TaskPlanner / Agent | 应显示步骤数或当前步骤，不只显示转圈 |
 | `awaiting_approval` | 等待确认 | 目标态 | Proposal / Approval checkpoint | 不是加载态，必须允许预览、接受或拒绝 |
 | `checkpointing` | 保存进度 | 目标态 | JobService 持久化 TaskStep/Artifact | 需要可恢复任务模型 |

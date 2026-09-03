@@ -1,11 +1,13 @@
 import { Channel, invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
 import type {
-  ChatMessage, ChatRequest, ChatStreamEvent, Conversation, ConversationSummary,
+  ChatMessage, ChatRequest, ChatStreamEvent, ContextDocument, Conversation, ConversationSummary,
   ChunkManifest, DocumentSnapshot, ModelConnectionResult, ModelProfile, ModelProfileInput, SearchHit,
   ThemeMode, WorkspaceSnapshot,
 } from '../types'
 import { getDocumentKind } from './fileTypes'
+import { buildStructureOutputs } from './structureSegmentation'
+import type { StructureProposal } from './structureSegmentation'
 
 const PROFILE_KEY = 'vinkey.demo.modelProfiles'
 const CONVERSATION_KEY = 'vinkey.demo.conversations'
@@ -217,6 +219,20 @@ export async function createDocument(path: string): Promise<DocumentSnapshot> {
     return document
   }
   return invoke<DocumentSnapshot>('create_document', { path })
+}
+
+export async function writeStructureOutputs(
+  documents: ContextDocument[],
+  proposals: StructureProposal[],
+): Promise<string[]> {
+  const outputs = documents.flatMap((document, index) => buildStructureOutputs(document, proposals[index]))
+  const written: string[] = []
+  for (const output of outputs) {
+    const created = await createDocument(output.path)
+    await saveDocument({ ...created, content: output.content })
+    written.push(output.path)
+  }
+  return written
 }
 
 export async function createDirectory(path: string): Promise<void> {
