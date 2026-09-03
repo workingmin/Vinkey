@@ -23,7 +23,7 @@ import {
 import { buildContextMessage, calculateContextBudget, selectRecentMessages } from './lib/context'
 import { analyzeLongText, cancelLongTextAnalysis } from './lib/longTextAnalysis'
 import { useAppStore } from './store'
-import type { ChatMessage, DocumentSnapshot, ViewMode } from './types'
+import type { ChatMessage, DocumentSnapshot, ViewMode, WorkspaceEntry } from './types'
 import { getDocumentKind, getLanguageName, isEditableDocument } from './lib/fileTypes'
 import { findNewTextFiles, flattenWorkspaceFiles } from './lib/tree'
 import { getCurrentWindow } from '@tauri-apps/api/window'
@@ -405,6 +405,7 @@ function ChatMessageItem({ message, streaming, onCopyError }: {
 }
 
 function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Promise<void> }) {
+  const workspace = useAppStore((state) => state.workspace)
   const messages = useAppStore((state) => state.messages)
   const contextDocuments = useAppStore((state) => state.contextDocuments)
   const chatRuns = useAppStore((state) => state.chatRuns)
@@ -427,11 +428,48 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
   const clearPendingNewFiles = useAppStore((state) => state.clearPendingNewFiles)
   const [prompt, setPrompt] = useState('')
   const [analysisStatus, setAnalysisStatus] = useState<string | null>(null)
+  const [mention, setMention] = useState<{ start: number; end: number; query: string } | null>(null)
+  const [mentionIndex, setMentionIndex] = useState(0)
   const promptRef = useRef<HTMLTextAreaElement>(null)
   const activeModel = modelProfiles.find((profile) => profile.id === activeModelId) ?? null
   const activeChatRun = conversationId ? chatRuns[conversationId] : undefined
   const busy = Boolean(activeChatRun)
   const budget = calculateContextBudget(messages, contextDocuments, prompt, activeModel?.contextWindow ?? 32768)
+
+  const mentionFiles = useMemo(() => {
+    if (!workspace || !mention) return []
+    const query = mention.query.trim().toLocaleLowerCase()
+    return flattenWorkspaceFiles(workspace.entries)
+      .filter((entry) => !query || entry.name.toLocaleLowerCase().includes(query) || entry.path.toLocaleLowerCase().includes(query))
+      .slice(0, 40)
+  }, [mention, workspace])
+
+  const updateMention = useCallback((value: string, caret: number) => {
+    if (!workspace) { setMention(null); return }
+    const beforeCaret = value.slice(0, caret)
+    const match = beforeCaret.match(/(^|[^\w@])@([^\s@]*)$/u)
+    if (!match) { setMention(null); return }
+    const start = caret - match[2].length - 1
+    setMention({ start, end: caret, query: match[2] })
+    setMentionIndex(0)
+  }, [workspace])
+
+  useEffect(() => {
+    if (mentionIndex >= mentionFiles.length && mentionFiles.length > 0) setMentionIndex(mentionFiles.length - 1)
+  }, [mentionFiles.length, mentionIndex])
+
+  const selectMention = async (entry: WorkspaceEntry) => {
+    if (!mention) return
+    const value = `${prompt.slice(0, mention.start)}@${entry.path}${prompt.slice(mention.end)}`
+    setPrompt(value)
+    setMention(null)
+    if (!contextDocuments.some((document) => document.path === entry.path)) await onToggleContext(entry.path)
+    const caret = mention.start + entry.path.length + 1
+    window.setTimeout(() => {
+      promptRef.current?.focus()
+      promptRef.current?.setSelectionRange(caret, caret)
+    }, 0)
+  }
 
   const send = async () => {
     const value = prompt.trim()
@@ -455,6 +493,7 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
     const nextTitle = conversationId ? conversationTitle : value.replace(/\s+/g, ' ').slice(0, 28)
     if (!conversationId) setConversation({ id: nextConversationId, title: nextTitle, messages, updatedAt: now })
     setPrompt('')
+    setMention(null)
     const userMessage = { id: crypto.randomUUID(), role: 'user' as const, content: value, createdAt: now }
     const assistantMessage = { id: crypto.randomUUID(), role: 'assistant' as const, content: '', createdAt: now + 1 }
     const nextRequestId = crypto.randomUUID()
@@ -517,6 +556,7 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
       }
       const names = paths.map((path) => path.split('/').at(-1) ?? path).join('、')
       setPrompt(`${instruction}\n\n目标文档：${names}`)
+      setMention(null)
       clearPendingNewFiles()
       window.setTimeout(() => promptRef.current?.focus(), 0)
     } catch (error) { setError(`准备文档分析失败：${String(error)}`) }
@@ -551,9 +591,47 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
           <button onClick={() => setPrompt('请根据已选文档识别章节和场景边界，给出章节拆分建议。')}><ListChecks />拆分章节</button>
           <button onClick={() => setPrompt('请从已选文档中提取人物卡、人物关系和主要人物线。')}><Bot />提取人物线</button>
         </div>}
-        <textarea ref={promptRef} aria-label="对话输入" value={prompt} onChange={(event) => setPrompt(event.target.value)} onKeyDown={(event) => {
-          if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); send() }
-        }} placeholder="描述你想续写、修改或梳理的内容..." />
+        {mention && <div id="mention-menu" className="mention-menu" role="listbox" aria-label="引用工作区文件">
+          {mentionFiles.length > 0 ? mentionFiles.map((entry, index) => {
+            const selected = contextDocuments.some((document) => document.path === entry.path)
+            return <button
+              type="button"
+              key={entry.path}
+              id={`mention-option-${index}`}
+              role="option"
+              aria-selected={index === mentionIndex}
+              className={index === mentionIndex ? 'active' : ''}
+              onMouseEnter={() => setMentionIndex(index)}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => void selectMention(entry)}
+            ><FileText /><span><strong>{entry.name}</strong><small>{entry.path}</small></span>{selected && <Check aria-label="已引用" />}</button>
+          }) : <div className="mention-empty">没有匹配的文件</div>}
+        </div>}
+        <textarea
+          ref={promptRef}
+          aria-label="对话输入"
+          aria-autocomplete="list"
+          aria-controls={mention ? 'mention-menu' : undefined}
+          aria-activedescendant={mention && mentionFiles.length > 0 ? `mention-option-${mentionIndex}` : undefined}
+          value={prompt}
+          onChange={(event) => { setPrompt(event.target.value); updateMention(event.target.value, event.target.selectionStart) }}
+          onClick={(event) => updateMention(event.currentTarget.value, event.currentTarget.selectionStart)}
+          onBlur={(event) => {
+            const nextFocus = event.relatedTarget
+            if (!(nextFocus instanceof Node) || !event.currentTarget.closest('.composer')?.contains(nextFocus)) setMention(null)
+          }}
+          onKeyUp={(event) => { if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown' && event.key !== 'Enter' && event.key !== 'Escape') updateMention(event.currentTarget.value, event.currentTarget.selectionStart) }}
+          onKeyDown={(event) => {
+            if (mention) {
+              if (event.key === 'ArrowDown' && mentionFiles.length > 0) { event.preventDefault(); setMentionIndex((index) => (index + 1) % mentionFiles.length); return }
+              if (event.key === 'ArrowUp' && mentionFiles.length > 0) { event.preventDefault(); setMentionIndex((index) => (index - 1 + mentionFiles.length) % mentionFiles.length); return }
+              if ((event.key === 'Enter' || event.key === 'Tab') && mentionFiles.length > 0) { event.preventDefault(); void selectMention(mentionFiles[mentionIndex]); return }
+              if (event.key === 'Escape') { event.preventDefault(); setMention(null); return }
+            }
+            if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); send() }
+          }}
+          placeholder="描述你想续写、修改或梳理的内容..."
+        />
         <div className="composer-tools">
           {modelProfiles.length > 0 ? <label className="composer-model-selector" title="切换模型"><Bot /><select aria-label="当前模型" value={activeModelId ?? ''} onChange={(event) => setActiveModelId(event.target.value)}>{modelProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name} · {profile.model}</option>)}</select><ChevronDown /></label>
             : <button className="composer-model-selector missing" onClick={() => setSettingsOpen(true)}><Bot /><span>添加模型</span></button>}
