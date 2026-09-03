@@ -663,8 +663,8 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
     {pendingNewFiles.length > 0 && <aside className="new-files-notice" role="status">
       <div className="new-files-notice-copy"><FileText /><span><strong>检测到 {pendingNewFiles.length} 个新增文本文件</strong><small>是否要让 AI 分析其中某个文件？</small></span></div>
       <div className="new-files-notice-actions">
-        {pendingNewFiles.slice(0, 3).map((path) => <button key={path} onClick={() => void prepareAnalysis([path], '请分析这个文本文件的类型、概要、故事主线、人物线和结构。')} title={`分析 ${path}`}>{path.split('/').at(-1) ?? path}</button>)}
-        {pendingNewFiles.length > 1 && <button onClick={() => void prepareAnalysis(pendingNewFiles, '请分析这些文本文件的类型、概要、故事主线、人物线、章节结构和伏笔。')}>全部分析</button>}
+        {pendingNewFiles.slice(0, 3).map((path) => <button key={path} onClick={() => void prepareAnalysis([path], '请分析已选文本，输出文档类型、内容概要、结构、故事主线和人物线报告。')} title={`分析 ${path}`}>{path.split('/').at(-1) ?? path}</button>)}
+        {pendingNewFiles.length > 1 && <button onClick={() => void prepareAnalysis(pendingNewFiles, '请分析已选文本，输出文档类型、内容概要、结构、故事主线、人物线、章节结构和伏笔报告。')}>全部分析</button>}
         <button className="notice-dismiss" aria-label="忽略新增文件提示" title="忽略" onClick={clearPendingNewFiles}><X /></button>
       </div>
     </aside>}
@@ -684,9 +684,9 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
           {contextDocuments.map((document) => <button className="composer-context-chip" key={document.path} title={`移除引用：${document.path}`} onClick={() => void onToggleContext(document.path)}><FileText /><span>{document.name}</span><X /></button>)}
         </div>}
         {contextDocuments.length > 0 && <div className="composer-analysis-actions" aria-label="文档分析快捷入口">
-          <button onClick={() => setPrompt('请分析已选文档的类型、概要、结构、故事主线和人物线。')}><FileText />分析文本</button>
-          <button onClick={() => setPrompt('请根据已选文档识别章节和场景边界，给出章节拆分建议。')}><ListChecks />拆分章节</button>
-          <button onClick={() => setPrompt('请从已选文档中提取人物卡、人物关系和主要人物线。')}><Bot />提取人物线</button>
+          <button onClick={() => setPrompt('请分析已选文档，输出文档类型、内容概要、结构、故事主线和人物线报告。')}><FileText />分析文本</button>
+          <button onClick={() => setPrompt('请在当前项目中按已选文档的章节和场景边界生成拆分文件；首轮使用本地规则粗分，不覆盖原文。')}><ListChecks />拆分章节</button>
+          <button onClick={() => setPrompt('请从已选文档中整理主要人物、人物关系、目标变化和人物线，输出可回溯的分析报告。')}><Bot />提取人物线</button>
         </div>}
         {mention && <div id="mention-menu" className="mention-menu" role="listbox" aria-label="引用工作区文件">
           {mentionFiles.length > 0 ? mentionFiles.map((entry, index) => {

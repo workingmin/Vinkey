@@ -3,7 +3,7 @@ import { classifyTask } from './intent'
 
 describe('task routing', () => {
   it('routes chapter segmentation without a model', () => {
-    const plan = classifyTask('请根据已选文档识别章节和场景边界，给出章节拆分建议。', true)
+    const plan = classifyTask('请在当前项目中按已选文档的章节和场景边界生成拆分文件；首轮使用本地规则粗分，不覆盖原文。', true)
     expect(plan.intent).toBe('structure-segmentation')
     expect(plan.operation).toBe('segment')
     expect(plan.requiresModel).toBe(false)
