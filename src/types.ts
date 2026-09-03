@@ -50,6 +50,9 @@ export interface TextChunk {
 
 export interface ChunkManifest {
   sourceId: string
+  sourceFingerprint: string
+  algorithmVersion: string
+  cacheKey: string
   sourceTokens: number
   maxTokens: number
   overlapTokens: number

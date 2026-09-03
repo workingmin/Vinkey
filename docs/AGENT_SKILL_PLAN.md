@@ -252,6 +252,8 @@ model_capabilities
 
 `summary_nodes` 保存父子摘要关系；`text_chunks` 保存原文位置和切分原因；所有模型结果保存模型、Prompt、schema 和算法版本，便于回归与增量失效。
 
+运行态文件不写入工作区 `tmp`。项目级中间目录固定为隐藏的 `.vinkey/`：`chunks/<cache-key>.json` 保存可复用的本地分块 manifest，`analysis/jobs/<job-id>/` 保存一次分析任务的 manifest、分块摘要和最终报告。分块缓存键使用 SHA-256，由源文档相对路径、原文内容指纹、分块算法版本及 token 配置组成；命中时校验指纹、配置、块边界和 token 估算，校验失败则重新切分。章节拆分产生的用户交付文件仍位于源文档同级的 `<源文件名>-章节拆分/`。
+
 ## 7. 文本处理与模型能力适配
 
 ### 7.1 不把模型名当作真实能力
@@ -408,7 +410,7 @@ quality_profile
 ### 11.2 尚未实现
 
 1. Tool Registry、Skill Registry 和完整 IntentRouter（当前仅有确定性 TaskRouter）。
-2. `AnalysisJob`、后台进度、暂停/恢复、缓存和增量失效。
+2. `AnalysisJob`、后台进度、暂停/恢复，以及模型摘要产物的增量失效（确定性分块缓存已落地）。
 3. `DocumentTriage`、`StoryDeconstruction` 和分层摘要。
 4. `Proposal`/diff 审核以及 canon、记忆更新确认。
 5. 模型能力注册表和本地模型基准测试。

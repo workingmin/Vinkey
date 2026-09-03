@@ -152,7 +152,7 @@ export async function analyzeLongText(
       assertNotCancelled(requestId)
       const manifest = await chunkDocument(document.path, maxTokens, Math.min(128, Math.floor(maxTokens / 8)))
       manifests.push(manifest)
-      await writeAnalysisArtifact(jobId, `manifest-${index + 1}.json`, JSON.stringify(manifest, null, 2))
+      await writeAnalysisArtifact(jobId, `manifest-${String(index + 1).padStart(3, '0')}.json`, JSON.stringify(manifest, null, 2))
       onProgress?.({ stage: 'chunking', completed: index + 1, total: documents.length, message: documentChunkMessage(document, manifest) })
     }
 

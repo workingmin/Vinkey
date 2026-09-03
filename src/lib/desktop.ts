@@ -162,6 +162,9 @@ export async function chunkDocument(
     const document = await readDocument(path)
     return {
       sourceId: path,
+      sourceFingerprint: 'demo',
+      algorithmVersion: 'demo',
+      cacheKey: 'demo',
       sourceTokens: document.content.length,
       maxTokens,
       overlapTokens,

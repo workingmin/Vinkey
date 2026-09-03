@@ -127,6 +127,25 @@ Local machine
 | API Key | 操作系统凭据库 |
 | 日志 | 应用日志目录，不记录正文、完整 prompt 或 API Key |
 
+### 项目级处理中间目录
+
+工作区内的运行态和可复用处理中间产物统一放在隐藏目录 `.vinkey/`；应用文件树跳过该目录，Windows 和 macOS 均使用相同布局。`tmp` 不再作为业务处理中间目录。
+
+```text
+<workspace>/.vinkey/
+├─ conversations.sqlite3
+├─ chunks/
+│  └─ <cache-key>.json
+└─ analysis/
+   └─ jobs/
+      └─ <job-id>/
+         ├─ manifest-001.json
+         ├─ summary-00001.md
+         └─ analysis.md
+```
+
+`chunks/` 只保存确定性本地分块结果，使用 SHA-256 生成原文指纹和缓存键；缓存键由源文档相对路径、原文指纹、分块算法版本、`maxTokens` 和 `overlapTokens` 计算。读取缓存时必须再次校验这些字段、块边界和 token 估算；任一不匹配都丢弃旧缓存并重新生成。分析任务产物按 `job-id` 隔离，便于诊断和后续恢复。用户可见的章节拆分文件仍写入源文档同级的 `<源文件名>-章节拆分/`，不放入 `.vinkey`。
+
 ### 运行日志与跨平台诊断
 
 桌面端使用 Rust `RuntimeLogState` 统一写入 JSONL 运行日志：

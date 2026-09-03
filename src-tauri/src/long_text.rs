@@ -1,4 +1,30 @@
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+
+pub const CHUNK_ALGORITHM_VERSION: &str = "chunk-v1";
+
+pub fn source_fingerprint(text: &str) -> String {
+    let digest = Sha256::digest(text.as_bytes());
+    hex_digest(&digest)
+}
+
+pub fn cache_key(source_id: &str, text: &str, max_tokens: usize, overlap_tokens: usize) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(CHUNK_ALGORITHM_VERSION.as_bytes());
+    hasher.update([0]);
+    hasher.update(source_id.as_bytes());
+    hasher.update([0]);
+    hasher.update(source_fingerprint(text).as_bytes());
+    hasher.update([0]);
+    hasher.update(max_tokens.to_string().as_bytes());
+    hasher.update([0]);
+    hasher.update(overlap_tokens.to_string().as_bytes());
+    hex_digest(&hasher.finalize())
+}
+
+fn hex_digest(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
 
 /// Conservative token estimate used when the provider tokenizer is unavailable.
 /// CJK characters are treated as one token; other text uses a four-character
@@ -47,6 +73,9 @@ pub struct TextChunk {
 #[serde(rename_all = "camelCase")]
 pub struct ChunkManifest {
     pub source_id: String,
+    pub source_fingerprint: String,
+    pub algorithm_version: String,
+    pub cache_key: String,
     pub source_tokens: usize,
     pub max_tokens: usize,
     pub overlap_tokens: usize,
@@ -299,6 +328,9 @@ pub fn chunk_text(
     }
 
     Ok(ChunkManifest {
+        cache_key: cache_key(&source_id, text, max_tokens, overlap_tokens),
+        source_fingerprint: source_fingerprint(text),
+        algorithm_version: CHUNK_ALGORITHM_VERSION.into(),
         source_id,
         source_tokens: estimate_tokens(text),
         max_tokens,
@@ -369,5 +401,24 @@ mod tests {
         assert_eq!(manifest.chunks.len(), 1);
         assert_eq!(manifest.chunks[0].line_start, 1);
         assert_eq!(manifest.chunks[0].line_end, 2);
+    }
+
+    #[test]
+    fn records_reusable_cache_identity() {
+        let manifest = chunk_text("doc.md", "第一章\n内容。", 32, 4).unwrap();
+
+        assert_eq!(manifest.algorithm_version, CHUNK_ALGORITHM_VERSION);
+        assert_eq!(
+            manifest.source_fingerprint,
+            source_fingerprint("第一章\n内容。")
+        );
+        assert_eq!(
+            manifest.cache_key,
+            cache_key("doc.md", "第一章\n内容。", 32, 4)
+        );
+        assert_ne!(
+            manifest.cache_key,
+            cache_key("doc.md", "第一章\n内容。", 64, 4)
+        );
     }
 }

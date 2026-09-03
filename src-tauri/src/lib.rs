@@ -297,6 +297,100 @@ fn workspace_from_root(canonical: PathBuf) -> Workspace {
     }
 }
 
+fn workspace_vinkey_dir(workspace: &Workspace) -> PathBuf {
+    workspace.root.join(".vinkey")
+}
+
+fn chunk_cache_dir(workspace: &Workspace) -> PathBuf {
+    workspace_vinkey_dir(workspace).join("chunks")
+}
+
+fn analysis_jobs_dir(workspace: &Workspace) -> PathBuf {
+    workspace_vinkey_dir(workspace)
+        .join("analysis")
+        .join("jobs")
+}
+
+fn cache_manifest_is_valid(
+    manifest: &long_text::ChunkManifest,
+    source_id: &str,
+    content: &str,
+    max_tokens: usize,
+    overlap_tokens: usize,
+    expected_key: &str,
+) -> bool {
+    if manifest.source_id != source_id
+        || manifest.source_fingerprint != long_text::source_fingerprint(content)
+        || manifest.algorithm_version != long_text::CHUNK_ALGORITHM_VERSION
+        || manifest.cache_key != expected_key
+        || manifest.max_tokens != max_tokens
+        || manifest.overlap_tokens != overlap_tokens
+        || manifest.source_tokens != long_text::estimate_tokens(content)
+    {
+        return false;
+    }
+    let character_count = content.chars().count();
+    if !content.is_empty() && manifest.chunks.is_empty() {
+        return false;
+    }
+    manifest.chunks.iter().all(|chunk| {
+        let start_byte = content
+            .char_indices()
+            .nth(chunk.start_char)
+            .map(|(offset, _)| offset)
+            .unwrap_or_else(|| content.len());
+        let end_byte = content
+            .char_indices()
+            .nth(chunk.end_char)
+            .map(|(offset, _)| offset)
+            .unwrap_or_else(|| content.len());
+        chunk.source_id == source_id
+            && !chunk.text.is_empty()
+            && chunk.start_char <= chunk.end_char
+            && chunk.end_char <= character_count
+            && start_byte <= end_byte
+            && content.get(start_byte..end_byte) == Some(chunk.text.as_str())
+            && chunk.estimated_tokens == long_text::estimate_tokens(&chunk.text)
+            && chunk.estimated_tokens <= max_tokens
+    })
+}
+
+fn write_atomic(path: &Path, content: &[u8]) -> Result<(), String> {
+    let parent = path.parent().ok_or_else(|| "缓存路径无效".to_string())?;
+    fs::create_dir_all(parent).map_err(|error| format!("无法创建中间目录：{error}"))?;
+    let temp_name = format!(
+        ".{}.tmp-{}",
+        path.file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or("artifact"),
+        now_millis()
+    );
+    let temp = parent.join(temp_name);
+    let result = (|| {
+        let mut file =
+            fs::File::create(&temp).map_err(|error| format!("无法创建临时文件：{error}"))?;
+        file.write_all(content)
+            .map_err(|error| format!("无法写入临时文件：{error}"))?;
+        file.sync_all()
+            .map_err(|error| format!("无法刷新临时文件：{error}"))?;
+        if path.exists() {
+            fs::remove_file(path).map_err(|error| format!("无法替换旧缓存：{error}"))?;
+        }
+        fs::rename(&temp, path).map_err(|error| format!("无法提交中间文件：{error}"))
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temp);
+    }
+    result
+}
+
+fn now_millis() -> u128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos()
+}
+
 fn workspace_preference_path(app: &AppHandle) -> Result<PathBuf, String> {
     app.path()
         .app_data_dir()
@@ -450,18 +544,65 @@ fn chunk_document(
     if !matches!(document.kind, "markdown" | "text" | "code") {
         return Err("只有文本类文档可以进行分块".into());
     }
-    let manifest = long_text::chunk_text(
-        document.path,
+    let max_tokens = max_tokens.unwrap_or(2048);
+    let overlap_tokens = overlap_tokens.unwrap_or(128);
+    let cache_key = long_text::cache_key(
+        &document.path,
         &document.content,
-        max_tokens.unwrap_or(2048),
-        overlap_tokens.unwrap_or(128),
+        max_tokens,
+        overlap_tokens,
+    );
+    let cache_path = chunk_cache_dir(&workspace).join(format!("{cache_key}.json"));
+    if let Ok(bytes) = fs::read(&cache_path) {
+        if let Ok(manifest) = serde_json::from_slice::<long_text::ChunkManifest>(&bytes) {
+            if cache_manifest_is_valid(
+                &manifest,
+                &document.path,
+                &document.content,
+                max_tokens,
+                overlap_tokens,
+                &cache_key,
+            ) {
+                runtime.info(
+                    "document.chunk_cache_hit",
+                    log_fields([
+                        ("path", Value::String(document.path.clone())),
+                        ("cacheKey", Value::String(cache_key)),
+                        ("chunkCount", Value::from(manifest.chunks.len())),
+                    ]),
+                );
+                return Ok(manifest);
+            }
+        }
+        runtime.info(
+            "document.chunk_cache_invalid",
+            log_fields([("path", Value::String(document.path.clone()))]),
+        );
+    }
+    runtime.info(
+        "document.chunk_cache_miss",
+        log_fields([
+            ("path", Value::String(document.path.clone())),
+            ("cacheKey", Value::String(cache_key.clone())),
+        ]),
+    );
+    let manifest = long_text::chunk_text(
+        document.path.clone(),
+        &document.content,
+        max_tokens,
+        overlap_tokens,
     )?;
+    let encoded = serde_json::to_vec_pretty(&manifest)
+        .map_err(|error| format!("无法序列化分块缓存：{error}"))?;
+    write_atomic(&cache_path, &encoded)?;
     runtime.info(
         "document.chunk",
         log_fields([
             ("path", Value::String(manifest.source_id.clone())),
             ("sourceTokens", Value::from(manifest.source_tokens)),
             ("chunkCount", Value::from(manifest.chunks.len())),
+            ("cacheKey", Value::String(manifest.cache_key.clone())),
+            ("cacheHit", Value::Bool(false)),
         ]),
     );
     Ok(manifest)
@@ -504,12 +645,8 @@ fn write_analysis_artifact(
         return Err("分析产物超过 16 MB 限制".into());
     }
     let workspace = lock_workspace(&state)?;
-    let artifact_dir = workspace
-        .root
-        .join("tmp")
-        .join("vinkey-analysis")
-        .join(&job_id);
-    fs::create_dir_all(&artifact_dir).map_err(|error| format!("无法创建分析临时目录：{error}"))?;
+    let artifact_dir = analysis_jobs_dir(&workspace).join(&job_id);
+    fs::create_dir_all(&artifact_dir).map_err(|error| format!("无法创建分析任务目录：{error}"))?;
     let target = artifact_dir.join(artifact_name);
     if target.exists() {
         return Err("分析产物已存在，拒绝覆盖".into());

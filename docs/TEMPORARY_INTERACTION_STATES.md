@@ -33,7 +33,8 @@
 ```text
 read_document
   → chunk_document
-  → write_analysis_artifact(manifest)
+  → 复用或生成 `.vinkey/chunks/<cache-key>.json`
+  → write_analysis_artifact(manifest)（`.vinkey/analysis/jobs/<job-id>/`）
   → 多次 stream_chat（局部摘要）
   → 多次 stream_chat（阶段汇总）
   → stream_chat（整体综合）
