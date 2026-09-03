@@ -1,5 +1,7 @@
 # UI 设计：状态、流程与验收
 
+对话任务的临时状态分层和 Service/Tool/Agent/Skill 映射见[临时交互状态设计](TEMPORARY_INTERACTION_STATES.md)。
+
 ## 首次打开
 
 - 应用直接进入工作台，不显示营销落地页。

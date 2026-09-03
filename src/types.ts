@@ -118,6 +118,8 @@ export interface ChatRequest {
   messages: Array<Pick<ChatMessage, 'role' | 'content'>>
 }
 
+export type ChatRunStatus = 'sending' | 'thinking' | 'fetching' | 'tool_calling' | 'streaming' | 'stopping'
+
 export type ChatStreamEvent =
   | { type: 'chunk'; content: string }
   | { type: 'done' }

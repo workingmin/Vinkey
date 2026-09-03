@@ -23,7 +23,7 @@ import {
 import { buildContextMessage, calculateContextBudget, selectRecentMessages } from './lib/context'
 import { analyzeLongText, cancelLongTextAnalysis } from './lib/longTextAnalysis'
 import { useAppStore } from './store'
-import type { ChatMessage, DocumentSnapshot, ViewMode, WorkspaceEntry } from './types'
+import type { ChatMessage, ChatRunStatus, DocumentSnapshot, ViewMode, WorkspaceEntry } from './types'
 import { getDocumentKind, getLanguageName, isEditableDocument } from './lib/fileTypes'
 import { findNewTextFiles, flattenWorkspaceFiles } from './lib/tree'
 import { getCurrentWindow } from '@tauri-apps/api/window'
@@ -211,6 +211,15 @@ function IconButton({ label, active = false, children, onClick, disabled = false
   return <button className={`icon-button ${active ? 'active' : ''}`} title={label} aria-label={label} onClick={onClick} disabled={disabled}>{children}</button>
 }
 
+const chatStatusMeta: Record<ChatRunStatus, { label: string; title: string }> = {
+  sending: { label: '发送中', title: 'sending · 正在提交消息' },
+  thinking: { label: '思考中', title: 'thinking · 正在理解你的请求' },
+  fetching: { label: '读取资料', title: 'fetching · 正在准备文档和上下文' },
+  tool_calling: { label: '执行分析', title: 'tool_calling · 正在执行分析流程' },
+  streaming: { label: '生成中', title: 'streaming · 正在返回内容' },
+  stopping: { label: '停止中', title: 'stopping · 正在等待请求结束' },
+}
+
 function ProjectSessionSidebar({ onPageChange, onOpenWorkspace, onRefreshWorkspace, onOpenDocument }: {
   onPageChange: (page: ContentPage) => void
   onOpenWorkspace: () => void
@@ -296,7 +305,20 @@ function ProjectSessionSidebar({ onPageChange, onOpenWorkspace, onRefreshWorkspa
             <div className="conversation-list">
               {!hasQuery && <button className="project-new-session" onClick={startConversation}><CirclePlus />新建会话</button>}
               {!hasQuery && !conversationId && <button className="conversation-item active" onClick={startConversation}><MessageSquareText /><span><b>新会话</b><small>{Math.max(0, messages.length - 1)} 条消息 · 尚未保存</small></span></button>}
-              {conversationMatches.map((conversation) => <button key={conversation.id} className={`conversation-item ${conversationId === conversation.id ? 'active' : ''}`} onClick={() => void selectConversation(conversation.id)}><MessageSquareText /><span><b>{conversation.title}</b><small>{chatRuns[conversation.id] ? '正在生成 · ' : ''}{conversation.messageCount} 条消息 · {new Date(conversation.updatedAt).toLocaleString()}</small></span></button>)}
+              {conversationMatches.map((conversation) => {
+                const run = chatRuns[conversation.id]
+                const status = run ? chatStatusMeta[run.status] : null
+                return <button key={conversation.id} className={`conversation-item ${conversationId === conversation.id ? 'active' : ''} ${run ? 'is-running' : ''}`} onClick={() => void selectConversation(conversation.id)}>
+                  <MessageSquareText />
+                  <span>
+                    <b>{conversation.title}</b>
+                    <small className={status ? 'conversation-item-meta has-status' : 'conversation-item-meta'}>
+                      {status && <span className={`conversation-live-status status-${run.status}`} title={status.title} role="status"><i aria-hidden="true" />{status.label}</span>}
+                      {status && <span aria-hidden="true"> · </span>}{conversation.messageCount} 条消息 · {new Date(conversation.updatedAt).toLocaleString()}
+                    </small>
+                  </span>
+                </button>
+              })}
               {hasQuery && conversationMatches.length === 0 && <div className="empty-small compact">没有匹配的会话</div>}
               {!hasQuery && conversations.length === 0 && conversationId && <div className="empty-small compact">还没有其他会话</div>}
             </div>
@@ -414,6 +436,7 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
   const modelProfiles = useAppStore((state) => state.modelProfiles)
   const activeModelId = useAppStore((state) => state.activeModelId)
   const beginChatRun = useAppStore((state) => state.beginChatRun)
+  const setChatRunStatus = useAppStore((state) => state.setChatRunStatus)
   const appendChatRunChunk = useAppStore((state) => state.appendChatRunChunk)
   const endChatRun = useAppStore((state) => state.endChatRun)
   const setConversation = useAppStore((state) => state.setConversation)
@@ -435,6 +458,7 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
   const activeChatRun = conversationId ? chatRuns[conversationId] : undefined
   const busy = Boolean(activeChatRun)
   const budget = calculateContextBudget(messages, contextDocuments, prompt, activeModel?.contextWindow ?? 32768)
+  const activeStatus = activeChatRun ? chatStatusMeta[activeChatRun.status] : null
 
   const mentionFiles = useMemo(() => {
     if (!workspace || !mention) return []
@@ -501,15 +525,19 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
       conversationId: nextConversationId,
       conversationTitle: nextTitle,
       requestId: nextRequestId,
+      status: 'sending',
       userMessage,
       assistantMessage,
     })
     try {
       await saveConversationMessage(nextConversationId, nextTitle, userMessage)
       setConversations(await listConversations())
+      setChatRunStatus(nextConversationId, 'thinking')
       if (useLongTextPipeline) {
+        setChatRunStatus(nextConversationId, 'fetching')
         setAnalysisStatus('正在准备长文本分析…')
         const result = await analyzeLongText(requestContextDocuments, value, activeModel, nextRequestId, (progress) => {
+          setChatRunStatus(nextConversationId, progress.stage === 'chunking' ? 'fetching' : 'tool_calling')
           setAnalysisStatus(`${progress.message} · ${progress.completed}/${progress.total}`)
         })
         appendChatRunChunk(nextConversationId, result.content)
@@ -521,7 +549,10 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
           profileId: activeModel.id,
           messages: [...(context ? [{ role: 'user' as const, content: context }] : []), ...recent.map(({ role, content }) => ({ role, content }))],
         }, (event) => {
-          if (event.type === 'chunk') appendChatRunChunk(nextConversationId, event.content)
+          if (event.type === 'chunk') {
+            setChatRunStatus(nextConversationId, 'streaming')
+            appendChatRunChunk(nextConversationId, event.content)
+          }
           if (event.type === 'error') setError(event.message)
         })
       }
@@ -542,7 +573,8 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
   }
 
   const stop = async () => {
-    if (!activeChatRun) return
+    if (!activeChatRun || activeChatRun.status === 'stopping') return
+    setChatRunStatus(activeChatRun.conversationId, 'stopping')
     if (analysisStatus) cancelLongTextAnalysis(activeChatRun.requestId)
     await cancelChat(activeChatRun.requestId)
   }
@@ -635,8 +667,8 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
         <div className="composer-tools">
           {modelProfiles.length > 0 ? <label className="composer-model-selector" title="切换模型"><Bot /><select aria-label="当前模型" value={activeModelId ?? ''} onChange={(event) => setActiveModelId(event.target.value)}>{modelProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name} · {profile.model}</option>)}</select><ChevronDown /></label>
             : <button className="composer-model-selector missing" onClick={() => setSettingsOpen(true)}><Bot /><span>添加模型</span></button>}
-          <span className={`composer-hint ${budget.exceedsLimit && !analysisStatus ? 'over-limit' : ''}`} title={`预计 ${budget.estimatedTokens} / ${budget.limit} tokens`}>{analysisStatus ?? `上下文 ${budget.usedPercent}% · Enter 发送`}</span>
-          <button className="send-button" aria-label={busy ? '停止生成' : '发送'} disabled={!prompt.trim() && !busy} onClick={busy ? () => void stop() : () => void send()}>{busy ? <Square /> : <Send />}</button>
+          <span className={`composer-hint ${budget.exceedsLimit && !analysisStatus && !activeStatus ? 'over-limit' : ''}`} title={activeStatus?.title ?? `预计 ${budget.estimatedTokens} / ${budget.limit} tokens`}>{analysisStatus ?? activeStatus?.label ?? `上下文 ${budget.usedPercent}% · Enter 发送`}</span>
+          <button className="send-button" aria-label={activeChatRun?.status === 'stopping' ? '正在停止' : busy ? '停止生成' : '发送'} disabled={activeChatRun?.status === 'stopping' || (!prompt.trim() && !busy)} onClick={busy ? () => void stop() : () => void send()}>{busy ? <Square /> : <Send />}</button>
         </div>
       </div>
     </div>

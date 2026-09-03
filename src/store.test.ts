@@ -16,6 +16,7 @@ const run = (conversationId: string): ChatRun => ({
   conversationId,
   conversationTitle: `会话 ${conversationId}`,
   requestId: `request-${conversationId}`,
+  status: 'thinking',
   userMessage: message(`user-${conversationId}`, 'user', '问题', 2),
   assistantMessage: message(`assistant-${conversationId}`, 'assistant', '', 3),
 })
@@ -73,6 +74,17 @@ describe('conversation chat runs', () => {
     store.beginChatRun(run('a'))
     store.endChatRun('a', true)
     expect(useAppStore.getState().messages.some((item) => item.id === 'assistant-a')).toBe(false)
+  })
+
+  it('updates temporary status without changing the live response', () => {
+    const store = useAppStore.getState()
+    store.setConversation(conversation('a'))
+    store.beginChatRun(run('a'))
+    store.appendChatRunChunk('a', '已收到')
+    store.setChatRunStatus('a', 'streaming')
+
+    expect(useAppStore.getState().chatRuns.a.status).toBe('streaming')
+    expect(useAppStore.getState().chatRuns.a.assistantMessage.content).toBe('已收到')
   })
 })
 

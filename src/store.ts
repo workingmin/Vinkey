@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type {
   ChatMessage, ContextDocument, Conversation, ConversationSummary, DocumentTab,
   ModelProfile, ThemeMode, ViewMode, WorkspaceSnapshot,
+  ChatRunStatus,
 } from './types'
 
 interface AppState {
@@ -34,6 +35,7 @@ interface AppState {
   setPendingNewFiles: (paths: string[]) => void
   clearPendingNewFiles: () => void
   beginChatRun: (run: ChatRun) => void
+  setChatRunStatus: (conversationId: string, status: ChatRunStatus) => void
   appendChatRunChunk: (conversationId: string, chunk: string) => void
   endChatRun: (conversationId: string, discardAssistant: boolean) => void
   setConversation: (conversation: Conversation) => void
@@ -51,6 +53,7 @@ export interface ChatRun {
   conversationId: string
   conversationTitle: string
   requestId: string
+  status: ChatRunStatus
   userMessage: ChatMessage
   assistantMessage: ChatMessage
 }
@@ -124,6 +127,11 @@ export const useAppStore = create<AppState>((set) => ({
       ? mergeRunMessages(state.messages, run)
       : state.messages,
   })),
+  setChatRunStatus: (conversationId, status) => set((state) => {
+    const run = state.chatRuns[conversationId]
+    if (!run || run.status === status) return state
+    return { chatRuns: { ...state.chatRuns, [conversationId]: { ...run, status } } }
+  }),
   appendChatRunChunk: (conversationId, chunk) => set((state) => {
     const run = state.chatRuns[conversationId]
     if (!run) return state
