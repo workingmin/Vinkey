@@ -21,7 +21,8 @@ import {
 import { buildContextMessage, calculateContextBudget, selectRecentMessages } from './lib/context'
 import { useAppStore } from './store'
 import type { ChatMessage, DocumentSnapshot, ViewMode } from './types'
-import { getLanguageName, isEditableDocument } from './lib/fileTypes'
+import { getDocumentKind, getLanguageName, isEditableDocument } from './lib/fileTypes'
+import { findNewTextFiles, flattenWorkspaceFiles } from './lib/tree'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { Menu, MenuItem, PredefinedMenuItem, Submenu } from '@tauri-apps/api/menu'
 import type { PredefinedMenuItemOptions } from '@tauri-apps/api/menu'
@@ -308,10 +309,11 @@ function ProjectSessionSidebar({ onPageChange, onOpenWorkspace, onRefreshWorkspa
   </aside>
 }
 
-function FileBrowserPanel({ onOpenDocument, onToggleContext, onOpenWorkspace }: {
+function FileBrowserPanel({ onOpenDocument, onToggleContext, onOpenWorkspace, onRefreshWorkspace }: {
   onOpenDocument: (path: string) => Promise<void>
   onToggleContext: (path: string) => Promise<void>
   onOpenWorkspace: () => void
+  onRefreshWorkspace: () => Promise<void>
 }) {
   const workspace = useAppStore((state) => state.workspace)
   const activePath = useAppStore((state) => state.activePath)
@@ -322,7 +324,7 @@ function FileBrowserPanel({ onOpenDocument, onToggleContext, onOpenWorkspace }: 
   const runAction = async (id: typeof workspaceActions[number]['id']) => {
     if (!workspace) { onOpenWorkspace(); return }
     try {
-      if (id === 'refresh') { setWorkspace(await refreshWorkspace()); return }
+      if (id === 'refresh') { await onRefreshWorkspace(); return }
       const label = id === 'file' ? '文档相对路径（.md / .txt）' : '文件夹相对路径'
       const value = window.prompt(label)?.trim()
       if (!value) return
@@ -410,8 +412,14 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
   const setActiveModelId = useAppStore((state) => state.setActiveModelId)
   const setConversations = useAppStore((state) => state.setConversations)
   const setSettingsOpen = useAppStore((state) => state.setSettingsOpen)
+  const activePath = useAppStore((state) => state.activePath)
+  const tabs = useAppStore((state) => state.tabs)
+  const addContextDocument = useAppStore((state) => state.toggleContext)
   const setError = useAppStore((state) => state.setError)
+  const pendingNewFiles = useAppStore((state) => state.pendingNewFiles)
+  const clearPendingNewFiles = useAppStore((state) => state.clearPendingNewFiles)
   const [prompt, setPrompt] = useState('')
+  const promptRef = useRef<HTMLTextAreaElement>(null)
   const activeModel = modelProfiles.find((profile) => profile.id === activeModelId) ?? null
   const activeChatRun = conversationId ? chatRuns[conversationId] : undefined
   const busy = Boolean(activeChatRun)
@@ -421,7 +429,15 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
     const value = prompt.trim()
     if (!value || busy) return
     if (!activeModel) { setSettingsOpen(true); return }
-    if (budget.exceedsLimit) { setError('当前消息和上下文超过模型可用窗口，请移除文档或缩短输入'); return }
+    let requestContextDocuments = contextDocuments
+    const explicitFileAnalysis = /(分析(?:当前|这个)?(?:文档|文件|文本)|拆分(?:章节|场景)|故事主线|人物线|章节结构|提取人物)/.test(value)
+    const activeDocument = activePath ? tabs.find((tab) => tab.path === activePath) : undefined
+    if (explicitFileAnalysis && requestContextDocuments.length === 0 && activeDocument) {
+      addContextDocument({ path: activeDocument.path, name: activeDocument.name, content: activeDocument.content, size: activeDocument.content.length })
+      requestContextDocuments = useAppStore.getState().contextDocuments
+    }
+    const requestBudget = calculateContextBudget(messages, requestContextDocuments, value, activeModel.contextWindow)
+    if (requestBudget.exceedsLimit) { setError('当前消息和上下文超过模型可用窗口，请移除文档或缩短输入'); return }
     const now = Date.now()
     const nextConversationId = conversationId ?? crypto.randomUUID()
     const nextTitle = conversationId ? conversationTitle : value.replace(/\s+/g, ' ').slice(0, 28)
@@ -440,8 +456,8 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
     try {
       await saveConversationMessage(nextConversationId, nextTitle, userMessage)
       setConversations(await listConversations())
-      const recent = selectRecentMessages([...messages.filter((message) => message.id !== 'welcome'), userMessage], contextDocuments, value, activeModel.contextWindow)
-      const context = buildContextMessage(contextDocuments)
+      const recent = selectRecentMessages([...messages.filter((message) => message.id !== 'welcome'), userMessage], requestContextDocuments, value, activeModel.contextWindow)
+      const context = buildContextMessage(requestContextDocuments)
       await streamChat({
         requestId: nextRequestId,
         profileId: activeModel.id,
@@ -467,7 +483,29 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
 
   const stop = async () => { if (activeChatRun) await cancelChat(activeChatRun.requestId) }
 
+  const prepareAnalysis = async (paths: string[], instruction: string) => {
+    try {
+      for (const path of paths) {
+        if (!useAppStore.getState().contextDocuments.some((document) => document.path === path)) {
+          await onToggleContext(path)
+        }
+      }
+      const names = paths.map((path) => path.split('/').at(-1) ?? path).join('、')
+      setPrompt(`${instruction}\n\n目标文档：${names}`)
+      clearPendingNewFiles()
+      window.setTimeout(() => promptRef.current?.focus(), 0)
+    } catch (error) { setError(`准备文档分析失败：${String(error)}`) }
+  }
+
   return <main className="chat-panel">
+    {pendingNewFiles.length > 0 && <aside className="new-files-notice" role="status">
+      <div className="new-files-notice-copy"><FileText /><span><strong>检测到 {pendingNewFiles.length} 个新增文本文件</strong><small>是否要让 AI 分析其中某个文件？</small></span></div>
+      <div className="new-files-notice-actions">
+        {pendingNewFiles.slice(0, 3).map((path) => <button key={path} onClick={() => void prepareAnalysis([path], '请分析这个文本文件的类型、概要、故事主线、人物线和结构。')} title={`分析 ${path}`}>{path.split('/').at(-1) ?? path}</button>)}
+        {pendingNewFiles.length > 1 && <button onClick={() => void prepareAnalysis(pendingNewFiles, '请分析这些文本文件的类型、概要、故事主线、人物线、章节结构和伏笔。')}>全部分析</button>}
+        <button className="notice-dismiss" aria-label="忽略新增文件提示" title="忽略" onClick={clearPendingNewFiles}><X /></button>
+      </div>
+    </aside>}
     <div className="message-stream">
       <div className="message-inner">
         {messages.map((message) => <ChatMessageItem
@@ -483,7 +521,12 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
         {contextDocuments.length > 0 && <div className="composer-context-list" aria-label="已引用文档">
           {contextDocuments.map((document) => <button className="composer-context-chip" key={document.path} title={`移除引用：${document.path}`} onClick={() => void onToggleContext(document.path)}><FileText /><span>{document.name}</span><X /></button>)}
         </div>}
-        <textarea aria-label="对话输入" value={prompt} onChange={(event) => setPrompt(event.target.value)} onKeyDown={(event) => {
+        {contextDocuments.length > 0 && <div className="composer-analysis-actions" aria-label="文档分析快捷入口">
+          <button onClick={() => setPrompt('请分析已选文档的类型、概要、结构、故事主线和人物线。')}><FileText />分析文本</button>
+          <button onClick={() => setPrompt('请根据已选文档识别章节和场景边界，给出章节拆分建议。')}><ListChecks />拆分章节</button>
+          <button onClick={() => setPrompt('请从已选文档中提取人物卡、人物关系和主要人物线。')}><Bot />提取人物线</button>
+        </div>}
+        <textarea ref={promptRef} aria-label="对话输入" value={prompt} onChange={(event) => setPrompt(event.target.value)} onKeyDown={(event) => {
           if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); send() }
         }} placeholder="描述你想续写、修改或梳理的内容..." />
         <div className="composer-tools">
@@ -558,26 +601,28 @@ function EditorPanel({ onSave, onClose }: { onSave: () => Promise<void>; onClose
   </aside>
 }
 
-function FileWorkspace({ showEditor, onOpenDocument, onToggleContext, onOpenWorkspace, onSave, onCloseEditor }: {
+function FileWorkspace({ showEditor, onOpenDocument, onToggleContext, onOpenWorkspace, onRefreshWorkspace, onSave, onCloseEditor }: {
   showEditor: boolean
   onOpenDocument: (path: string) => Promise<void>
   onToggleContext: (path: string) => Promise<void>
   onOpenWorkspace: () => void
+  onRefreshWorkspace: () => Promise<void>
   onSave: () => Promise<void>
   onCloseEditor: () => void
 }) {
   return <div className={`file-workspace ${showEditor ? 'with-editor' : 'list-only'}`}>
-    <FileBrowserPanel onOpenDocument={onOpenDocument} onToggleContext={onToggleContext} onOpenWorkspace={onOpenWorkspace} />
+    <FileBrowserPanel onOpenDocument={onOpenDocument} onToggleContext={onToggleContext} onOpenWorkspace={onOpenWorkspace} onRefreshWorkspace={onRefreshWorkspace} />
     {showEditor && <EditorPanel onSave={onSave} onClose={onCloseEditor} />}
   </div>
 }
 
-function ContentPanel({ page, onPageChange, showFileEditor, onOpenDocument, onOpenWorkspace, onSave, onCloseEditor, onToggleContext }: {
+function ContentPanel({ page, onPageChange, showFileEditor, onOpenDocument, onOpenWorkspace, onRefreshWorkspace, onSave, onCloseEditor, onToggleContext }: {
   page: ContentPage
   onPageChange: (page: ContentPage) => void
   showFileEditor: boolean
   onOpenDocument: (path: string) => Promise<void>
   onOpenWorkspace: () => void
+  onRefreshWorkspace: () => Promise<void>
   onSave: () => Promise<void>
   onCloseEditor: () => void
   onToggleContext: (path: string) => Promise<void>
@@ -600,7 +645,7 @@ function ContentPanel({ page, onPageChange, showFileEditor, onOpenDocument, onOp
       </div>
     </header>
     <div className="content-panel-body">
-      {page === 'chat' ? <ChatPanel onToggleContext={onToggleContext} /> : <FileWorkspace showEditor={showFileEditor} onOpenDocument={onOpenDocument} onToggleContext={onToggleContext} onOpenWorkspace={onOpenWorkspace} onSave={onSave} onCloseEditor={onCloseEditor} />}
+      {page === 'chat' ? <ChatPanel onToggleContext={onToggleContext} /> : <FileWorkspace showEditor={showFileEditor} onOpenDocument={onOpenDocument} onToggleContext={onToggleContext} onOpenWorkspace={onOpenWorkspace} onRefreshWorkspace={onRefreshWorkspace} onSave={onSave} onCloseEditor={onCloseEditor} />}
     </div>
   </section>
 }
@@ -622,9 +667,30 @@ export function App() {
   const setModelProfiles = useAppStore((state) => state.setModelProfiles)
   const setConversations = useAppStore((state) => state.setConversations)
   const setSettingsOpen = useAppStore((state) => state.setSettingsOpen)
+  const setPendingNewFiles = useAppStore((state) => state.setPendingNewFiles)
   const [contentPage, setContentPage] = useState<ContentPage>('chat')
   const [fileEditorVisible, setFileEditorVisible] = useState(false)
   const macMenuInstalled = useRef(false)
+
+  const applyWorkspaceSnapshot = useCallback((next: Awaited<ReturnType<typeof refreshWorkspace>>, discover = true) => {
+    const previous = useAppStore.getState().workspace
+    let added: string[] = []
+    if (discover) {
+      const textFiles = flattenWorkspaceFiles(next.entries)
+        .filter((entry) => ['markdown', 'text'].includes(entry.documentKind ?? getDocumentKind(entry.name)))
+      if (previous?.id === next.id) {
+        added = findNewTextFiles(previous, next)
+      } else if (!previous) {
+        const seenKey = `vinkey.workspace-seen.${next.id}`
+        if (!localStorage.getItem(seenKey)) {
+          added = textFiles.slice(0, 3).map((entry) => entry.path)
+          localStorage.setItem(seenKey, 'true')
+        }
+      }
+    }
+    if (added.length > 0 || previous?.id !== next.id) setPendingNewFiles(added)
+    setWorkspace(next)
+  }, [setPendingNewFiles, setWorkspace])
 
   const changeContentPage = useCallback((page: ContentPage) => {
     setContentPage(page)
@@ -645,10 +711,10 @@ export function App() {
       if (next) {
         useAppStore.getState().newConversation()
         setConversations([])
-        setWorkspace(next)
+        applyWorkspaceSnapshot(next)
       }
     } catch (cause) { setError(String(cause)) }
-  }, [setConversations, setError, setWorkspace])
+  }, [applyWorkspaceSnapshot, setConversations, setError])
 
   const newDocumentFromMenu = useCallback(async () => {
     if (!workspace) return openWorkspaceFromMenu()
@@ -679,8 +745,8 @@ export function App() {
 
   const refreshWorkspaceFromMenu = useCallback(async () => {
     if (!workspace) return openWorkspaceFromMenu()
-    try { setWorkspace(await refreshWorkspace()) } catch (cause) { setError(`刷新工作区失败：${String(cause)}`) }
-  }, [openWorkspaceFromMenu, setError, setWorkspace, workspace])
+    try { applyWorkspaceSnapshot(await refreshWorkspace()) } catch (cause) { setError(`刷新工作区失败：${String(cause)}`) }
+  }, [applyWorkspaceSnapshot, openWorkspaceFromMenu, setError, workspace])
 
   const closeDocumentFromMenu = useCallback(() => {
     const path = useAppStore.getState().activePath
@@ -690,12 +756,12 @@ export function App() {
 
   useEffect(() => {
     if (!workspace) {
-      if (!isDesktop()) void chooseWorkspace().then((next) => next && setWorkspace(next))
-      else void refreshWorkspace().then(setWorkspace).catch((cause) => {
+      if (!isDesktop()) void chooseWorkspace().then((next) => next && applyWorkspaceSnapshot(next))
+      else void refreshWorkspace().then((next) => applyWorkspaceSnapshot(next)).catch((cause) => {
         if (!String(cause).includes('请先选择工作目录')) setError(`恢复上次工作区失败：${String(cause)}`)
       })
     }
-  }, [setError, setWorkspace, workspace])
+  }, [applyWorkspaceSnapshot, setError, workspace])
 
   useEffect(() => {
     void listModelProfiles().then(setModelProfiles).catch((cause) => setError(String(cause)))
@@ -771,7 +837,7 @@ export function App() {
     <TitleBar onPageChange={changeContentPage} onOpenWorkspace={() => void openWorkspaceFromMenu()} onNewDocument={() => void newDocumentFromMenu()} onRefreshWorkspace={() => void refreshWorkspaceFromMenu()} onCloseDocument={closeDocumentFromMenu} onSave={() => void saveActive()} onShowShortcuts={showShortcuts} onShowAbout={showAbout} onShowWindowDiagnostics={showWindowDiagnostics} />
     <div className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`} data-theme={theme}>
       <ProjectSessionSidebar onPageChange={changeContentPage} onOpenWorkspace={() => void openWorkspaceFromMenu()} onRefreshWorkspace={() => void refreshWorkspaceFromMenu()} onOpenDocument={openDocument} />
-      {settingsOpen ? <SettingsPage /> : <ContentPanel page={contentPage} onPageChange={changeContentPage} showFileEditor={fileEditorVisible && hasActiveDocument} onOpenDocument={openDocument} onOpenWorkspace={() => void openWorkspaceFromMenu()} onSave={saveActive} onCloseEditor={() => setFileEditorVisible(false)} onToggleContext={toggleDocumentContext} />}
+      {settingsOpen ? <SettingsPage /> : <ContentPanel page={contentPage} onPageChange={changeContentPage} showFileEditor={fileEditorVisible && hasActiveDocument} onOpenDocument={openDocument} onOpenWorkspace={() => void openWorkspaceFromMenu()} onRefreshWorkspace={refreshWorkspaceFromMenu} onSave={saveActive} onCloseEditor={() => setFileEditorVisible(false)} onToggleContext={toggleDocumentContext} />}
       {error && <div className="error-banner" role="alert"><span>{error}</span><button aria-label="关闭错误提示" onClick={() => setError(null)}><X /></button></div>}
     </div>
   </div>

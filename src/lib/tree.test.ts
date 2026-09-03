@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { WorkspaceEntry } from '../types'
-import { filterWorkspaceTree, flattenWorkspaceFiles } from './tree'
+import { filterWorkspaceTree, findNewTextFiles, flattenWorkspaceFiles } from './tree'
 
 const entries: WorkspaceEntry[] = [
   {
@@ -31,5 +31,14 @@ describe('workspace tree helpers', () => {
       '设定/地点.txt',
       '第一章.md',
     ])
+  })
+
+  it('finds newly added markdown and text files in the same workspace', () => {
+    const previous = { id: 'project', name: 'Project', pathLabel: '.', entries }
+    const next = {
+      ...previous,
+      entries: [...entries, { name: '新章.md', path: '新章.md', kind: 'file' as const, children: [] }],
+    }
+    expect(findNewTextFiles(previous, next)).toEqual(['新章.md'])
   })
 })

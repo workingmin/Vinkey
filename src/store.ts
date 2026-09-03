@@ -9,6 +9,7 @@ interface AppState {
   tabs: DocumentTab[]
   activePath: string | null
   contextDocuments: ContextDocument[]
+  pendingNewFiles: string[]
   messages: ChatMessage[]
   conversationId: string | null
   conversationTitle: string
@@ -30,6 +31,8 @@ interface AppState {
   markSaved: (path: string, content: string, modifiedMs: number) => void
   setViewMode: (mode: ViewMode) => void
   toggleContext: (document: ContextDocument) => void
+  setPendingNewFiles: (paths: string[]) => void
+  clearPendingNewFiles: () => void
   beginChatRun: (run: ChatRun) => void
   appendChatRunChunk: (conversationId: string, chunk: string) => void
   endChatRun: (conversationId: string, discardAssistant: boolean) => void
@@ -75,6 +78,7 @@ export const useAppStore = create<AppState>((set) => ({
   tabs: [],
   activePath: null,
   contextDocuments: [],
+  pendingNewFiles: [],
   messages: initialMessages,
   conversationId: null,
   conversationTitle: '新会话',
@@ -112,6 +116,8 @@ export const useAppStore = create<AppState>((set) => ({
       ? state.contextDocuments.filter((item) => item.path !== document.path)
       : [...state.contextDocuments, document],
   })),
+  setPendingNewFiles: (paths) => set({ pendingNewFiles: [...new Set(paths)].slice(0, 8) }),
+  clearPendingNewFiles: () => set({ pendingNewFiles: [] }),
   beginChatRun: (run) => set((state) => ({
     chatRuns: { ...state.chatRuns, [run.conversationId]: run },
     messages: state.conversationId === run.conversationId
