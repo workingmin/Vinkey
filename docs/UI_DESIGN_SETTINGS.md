@@ -30,6 +30,24 @@
 
 后续可增加编辑器（字体、字号、行高、自动换行、自动保存）、数据（会话位置、导出、删除、日志）和权限（已授权工作区、撤销授权）。增加分组时保持左侧导航和独立页面结构，不改造成弹窗堆叠。
 
+## 页面预览（Markdown 预览）
+
+该 HTML 区块用于确认设置入口、分组导航和配置表单的层级：
+
+<table border="1" cellpadding="8" cellspacing="0" width="100%">
+  <tr><td colspan="2" bgcolor="#23272B"><strong>设置</strong>　　　　　　　　　　　　　　　　　　　　　　　　　<strong>返回工作区</strong></td></tr>
+  <tr>
+    <td width="24%" height="190" valign="top" bgcolor="#1C1F22"><strong>设置导航</strong><br><strong>模型</strong><br><strong>外观</strong><br><small>后续：编辑器　数据　权限</small></td>
+    <td valign="top" bgcolor="#151719">
+      <strong>模型配置</strong><br>
+      配置名称　 Base URL　 模型　 上下文窗口　 API Key<br><br>
+      <strong>测试连接</strong>　连接结果　　　　　　　　　<strong>保存并启用</strong><br><br>
+      <hr>
+      <strong>外观</strong>　 <strong>深色</strong>　|　浅色
+    </td>
+  </tr>
+</table>
+
 ## 状态
 
 - 初始空模型列表：新增配置表单应仍可用。

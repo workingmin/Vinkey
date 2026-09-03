@@ -26,6 +26,24 @@
 - 输入区底部左侧选择模型，右侧显示上下文使用百分比和发送按钮。
 - 没有模型时显示“添加模型”入口；上下文超限时禁用发送并提示移除文档或缩短输入。
 
+## 页面预览（Markdown 预览）
+
+该 HTML 区块会直接显示对话页的空间层级和输入区入口：
+
+<table border="1" cellpadding="8" cellspacing="0" width="100%">
+  <tr><td bgcolor="#23272B"><strong>会话摘要</strong>　会话标题　工作区 · 模型　　　　　　　　　<strong>对话</strong>　|　文件</td></tr>
+  <tr>
+    <td height="180" valign="top" bgcolor="#151719">
+      <strong>消息流</strong><br><br>
+      <table border="1" cellpadding="6" cellspacing="0" width="100%">
+        <tr><td width="22%" bgcolor="#1C1F22">助手<br>复制　时间</td><td>回答内容与流式生成状态</td></tr>
+        <tr><td align="right" colspan="2" bgcolor="#293036">用户消息　复制　时间</td></tr>
+      </table>
+    </td>
+  </tr>
+  <tr><td bgcolor="#23272B"><strong>输入区</strong>　已引用文件　分析文本　拆分章节　提取人物线<br>多行输入<br><strong>模型选择</strong>　上下文占用　　<strong>发送 / 停止</strong></td></tr>
+</table>
+
 ### 文件分析入口
 
 - 已附加文档时，输入框上方显示“分析文本”“拆分章节”“提取人物线”快捷入口；点击只预填问题，不自动发送。

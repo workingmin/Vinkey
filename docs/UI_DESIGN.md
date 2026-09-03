@@ -23,6 +23,33 @@ Vinkey 是深色、安静、AI 对话优先的本地文学创作工作台。主�
 
 设计目标是让本地状态始终可见，让 AI 产出可审核，并让工具栏、输入区和状态栏保持稳定尺寸。平台菜单和标题栏可以不同，但命令能力、内容区布局和状态语义保持一致。
 
+## 页面总览（Markdown 预览）
+
+下面的 HTML 区块会在 Markdown 预览中直接渲染，用于快速确认页面区域和主要功能入口的分布：
+
+<table border="1" cellpadding="8" cellspacing="0" width="100%">
+  <tr>
+    <td colspan="2" bgcolor="#17191C"><strong>标题栏</strong>　品牌 / 工作区 / 当前模型　　文件　编辑　查看　窗口　帮助　　窗口控制</td>
+  </tr>
+  <tr>
+    <td width="28%" bgcolor="#1C1F22" valign="top">
+      <strong>项目与会话栏</strong><br>
+      切换工作区　刷新　折叠<br>
+      <strong>统一搜索</strong><br>
+      项目名称 / 路径 / 新建会话<br>
+      会话历史列表<br>
+      <strong>设置</strong>
+    </td>
+    <td bgcolor="#151719" valign="top">
+      <strong>内容区顶栏</strong>　会话标题　工作区 · 模型　　<strong>对话</strong>　|　<strong>文件</strong><br><br>
+      <table border="1" cellpadding="6" cellspacing="0" width="100%">
+        <tr><td bgcolor="#23272B"><strong>对话页（默认）</strong>　消息流　输入区　引用文件　模型　上下文　发送</td></tr>
+        <tr><td bgcolor="#23272B"><strong>文件页</strong>　文件列表　文档标签　编辑 / 分栏 / 预览　保存</td></tr>
+      </table>
+    </td>
+  </tr>
+</table>
+
 ## 使用规则
 
 1. 先读 [UI_INVENTORY.md](./UI_INVENTORY.md) 判断需求针对的是现状、目标态还是两者之间的缺口。
