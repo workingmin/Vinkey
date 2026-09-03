@@ -32,13 +32,13 @@
 
 ## 页面预览（Markdown 预览）
 
-该 HTML 区块用于确认设置入口、分组导航和配置表单的层级：
+该 HTML 区块用于确认设置入口、分组导航和配置表单的层级。背景采用浅色中性灰阶，仅用于区分区域，不代表产品实际配色或状态语义：
 
 <table border="1" cellpadding="8" cellspacing="0" width="100%">
-  <tr><td colspan="2" bgcolor="#23272B"><strong>设置</strong>　　　　　　　　　　　　　　　　　　　　　　　　　<strong>返回工作区</strong></td></tr>
+  <tr><td colspan="2" bgcolor="#F1F3F5"><strong>设置</strong>　　　　　　　　　　　　　　　　　　　　　　　　　<strong>返回工作区</strong></td></tr>
   <tr>
-    <td width="24%" height="190" valign="top" bgcolor="#1C1F22"><strong>设置导航</strong><br><strong>模型</strong><br><strong>外观</strong><br><small>后续：编辑器　数据　权限</small></td>
-    <td valign="top" bgcolor="#151719">
+    <td width="24%" height="190" valign="top" bgcolor="#F8F9FA"><strong>设置导航</strong><br><strong>模型</strong><br><strong>外观</strong><br><small>后续：编辑器　数据　权限</small></td>
+    <td valign="top" bgcolor="#FFFFFF">
       <strong>模型配置</strong><br>
       配置名称　 Base URL　 模型　 上下文窗口　 API Key<br><br>
       <strong>测试连接</strong>　连接结果　　　　　　　　　<strong>保存并启用</strong><br><br>

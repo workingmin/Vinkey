@@ -28,20 +28,20 @@
 
 ## 页面预览（Markdown 预览）
 
-该 HTML 区块会直接显示对话页的空间层级和输入区入口：
+该 HTML 区块会直接显示对话页的空间层级和输入区入口。背景采用浅色中性灰阶，仅用于区分区域，不代表产品实际配色或状态语义：
 
 <table border="1" cellpadding="8" cellspacing="0" width="100%">
-  <tr><td bgcolor="#23272B"><strong>会话摘要</strong>　会话标题　工作区 · 模型　　　　　　　　　<strong>对话</strong>　|　文件</td></tr>
+  <tr><td bgcolor="#F1F3F5"><strong>会话摘要</strong>　会话标题　工作区 · 模型　　　　　　　　　<strong>对话</strong>　|　文件</td></tr>
   <tr>
-    <td height="180" valign="top" bgcolor="#151719">
+    <td height="180" valign="top" bgcolor="#FFFFFF">
       <strong>消息流</strong><br><br>
       <table border="1" cellpadding="6" cellspacing="0" width="100%">
-        <tr><td width="22%" bgcolor="#1C1F22">助手<br>复制　时间</td><td>回答内容与流式生成状态</td></tr>
-        <tr><td align="right" colspan="2" bgcolor="#293036">用户消息　复制　时间</td></tr>
+        <tr><td width="22%" bgcolor="#F8F9FA">助手<br>复制　时间</td><td>回答内容与流式生成状态</td></tr>
+        <tr><td align="right" colspan="2" bgcolor="#F4F5F6">用户消息　复制　时间</td></tr>
       </table>
     </td>
   </tr>
-  <tr><td bgcolor="#23272B"><strong>输入区</strong>　已引用文件　分析文本　拆分章节　提取人物线<br>多行输入<br><strong>模型选择</strong>　上下文占用　　<strong>发送 / 停止</strong></td></tr>
+  <tr><td bgcolor="#F1F3F5"><strong>输入区</strong>　已引用文件　分析文本　拆分章节　提取人物线<br>多行输入<br><strong>模型选择</strong>　上下文占用　　<strong>发送 / 停止</strong></td></tr>
 </table>
 
 ### 文件分析入口

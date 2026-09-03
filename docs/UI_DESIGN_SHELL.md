@@ -21,13 +21,13 @@ macOS：  原生 Overlay 标题区与交通灯
 
 ## 页面预览（Markdown 预览）
 
-以下 HTML 会在 Markdown 预览中呈现应用壳层的区域比例和全局入口：
+以下 HTML 会在 Markdown 预览中呈现应用壳层的区域比例和全局入口。背景采用浅色中性灰阶，仅用于区分区域，不代表产品实际配色或状态语义：
 
 <table border="1" cellpadding="8" cellspacing="0" width="100%">
-  <tr><td colspan="2" bgcolor="#17191C"><strong>Windows 自绘标题栏 / macOS Overlay 标题区</strong>　品牌　工作区　模型　　文件　编辑　查看　窗口　帮助　　最小化 / 最大化 / 关闭</td></tr>
+  <tr><td colspan="2" bgcolor="#F1F3F5"><strong>Windows 自绘标题栏 / macOS Overlay 标题区</strong>　品牌　工作区　模型　　文件　编辑　查看　窗口　帮助　　最小化 / 最大化 / 关闭</td></tr>
   <tr>
-    <td width="28%" height="230" valign="top" bgcolor="#1C1F22"><strong>项目与会话栏</strong><br>刷新　切换工作区　折叠<br><strong>统一搜索</strong><br><br>项目名称 · 路径　<strong>新建会话</strong><br>会话历史<br><br><strong>设置</strong></td>
-    <td valign="top" bgcolor="#151719"><strong>内容区顶栏</strong>　会话标题　工作区 · 模型　　　　<strong>对话</strong>　|　<strong>文件</strong><br><br><div align="center"><strong>稳定内容工作面</strong><br>对话：消息流 + 输入区<br>文件：文件列表 + 编辑器 / 预览</div></td>
+    <td width="28%" height="230" valign="top" bgcolor="#F8F9FA"><strong>项目与会话栏</strong><br>刷新　切换工作区　折叠<br><strong>统一搜索</strong><br><br>项目名称 · 路径　<strong>新建会话</strong><br>会话历史<br><br><strong>设置</strong></td>
+    <td valign="top" bgcolor="#FFFFFF"><strong>内容区顶栏</strong>　会话标题　工作区 · 模型　　　　<strong>对话</strong>　|　<strong>文件</strong><br><br><div align="center"><strong>稳定内容工作面</strong><br>对话：消息流 + 输入区<br>文件：文件列表 + 编辑器 / 预览</div></td>
   </tr>
 </table>
 
