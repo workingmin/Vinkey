@@ -25,14 +25,14 @@ Vinkey 是深色、安静、AI 对话优先的本地文学创作工作台。主�
 
 ## 页面总览（Markdown 预览）
 
-下面的 HTML 区块会在 Markdown 预览中直接渲染，用于快速确认页面区域和主要功能入口的分布：
+下面的 HTML 区块会在 Markdown 预览中直接渲染，用于快速确认页面区域和主要功能入口的分布。背景采用浅色中性灰阶，仅用于区分区域，不代表产品实际配色或状态语义：
 
 <table border="1" cellpadding="8" cellspacing="0" width="100%">
   <tr>
-    <td colspan="2" bgcolor="#17191C"><strong>标题栏</strong>　品牌 / 工作区 / 当前模型　　文件　编辑　查看　窗口　帮助　　窗口控制</td>
+    <td colspan="2" bgcolor="#F1F3F5"><strong>标题栏</strong>　品牌 / 工作区 / 当前模型　　文件　编辑　查看　窗口　帮助　　窗口控制</td>
   </tr>
   <tr>
-    <td width="28%" bgcolor="#1C1F22" valign="top">
+    <td width="28%" bgcolor="#F8F9FA" valign="top">
       <strong>项目与会话栏</strong><br>
       切换工作区　刷新　折叠<br>
       <strong>统一搜索</strong><br>
@@ -40,11 +40,11 @@ Vinkey 是深色、安静、AI 对话优先的本地文学创作工作台。主�
       会话历史列表<br>
       <strong>设置</strong>
     </td>
-    <td bgcolor="#151719" valign="top">
+    <td bgcolor="#FFFFFF" valign="top">
       <strong>内容区顶栏</strong>　会话标题　工作区 · 模型　　<strong>对话</strong>　|　<strong>文件</strong><br><br>
       <table border="1" cellpadding="6" cellspacing="0" width="100%">
-        <tr><td bgcolor="#23272B"><strong>对话页（默认）</strong>　消息流　输入区　引用文件　模型　上下文　发送</td></tr>
-        <tr><td bgcolor="#23272B"><strong>文件页</strong>　文件列表　文档标签　编辑 / 分栏 / 预览　保存</td></tr>
+        <tr><td bgcolor="#F4F5F6"><strong>对话页（默认）</strong>　消息流　输入区　引用文件　模型　上下文　发送</td></tr>
+        <tr><td bgcolor="#F4F5F6"><strong>文件页</strong>　文件列表　文档标签　编辑 / 分栏 / 预览　保存</td></tr>
       </table>
     </td>
   </tr>

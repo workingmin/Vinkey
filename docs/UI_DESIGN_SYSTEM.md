@@ -40,15 +40,15 @@
 
 ## 组件预览（Markdown 预览）
 
-该 HTML 区块用实际 token 和入口标签展示常用工作区控件的组合方式：
+该 HTML 区块用实际 token 和入口标签展示常用工作区控件的组合方式。背景采用浅色中性灰阶，仅用于区分区域，不代表产品实际配色或状态语义；颜色名称只保留为语义标签：
 
 <table border="1" cellpadding="8" cellspacing="0" width="100%">
-  <tr><td colspan="4" bgcolor="#17191C"><strong>工具栏</strong>　↶ 撤销　↷ 重做　⌕ 查找　　<strong>保存</strong>　　<strong>对话</strong>　|　<strong>文件</strong></td></tr>
+  <tr><td colspan="4" bgcolor="#F1F3F5"><strong>工具栏</strong>　↶ 撤销　↷ 重做　⌕ 查找　　<strong>保存</strong>　　<strong>对话</strong>　|　<strong>文件</strong></td></tr>
   <tr>
-    <td bgcolor="#1C1F22"><strong>侧栏入口</strong><br>搜索<br>新建会话<br>设置</td>
-    <td bgcolor="#151719"><strong>内容入口</strong><br>引用文件<br>编辑 / 分栏 / 预览<br>模型选择</td>
-    <td bgcolor="#23272B"><strong>状态入口</strong><br>上下文占用<br>未保存<br>连接成功 / 失败</td>
-    <td bgcolor="#293036"><strong>强调色</strong><br><span style="color:#36B8C4">主操作 / 焦点</span><br><span style="color:#55B88A">成功</span>　<span style="color:#D5A64A">警告</span>　<span style="color:#DC7078">危险</span></td>
+    <td bgcolor="#F8F9FA"><strong>侧栏入口</strong><br>搜索<br>新建会话<br>设置</td>
+    <td bgcolor="#FFFFFF"><strong>内容入口</strong><br>引用文件<br>编辑 / 分栏 / 预览<br>模型选择</td>
+    <td bgcolor="#F4F5F6"><strong>状态入口</strong><br>上下文占用<br>未保存<br>连接成功 / 失败</td>
+    <td bgcolor="#F4F5F6"><strong>语义标签</strong><br>主操作 / 焦点<br>成功　警告　危险</td>
   </tr>
 </table>
 
