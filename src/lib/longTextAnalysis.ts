@@ -29,6 +29,43 @@ const MIN_CHUNK_TOKENS = 128
 const MAX_CHUNK_TOKENS = 6000
 const cancelledAnalyses = new Set<string>()
 
+function formatCount(value: number): string {
+  return new Intl.NumberFormat('zh-CN').format(value)
+}
+
+function charCount(value: string): number {
+  return Array.from(value).length
+}
+
+function range(values: number[]): [number, number] {
+  if (values.length === 0) return [0, 0]
+  let minimum = values[0]
+  let maximum = values[0]
+  for (const value of values.slice(1)) {
+    minimum = Math.min(minimum, value)
+    maximum = Math.max(maximum, value)
+  }
+  return [minimum, maximum]
+}
+
+function chunkingPreparationMessage(documents: ContextDocument[], maxTokens: number, overlapTokens: number): string {
+  const totalChars = documents.reduce((sum, document) => sum + charCount(document.content), 0)
+  const totalTokens = documents.reduce((sum, document) => sum + estimateTokens(document.content), 0)
+  return `准备分块：${documents.length} 个文档，共 ${formatCount(totalChars)} 字，约 ${formatCount(totalTokens)} tokens。策略：优先按标题、段落和句子切分，超出预算时再硬切；单块上限 ${formatCount(maxTokens)} tokens，块间保留 ${formatCount(overlapTokens)} tokens 重叠。`
+}
+
+function documentChunkMessage(document: ContextDocument, manifest: Awaited<ReturnType<typeof chunkDocument>>): string {
+  const charRange = range(manifest.chunks.map((chunk) => charCount(chunk.text)))
+  const tokenRange = range(manifest.chunks.map((chunk) => chunk.estimatedTokens))
+  return `已分块 ${document.name}：${formatCount(charCount(document.content))} 字（约 ${formatCount(manifest.sourceTokens)} tokens）→ ${formatCount(manifest.chunks.length)} 块；实际每块约 ${formatCount(charRange[0])}-${formatCount(charRange[1])} 字、${formatCount(tokenRange[0])}-${formatCount(tokenRange[1])} tokens。`
+}
+
+function chunkAnalysisMessage(chunks: Awaited<ReturnType<typeof chunkDocument>>['chunks']): string {
+  const charRange = range(chunks.map((chunk) => charCount(chunk.text)))
+  const tokenRange = range(chunks.map((chunk) => chunk.estimatedTokens))
+  return `准备逐块分析：共 ${formatCount(chunks.length)} 块；每块实际约 ${formatCount(charRange[0])}-${formatCount(charRange[1])} 字、${formatCount(tokenRange[0])}-${formatCount(tokenRange[1])} tokens。`
+}
+
 export function cancelLongTextAnalysis(requestId: string): void {
   cancelledAnalyses.add(requestId)
 }
@@ -110,24 +147,25 @@ export async function analyzeLongText(
   const maxTokens = chunkBudget(profile.contextWindow)
   try {
     const manifests = []
-    onProgress?.({ stage: 'chunking', completed: 0, total: documents.length, message: '正在按章节、段落和预算切分文档…' })
+    onProgress?.({ stage: 'chunking', completed: 0, total: documents.length, message: chunkingPreparationMessage(documents, maxTokens, Math.min(128, Math.floor(maxTokens / 8))) })
     for (const [index, document] of documents.entries()) {
       assertNotCancelled(requestId)
       const manifest = await chunkDocument(document.path, maxTokens, Math.min(128, Math.floor(maxTokens / 8)))
       manifests.push(manifest)
       await writeAnalysisArtifact(jobId, `manifest-${index + 1}.json`, JSON.stringify(manifest, null, 2))
-      onProgress?.({ stage: 'chunking', completed: index + 1, total: documents.length, message: `已切分 ${document.name}` })
+      onProgress?.({ stage: 'chunking', completed: index + 1, total: documents.length, message: documentChunkMessage(document, manifest) })
     }
 
     const chunks = manifests.flatMap((manifest) => manifest.chunks)
     const summaries: SummaryRecord[] = []
-    onProgress?.({ stage: 'map', completed: 0, total: chunks.length, message: `正在分析 ${chunks.length} 个文本分块…` })
+    onProgress?.({ stage: 'map', completed: 0, total: chunks.length, message: chunkAnalysisMessage(chunks) })
     for (const [index, chunk] of chunks.entries()) {
       assertNotCancelled(requestId)
+      onProgress?.({ stage: 'map', completed: index, total: chunks.length, message: `正在分析第 ${index + 1}/${chunks.length} 块（${chunk.sourceId}，约 ${formatCount(chunk.estimatedTokens)} tokens）…` })
       const text = await collectResponse(requestId, profile.id, [{ role: 'user', content: chunkPrompt(instruction, chunk) }])
       if (text) summaries.push({ sourceId: chunk.sourceId, chunkId: chunk.id, heading: chunk.heading, text: clipToTokens(text, batchBudget(profile.contextWindow) - 64) })
       await writeAnalysisArtifact(jobId, `summary-${String(index + 1).padStart(5, '0')}.md`, text)
-      onProgress?.({ stage: 'map', completed: index + 1, total: chunks.length, message: `已完成分块 ${index + 1}/${chunks.length}` })
+      onProgress?.({ stage: 'map', completed: index + 1, total: chunks.length, message: `已完成第 ${index + 1}/${chunks.length} 块（${chunk.sourceId}，约 ${formatCount(chunk.estimatedTokens)} tokens）` })
     }
     if (summaries.length === 0) throw new Error('模型没有返回可汇总的分块结果')
 
@@ -136,13 +174,14 @@ export async function analyzeLongText(
     while (batchSummaries(current, profile.contextWindow).length > 1) {
       const batches = batchSummaries(current, profile.contextWindow)
       const next: SummaryRecord[] = []
-      onProgress?.({ stage: 'reduce', completed: 0, total: batches.length, message: `正在汇总第 ${level + 1} 层摘要…` })
+      onProgress?.({ stage: 'reduce', completed: 0, total: batches.length, message: `正在汇总第 ${level + 1} 层摘要：${formatCount(current.length)} 条摘要分 ${formatCount(batches.length)} 批处理…` })
       for (const [index, batch] of batches.entries()) {
         assertNotCancelled(requestId)
+        onProgress?.({ stage: 'reduce', completed: index, total: batches.length, message: `正在处理第 ${index + 1}/${batches.length} 批阶段汇总…` })
         const text = await collectResponse(requestId, profile.id, [{ role: 'user', content: summaryPrompt(instruction, batch, false) }])
         if (text) next.push({ sourceId: 'summary', chunkId: `level-${level}-${index}`, heading: null, text: clipToTokens(text, batchBudget(profile.contextWindow) - 64) })
         await writeAnalysisArtifact(jobId, `reduce-${level + 1}-${String(index + 1).padStart(4, '0')}.md`, text)
-        onProgress?.({ stage: 'reduce', completed: index + 1, total: batches.length, message: `已完成汇总 ${index + 1}/${batches.length}` })
+        onProgress?.({ stage: 'reduce', completed: index + 1, total: batches.length, message: `已完成第 ${index + 1}/${batches.length} 批阶段汇总` })
       }
       if (next.length === 0) throw new Error('模型没有返回可用的阶段汇总')
       current = next
@@ -150,7 +189,7 @@ export async function analyzeLongText(
     }
 
     assertNotCancelled(requestId)
-    onProgress?.({ stage: 'synthesis', completed: 0, total: 1, message: '正在进行整体梳理…' })
+    onProgress?.({ stage: 'synthesis', completed: 0, total: 1, message: `正在综合 ${formatCount(current.length)} 条阶段摘要，整理最终报告…` })
     const content = await collectResponse(requestId, profile.id, [{ role: 'user', content: summaryPrompt(instruction, current, true) }])
     await writeAnalysisArtifact(jobId, 'analysis.md', content)
     onProgress?.({ stage: 'synthesis', completed: 1, total: 1, message: '长文本分析完成' })

@@ -2,8 +2,10 @@ import { create } from 'zustand'
 import type {
   ChatMessage, ContextDocument, Conversation, ConversationSummary, DocumentTab,
   ModelProfile, ThemeMode, ViewMode, WorkspaceSnapshot,
-  ChatRunStatus,
+  ChatActivity, ChatRunStatus,
 } from './types'
+
+const MAX_CHAT_ACTIVITY_LOG = 80
 
 interface AppState {
   workspace: WorkspaceSnapshot | null
@@ -16,6 +18,7 @@ interface AppState {
   conversationTitle: string
   conversations: ConversationSummary[]
   chatRuns: Record<string, ChatRun>
+  completedChatMessages: Record<string, ChatMessage>
   modelProfiles: ModelProfile[]
   activeModelId: string | null
   settingsOpen: boolean
@@ -55,6 +58,7 @@ export interface ChatRun {
   requestId: string
   status: ChatRunStatus
   statusMessage: string | null
+  activityLog: ChatActivity[]
   userMessage: ChatMessage
   assistantMessage: ChatMessage
 }
@@ -88,6 +92,7 @@ export const useAppStore = create<AppState>((set) => ({
   conversationTitle: '新会话',
   conversations: [],
   chatRuns: {},
+  completedChatMessages: {},
   modelProfiles: [],
   activeModelId: localStorage.getItem('vinkey.activeModelId'),
   settingsOpen: false,
@@ -122,16 +127,40 @@ export const useAppStore = create<AppState>((set) => ({
   })),
   setPendingNewFiles: (paths) => set({ pendingNewFiles: [...new Set(paths)].slice(0, 8) }),
   clearPendingNewFiles: () => set({ pendingNewFiles: [] }),
-  beginChatRun: (run) => set((state) => ({
-    chatRuns: { ...state.chatRuns, [run.conversationId]: run },
-    messages: state.conversationId === run.conversationId
-      ? mergeRunMessages(state.messages, run)
-      : state.messages,
-  })),
+  beginChatRun: (run) => set((state) => {
+    const activityLog = run.activityLog.length > 0
+      ? run.activityLog
+      : [{ status: run.status, message: run.statusMessage, timestamp: Date.now() }]
+    const nextRun = {
+      ...run,
+      activityLog,
+      assistantMessage: { ...run.assistantMessage, activityLog },
+    }
+    return {
+      chatRuns: { ...state.chatRuns, [run.conversationId]: nextRun },
+      messages: state.conversationId === run.conversationId
+        ? mergeRunMessages(state.messages, nextRun)
+        : state.messages,
+    }
+  }),
   setChatRunStatus: (conversationId, status, statusMessage = null) => set((state) => {
     const run = state.chatRuns[conversationId]
     if (!run || (run.status === status && run.statusMessage === statusMessage)) return state
-    return { chatRuns: { ...state.chatRuns, [conversationId]: { ...run, status, statusMessage } } }
+    const activity: ChatActivity = { status, message: statusMessage, timestamp: Date.now() }
+    const activityLog = [...run.activityLog, activity].slice(-MAX_CHAT_ACTIVITY_LOG)
+    const nextRun = {
+      ...run,
+      status,
+      statusMessage,
+      activityLog,
+      assistantMessage: { ...run.assistantMessage, activityLog },
+    }
+    return {
+      chatRuns: { ...state.chatRuns, [conversationId]: nextRun },
+      messages: state.conversationId === conversationId
+        ? mergeRunMessages(state.messages, nextRun)
+        : state.messages,
+    }
   }),
   appendChatRunChunk: (conversationId, chunk) => set((state) => {
     const run = state.chatRuns[conversationId]
@@ -152,17 +181,30 @@ export const useAppStore = create<AppState>((set) => ({
     if (!run) return state
     const chatRuns = { ...state.chatRuns }
     delete chatRuns[conversationId]
+    const completedAssistant = { ...run.assistantMessage, activityLog: run.activityLog }
+    const completedChatMessages = { ...state.completedChatMessages }
+    if (discardAssistant || !completedAssistant.content.trim()) delete completedChatMessages[conversationId]
+    else completedChatMessages[conversationId] = completedAssistant
+    const nextRun = { ...run, assistantMessage: completedAssistant }
     return {
       chatRuns,
-      messages: discardAssistant && state.conversationId === conversationId
-        ? state.messages.filter((message) => message.id !== run.assistantMessage.id)
+      completedChatMessages,
+      messages: state.conversationId === conversationId
+        ? (discardAssistant
+          ? state.messages.filter((message) => message.id !== run.assistantMessage.id)
+          : mergeRunMessages(state.messages, nextRun))
         : state.messages,
     }
   }),
   setConversation: (conversation) => set((state) => ({
     conversationId: conversation.id,
     conversationTitle: conversation.title,
-    messages: mergeRunMessages(conversation.messages, state.chatRuns[conversation.id]),
+    messages: mergeRunMessages(
+      conversation.messages.map((message) => state.completedChatMessages[conversation.id]?.id === message.id
+        ? state.completedChatMessages[conversation.id]
+        : message),
+      state.chatRuns[conversation.id],
+    ),
     settingsOpen: false,
     sidebarCollapsed: state.settingsOpen && !state.settingsSidebarUserOverride
       ? state.settingsSidebarBeforeOpen ?? state.sidebarCollapsed

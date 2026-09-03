@@ -23,7 +23,7 @@ import {
 import { buildContextMessage, calculateContextBudget, selectRecentMessages } from './lib/context'
 import { analyzeLongText, cancelLongTextAnalysis } from './lib/longTextAnalysis'
 import { useAppStore } from './store'
-import type { ChatMessage, ChatRunStatus, DocumentSnapshot, ViewMode, WorkspaceEntry } from './types'
+import type { ChatActivity, ChatMessage, ChatRunStatus, DocumentSnapshot, ViewMode, WorkspaceEntry } from './types'
 import { getDocumentKind, getLanguageName, isEditableDocument } from './lib/fileTypes'
 import { findNewTextFiles, flattenWorkspaceFiles } from './lib/tree'
 import { getCurrentWindow } from '@tauri-apps/api/window'
@@ -377,15 +377,20 @@ function FileBrowserPanel({ onOpenDocument, onToggleContext, onOpenWorkspace, on
 
 function ChatMessageItem({ message, activity, onCopyError }: {
   message: ChatMessage
-  activity?: { status: ChatRunStatus; statusMessage: string | null }
+  activity?: { status: ChatRunStatus; statusMessage: string | null; activityLog: ChatActivity[] }
   onCopyError: (message: string) => void
 }) {
   const [copied, setCopied] = useState(false)
+  const [activityExpanded, setActivityExpanded] = useState(false)
   const copyTimer = useRef<number | null>(null)
 
   useEffect(() => () => {
     if (copyTimer.current) window.clearTimeout(copyTimer.current)
   }, [])
+
+  useEffect(() => {
+    if (!activity) setActivityExpanded(false)
+  }, [activity])
 
   const copyMessage = async () => {
     if (!message.content.trim()) return
@@ -398,6 +403,13 @@ function ChatMessageItem({ message, activity, onCopyError }: {
   }
 
   const isAssistant = message.role === 'assistant'
+  const activityLog = activity?.activityLog ?? message.activityLog ?? []
+  const currentActivity = activity
+    ? activityLog.at(-1)
+    : undefined
+  const history = activity
+    ? activityLog.slice(0, -1)
+    : activityLog
   const timestamp = new Date(message.createdAt)
   const formattedTime = timestamp.toLocaleString('zh-CN', {
     month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
@@ -408,6 +420,28 @@ function ChatMessageItem({ message, activity, onCopyError }: {
     <div className="message-stack">
       {isAssistant && <div className="message-author">Vinkey</div>}
       {isAssistant && activity && <div className={`message-activity status-${activity.status}`} role="status" aria-live="polite"><i aria-hidden="true" /><span>{activity.statusMessage ?? chatStatusMeta[activity.status].label}</span></div>}
+      {isAssistant && activityLog.length > 0 && <div className="message-activity-history">
+        <button
+          type="button"
+          className="message-activity-toggle"
+          aria-expanded={activityExpanded}
+          aria-controls={`activity-log-${message.id}`}
+          onClick={() => setActivityExpanded((expanded) => !expanded)}
+        >
+          {activityExpanded ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}
+          <span>{activityExpanded ? '收起处理过程' : `查看处理过程 · ${activityLog.length} 步`}</span>
+        </button>
+        {activityExpanded && <ol id={`activity-log-${message.id}`} className="message-activity-log">
+          {history.map((item, index) => <li key={`${item.timestamp}-${index}`} className={`status-${item.status}`}>
+            <span className="message-activity-log-dot" aria-hidden="true" />
+            <span>{item.message ?? chatStatusMeta[item.status].label}</span>
+          </li>)}
+          {activity && currentActivity && <li className={`status-${currentActivity.status} current`}>
+            <span className="message-activity-log-dot" aria-hidden="true" />
+            <span>{currentActivity.message ?? chatStatusMeta[currentActivity.status].label}</span>
+          </li>}
+        </ol>}
+      </div>}
       <div className="message-bubble">
         {message.content ? <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw, rehypeSanitize]}>{message.content}</ReactMarkdown>
           : activity ? <div className="typing" aria-label={activity.statusMessage ?? chatStatusMeta[activity.status].label}><i /><i /><i /></div> : null}
@@ -522,6 +556,7 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
       requestId: nextRequestId,
       status: 'sending',
       statusMessage: null,
+      activityLog: [],
       userMessage,
       assistantMessage,
     })

@@ -18,6 +18,7 @@ const run = (conversationId: string): ChatRun => ({
   requestId: `request-${conversationId}`,
   status: 'thinking',
   statusMessage: null,
+  activityLog: [],
   userMessage: message(`user-${conversationId}`, 'user', '问题', 2),
   assistantMessage: message(`assistant-${conversationId}`, 'assistant', '', 3),
 })
@@ -29,6 +30,7 @@ describe('conversation chat runs', () => {
       conversationTitle: '新会话',
       messages: [],
       chatRuns: {},
+      completedChatMessages: {},
       error: null,
     })
   })
@@ -87,6 +89,38 @@ describe('conversation chat runs', () => {
     expect(useAppStore.getState().chatRuns.a.status).toBe('streaming')
     expect(useAppStore.getState().chatRuns.a.statusMessage).toBe('已收到模型响应')
     expect(useAppStore.getState().chatRuns.a.assistantMessage.content).toBe('已收到')
+    expect(useAppStore.getState().chatRuns.a.activityLog.map((item) => item.status)).toEqual(['thinking', 'streaming'])
+    expect(useAppStore.getState().messages.at(-1)?.activityLog).toHaveLength(2)
+  })
+
+  it('keeps a bounded activity trail on the completed assistant message', () => {
+    const store = useAppStore.getState()
+    store.setConversation(conversation('a'))
+    store.beginChatRun(run('a'))
+    for (let index = 0; index < 100; index += 1) {
+      store.setChatRunStatus('a', 'fetching', `步骤 ${index}`)
+    }
+    store.appendChatRunChunk('a', '完成')
+    store.endChatRun('a', false)
+
+    const assistant = useAppStore.getState().messages.at(-1)
+    expect(assistant?.content).toBe('完成')
+    expect(assistant?.activityLog).toHaveLength(80)
+  })
+
+  it('restores a completed activity trail after switching conversations', () => {
+    const store = useAppStore.getState()
+    store.setConversation(conversation('a'))
+    store.beginChatRun(run('a'))
+    store.appendChatRunChunk('a', '已完成')
+    store.setChatRunStatus('a', 'streaming', '已收到模型响应')
+    store.setConversation(conversation('b'))
+    store.endChatRun('a', false)
+
+    store.setConversation(conversation('a', [message('user-a', 'user', '问题', 2), message('assistant-a', 'assistant', '已完成', 3)]))
+    const assistant = useAppStore.getState().messages.at(-1)
+    expect(assistant?.content).toBe('已完成')
+    expect(assistant?.activityLog).toHaveLength(2)
   })
 })
 

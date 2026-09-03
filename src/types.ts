@@ -68,6 +68,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   createdAt: number
+  activityLog?: ChatActivity[]
 }
 
 export interface Conversation {
@@ -119,6 +120,12 @@ export interface ChatRequest {
 }
 
 export type ChatRunStatus = 'sending' | 'thinking' | 'fetching' | 'tool_calling' | 'streaming' | 'stopping'
+
+export interface ChatActivity {
+  status: ChatRunStatus
+  message: string | null
+  timestamp: number
+}
 
 export type ChatStreamEvent =
   | { type: 'chunk'; content: string }
