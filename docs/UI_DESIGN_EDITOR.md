@@ -46,6 +46,25 @@
 - 预览：单栏阅读视图；TXT 禁用分栏和预览。
 - 当前数据结构保留 `tabs`，但首版只呈现一个活动文档标签。
 
+## 页面预览（Markdown 预览）
+
+该 HTML 区块展示从文件列表进入文档后，各个编辑和预览入口的相对位置：
+
+<table border="1" cellpadding="8" cellspacing="0" width="100%">
+  <tr><td colspan="2" bgcolor="#23272B"><strong>文件页顶栏</strong>　工作区名称 / 路径　　新建文档　新建文件夹　刷新</td></tr>
+  <tr>
+    <td width="28%" height="210" valign="top" bgcolor="#1C1F22"><strong>文件列表</strong><br>筛选文件名<br>▾ 项目<br>　▸ 章节.md<br>　▸ 设定.txt<br>　▸ 素材.png<br><br>左键打开　右键添加上下文</td>
+    <td valign="top" bgcolor="#151719">
+      <strong>文档标签栏</strong>　文档.md　● 未保存　关闭<br>
+      <strong>工具栏</strong>　相对路径　　保存　　<strong>编辑</strong>　|　<strong>分栏</strong>　|　<strong>预览</strong>　　收起编辑器
+      <table border="1" cellpadding="8" cellspacing="0" width="100%">
+        <tr><td width="50%" height="120" valign="top" bgcolor="#151719"><strong>CodeMirror 编辑器</strong><br>行号　折叠　查找　撤销 / 重做</td><td valign="top" bgcolor="#23272B"><strong>Markdown 预览</strong><br>标题、段落、列表、引用</td></tr>
+      </table>
+      <small>状态栏：行列　字符 / 词数　UTF-8　LF / CRLF　保存状态</small>
+    </td>
+  </tr>
+</table>
+
 ## 保存和冲突
 
 - 内容变化后，文档标签和状态栏显示“未保存”，保存按钮可用。

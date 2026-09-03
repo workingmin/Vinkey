@@ -35,6 +35,19 @@ AI 返回结果
 
 当前 diff 审核尚未实现，不能把 AI 生成内容静默写入正文。
 
+## 核心状态预览（Markdown 预览）
+
+该 HTML 区块把首次打开、正常工作和异常处理入口放在同一张可渲染示意图中：
+
+<table border="1" cellpadding="8" cellspacing="0" width="100%">
+  <tr><td colspan="3" bgcolor="#23272B"><strong>状态反馈区</strong>　模型状态　未保存 / 外部冲突　上下文占用　重试</td></tr>
+  <tr>
+    <td width="33%" height="150" valign="top" bgcolor="#1C1F22"><strong>首次打开 / 空态</strong><br>打开工作区<br>打开文件夹<br>新建 Markdown　新建 TXT<br>添加模型</td>
+    <td width="34%" valign="top" bgcolor="#151719"><strong>正常工作</strong><br>对话：发送 / 停止<br>文件：编辑 / 分栏 / 预览<br>保存　添加上下文</td>
+    <td valign="top" bgcolor="#3A2528"><strong>异常与审核</strong><br>模型不可用：重试<br>上下文超限：移除文件<br>外部冲突：对比 / 重新加载 / 另存为<br>AI 修改：接受 / 拒绝</td>
+  </tr>
+</table>
+
 ## 空态、加载和错误
 
 | 状态 | 设计表现 |

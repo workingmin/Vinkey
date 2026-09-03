@@ -38,6 +38,20 @@
 - 标签高度固定 24px，长文件名截断并通过 tooltip 展示完整路径。
 - 状态不能只依赖颜色：连接状态、diff、未保存都要有文字或图标。
 
+## 组件预览（Markdown 预览）
+
+该 HTML 区块用实际 token 和入口标签展示常用工作区控件的组合方式：
+
+<table border="1" cellpadding="8" cellspacing="0" width="100%">
+  <tr><td colspan="4" bgcolor="#17191C"><strong>工具栏</strong>　↶ 撤销　↷ 重做　⌕ 查找　　<strong>保存</strong>　　<strong>对话</strong>　|　<strong>文件</strong></td></tr>
+  <tr>
+    <td bgcolor="#1C1F22"><strong>侧栏入口</strong><br>搜索<br>新建会话<br>设置</td>
+    <td bgcolor="#151719"><strong>内容入口</strong><br>引用文件<br>编辑 / 分栏 / 预览<br>模型选择</td>
+    <td bgcolor="#23272B"><strong>状态入口</strong><br>上下文占用<br>未保存<br>连接成功 / 失败</td>
+    <td bgcolor="#293036"><strong>强调色</strong><br><span style="color:#36B8C4">主操作 / 焦点</span><br><span style="color:#55B88A">成功</span>　<span style="color:#D5A64A">警告</span>　<span style="color:#DC7078">危险</span></td>
+  </tr>
+</table>
+
 ## 动效、焦点和无障碍
 
 - 微交互 120–180ms，面板展开收起 180–220ms；流式文字不逐 token 动画。
