@@ -1076,6 +1076,22 @@ pub fn run() {
             runtime.info("app.start", log_fields([
                 ("platform", Value::String(std::env::consts::OS.into())),
                 ("arch", Value::String(std::env::consts::ARCH.into())),
+                (
+                    "commitSha",
+                    Value::String(env!("VINKEY_COMMIT_SHA").into()),
+                ),
+                (
+                    "buildTime",
+                    Value::from(
+                        env!("VINKEY_BUILD_TIME")
+                            .parse::<u64>()
+                            .unwrap_or_default(),
+                    ),
+                ),
+                (
+                    "workingTreeDirty",
+                    Value::Bool(env!("VINKEY_WORKING_TREE_DIRTY") == "true"),
+                ),
             ]));
             app.manage(runtime.clone());
             // macOS window chrome is configured before creation in tauri.macos.conf.json.

@@ -15,7 +15,7 @@
 - 长文本/项目分析完成后生成项目记忆候选；用户确认后保存到项目数据库，并在后续相关对话中作为辅助上下文检索
 - 长文本分析会将任务清单、分块和摘要产物保存到项目 `.vinkey/analysis/jobs/`，应用重启后可发现并恢复未完成任务
 - 深色和浅色主题；API Key 仅保存到 macOS Keychain / Windows Credential Manager
-- 桌面端记录跨平台 JSONL 运行日志，可从“帮助 → 运行日志”查看并复制最近事件
+- 桌面端记录跨平台 JSONL 运行日志，可从“帮助 → 运行日志”查看并复制最近事件；`app.start` 包含 `commitSha`、Unix 毫秒 `buildTime` 和 `workingTreeDirty`，用于确认实际运行的构建
 
 ## 本地开发
 
