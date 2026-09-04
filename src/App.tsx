@@ -3,7 +3,7 @@ import {
   MessageSquareText, PanelLeftClose, PanelLeftOpen, PanelRightClose,
   Save, Search, Send, Settings, Square, X, Minus, Maximize2, Minimize2,
   RotateCcw, RotateCw, Copy, Scissors, Clipboard, Moon, Sun, Keyboard, ListChecks, RefreshCw,
-  ScrollText,
+  ScrollText, Trash2,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
@@ -15,7 +15,7 @@ import { FilePreview, downloadBytes } from './components/FilePreview'
 import { SettingsPage } from './components/SettingsPage'
 import { WorkspaceTree, workspaceActions } from './components/WorkspaceTree'
 import {
-  cancelChat, chooseWorkspace, createDirectory, createDocument, isDesktop, listConversations,
+  cancelChat, chooseWorkspace, createDirectory, createDocument, deleteConversation, isDesktop, listConversations,
   getWindowDiagnostics, getRuntimeDiagnostics, listModelProfiles, loadConversation, readDocument, readFileBytes, refreshWorkspace,
   listAnalysisJobs, recordRuntimeEvent, writeStructureOutputs,
   saveConversationMessage, saveDocument, searchWorkspace, streamChat, syncNativeWindowTheme,
@@ -35,6 +35,7 @@ import { readWorkspaceDocuments } from './lib/workspaceAnalysis'
 import { buildSelectedDocumentsOverviewMessage, formatWorkspaceOverview } from './lib/workspaceOverview'
 import { buildFocusedWorkspaceMessage } from './lib/focusedAnalysis'
 import { isLoopbackModelEndpoint } from './lib/modelPrivacy'
+import { formatConversationAge } from './lib/conversationTime'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { Menu, MenuItem, PredefinedMenuItem, Submenu } from '@tauri-apps/api/menu'
 import type { PredefinedMenuItemOptions } from '@tauri-apps/api/menu'
@@ -240,7 +241,9 @@ function ProjectSessionSidebar({ onPageChange, onOpenWorkspace, onRefreshWorkspa
   const conversationId = useAppStore((state) => state.conversationId)
   const messages = useAppStore((state) => state.messages)
   const newConversation = useAppStore((state) => state.newConversation)
+  const removeConversation = useAppStore((state) => state.removeConversation)
   const setConversation = useAppStore((state) => state.setConversation)
+  const chatRuns = useAppStore((state) => state.chatRuns)
   const settingsOpen = useAppStore((state) => state.settingsOpen)
   const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed)
   const setSidebarCollapsed = useAppStore((state) => state.setSidebarCollapsed)
@@ -250,6 +253,13 @@ function ProjectSessionSidebar({ onPageChange, onOpenWorkspace, onRefreshWorkspa
   const [searchHits, setSearchHits] = useState<Awaited<ReturnType<typeof searchWorkspace>>>([])
   const [searching, setSearching] = useState(false)
   const [projectExpanded, setProjectExpanded] = useState(true)
+  const [currentTime, setCurrentTime] = useState(() => Date.now())
+  const [deletingConversationIds, setDeletingConversationIds] = useState<Set<string>>(() => new Set())
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setCurrentTime(Date.now()), 60_000)
+    return () => window.clearInterval(timer)
+  }, [])
 
   useEffect(() => {
     if (!workspace || !query.trim()) { setSearchHits([]); setSearching(false); return }
@@ -278,6 +288,31 @@ function ProjectSessionSidebar({ onPageChange, onOpenWorkspace, onRefreshWorkspa
     newConversation()
     setSettingsOpen(false)
     onPageChange('chat')
+  }
+
+  const removeStoredConversation = async (id: string, title: string, messageCount: number) => {
+    if (chatRuns[id] || deletingConversationIds.has(id)) return
+    const detail = messageCount > 0 ? `其中的 ${messageCount} 条消息也会被删除。` : ''
+    if (!window.confirm(`删除会话“${title}”？${detail}此操作无法撤销。`)) return
+
+    setDeletingConversationIds((current) => new Set(current).add(id))
+    try {
+      await deleteConversation(id)
+      const wasActive = useAppStore.getState().conversationId === id
+      removeConversation(id)
+      if (wasActive) {
+        setSettingsOpen(false)
+        onPageChange('chat')
+      }
+    } catch (error) {
+      setError(`删除会话失败：${String(error)}`)
+    } finally {
+      setDeletingConversationIds((current) => {
+        const next = new Set(current)
+        next.delete(id)
+        return next
+      })
+    }
   }
 
   const hasQuery = Boolean(query.trim())
@@ -314,13 +349,29 @@ function ProjectSessionSidebar({ onPageChange, onOpenWorkspace, onRefreshWorkspa
               {!hasQuery && <button className="project-new-session" onClick={startConversation}><CirclePlus />新建会话</button>}
               {!hasQuery && !conversationId && <button className="conversation-item active" onClick={startConversation}><MessageSquareText /><span><b>新会话</b><small>{Math.max(0, messages.length - 1)} 条消息 · 尚未保存</small></span></button>}
               {conversationMatches.map((conversation) => {
-                return <button key={conversation.id} className={`conversation-item ${conversationId === conversation.id ? 'active' : ''}`} onClick={() => void selectConversation(conversation.id)}>
-                  <MessageSquareText />
-                  <span>
-                    <b>{conversation.title}</b>
-                    <small className="conversation-item-meta">{conversation.messageCount} 条消息 · {new Date(conversation.updatedAt).toLocaleString()}</small>
-                  </span>
-                </button>
+                const isRunning = Boolean(chatRuns[conversation.id])
+                const isDeleting = deletingConversationIds.has(conversation.id)
+                const age = formatConversationAge(conversation.updatedAt, currentTime)
+                return <div key={conversation.id} className={`conversation-item ${conversationId === conversation.id ? 'active' : ''}`}>
+                  <button type="button" className="conversation-item-select" onClick={() => void selectConversation(conversation.id)}>
+                    <MessageSquareText />
+                    <span>
+                      <b title={conversation.title}>{conversation.title}</b>
+                      <small className="conversation-item-meta">{conversation.messageCount} 条消息</small>
+                    </span>
+                  </button>
+                  <div className="conversation-item-action">
+                    {age && <time className="conversation-item-age" dateTime={new Date(conversation.updatedAt).toISOString()} title={`最后使用：${new Date(conversation.updatedAt).toLocaleString()}`}>{age}</time>}
+                    <button
+                      type="button"
+                      className="conversation-item-delete"
+                      aria-label={`删除会话“${conversation.title}”`}
+                      title={isRunning ? '会话正在生成，暂时无法删除' : isDeleting ? '正在删除' : '删除会话'}
+                      disabled={isRunning || isDeleting}
+                      onClick={() => void removeStoredConversation(conversation.id, conversation.title, conversation.messageCount)}
+                    ><Trash2 /></button>
+                  </div>
+                </div>
               })}
               {hasQuery && conversationMatches.length === 0 && <div className="empty-small compact">没有匹配的会话</div>}
               {!hasQuery && conversations.length === 0 && conversationId && <div className="empty-small compact">还没有其他会话</div>}

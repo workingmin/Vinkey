@@ -136,6 +136,25 @@ describe('conversation chat runs', () => {
     expect(assistant?.content).toBe('已完成')
     expect(assistant?.activityLog).toHaveLength(2)
   })
+
+  it('removes a stored conversation and resets the active conversation', () => {
+    const store = useAppStore.getState()
+    store.setConversations([
+      { id: 'a', title: '会话 a', updatedAt: 2, messageCount: 2 },
+      { id: 'b', title: '会话 b', updatedAt: 1, messageCount: 1 },
+    ])
+    store.setConversation(conversation('a', [message('user-a', 'user', '问题', 2)]))
+    useAppStore.setState({ completedChatMessages: { a: message('assistant-a', 'assistant', '回答', 3) } })
+
+    store.removeConversation('a')
+
+    const state = useAppStore.getState()
+    expect(state.conversations.map((item) => item.id)).toEqual(['b'])
+    expect(state.conversationId).toBeNull()
+    expect(state.conversationTitle).toBe('新会话')
+    expect(state.contextDocuments).toEqual([])
+    expect(state.completedChatMessages.a).toBeUndefined()
+  })
 })
 
 describe('settings sidebar behavior', () => {
