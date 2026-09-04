@@ -42,4 +42,19 @@ describe('task routing', () => {
     expect(plan.scope).toBe('selected-documents')
     expect(plan.requiresModel).toBe(true)
   })
+
+  it('routes specific character relationship questions to document analysis', () => {
+    const plan = classifyTask('林晚和林崇山是什么关系？', true)
+    expect(plan.intent).toBe('character-analysis')
+    expect(plan.operation).toBe('analyze')
+    expect(plan.documentAccess).toBe('selected')
+    expect(plan.confidence).toBe('high')
+  })
+
+  it('routes project-wide file content questions to workspace analysis', () => {
+    const plan = classifyTask('分析当前项目有哪些文件内容', false)
+    expect(plan.intent).toBe('workspace-analysis')
+    expect(plan.scope).toBe('workspace')
+    expect(plan.documentAccess).toBe('workspace')
+  })
 })

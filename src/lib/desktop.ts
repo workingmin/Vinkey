@@ -3,6 +3,8 @@ import { open } from '@tauri-apps/plugin-dialog'
 import type {
   ChatMessage, ChatRequest, ChatStreamEvent, ContextDocument, Conversation, ConversationSummary,
   ChunkManifest, DocumentSnapshot, ModelConnectionResult, ModelProfile, ModelProfileInput, SearchHit,
+  AnalysisJobManifest, CharacterGraphBenchmark, CharacterGraphStats, CharacterInput, CharacterMentionInput, CharacterNeighbor, CharacterRecord,
+  ProjectMemoryCandidate, ProjectMemoryItem, ProjectMemoryStatus, RelationshipEvidenceInput, RelationshipInput,
   ThemeMode, WorkspaceSnapshot,
 } from '../types'
 import { getDocumentKind } from './fileTypes'
@@ -11,6 +13,7 @@ import type { StructureProposal } from './structureSegmentation'
 
 const PROFILE_KEY = 'vinkey.demo.modelProfiles'
 const CONVERSATION_KEY = 'vinkey.demo.conversations'
+const MEMORY_KEY = 'vinkey.demo.projectMemory'
 const demoCancellations = new Set<string>()
 
 export interface RuntimeDiagnostics {
@@ -185,6 +188,16 @@ export async function writeAnalysisArtifact(jobId: string, name: string, content
   return invoke<string>('write_analysis_artifact', { jobId, name, content })
 }
 
+export async function readAnalysisArtifact(jobId: string, name: string): Promise<string | null> {
+  if (!isDesktop()) return null
+  return invoke<string>('read_analysis_artifact', { jobId, name })
+}
+
+export async function listAnalysisJobs(): Promise<AnalysisJobManifest[]> {
+  if (!isDesktop()) return []
+  return invoke<AnalysisJobManifest[]>('list_analysis_jobs')
+}
+
 export async function saveDocument(document: DocumentSnapshot): Promise<DocumentSnapshot> {
   if (!isDesktop()) {
     const saved = { ...document, modifiedMs: Date.now() }
@@ -251,6 +264,130 @@ export async function searchWorkspace(query: string): Promise<SearchHit[]> {
       line.toLocaleLowerCase().includes(normalized) ? [{ path: document.path, line: index + 1, snippet: line.slice(0, 180) }] : []))
   }
   return invoke<SearchHit[]>('search_workspace', { query, maxResults: 100 })
+}
+
+function readDemoMemory(): ProjectMemoryItem[] {
+  try { return JSON.parse(localStorage.getItem(MEMORY_KEY) ?? '[]') as ProjectMemoryItem[] } catch { return [] }
+}
+
+export async function listProjectMemory(status: ProjectMemoryStatus | 'all' = 'confirmed'): Promise<ProjectMemoryItem[]> {
+  if (!isDesktop()) return readDemoMemory().filter((item) => status === 'all' || item.status === status).sort((left, right) => right.updatedAt - left.updatedAt)
+  return invoke<ProjectMemoryItem[]>('list_project_memory', { status })
+}
+
+export async function searchProjectMemory(query: string, maxResults = 12): Promise<ProjectMemoryItem[]> {
+  if (!isDesktop()) {
+    const normalized = query.trim().toLocaleLowerCase()
+    const values = readDemoMemory().filter((item) => item.status === 'confirmed')
+    const hits = values.filter((item) => !normalized || `${item.title}\n${item.content}`.toLocaleLowerCase().includes(normalized))
+    return (hits.length > 0 || !normalized ? hits : values).slice(0, maxResults)
+  }
+  const hits = await invoke<ProjectMemoryItem[]>('search_project_memory', { query, maxResults })
+  return hits.length > 0 || !query.trim() ? hits : invoke<ProjectMemoryItem[]>('list_project_memory', { status: 'confirmed' })
+}
+
+export async function proposeProjectMemory(candidates: ProjectMemoryCandidate[]): Promise<ProjectMemoryItem[]> {
+  if (!isDesktop()) {
+    const now = Date.now()
+    const values = readDemoMemory()
+    const proposed = candidates.map((candidate) => ({ ...candidate, confidence: candidate.confidence ?? 'medium', status: 'proposed' as const, createdAt: now, updatedAt: now }))
+    const next = [...proposed, ...values.filter((item) => !candidates.some((candidate) => candidate.id === item.id))]
+    localStorage.setItem(MEMORY_KEY, JSON.stringify(next))
+    return proposed
+  }
+  return invoke<ProjectMemoryItem[]>('propose_project_memory', { candidates })
+}
+
+export async function confirmProjectMemory(ids: string[]): Promise<ProjectMemoryItem[]> {
+  if (!isDesktop()) {
+    const now = Date.now()
+    const values = readDemoMemory().map((item) => ids.includes(item.id) && item.status === 'proposed' ? { ...item, status: 'confirmed' as const, updatedAt: now } : item)
+    localStorage.setItem(MEMORY_KEY, JSON.stringify(values))
+    return values.filter((item) => ids.includes(item.id) && item.status === 'confirmed')
+  }
+  return invoke<ProjectMemoryItem[]>('confirm_project_memory', { ids })
+}
+
+export async function rejectProjectMemory(ids: string[]): Promise<ProjectMemoryItem[]> {
+  if (!isDesktop()) {
+    const now = Date.now()
+    const values = readDemoMemory().map((item) => ids.includes(item.id) && item.status === 'proposed' ? { ...item, status: 'rejected' as const, updatedAt: now } : item)
+    localStorage.setItem(MEMORY_KEY, JSON.stringify(values))
+    return values.filter((item) => ids.includes(item.id) && item.status === 'rejected')
+  }
+  return invoke<ProjectMemoryItem[]>('reject_project_memory', { ids })
+}
+
+export async function upsertCharacters(characters: CharacterInput[]): Promise<CharacterRecord[]> {
+  if (!isDesktop()) {
+    const now = Date.now()
+    return characters.map((character) => ({
+      ...character,
+      aliases: character.aliases ?? [],
+      description: character.description ?? '',
+      confidence: character.confidence ?? 'medium',
+      status: character.status ?? 'proposed',
+      createdAt: now,
+      updatedAt: now,
+    }))
+  }
+  return invoke<CharacterRecord[]>('upsert_characters', { characters })
+}
+
+export async function searchCharacters(workId: string, query: string, maxResults = 50): Promise<CharacterRecord[]> {
+  if (!isDesktop()) return []
+  return invoke<CharacterRecord[]>('search_characters', { workId, query, maxResults })
+}
+
+export async function upsertCharacterMentions(mentions: CharacterMentionInput[]): Promise<number> {
+  if (!isDesktop()) return mentions.length
+  return invoke<number>('upsert_character_mentions', { mentions })
+}
+
+export async function invalidateCharacterSource(sourceId: string, sourceFingerprint: string): Promise<number> {
+  if (!isDesktop()) return 0
+  return invoke<number>('invalidate_character_source', { sourceId, sourceFingerprint })
+}
+
+export async function upsertCharacterRelationships(
+  relationships: RelationshipInput[],
+  evidence: RelationshipEvidenceInput[] = [],
+): Promise<number> {
+  if (!isDesktop()) return relationships.length
+  return invoke<number>('upsert_character_relationships', { relationships, evidence })
+}
+
+export async function getCharacterGraphStats(workId: string): Promise<CharacterGraphStats> {
+  if (!isDesktop()) {
+    return { nodeCount: 0, edgeCount: 0, connectedComponents: 0, isolatedNodeCount: 0, averageDegree: 0, maxDegree: 0, topCharacters: [] }
+  }
+  return invoke<CharacterGraphStats>('character_graph_stats', { workId })
+}
+
+export async function listCharacterNeighbors(workId: string, characterId: string): Promise<CharacterNeighbor[]> {
+  if (!isDesktop()) return []
+  return invoke<CharacterNeighbor[]>('list_character_neighbors', { workId, characterId })
+}
+
+export async function benchmarkCharacterGraph(workId: string, iterations = 10): Promise<CharacterGraphBenchmark> {
+  if (!isDesktop()) {
+    return {
+      stats: { nodeCount: 0, edgeCount: 0, connectedComponents: 0, isolatedNodeCount: 0, averageDegree: 0, maxDegree: 0, topCharacters: [] },
+      loadMicros: 0,
+      statsP50Micros: 0,
+      statsP95Micros: 0,
+      pathP50Micros: 0,
+      pathP95Micros: 0,
+      pathFound: false,
+      iterations: 0,
+    }
+  }
+  return invoke<CharacterGraphBenchmark>('character_graph_benchmark', { workId, iterations })
+}
+
+export async function findCharacterPath(workId: string, sourceCharacterId: string, targetCharacterId: string, maxHops = 4): Promise<string[] | null> {
+  if (!isDesktop()) return null
+  return invoke<string[] | null>('character_graph_path', { workId, sourceCharacterId, targetCharacterId, maxHops })
 }
 
 function defaultDemoProfile(): ModelProfile {
@@ -364,9 +501,9 @@ export async function saveConversationMessage(conversationId: string, title: str
     const existing = values.find((item) => item.id === conversationId)
     if (existing) {
       existing.title = title
-      existing.updatedAt = message.createdAt
+      existing.updatedAt = message.completedAt ?? message.createdAt
       existing.messages = [...existing.messages.filter((item) => item.id !== message.id), message]
-    } else values.push({ id: conversationId, title, updatedAt: message.createdAt, messages: [message] })
+    } else values.push({ id: conversationId, title, updatedAt: message.completedAt ?? message.createdAt, messages: [message] })
     localStorage.setItem(CONVERSATION_KEY, JSON.stringify(values))
     return
   }

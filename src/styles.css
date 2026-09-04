@@ -238,6 +238,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 1px
 .message-activity-log { max-width: 100%; margin: 3px 0 0 6px; padding: 0 0 0 13px; border-left: 1px solid var(--border); list-style: none; }
 .message-activity-log li { min-width: 0; display: flex; align-items: flex-start; gap: 7px; padding: 3px 0; color: var(--text-muted); font-size: 10px; line-height: 1.45; }
 .message-activity-log li span:last-child { min-width: 0; overflow-wrap: anywhere; white-space: normal; }
+.message-activity-log li span:last-child small { display: block; margin-top: 1px; color: var(--text-muted); font-size: 9px; font-weight: 400; }
 .message-activity-log li.current { color: var(--accent); }
 .message-activity-log-dot { width: 5px; height: 5px; flex: 0 0 5px; margin-top: 5px; border-radius: 50%; background: currentColor; opacity: .75; }
 @keyframes message-activity-pulse { 0%, 100% { opacity: .35; transform: scale(.8); } 50% { opacity: 1; transform: scale(1); } }

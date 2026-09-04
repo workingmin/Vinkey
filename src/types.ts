@@ -18,6 +18,13 @@ export interface WorkspaceSnapshot {
   entries: WorkspaceEntry[]
 }
 
+export interface WorkspaceDocumentRef {
+  path: string
+  name: string
+  kind: DocumentKind
+  reason?: 'supported' | 'sensitive' | 'unsupported' | 'too-large' | 'read-error'
+}
+
 export interface DocumentSnapshot {
   path: string
   name: string
@@ -64,6 +71,40 @@ export interface ContextDocument {
   name: string
   content: string
   size: number
+  /** Original byte size when the source reader can provide it. */
+  sizeBytes?: number
+  kind?: DocumentKind
+}
+
+export interface EvidenceReference {
+  sourceId: string
+  chunkId?: string | null
+  lineStart: number
+  lineEnd: number
+  startChar?: number | null
+  endChar?: number | null
+  quote?: string | null
+  verified: boolean
+  verificationError?: string | null
+}
+
+export type AnalysisJobStatus = 'planned' | 'running' | 'completed' | 'failed' | 'cancelled'
+
+export interface AnalysisJobManifest {
+  jobId: string
+  workspaceId: string
+  instruction: string
+  status: AnalysisJobStatus
+  createdAt: number
+  updatedAt: number
+  documentCount: number
+  supportedDocumentCount: number
+  excludedDocuments: WorkspaceDocumentRef[]
+  sourceFingerprints: Record<string, string>
+  chunkCount?: number
+  summaryCount?: number
+  evidenceCount?: number
+  error?: string | null
 }
 
 export interface ChatMessage {
@@ -71,6 +112,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   createdAt: number
+  completedAt?: number
   activityLog?: ChatActivity[]
 }
 
@@ -116,6 +158,129 @@ export interface SearchHit {
   snippet: string
 }
 
+export type ProjectMemoryKind = 'summary' | 'fact' | 'character' | 'timeline' | 'foreshadowing' | 'decision'
+export type ProjectMemoryStatus = 'proposed' | 'confirmed' | 'rejected'
+
+export interface ProjectMemoryItem {
+  id: string
+  kind: ProjectMemoryKind
+  title: string
+  content: string
+  sourcePaths: string[]
+  confidence: 'low' | 'medium' | 'high'
+  status: ProjectMemoryStatus
+  createdAt: number
+  updatedAt: number
+}
+
+export interface ProjectMemoryCandidate {
+  id: string
+  kind: ProjectMemoryKind
+  title: string
+  content: string
+  sourcePaths: string[]
+  confidence?: 'low' | 'medium' | 'high'
+}
+
+export interface CharacterRecord {
+  id: string
+  workId: string
+  canonicalName: string
+  aliases: string[]
+  description: string
+  confidence: 'low' | 'medium' | 'high'
+  status: ProjectMemoryStatus
+  createdAt: number
+  updatedAt: number
+}
+
+export interface CharacterInput {
+  id: string
+  workId: string
+  canonicalName: string
+  aliases?: string[]
+  description?: string
+  confidence?: CharacterRecord['confidence']
+  status?: ProjectMemoryStatus
+}
+
+export interface CharacterMentionInput {
+  id: string
+  workId: string
+  characterId: string
+  sourceId: string
+  chapterId?: string | null
+  sceneId?: string | null
+  startChar: number
+  endChar: number
+  lineStart: number
+  lineEnd: number
+  quote?: string | null
+  sourceFingerprint?: string | null
+}
+
+export interface RelationshipInput {
+  id: string
+  workId: string
+  sourceCharacterId: string
+  targetCharacterId: string
+  relationType: string
+  directed: boolean
+  confidence?: CharacterRecord['confidence']
+  status?: ProjectMemoryStatus
+  firstSeenAt?: number | null
+  lastSeenAt?: number | null
+}
+
+export interface RelationshipEvidenceInput {
+  id: string
+  relationshipId: string
+  sourceId: string
+  chapterId?: string | null
+  sceneId?: string | null
+  startChar: number
+  endChar: number
+  lineStart: number
+  lineEnd: number
+  quote?: string | null
+  sourceFingerprint?: string | null
+}
+
+export interface CharacterScore {
+  characterId: string
+  degree: number
+}
+
+export interface CharacterGraphStats {
+  nodeCount: number
+  edgeCount: number
+  connectedComponents: number
+  isolatedNodeCount: number
+  averageDegree: number
+  maxDegree: number
+  topCharacters: CharacterScore[]
+}
+
+export interface CharacterGraphBenchmark {
+  stats: CharacterGraphStats
+  loadMicros: number
+  statsP50Micros: number
+  statsP95Micros: number
+  pathP50Micros: number
+  pathP95Micros: number
+  pathFound: boolean
+  iterations: number
+}
+
+export interface CharacterNeighbor {
+  relationshipId: string
+  characterId: string
+  relationType: string
+  directed: boolean
+  confidence: CharacterRecord['confidence']
+  status: ProjectMemoryStatus
+}
+
 export interface ChatRequest {
   requestId: string
   profileId: string
@@ -128,6 +293,7 @@ export interface ChatActivity {
   status: ChatRunStatus
   message: string | null
   timestamp: number
+  completedAt?: number
 }
 
 export type ChatStreamEvent =

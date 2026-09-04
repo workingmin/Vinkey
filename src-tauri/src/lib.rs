@@ -11,6 +11,7 @@ use std::{
 };
 use tauri::{AppHandle, Manager, State, WebviewWindow};
 
+mod character_graph;
 mod database;
 mod long_text;
 mod models;
@@ -305,10 +306,31 @@ fn chunk_cache_dir(workspace: &Workspace) -> PathBuf {
     workspace_vinkey_dir(workspace).join("chunks")
 }
 
-fn analysis_jobs_dir(workspace: &Workspace) -> PathBuf {
+pub(crate) fn analysis_jobs_dir(workspace: &Workspace) -> PathBuf {
     workspace_vinkey_dir(workspace)
         .join("analysis")
         .join("jobs")
+}
+
+fn validate_analysis_artifact_name(name: &str) -> Result<&Path, String> {
+    let artifact_name = Path::new(name);
+    if name.is_empty()
+        || name.len() > 180
+        || artifact_name.is_absolute()
+        || artifact_name.components().any(|component| {
+            matches!(
+                component,
+                Component::ParentDir | Component::RootDir | Component::Prefix(_)
+            )
+        })
+        || !artifact_name
+            .file_name()
+            .map(|value| !value.is_empty())
+            .unwrap_or(false)
+    {
+        return Err("分析产物名称无效".into());
+    }
+    Ok(artifact_name)
 }
 
 fn cache_manifest_is_valid(
@@ -626,31 +648,29 @@ fn write_analysis_artifact(
     {
         return Err("分析任务 ID 无效".into());
     }
-    let artifact_name = Path::new(&name);
-    if name.is_empty()
-        || name.len() > 180
-        || artifact_name.is_absolute()
-        || artifact_name.components().any(|component| {
-            matches!(
-                component,
-                Component::ParentDir | Component::RootDir | Component::Prefix(_)
-            )
-        })
-        || !artifact_name
-            .file_name()
-            .map(|value| !value.is_empty())
-            .unwrap_or(false)
-    {
-        return Err("分析产物名称无效".into());
-    }
+    let artifact_name = validate_analysis_artifact_name(&name)?;
     if content.len() > 16 * 1024 * 1024 {
         return Err("分析产物超过 16 MB 限制".into());
     }
     let workspace = lock_workspace(&state)?;
-    let artifact_dir = analysis_jobs_dir(&workspace).join(&job_id);
+    let jobs_dir = analysis_jobs_dir(&workspace);
+    fs::create_dir_all(&jobs_dir).map_err(|error| format!("无法创建分析任务目录：{error}"))?;
+    let canonical_jobs_dir = jobs_dir
+        .canonicalize()
+        .map_err(|error| format!("无法解析分析任务目录：{error}"))?;
+    if !canonical_jobs_dir.starts_with(&workspace.root) {
+        return Err("分析任务目录路径越界".into());
+    }
+    let artifact_dir = jobs_dir.join(&job_id);
     fs::create_dir_all(&artifact_dir).map_err(|error| format!("无法创建分析任务目录：{error}"))?;
+    let canonical_artifact_dir = artifact_dir
+        .canonicalize()
+        .map_err(|error| format!("无法解析分析任务目录：{error}"))?;
+    if !canonical_artifact_dir.starts_with(&canonical_jobs_dir) {
+        return Err("分析任务目录路径越界".into());
+    }
     let target = artifact_dir.join(artifact_name);
-    if target.exists() {
+    if fs::symlink_metadata(&target).is_ok() {
         return Err("分析产物已存在，拒绝覆盖".into());
     }
     fs::write(&target, content).map_err(|error| format!("无法写入分析产物：{error}"))?;
@@ -667,6 +687,119 @@ fn write_analysis_artifact(
         ]),
     );
     Ok(relative)
+}
+
+#[tauri::command]
+fn read_analysis_artifact(
+    job_id: String,
+    name: String,
+    state: State<'_, WorkspaceState>,
+) -> Result<String, String> {
+    if job_id.is_empty()
+        || job_id.len() > 100
+        || !job_id
+            .chars()
+            .all(|value| value.is_ascii_alphanumeric() || matches!(value, '-' | '_'))
+    {
+        return Err("分析任务 ID 无效".into());
+    }
+    let artifact_name = validate_analysis_artifact_name(&name)?;
+    let workspace = lock_workspace(&state)?;
+    let jobs_dir = analysis_jobs_dir(&workspace);
+    let canonical_jobs_dir = jobs_dir
+        .canonicalize()
+        .map_err(|error| format!("无法读取分析任务目录：{error}"))?;
+    if !canonical_jobs_dir.starts_with(&workspace.root) {
+        return Err("分析任务目录路径越界".into());
+    }
+    let job_dir = jobs_dir.join(&job_id);
+    let canonical_job_dir = job_dir
+        .canonicalize()
+        .map_err(|error| format!("无法读取分析任务目录：{error}"))?;
+    if !canonical_job_dir.starts_with(&canonical_jobs_dir) {
+        return Err("分析任务目录路径越界".into());
+    }
+    let target = job_dir.join(artifact_name);
+    let canonical = target
+        .canonicalize()
+        .map_err(|error| format!("无法读取分析产物：{error}"))?;
+    if !canonical.starts_with(&canonical_job_dir) {
+        return Err("分析产物路径越界".into());
+    }
+    let metadata =
+        fs::metadata(&canonical).map_err(|error| format!("无法读取分析产物信息：{error}"))?;
+    if !metadata.is_file() || metadata.len() > 16 * 1024 * 1024 {
+        return Err("分析产物不可读或超过 16 MB 限制".into());
+    }
+    fs::read_to_string(&canonical).map_err(|error| format!("无法读取分析产物：{error}"))
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AnalysisJobManifest {
+    job_id: String,
+    workspace_id: String,
+    instruction: String,
+    status: String,
+    created_at: u64,
+    updated_at: u64,
+    document_count: usize,
+    supported_document_count: usize,
+    excluded_documents: Vec<Value>,
+    source_fingerprints: std::collections::HashMap<String, String>,
+    chunk_count: Option<usize>,
+    summary_count: Option<usize>,
+    evidence_count: Option<usize>,
+    error: Option<String>,
+}
+
+#[tauri::command]
+fn list_analysis_jobs(
+    state: State<'_, WorkspaceState>,
+) -> Result<Vec<AnalysisJobManifest>, String> {
+    let workspace = lock_workspace(&state)?;
+    let directory = analysis_jobs_dir(&workspace);
+    if !directory.exists() {
+        return Ok(Vec::new());
+    }
+    let canonical_directory = directory
+        .canonicalize()
+        .map_err(|error| format!("无法读取分析任务：{error}"))?;
+    if !canonical_directory.starts_with(&workspace.root) {
+        return Err("分析任务目录路径越界".into());
+    }
+    let mut jobs = Vec::new();
+    for entry in
+        fs::read_dir(canonical_directory).map_err(|error| format!("无法读取分析任务：{error}"))?
+    {
+        let entry = entry.map_err(|error| format!("无法读取分析任务目录项：{error}"))?;
+        if !entry
+            .file_type()
+            .map_err(|error| format!("无法识别分析任务：{error}"))?
+            .is_dir()
+        {
+            continue;
+        }
+        let job_directory = entry.path();
+        let mut manifest = None;
+        for name in ["job.json", "job-failed.json", "job-start.json"] {
+            let path = job_directory.join(name);
+            if let Ok(bytes) = fs::read(path) {
+                if let Ok(value) = serde_json::from_slice::<AnalysisJobManifest>(&bytes) {
+                    manifest = Some(value);
+                    if name != "job-start.json" {
+                        break;
+                    }
+                }
+            }
+        }
+        if let Some(value) = manifest {
+            jobs.push(value);
+        }
+    }
+    jobs.sort_by(|left, right| right.updated_at.cmp(&left.updated_at));
+    jobs.truncate(20);
+    Ok(jobs)
 }
 
 #[tauri::command]
@@ -982,6 +1115,8 @@ pub fn run() {
             read_document,
             chunk_document,
             write_analysis_artifact,
+            read_analysis_artifact,
+            list_analysis_jobs,
             read_file_bytes,
             save_document,
             create_document,
@@ -1001,6 +1136,20 @@ pub fn run() {
             database::load_conversation,
             database::save_conversation_message,
             database::delete_conversation,
+            database::list_project_memory,
+            database::search_project_memory,
+            database::propose_project_memory,
+            database::confirm_project_memory,
+            database::reject_project_memory,
+            database::upsert_characters,
+            database::search_characters,
+            database::upsert_character_mentions,
+            database::invalidate_character_source,
+            database::upsert_character_relationships,
+            database::character_graph_stats,
+            database::list_character_neighbors,
+            database::character_graph_benchmark,
+            database::character_graph_path,
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Vinkey");

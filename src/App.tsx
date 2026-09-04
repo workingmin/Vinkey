@@ -17,17 +17,21 @@ import { WorkspaceTree, workspaceActions } from './components/WorkspaceTree'
 import {
   cancelChat, chooseWorkspace, createDirectory, createDocument, isDesktop, listConversations,
   getWindowDiagnostics, getRuntimeDiagnostics, listModelProfiles, loadConversation, readDocument, readFileBytes, refreshWorkspace,
-  recordRuntimeEvent, writeStructureOutputs,
+  listAnalysisJobs, recordRuntimeEvent, writeStructureOutputs,
   saveConversationMessage, saveDocument, searchWorkspace, streamChat, syncNativeWindowTheme,
+  confirmProjectMemory, listProjectMemory, proposeProjectMemory, rejectProjectMemory, searchProjectMemory,
 } from './lib/desktop'
 import { buildContextMessage, calculateContextBudget, selectRecentMessages } from './lib/context'
 import { analyzeLongText, cancelLongTextAnalysis } from './lib/longTextAnalysis'
 import { classifyTask } from './lib/intent'
+import { isContextRecoveryResponse } from './lib/contextRecovery'
+import { buildMemoryCandidates, buildProjectMemoryContext, selectRelevantMemory } from './lib/projectMemory'
 import { formatStructureResult, segmentDocument } from './lib/structureSegmentation'
 import { useAppStore } from './store'
-import type { ChatActivity, ChatMessage, ChatRunStatus, DocumentSnapshot, ViewMode, WorkspaceEntry } from './types'
+import type { AnalysisJobManifest, ChatActivity, ChatMessage, ChatRunStatus, DocumentSnapshot, ProjectMemoryItem, ViewMode, WorkspaceEntry } from './types'
 import { getDocumentKind, getLanguageName, isEditableDocument } from './lib/fileTypes'
 import { findNewTextFiles, flattenWorkspaceFiles } from './lib/tree'
+import { readWorkspaceDocuments } from './lib/workspaceAnalysis'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { Menu, MenuItem, PredefinedMenuItem, Submenu } from '@tauri-apps/api/menu'
 import type { PredefinedMenuItemOptions } from '@tauri-apps/api/menu'
@@ -384,6 +388,7 @@ function ChatMessageItem({ message, activity, onCopyError }: {
 }) {
   const [copied, setCopied] = useState(false)
   const [activityExpanded, setActivityExpanded] = useState(false)
+  const [clock, setClock] = useState(() => Date.now())
   const copyTimer = useRef<number | null>(null)
 
   useEffect(() => () => {
@@ -392,6 +397,13 @@ function ChatMessageItem({ message, activity, onCopyError }: {
 
   useEffect(() => {
     if (!activity) setActivityExpanded(false)
+  }, [activity])
+
+  useEffect(() => {
+    if (!activity) return
+    setClock(Date.now())
+    const timer = window.setInterval(() => setClock(Date.now()), 1000)
+    return () => window.clearInterval(timer)
   }, [activity])
 
   const copyMessage = async () => {
@@ -412,10 +424,19 @@ function ChatMessageItem({ message, activity, onCopyError }: {
   const history = activity
     ? activityLog.slice(0, -1)
     : activityLog
-  const timestamp = new Date(message.createdAt)
+  const displayTimestamp = activity ? clock : (message.completedAt ?? message.createdAt)
+  const timestamp = new Date(displayTimestamp)
   const formattedTime = timestamp.toLocaleString('zh-CN', {
-    month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
+    month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
   })
+  const formatActivityTime = (value: number) => new Date(value).toLocaleTimeString('zh-CN', {
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  })
+  const formatActivityDuration = (item: ChatActivity) => {
+    const end = item.completedAt ?? (activity ? clock : item.timestamp)
+    const seconds = Math.max(0, Math.round((end - item.timestamp) / 1000))
+    return `${seconds} 秒`
+  }
 
   return <article className={`message ${message.role}`}>
     {isAssistant && <div className="avatar" aria-hidden="true"><Bot /></div>}
@@ -436,11 +457,11 @@ function ChatMessageItem({ message, activity, onCopyError }: {
         {activityExpanded && <ol id={`activity-log-${message.id}`} className="message-activity-log">
           {history.map((item, index) => <li key={`${item.timestamp}-${index}`} className={`status-${item.status}`}>
             <span className="message-activity-log-dot" aria-hidden="true" />
-            <span>{item.message ?? chatStatusMeta[item.status].label}</span>
+            <span>{item.message ?? chatStatusMeta[item.status].label}<small>{formatActivityTime(item.completedAt ?? item.timestamp)} · {formatActivityDuration(item)}</small></span>
           </li>)}
           {activity && currentActivity && <li className={`status-${currentActivity.status} current`}>
             <span className="message-activity-log-dot" aria-hidden="true" />
-            <span>{currentActivity.message ?? chatStatusMeta[currentActivity.status].label}</span>
+            <span>{currentActivity.message ?? chatStatusMeta[currentActivity.status].label}<small>{currentActivity.completedAt ? `${formatActivityTime(currentActivity.completedAt)} · ${formatActivityDuration(currentActivity)}` : `进行中 · ${formatActivityDuration(currentActivity)}`}</small></span>
           </li>}
         </ol>}
       </div>}
@@ -469,6 +490,7 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
   const beginChatRun = useAppStore((state) => state.beginChatRun)
   const setChatRunStatus = useAppStore((state) => state.setChatRunStatus)
   const appendChatRunChunk = useAppStore((state) => state.appendChatRunChunk)
+  const resetChatRunResponse = useAppStore((state) => state.resetChatRunResponse)
   const endChatRun = useAppStore((state) => state.endChatRun)
   const setConversation = useAppStore((state) => state.setConversation)
   const setActiveModelId = useAppStore((state) => state.setActiveModelId)
@@ -483,6 +505,9 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
   const clearPendingNewFiles = useAppStore((state) => state.clearPendingNewFiles)
   const [prompt, setPrompt] = useState('')
   const [analysisStatus, setAnalysisStatus] = useState<string | null>(null)
+  const [pendingMemory, setPendingMemory] = useState<ProjectMemoryItem[]>([])
+  const [recoverableJob, setRecoverableJob] = useState<AnalysisJobManifest | null>(null)
+  const [resumeJobId, setResumeJobId] = useState<string | null>(null)
   const [mention, setMention] = useState<{ start: number; end: number; query: string } | null>(null)
   const [mentionIndex, setMentionIndex] = useState(0)
   const promptRef = useRef<HTMLTextAreaElement>(null)
@@ -491,6 +516,18 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
   const busy = Boolean(activeChatRun)
   const budget = calculateContextBudget(messages, contextDocuments, prompt, activeModel?.contextWindow ?? 32768)
   const activeStatus = activeChatRun ? chatStatusMeta[activeChatRun.status] : null
+
+  useEffect(() => {
+    if (!workspace) { setPendingMemory([]); return }
+    void listProjectMemory('proposed').then(setPendingMemory).catch((error) => setError(String(error)))
+  }, [setError, workspace])
+
+  useEffect(() => {
+    if (!workspace) { setRecoverableJob(null); return }
+    void listAnalysisJobs()
+      .then((jobs) => setRecoverableJob(jobs.find((job) => job.status === 'running' || job.status === 'failed') ?? null))
+      .catch((error) => setError(String(error)))
+  }, [setError, workspace])
 
   const mentionFiles = useMemo(() => {
     if (!workspace || !mention) return []
@@ -534,14 +571,40 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
     const activeDocument = activePath ? tabs.find((tab) => tab.path === activePath) : undefined
     let taskPlan = classifyTask(value, selectedContextDocuments.length > 0 || Boolean(activeDocument))
     if (taskPlan.documentAccess === 'selected' && selectedContextDocuments.length === 0 && activeDocument) {
-      addContextDocument({ path: activeDocument.path, name: activeDocument.name, content: activeDocument.content, size: activeDocument.content.length })
+      addContextDocument({ path: activeDocument.path, name: activeDocument.name, content: activeDocument.content, size: activeDocument.content.length, sizeBytes: activeDocument.sizeBytes, kind: activeDocument.kind })
       selectedContextDocuments = useAppStore.getState().contextDocuments
       taskPlan = classifyTask(value, selectedContextDocuments.length > 0)
     }
 
+    const selectedModel = activeModel
+    if (taskPlan.requiresModel && !selectedModel) { setSettingsOpen(true); return }
+
     // Keep file bodies behind the routed document-access decision. A selected file
     // is not automatically sent to the model for unrelated conversation turns.
-    const requestContextDocuments = taskPlan.documentAccess === 'selected' ? selectedContextDocuments : []
+    let requestContextDocuments = taskPlan.documentAccess === 'selected' ? selectedContextDocuments : []
+    let excludedWorkspaceDocuments: Awaited<ReturnType<typeof readWorkspaceDocuments>>['excluded'] = []
+    if (taskPlan.documentAccess === 'workspace') {
+      if (!workspace) {
+        setError('项目级分析需要先打开工作区。')
+        return
+      }
+      setAnalysisStatus('正在扫描项目文件…')
+      let loaded: Awaited<ReturnType<typeof readWorkspaceDocuments>>
+      try {
+        loaded = await readWorkspaceDocuments(workspace, readDocument)
+      } catch (error) {
+        setAnalysisStatus(null)
+        setError(`扫描项目文件失败：${String(error)}`)
+        return
+      }
+      requestContextDocuments = loaded.documents
+      excludedWorkspaceDocuments = loaded.excluded
+      if (requestContextDocuments.length === 0) {
+        setAnalysisStatus(null)
+        setError('当前项目没有可分析的文本文件。')
+        return
+      }
+    }
 
     if (taskPlan.documentAccess === 'selected' && requestContextDocuments.length === 0) {
       setError(taskPlan.intent === 'structure-segmentation'
@@ -549,13 +612,18 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
         : '文档分析需要先选择或打开文档。')
       return
     }
-    const selectedModel = activeModel
-    if (taskPlan.requiresModel && !selectedModel) { setSettingsOpen(true); return }
-
+    let memoryContext: string | null = null
+    if (workspace && taskPlan.intent !== 'structure-segmentation') {
+      try {
+        const memory = await searchProjectMemory(value)
+        memoryContext = buildProjectMemoryContext(selectRelevantMemory(memory, value))
+      } catch (error) { setError(`读取项目记忆失败：${String(error)}`) }
+    }
+    const budgetDraft = [value, memoryContext].filter(Boolean).join('\n\n')
     const requestBudget = taskPlan.requiresModel
-      ? calculateContextBudget(messages, requestContextDocuments, value, selectedModel?.contextWindow ?? 32768)
+      ? calculateContextBudget(messages, requestContextDocuments, budgetDraft, selectedModel?.contextWindow ?? 32768)
       : null
-    const useLongTextPipeline = Boolean(requestBudget?.exceedsLimit)
+    const useLongTextPipeline = taskPlan.documentAccess === 'workspace' || Boolean(requestBudget?.exceedsLimit)
       && taskPlan.documentAccess === 'selected'
       && requestContextDocuments.length > 0
     void recordRuntimeEvent(
@@ -609,37 +677,104 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
           const message = `${progress.message} · ${progress.completed}/${progress.total}`
           setChatRunStatus(nextConversationId, progress.stage === 'chunking' ? 'fetching' : 'tool_calling', message)
           setAnalysisStatus(message)
-        })
-        appendChatRunChunk(nextConversationId, result.content)
+        }, workspace?.id ?? 'workspace', excludedWorkspaceDocuments, resumeJobId ?? undefined)
+        setResumeJobId(null)
+        setRecoverableJob(null)
+        const excludedNote = taskPlan.documentAccess === 'workspace' && excludedWorkspaceDocuments.length > 0
+          ? `\n\n---\n**项目扫描说明**\n本次纳入 ${requestContextDocuments.length} 个文本文件；${excludedWorkspaceDocuments.length} 个文件未纳入分析。\n\n未纳入：${excludedWorkspaceDocuments.map((item) => `${item.path}（${item.reason === 'sensitive' ? '敏感文件' : item.reason === 'too-large' ? '超过大小上限' : item.reason === 'read-error' ? '读取失败' : '不支持的文件类型'}）`).join('、')}`
+          : ''
+        const evidenceNote = result.evidence.length > 0
+          ? `\n\n> 证据校验：发现 ${result.evidence.length} 条来源引用，其中 ${result.evidence.filter((item) => item.verified).length} 条已通过行号和原文校验。`
+          : '\n\n> 证据校验：最终回答没有生成可解析的来源引用。'
+        appendChatRunChunk(nextConversationId, `${result.content}${excludedNote}${evidenceNote}`)
+        const candidates = buildMemoryCandidates(result.content, requestContextDocuments.map((document) => document.path), value)
+        if (candidates.length > 0) {
+          try {
+            setPendingMemory(await proposeProjectMemory(candidates))
+          } catch (error) { setError(`创建项目记忆提案失败：${String(error)}`) }
+        }
       } else {
         if (!selectedModel) throw new Error('未配置模型')
-        const recent = selectRecentMessages([...messages.filter((message) => message.id !== 'welcome'), userMessage], requestContextDocuments, value, selectedModel.contextWindow)
-        const context = buildContextMessage(requestContextDocuments)
+        const recent = selectRecentMessages([...messages.filter((message) => message.id !== 'welcome'), userMessage], requestContextDocuments, budgetDraft, selectedModel.contextWindow)
+        const context = [buildContextMessage(requestContextDocuments), memoryContext].filter(Boolean).join('\n\n') || null
+        let firstResponse = ''
         await streamChat({
           requestId: nextRequestId,
           profileId: selectedModel.id,
           messages: [...(context ? [{ role: 'user' as const, content: context }] : []), ...recent.map(({ role, content }) => ({ role, content }))],
         }, (event) => {
           if (event.type === 'chunk') {
+            firstResponse += event.content
             setChatRunStatus(nextConversationId, 'streaming', null)
             appendChatRunChunk(nextConversationId, event.content)
           }
           if (event.type === 'error') setError(event.message)
         })
+
+        // A bare chat turn may reveal that the question needs the open document.
+        // Retry only on an explicit context-related refusal, never on generic uncertainty.
+          const recoveryDocuments = requestContextDocuments.length > 0
+          ? []
+          : (contextDocuments.length > 0 ? contextDocuments : (activeDocument ? [{
+            path: activeDocument.path,
+            name: activeDocument.name,
+            content: activeDocument.content,
+            size: activeDocument.content.length,
+            sizeBytes: activeDocument.sizeBytes,
+            kind: activeDocument.kind,
+          }] : []))
+        if (recoveryDocuments.length > 0 && isContextRecoveryResponse(firstResponse)) {
+            const recoveryBudget = calculateContextBudget(messages, recoveryDocuments, budgetDraft, selectedModel.contextWindow)
+          const recoveryUsesLongText = recoveryBudget.exceedsLimit
+          resetChatRunResponse(nextConversationId)
+          setChatRunStatus(nextConversationId, 'fetching', recoveryUsesLongText ? '正在补充正文并分块分析…' : '正在补充文档上下文…')
+          await recordRuntimeEvent(
+            'context.recovery',
+            `reason=model-context-refusal, documents=${recoveryDocuments.length}, estimatedTokens=${recoveryBudget.estimatedTokens}, limit=${recoveryBudget.limit}, longText=${recoveryUsesLongText}`,
+          )
+          if (recoveryUsesLongText) {
+            setAnalysisStatus('正在补充正文并分块分析…')
+            const result = await analyzeLongText(recoveryDocuments, value, selectedModel, nextRequestId, (progress) => {
+              const message = `${progress.message} · ${progress.completed}/${progress.total}`
+              setChatRunStatus(nextConversationId, progress.stage === 'chunking' ? 'fetching' : 'tool_calling', message)
+              setAnalysisStatus(message)
+            })
+            appendChatRunChunk(nextConversationId, result.content)
+          } else {
+            const recoveryRecent = selectRecentMessages([...messages.filter((message) => message.id !== 'welcome'), userMessage], recoveryDocuments, budgetDraft, selectedModel.contextWindow)
+            const recoveryContext = [buildContextMessage(recoveryDocuments), memoryContext].filter(Boolean).join('\n\n') || null
+            await streamChat({
+              requestId: nextRequestId,
+              profileId: selectedModel.id,
+              messages: [...(recoveryContext ? [{ role: 'user' as const, content: recoveryContext }] : []), ...recoveryRecent.map(({ role, content }) => ({ role, content }))],
+            }, (event) => {
+              if (event.type === 'chunk') {
+                setChatRunStatus(nextConversationId, 'streaming', null)
+                appendChatRunChunk(nextConversationId, event.content)
+              }
+              if (event.type === 'error') setError(event.message)
+            })
+          }
+        }
       }
     } catch (error) {
       const message = String(error)
+      if (resumeJobId && /找不到可恢复|已经完成|属于其他工作区|指令已变化|源文档已变化/u.test(message)) {
+        setResumeJobId(null)
+        setRecoverableJob(null)
+      }
       if (!message.includes('请求已停止')) setError(message)
     } finally {
       setAnalysisStatus(null)
-      const completed = useAppStore.getState().chatRuns[nextConversationId]?.assistantMessage
+      const completedBeforeEnd = useAppStore.getState().chatRuns[nextConversationId]?.assistantMessage
+      endChatRun(nextConversationId, !completedBeforeEnd?.content)
+      const completed = useAppStore.getState().completedChatMessages[nextConversationId]
       if (completed?.content) {
         try {
           await saveConversationMessage(nextConversationId, nextTitle, completed)
           setConversations(await listConversations())
         } catch (error) { setError(String(error)) }
       }
-      endChatRun(nextConversationId, !completed?.content)
     }
   }
 
@@ -648,6 +783,36 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
     setChatRunStatus(activeChatRun.conversationId, 'stopping', null)
     if (analysisStatus) cancelLongTextAnalysis(activeChatRun.requestId)
     await cancelChat(activeChatRun.requestId)
+  }
+
+  const approvePendingMemory = async () => {
+    try {
+      await confirmProjectMemory(pendingMemory.map((item) => item.id))
+      setPendingMemory([])
+    } catch (error) { setError(`确认项目记忆失败：${String(error)}`) }
+  }
+
+  const rejectPendingMemory = async () => {
+    try {
+      await rejectProjectMemory(pendingMemory.map((item) => item.id))
+      setPendingMemory([])
+    } catch (error) { setError(`拒绝项目记忆失败：${String(error)}`) }
+  }
+
+  const prepareResumeJob = async () => {
+    if (!recoverableJob) return
+    try {
+      const paths = Object.keys(recoverableJob.sourceFingerprints)
+      for (const path of paths) {
+        if (!useAppStore.getState().contextDocuments.some((document) => document.path === path)) {
+          const document = await readDocument(path)
+          addContextDocument({ path, name: document.name, content: document.content, size: document.content.length, sizeBytes: document.sizeBytes, kind: document.kind })
+        }
+      }
+      setResumeJobId(recoverableJob.jobId)
+      setPrompt(recoverableJob.instruction)
+      setRecoverableJob(null)
+    } catch (error) { setError(`准备恢复任务失败：${String(error)}`) }
   }
 
   const prepareAnalysis = async (paths: string[], instruction: string) => {
@@ -666,6 +831,14 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
   }
 
   return <main className="chat-panel">
+    {recoverableJob && <aside className="new-files-notice memory-notice" role="status">
+      <div className="new-files-notice-copy"><RefreshCw /><span><strong>检测到未完成的长文本任务</strong><small>{recoverableJob.instruction.slice(0, 96)}</small></span></div>
+      <div className="new-files-notice-actions"><button onClick={() => void prepareResumeJob()}>恢复任务</button><button onClick={() => setRecoverableJob(null)}>忽略</button></div>
+    </aside>}
+    {pendingMemory.length > 0 && <aside className="new-files-notice memory-notice" role="status">
+      <div className="new-files-notice-copy"><Check /><span><strong>发现 {pendingMemory.length} 条项目记忆候选</strong><small>{pendingMemory[0].title} · 仅确认后写入本项目</small></span></div>
+      <div className="new-files-notice-actions"><button onClick={() => void approvePendingMemory()}>确认写入</button><button onClick={() => void rejectPendingMemory()}>忽略</button></div>
+    </aside>}
     {pendingNewFiles.length > 0 && <aside className="new-files-notice" role="status">
       <div className="new-files-notice-copy"><FileText /><span><strong>检测到 {pendingNewFiles.length} 个新增文本文件</strong><small>是否要让 AI 分析其中某个文件？</small></span></div>
       <div className="new-files-notice-actions">
@@ -693,6 +866,9 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
           <button onClick={() => setPrompt('请分析已选文档，输出文档类型、内容概要、结构、故事主线和人物线报告。')}><FileText />分析文本</button>
           <button onClick={() => setPrompt('请在当前项目中按已选文档的章节和场景边界生成拆分文件；首轮使用本地规则粗分，不覆盖原文。')}><ListChecks />拆分章节</button>
           <button onClick={() => setPrompt('请从已选文档中整理主要人物、人物关系、目标变化和人物线，输出可回溯的分析报告。')}><Bot />提取人物线</button>
+        </div>}
+        {workspace && <div className="composer-analysis-actions" aria-label="项目分析快捷入口">
+          <button onClick={() => setPrompt('分析当前项目有哪些文件内容，输出文件清单、每个文件摘要、项目结构和跨文件关系，并为关键结论附来源证据。')}><FolderOpen />分析整个项目</button>
         </div>}
         {mention && <div id="mention-menu" className="mention-menu" role="listbox" aria-label="引用工作区文件">
           {mentionFiles.length > 0 ? mentionFiles.map((entry, index) => {
@@ -1033,7 +1209,7 @@ export function App() {
       const existing = useAppStore.getState().contextDocuments.find((item) => item.path === path)
       if (existing) return toggleContext(existing)
       const document = await readDocument(path)
-      toggleContext({ path, name: document.name, content: document.content, size: document.content.length })
+      toggleContext({ path, name: document.name, content: document.content, size: document.content.length, sizeBytes: document.sizeBytes, kind: document.kind })
     } catch (cause) { setError(String(cause)) }
   }, [setError, toggleContext])
 

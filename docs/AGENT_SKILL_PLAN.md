@@ -1,6 +1,6 @@
 # Vinkey Agent 与 Skill 建设计划
 
-- 状态：规划中
+- 状态：持续实施中
 - 适用版本：Vinkey 本地 AI 文学创作工作台
 - 目标：在现有 Tauri 2 + React + Rust + SQLite MVP 上，建立可审核、可恢复、适配本地模型能力的文学创作 Agent/Skill 系统。
 - 相关文档：[开发框架与技术选型](DEVELOPMENT_FRAMEWORK.md)、[GitHub 同类项目调研与功能取舍](GITHUB_REFERENCE.md)、[对话页设计](UI_DESIGN_CHAT.md)、[文件与编辑器设计](UI_DESIGN_EDITOR.md)
@@ -340,6 +340,75 @@ quality_profile
 
 ## 9. 分阶段实施计划
 
+### 9.0 当前阶段版本目标（人物关系分析）
+
+本阶段以单部作品为容量基线：支持 **2,000～5,000 个人物实体、数百万关系候选、数千万条关系证据记录**，并通过离线基准测试验证人物查询、关系邻居查询和有限深度路径查询的延迟。这里的“关系候选”允许尚未确认的模型提案；“证据记录”必须能回溯到文档版本、章节/场景、字符范围或行号。
+
+容量目标不等于对所有人物对做全量模型判断。关系抽取应先按场景共同出场生成候选，再进行实体消歧、关系分类、置信度审核和证据归并。第一阶段以 SQLite 作为规范化事实存储，第二阶段在 Rust 进程内加载作品子图进行度数、连通分量和有限深度遍历等离线计算；只有基准测试显示 SQLite + 图算法库无法满足交互需求时，才评估嵌入式或服务型图数据库。
+
+阶段验收门槛：
+
+- 关系数据采用人物、别名、出场、关系边和证据分表，不能以单一 JSON 图 blob 持久化。
+- 人物名、别名和证据文本可通过 FTS5 检索；关系边按源/目标人物、类型和作品建立组合索引。
+- 支持增量写入和按文档版本失效，不因单个章节重算而重建整部作品。
+- 基准数据覆盖 2,000 和 5,000 人物两档，并记录导入耗时、数据库大小、邻居查询、1～3 跳路径查询的 p50/p95 延迟。
+
+### 9.1 人物资产提取链路（研究确认）
+
+#### 设计结论
+
+初期人物提取可以不依赖大模型，但输出必须定义为“人物候选”和“人物提及”，不能直接视为已确认人物资产。确定性层负责低成本、高召回的候选生成：章节/人物设定标题、显式姓名模式、对话说话人格式、重复出现的专名、已有别名词典和场景共同出场。候选必须携带来源文档版本、章节/场景、字符范围、行号、原文短引、提取规则版本和初始置信度。
+
+模型作为校验器和提案器按需参与，而不是替代整本书的初筛：
+
+1. 校验候选是否为人物，区分人物、地点、组织、物品和普通名词。
+2. 对规范化名称相同、标题/称谓不同或代词指向不明确的候选做别名消歧和合并/拆分建议。
+3. 只向模型提供候选及其证据窗口，校验索引文本中的人物身份、属性和出场位置；不要求每次重新读取全文。
+4. 先由场景共同出场、说话人和动作谓词生成关系候选，再由模型判断关系类型、方向、极性、时间有效性和语义强度。共同出现本身只记录为共现，不自动升级为语义关系。
+5. 低置信度、冲突合并和高影响关系进入用户审核；模型结果只能形成 `proposed`，不能绕过确认直接写入 `confirmed` canon。
+
+#### 业务状态和链路
+
+```text
+导入/指纹
+  → 章节/场景切分
+  → 确定性人物候选与提及抽取
+  → 名称规范化/词典匹配/候选聚类
+  → 人物候选审核（可选模型校验）
+  → 人物卡确认 + 提及证据索引
+  → 场景级共现/谓词候选关系生成
+  → 模型关系语义校验（可选）
+  → 关系提案与证据审核
+  → 已确认人物图、统计和查询
+  → 仅重算变更文档版本，旧结果标记 stale
+```
+
+资产状态至少包括 `mention_candidate`、`entity_candidate`、`entity_confirmed`、`relation_candidate`、`relation_confirmed`、`rejected` 和 `stale`。别名消歧优先使用精确匹配和规范化匹配；只有多候选冲突才调用模型或请求用户确认。
+
+业务判断与自动化边界：
+
+| 业务问题 | 默认处理 | 是否允许自动确认 |
+| --- | --- | --- |
+| 人名/称谓/对话说话人识别 | 规则、词典、章节标题和重复提及产生候选 | 仅高置信且无冲突的候选可自动确认为 `entity_candidate`，不能直接成为 canon |
+| 人物与地点/组织/物品同名 | 模型分类或用户选择，保留多个候选及证据 | 不允许自动合并 |
+| 姓名、昵称、官职、亲属称谓、化名 | 精确/规范化匹配优先，模型只处理冲突簇 | 唯一匹配可提交别名提案，需确认后写入 |
+| “他/她/对方”、省略主语和群体称谓 | 章节窗口内候选链 + 模型校验 | 不允许仅凭规则自动归属 |
+| 两人同场但没有明确互动 | 记录共现事件和候选边 | 不得自动判定为语义关系 |
+| 亲属、敌对、利用、曾经关系等语义 | 模型输出关系类型、方向、极性、时间和证据 | 形成 `relation_candidate`，高影响关系需确认 |
+| 关系随剧情变化或叙述者认知不可靠 | 按章节/场景保存有效区间、叙述视角和置信度 | 不覆盖历史关系，使用新版本或时间片 |
+| 文档修改后旧证据失配 | 以源文件指纹和字符范围校验，标记 `stale` | 不自动保留旧证据为有效事实 |
+
+人物资产的最小可交付单元不是一张人物卡，而是“规范化实体 + 别名集合 + 提及集合 + 可核验证据 + 状态/置信度”。关系资产则是“有向/无向关系边 + 关系类型/极性/时间区间 + 至少一条证据”。这样既支持用户先看候选，也支持后续模型只校验高价值或有冲突的局部文本。
+
+#### 外部方案对比与取舍
+
+- [StorySphere](https://github.com/willim9313/storysphere) 将流程拆成“段落级实体抽取 → 实体链接/去重 → 章节级关系与事件抽取”，默认使用 NetworkX，SQLite 保存任务/缓存，并把 Neo4j 作为规模升级选项。其实体链接采用精确名、别名和规范化匹配，适合作为 Vinkey 的分层参考。
+- [graphify-novel](https://github.com/Anshler/graphify-novel) 采用章节批处理、SHA 缓存、review 提案和 update 写回；review 不直接修改 bible，确认后再更新图。底层 [graphify](https://github.com/safishamsi/graphify) 使用本地图 JSON 和缓存，Neo4j 只是导出选项，说明初期不需要图数据库。
+- [NLP-Characters-Relationships](https://github.com/isthatyoung/NLP-Characters-Relationships) 展示了命名实体、主客体和词向量共现的传统 NLP 路线，但关系语义和别名消歧能力有限，适合作为候选生成而非最终资产确认。
+- 商用写作工具 [Novelcrafter Codex](https://www.novelcrafter.com/features) 把人物卡、别名/昵称、正文提及、可选字段和 AI 排除范围作为独立资产；[Sudowrite Story Bible](https://www.sudowrite.com/) 更偏向模型引导的创作流程。两者共同点是结构化 story bible 与正文引用分离，而不是把模型输出直接当作正文事实。
+
+因此 Vinkey 采用“确定性初筛 + 证据索引 + 模型按需校验 + 人工确认 + 增量图更新”的混合链路；不采用“整本小说一次模型抽取并自动提交”，也不把图数据库作为初期依赖。
+
 ### 阶段 A：合同和运行时底座
 
 - 定义 `TaskPlan`、`TaskStep`、`TaskEvent`、`Proposal`、`EvidenceReference`。
@@ -395,7 +464,9 @@ quality_profile
 
 聊天输入
   → TaskRouter（指令 + 不含正文的文档清单，先判断 intent / scope / operation / side_effect / document_access）
+  → Tool/Skill Registry（版本、权限、副作用、超时、可取消性和允许工具）
   ├─ StructureSegmentation → 本地 StructureParser/ChunkService → ChapterSplitResult + 输出文件
+  ├─ 项目级分析 → WorkspaceInventory（敏感/类型/大小过滤）→ 文件索引卡片 → LongTextAnalysis → 项目汇总 + evidence.json
   ├─ 文档分析 → LongTextAnalysis Service → Chunk/Map/Reduce/Synthesis → Ollama/OpenAI-compatible Provider
   ├─ 明确引用文档的创作请求 → context budget → 小文本 stream_chat / 超长文本 Chunk/Map/Reduce/Synthesis
   └─ 普通聊天 → 不读取所选文档正文 → stream_chat → Ollama/OpenAI-compatible Provider
@@ -405,16 +476,21 @@ quality_profile
   → read_document
   → chunk_document
   → ChunkManifest
+
+人物关系结构化底座（当前阶段）
+  → SQLite characters / aliases / mentions / relationships / evidence
+  → FTS5 人物检索
+  → Rust petgraph 统计、连通分量和有限跳数路径
 ```
 
-`chunk_document` 已实现 Rust 逻辑、Tauri 命令、前端类型和调用封装；当前新增的本地 `structureSegmentation` 服务会在模型请求前识别章节/场景候选，并通过文件写入 Tool 在源文档同级生成粗略拆分文件。文件分析快捷入口仍进入长文本分析和模型摘要；章节拆分不修改源文档，后续需接入输出清理/重生成和章节索引持久化。
+`chunk_document` 已实现 Rust 逻辑、Tauri 命令、前端类型和调用封装；当前新增的本地 `structureSegmentation` 服务会在模型请求前识别章节/场景候选，并通过文件写入 Tool 在源文档同级生成粗略拆分文件。项目级分析已增加确定性工作区清单、安全过滤、文件索引卡片、全项目长文本编排、内容指纹、任务阶段产物和证据行号校验；不支持或超限文件会进入排除清单，不会发送给模型。长文本任务现在会持久化任务清单，支持列出未完成任务、读取已有分块/摘要产物，并从已完成的 Map 阶段恢复进入 Reduce/Synthesis；恢复前会校验工作区、指令和源文档指纹。
 
 ### 11.2 尚未实现
 
-1. Tool Registry、Skill Registry 和完整 IntentRouter（当前仅有确定性 TaskRouter）。
-2. `AnalysisJob`、后台进度、暂停/恢复，以及模型摘要产物的增量失效（确定性分块缓存已落地）。
-3. `DocumentTriage`、`StoryDeconstruction` 和分层摘要。
-4. `Proposal`/diff 审核以及 canon、记忆更新确认。
+1. 完整 Tool/Skill 执行注册表和 IntentRouter（当前已落地版本化的 Tool/Skill 描述、权限/副作用/超时合同，并由 TaskRouter 返回 Agent、Skill 和允许 Tool；尚未接入统一执行器、JSON Schema 运行时校验和动态路由）。
+2. 完整 `AnalysisJob` 后台队列服务、跨重启暂停/恢复、取消/重试幂等，以及模型摘要产物的增量失效（当前已具备任务 JSON 产物、任务列表、产物读取和 Map 阶段恢复）。
+3. 项目级检索层、`DocumentTriage`、`StoryDeconstruction` 和按目录/主题的持久化分层摘要。
+4. 文档 `Proposal`/diff 审核以及完整结构化 canon；人物关系的 SQLite/FTS5/图算法底座已落地，实体抽取、别名消歧、模型提案审核和事件/时间线结构化仍未实现。
 5. 模型能力注册表和本地模型基准测试。
 
 后续业务实现必须将本地 `structureSegmentation` 输出提升为统一的 `StructureSegmentation` Service，并接入输出清理/重生成和章节索引；不能把全文直接组装进普通聊天，也不能在聊天组件中复制分块和汇总逻辑。

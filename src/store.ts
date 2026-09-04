@@ -40,6 +40,7 @@ interface AppState {
   beginChatRun: (run: ChatRun) => void
   setChatRunStatus: (conversationId: string, status: ChatRunStatus, message?: string | null) => void
   appendChatRunChunk: (conversationId: string, chunk: string) => void
+  resetChatRunResponse: (conversationId: string) => void
   endChatRun: (conversationId: string, discardAssistant: boolean) => void
   setConversation: (conversation: Conversation) => void
   newConversation: () => void
@@ -146,8 +147,13 @@ export const useAppStore = create<AppState>((set) => ({
   setChatRunStatus: (conversationId, status, statusMessage = null) => set((state) => {
     const run = state.chatRuns[conversationId]
     if (!run || (run.status === status && run.statusMessage === statusMessage)) return state
-    const activity: ChatActivity = { status, message: statusMessage, timestamp: Date.now() }
-    const activityLog = [...run.activityLog, activity].slice(-MAX_CHAT_ACTIVITY_LOG)
+    const completedAt = Date.now()
+    const previous = run.activityLog.at(-1)
+    const closedLog = previous && !previous.completedAt
+      ? [...run.activityLog.slice(0, -1), { ...previous, completedAt }]
+      : run.activityLog
+    const activity: ChatActivity = { status, message: statusMessage, timestamp: completedAt }
+    const activityLog = [...closedLog, activity].slice(-MAX_CHAT_ACTIVITY_LOG)
     const nextRun = {
       ...run,
       status,
@@ -176,12 +182,31 @@ export const useAppStore = create<AppState>((set) => ({
         : state.messages,
     }
   }),
+  resetChatRunResponse: (conversationId) => set((state) => {
+    const run = state.chatRuns[conversationId]
+    if (!run || !run.assistantMessage.content) return state
+    const nextRun = {
+      ...run,
+      assistantMessage: { ...run.assistantMessage, content: '' },
+    }
+    return {
+      chatRuns: { ...state.chatRuns, [conversationId]: nextRun },
+      messages: state.conversationId === conversationId
+        ? mergeRunMessages(state.messages, nextRun)
+        : state.messages,
+    }
+  }),
   endChatRun: (conversationId, discardAssistant) => set((state) => {
     const run = state.chatRuns[conversationId]
     if (!run) return state
     const chatRuns = { ...state.chatRuns }
     delete chatRuns[conversationId]
-    const completedAssistant = { ...run.assistantMessage, activityLog: run.activityLog }
+    const completedAt = Date.now()
+    const previous = run.activityLog.at(-1)
+    const activityLog = previous && !previous.completedAt
+      ? [...run.activityLog.slice(0, -1), { ...previous, completedAt }]
+      : run.activityLog
+    const completedAssistant = { ...run.assistantMessage, completedAt, activityLog }
     const completedChatMessages = { ...state.completedChatMessages }
     if (discardAssistant || !completedAssistant.content.trim()) delete completedChatMessages[conversationId]
     else completedChatMessages[conversationId] = completedAssistant

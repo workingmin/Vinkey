@@ -93,6 +93,20 @@ describe('conversation chat runs', () => {
     expect(useAppStore.getState().messages.at(-1)?.activityLog).toHaveLength(2)
   })
 
+  it('closes each activity and stamps the completed assistant message', () => {
+    const store = useAppStore.getState()
+    store.setConversation(conversation('a'))
+    store.beginChatRun(run('a'))
+    store.setChatRunStatus('a', 'fetching', '读取文档')
+    store.appendChatRunChunk('a', '完成')
+    store.endChatRun('a', false)
+
+    const assistant = useAppStore.getState().completedChatMessages.a
+    expect(assistant?.completedAt).toBeTypeOf('number')
+    expect(assistant?.activityLog?.every((item) => typeof item.completedAt === 'number')).toBe(true)
+    expect(assistant?.activityLog?.[0].completedAt).toBeLessThanOrEqual(assistant.completedAt ?? 0)
+  })
+
   it('keeps a bounded activity trail on the completed assistant message', () => {
     const store = useAppStore.getState()
     store.setConversation(conversation('a'))
