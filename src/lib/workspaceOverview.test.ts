@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { WorkspaceSnapshot } from '../types'
-import { buildSelectedDocumentsOverviewMessage, buildWorkspaceOverviewMessage, buildWorkspaceProfile } from './workspaceOverview'
+import { buildSelectedDocumentsOverviewMessage, buildWorkspaceOverviewMessage, buildWorkspaceProfile, formatWorkspaceOverview } from './workspaceOverview'
 
 const workspace: WorkspaceSnapshot = {
   id: 'workspace-1',
@@ -22,6 +22,15 @@ describe('workspace overview context', () => {
     expect(message).not.toContain(workspace.pathLabel)
     expect(message).not.toContain('.env')
     expect(message).not.toMatch(/"(?:content|text|chunk|preview|quote)"\s*:/u)
+  })
+
+  it('formats a deterministic answer without requiring a model or digest', () => {
+    const result = formatWorkspaceOverview(workspace)
+    expect(result).toContain('项目：雾港计划')
+    expect(result).toContain('目录：1 个')
+    expect(result).toContain('`章节/第一章.md`')
+    expect(result).toContain('未读取文件正文')
+    expect(result).not.toContain('.env')
   })
 
   it('ignores selected document bodies', () => {

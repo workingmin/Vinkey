@@ -45,33 +45,34 @@ function asksAboutCharacterRelations(prompt: string): boolean {
 }
 
 function asksAboutWorkspace(prompt: string): boolean {
-  return /(?:这个|当前|整个|本地|该|本)(?:项目|工作区|工程)|(?:项目|工作区|工程)(?:中|里|内|的)?(?:有哪些|包含|有多少|是什么|做什么|讲了什么|介绍|概况|总览|全貌|结构|组成|分析|总结)|(?:分析|介绍|概览|总结|梳理|通读)(?:一下|下)?(?:这个|当前|整个|本地|该|本)?(?:项目|工作区|工程)|(?:全部|所有)(?:文件|文档)(?:内容|概要|摘要|总结|汇总|分析)/u.test(prompt)
+  return /(?:这个|当前|整个|本地|该|本)(?:项目|工作区|工程)|(?:项目|工作区|工程)(?:目录|文件)|(?:项目|工作区|工程)(?:中|里|内|的)?(?:有哪些|包含|有多少|是什么|做什么|讲了什么|介绍|概况|总览|全貌|结构|组成|分析|总结)|(?:分析|介绍|概览|总结|梳理|通读)(?:一下|下)?(?:这个|当前|整个|本地|该|本)?(?:项目|工作区|工程)|(?:全部|所有)(?:文件|文档)(?:内容|概要|摘要|总结|汇总|分析)/u.test(prompt)
 }
 
-function explicitDeepMode(prompt: string): boolean {
-  return /(?:详细|深入|深度|逐章|逐节|逐文件|通读|全文|完整|全量|全部|所有|不要遗漏|不遗漏)/u.test(prompt)
-}
-
-function explicitOverviewMode(prompt: string): boolean {
-  return /(?:概览|总览|概况|大致|简要介绍|结构一览)/u.test(prompt)
+function asksForWorkspaceMetadata(prompt: string): boolean {
+  const metadataQuestion = /(?:目录(?:结构|层级)?|文件(?:清单|列表|数量|类型|格式|分布|结构)|有哪些文件|有多少(?:个)?(?:文件|文档)|多少(?:个)?(?:文件|文档)|扩展名|索引状态|项目规模|工作区状态)/u.test(prompt)
+  const semanticQuestion = /(?:文件内容|正文|讲了什么|写了什么|做什么|用途|主题|人物|角色|关系|情节|剧情|主线|支线|设定|世界观|风格|摘要|总结|梗概|伏笔)/u.test(prompt)
+  return metadataQuestion && !semanticQuestion
 }
 
 function exhaustiveCoverage(prompt: string): boolean {
   return /(?:完整|全量|全部|所有|通读|逐章|逐节|逐文件|不要遗漏|不遗漏|一字不漏)/u.test(prompt)
 }
 
-function analysisPolicy(prompt: string, preferredMode: AnalysisMode): Pick<TaskPlan, 'analysisMode' | 'analysisCoverage' | 'sourcePolicy'> {
-  const analysisMode: AnalysisMode = explicitDeepMode(prompt) ? 'deep' : explicitOverviewMode(prompt) ? 'overview' : preferredMode
-  return analysisMode === 'overview'
-    ? { analysisMode, analysisCoverage: 'index-only', sourcePolicy: 'metadata-only' }
-    : { analysisMode, analysisCoverage: exhaustiveCoverage(prompt) ? 'exhaustive' : 'targeted', sourcePolicy: 'local-chunks' }
+function workspaceAnalysisPolicy(prompt: string): Pick<TaskPlan, 'analysisMode' | 'analysisCoverage' | 'sourcePolicy'> {
+  return asksForWorkspaceMetadata(prompt)
+    ? { analysisMode: 'overview', analysisCoverage: 'index-only', sourcePolicy: 'metadata-only' }
+    : { analysisMode: 'deep', analysisCoverage: exhaustiveCoverage(prompt) ? 'exhaustive' : 'targeted', sourcePolicy: 'local-chunks' }
+}
+
+function deepAnalysisPolicy(prompt: string): Pick<TaskPlan, 'analysisMode' | 'analysisCoverage' | 'sourcePolicy'> {
+  return { analysisMode: 'deep', analysisCoverage: exhaustiveCoverage(prompt) ? 'exhaustive' : 'targeted', sourcePolicy: 'local-chunks' }
 }
 
 /**
  * Route explicit document operations before assembling a model request.
  * This is deliberately deterministic: ambiguous prompts remain ordinary chat.
  */
-export function classifyTask(value: string, hasContextDocuments: boolean, preferredMode: AnalysisMode = 'overview'): TaskPlan {
+export function classifyTask(value: string, hasContextDocuments: boolean): TaskPlan {
   const prompt = value.trim()
   const scope: TaskScope = hasContextDocuments ? 'selected-documents' : 'conversation'
 
@@ -106,7 +107,7 @@ export function classifyTask(value: string, hasContextDocuments: boolean, prefer
   }
 
   if (asksAboutWorkspace(prompt)) {
-    const policy = analysisPolicy(prompt, preferredMode)
+    const policy = workspaceAnalysisPolicy(prompt)
     return withCapabilities({
       intent: 'workspace-analysis',
       operation: 'analyze',
@@ -114,19 +115,19 @@ export function classifyTask(value: string, hasContextDocuments: boolean, prefer
       sideEffect: 'draft',
       documentAccess: policy.analysisMode === 'overview' ? 'workspace-metadata' : 'workspace',
       ...policy,
-      requiresModel: true,
+      requiresModel: policy.analysisMode === 'deep',
       confidence: 'high',
     })
   }
 
   if (/(?:分析(?:当前|这个|已选)?(?:文档|文件|文本|小说|故事)|(?:这|该|此|这个|这篇|所选)?(?:篇)?(?:小说|故事|文章|文本)(?:主要)?(?:说了什么|讲了什么|讲述了什么|内容是什么|写了什么)|(?:小说|故事|文章|文本)(?:内容|概要|梗概|摘要|概括|总结)|故事主线|人物线|提取人物|伏笔|情节结构)/u.test(prompt)) {
-    const policy = analysisPolicy(prompt, preferredMode)
+    const policy = deepAnalysisPolicy(prompt)
     return withCapabilities({
       intent: prompt.includes('人物') ? 'character-analysis' : 'document-analysis',
       operation: 'analyze',
       scope,
       sideEffect: 'draft',
-      documentAccess: policy.analysisMode === 'overview' ? 'selected-metadata' : 'selected',
+      documentAccess: 'selected',
       ...policy,
       requiresModel: true,
       confidence: 'medium',
@@ -134,13 +135,13 @@ export function classifyTask(value: string, hasContextDocuments: boolean, prefer
   }
 
   if (asksAboutCharacterRelations(prompt)) {
-    const policy = analysisPolicy(prompt, preferredMode)
+    const policy = deepAnalysisPolicy(prompt)
     return withCapabilities({
       intent: 'character-analysis',
       operation: 'analyze',
       scope,
       sideEffect: 'draft',
-      documentAccess: policy.analysisMode === 'overview' ? 'selected-metadata' : 'selected',
+      documentAccess: 'selected',
       ...policy,
       requiresModel: true,
       confidence: 'high',

@@ -21,12 +21,14 @@ describe('runtime capability registry', () => {
   })
 
   it('adds agent, skill and tool capabilities to routed plans', () => {
-    const plan = classifyTask('分析当前项目有哪些文件内容', false)
+    const plan = classifyTask('当前项目有哪些文件', false)
     expect(plan.agent).toBe('StoryDeconstruction')
     expect(plan.skill).toBe('workspace-overview')
     expect(plan.allowedTools).toContain('get_workspace_profile')
     expect(plan.allowedTools).not.toContain('read_document')
     expect(plan.allowedTools).not.toContain('chunk_document')
+    expect(plan.requiresModel).toBe(false)
+    expect(getSkillDefinition('workspace-overview')?.modelRequirements).toBe('none')
     expect(plan.allowedTools).toEqual(getTaskCapabilities(plan.intent, plan.analysisMode).allowedTools)
   })
 

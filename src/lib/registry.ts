@@ -152,8 +152,8 @@ const skillDefinitions: SkillDefinition[] = [
   },
   {
     name: 'workspace-overview', version: '1.0.0', description: '仅依据工作区画像、文档画像和已有摘要进行项目概览',
-    allowedTools: ['get_workspace_profile', 'list_document_profiles', 'get_project_digest', 'stream_chat', 'search_project_memory'], contextScope: 'workspace', sideEffects: ['draft'],
-    approvalPolicy: 'auto', modelRequirements: 'configured', failureAndRetry: '索引或摘要不可用时降级为清单概览，不升级正文权限。',
+    allowedTools: ['get_workspace_profile', 'list_document_profiles', 'get_project_digest'], contextScope: 'workspace', sideEffects: ['draft'],
+    approvalPolicy: 'auto', modelRequirements: 'none', failureAndRetry: '索引或摘要不可用时降级为确定性清单概览，不升级正文权限。',
   },
   {
     name: 'general-conversation', version: '1.0.0', description: '普通对话和创作建议，不写入工作区',
@@ -218,7 +218,7 @@ export function getSkillDefinition(name: string): SkillDefinition | undefined {
 
 export function getTaskCapabilities(intent: TaskIntent, analysisMode: AnalysisMode | null = null): TaskCapabilities {
   if (analysisMode === 'overview' && intent === 'workspace-analysis') {
-    return { agent: 'StoryDeconstruction', skill: 'workspace-overview', allowedTools: ['get_workspace_profile', 'list_document_profiles', 'get_project_digest', 'stream_chat', 'search_project_memory'] }
+    return { agent: 'StoryDeconstruction', skill: 'workspace-overview', allowedTools: ['get_workspace_profile', 'list_document_profiles', 'get_project_digest'] }
   }
   if (analysisMode === 'overview' && (intent === 'document-analysis' || intent === 'character-analysis')) {
     return { agent: 'StoryDeconstruction', skill: 'document-overview', allowedTools: ['list_document_profiles', 'get_document_digest', 'stream_chat'] }

@@ -28,11 +28,11 @@ import { isContextRecoveryResponse } from './lib/contextRecovery'
 import { buildMemoryCandidates, buildProjectMemoryContext, selectRelevantMemory } from './lib/projectMemory'
 import { formatStructureResult, segmentDocument } from './lib/structureSegmentation'
 import { useAppStore } from './store'
-import type { AnalysisJobManifest, AnalysisMode, ChatActivity, ChatMessage, ChatRunStatus, DocumentSnapshot, ProjectMemoryItem, ViewMode, WorkspaceEntry } from './types'
+import type { AnalysisJobManifest, ChatActivity, ChatMessage, ChatRunStatus, DocumentSnapshot, ProjectMemoryItem, ViewMode, WorkspaceEntry } from './types'
 import { getDocumentKind, getLanguageName, isEditableDocument } from './lib/fileTypes'
 import { findNewTextFiles, flattenWorkspaceFiles } from './lib/tree'
 import { readWorkspaceDocuments } from './lib/workspaceAnalysis'
-import { buildSelectedDocumentsOverviewMessage, buildWorkspaceOverviewMessage } from './lib/workspaceOverview'
+import { buildSelectedDocumentsOverviewMessage, formatWorkspaceOverview } from './lib/workspaceOverview'
 import { isLoopbackModelEndpoint } from './lib/modelPrivacy'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { Menu, MenuItem, PredefinedMenuItem, Submenu } from '@tauri-apps/api/menu'
@@ -506,7 +506,6 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
   const pendingNewFiles = useAppStore((state) => state.pendingNewFiles)
   const clearPendingNewFiles = useAppStore((state) => state.clearPendingNewFiles)
   const [prompt, setPrompt] = useState('')
-  const [analysisMode, setAnalysisMode] = useState<AnalysisMode>('overview')
   const [analysisStatus, setAnalysisStatus] = useState<string | null>(null)
   const [pendingMemory, setPendingMemory] = useState<ProjectMemoryItem[]>([])
   const [recoverableJob, setRecoverableJob] = useState<AnalysisJobManifest | null>(null)
@@ -572,12 +571,12 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
     if (!value || busy) return
     let selectedContextDocuments = contextDocuments
     const activeDocument = activePath ? tabs.find((tab) => tab.path === activePath) : undefined
-    let taskPlan = classifyTask(value, selectedContextDocuments.length > 0 || Boolean(activeDocument), analysisMode)
+    let taskPlan = classifyTask(value, selectedContextDocuments.length > 0 || Boolean(activeDocument))
     const needsSelectedDocument = taskPlan.documentAccess === 'selected' || taskPlan.documentAccess === 'selected-metadata'
     if (needsSelectedDocument && selectedContextDocuments.length === 0 && activeDocument) {
       addContextDocument({ path: activeDocument.path, name: activeDocument.name, content: activeDocument.content, size: activeDocument.content.length, sizeBytes: activeDocument.sizeBytes, kind: activeDocument.kind })
       selectedContextDocuments = useAppStore.getState().contextDocuments
-      taskPlan = classifyTask(value, selectedContextDocuments.length > 0, analysisMode)
+      taskPlan = classifyTask(value, selectedContextDocuments.length > 0)
     }
 
     const selectedModel = activeModel
@@ -595,7 +594,6 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
         setError('项目概览需要先打开工作区。')
         return
       }
-      overviewContext = buildWorkspaceOverviewMessage(workspace)
     }
     if (taskPlan.documentAccess === 'selected-metadata') {
       overviewContext = buildSelectedDocumentsOverviewMessage(selectedContextDocuments)
@@ -633,7 +631,7 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
       return
     }
     let memoryContext: string | null = null
-    if (workspace && taskPlan.intent !== 'structure-segmentation') {
+    if (workspace && taskPlan.requiresModel && taskPlan.intent !== 'structure-segmentation') {
       try {
         const memory = await searchProjectMemory(value)
         memoryContext = buildProjectMemoryContext(selectRelevantMemory(memory, value))
@@ -689,6 +687,9 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
           'structure.segmented',
           `documents=${proposals.length}, outputs=${outputPaths.length}, segments=${proposals.reduce((sum, proposal) => sum + proposal.segments.length, 0)}, model=none`,
         )
+      } else if (taskPlan.documentAccess === 'workspace-metadata' && workspace) {
+        setChatRunStatus(nextConversationId, 'tool_calling', '正在整理项目结构…')
+        appendChatRunChunk(nextConversationId, formatWorkspaceOverview(workspace))
       } else if (useLongTextPipeline) {
         if (!selectedModel) throw new Error('未配置模型')
         setChatRunStatus(nextConversationId, 'fetching', '正在准备长文本分析…')
@@ -823,7 +824,6 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
         }
       }
       setResumeJobId(recoverableJob.jobId)
-      setAnalysisMode('deep')
       setPrompt(recoverableJob.instruction)
       setRecoverableJob(null)
     } catch (error) { setError(`准备恢复任务失败：${String(error)}`) }
@@ -877,12 +877,12 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
           {contextDocuments.map((document) => <button className="composer-context-chip" key={document.path} title={`移除引用：${document.path}`} onClick={() => void onToggleContext(document.path)}><FileText /><span>{document.name}</span><X /></button>)}
         </div>}
         {contextDocuments.length > 0 && <div className="composer-analysis-actions" aria-label="文档分析快捷入口">
-          <button onClick={() => setPrompt(analysisMode === 'overview' ? '概览已选文档的类型、规模、结构索引和已有摘要状态。' : '深入分析已选文档，输出内容概要、结构、故事主线和人物线报告。')}><FileText />{analysisMode === 'overview' ? '概览文本' : '深度分析文本'}</button>
+          <button onClick={() => setPrompt('请分析已选文档，输出内容概要、结构、故事主线和人物线报告。')}><FileText />分析文本</button>
           <button onClick={() => setPrompt('请在当前项目中按已选文档的章节和场景边界生成拆分文件；首轮使用本地规则粗分，不覆盖原文。')}><ListChecks />拆分章节</button>
           <button onClick={() => setPrompt('请从已选文档中整理主要人物、人物关系、目标变化和人物线，输出可回溯的分析报告。')}><Bot />提取人物线</button>
         </div>}
         {workspace && <div className="composer-analysis-actions" aria-label="项目分析快捷入口">
-          <button onClick={() => setPrompt(analysisMode === 'overview' ? '概览当前项目，输出目录与文件类型分布、可分析文件范围和已有摘要状态。' : '深入分析当前项目的结构和跨文件关系，并为关键结论附来源证据。')}><FolderOpen />{analysisMode === 'overview' ? '概览项目' : '深度分析项目'}</button>
+          <button onClick={() => setPrompt('分析当前项目的内容、结构和跨文件关系，并为关键结论附来源证据。')}><FolderOpen />分析整个项目</button>
         </div>}
         {mention && <div id="mention-menu" className="mention-menu" role="listbox" aria-label="引用工作区文件">
           {mentionFiles.length > 0 ? mentionFiles.map((entry, index) => {
@@ -926,10 +926,6 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
           placeholder="描述你想续写、修改或梳理的内容..."
         />
         <div className="composer-tools">
-          <div className="segmented analysis-mode-switch" aria-label="分析模式">
-            <button type="button" className={analysisMode === 'overview' ? 'active' : ''} aria-pressed={analysisMode === 'overview'} title="仅使用项目清单、结构元数据和已有摘要" onClick={() => setAnalysisMode('overview')}>概览</button>
-            <button type="button" className={analysisMode === 'deep' ? 'active' : ''} aria-pressed={analysisMode === 'deep'} title="使用本机模型逐块读取并分析正文" onClick={() => setAnalysisMode('deep')}>深度</button>
-          </div>
           {modelProfiles.length > 0 ? <label className="composer-model-selector" title="切换模型"><Bot /><select aria-label="当前模型" value={activeModelId ?? ''} onChange={(event) => setActiveModelId(event.target.value)}>{modelProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name} · {profile.model}</option>)}</select><ChevronDown /></label>
             : <button className="composer-model-selector missing" onClick={() => setSettingsOpen(true)}><Bot /><span>添加模型</span></button>}
           <span className={`composer-hint ${budget.exceedsLimit && !analysisStatus && !activeStatus ? 'over-limit' : ''}`} title={activeStatus?.title ?? `预计 ${budget.estimatedTokens} / ${budget.limit} tokens`}>{analysisStatus ?? activeStatus?.label ?? `上下文 ${budget.usedPercent}% · Enter 发送`}</span>
