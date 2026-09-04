@@ -3,7 +3,9 @@
 - 状态：持续实施中
 - 适用版本：Vinkey 本地 AI 文学创作工作台
 - 目标：在现有 Tauri 2 + React + Rust + SQLite MVP 上，建立可审核、可恢复、适配本地模型能力的文学创作 Agent/Skill 系统。
-- 相关文档：[开发框架与技术选型](DEVELOPMENT_FRAMEWORK.md)、[GitHub 同类项目调研与功能取舍](GITHUB_REFERENCE.md)、[对话页设计](UI_DESIGN_CHAT.md)、[文件与编辑器设计](UI_DESIGN_EDITOR.md)
+- 相关文档：[AI 业务链路架构与改造方案](AI_BUSINESS_CHAINS.md)、[开发框架与技术选型](DEVELOPMENT_FRAMEWORK.md)、[GitHub 同类项目调研与功能取舍](GITHUB_REFERENCE.md)、[对话页设计](UI_DESIGN_CHAT.md)、[文件与编辑器设计](UI_DESIGN_EDITOR.md)
+
+业务链路采用确定性 Service、单次模型调用、固定 Workflow、自适应 Agent 或 Hybrid 的判定，以《AI 业务链路架构与改造方案》为实施基线。本文件继续维护领域 Agent、Skill、长文本和人物资产的详细计划。Codex、Claude 等 Agent 能力体系仅作为架构参考或由具体业务缺口驱动的内部原型。当前版本不提供外部 Agent Runtime 的用户选择入口，也不为此新增需要配置的商用付费 API。
 
 ## 1. 设计边界
 
@@ -551,5 +553,15 @@ quality_profile
 3. 项目级检索层、`DocumentTriage`、`StoryDeconstruction` 和按目录/主题的持久化分层摘要。
 4. 文档 `Proposal`/diff 审核以及完整结构化 canon；人物关系的 SQLite/FTS5/图算法底座已落地，实体抽取、别名消歧、模型提案审核和事件/时间线结构化仍未实现。
 5. 模型能力注册表和本地模型基准测试。
+
+### 11.3 2026-09-04 业务链路改造进展
+
+- `TaskPlan` 已增加 `ExecutionStrategy`，显式记录当前执行模式、目标模式、固定 Workflow、Agent 升级策略和所需 Runtime 能力。
+- 对话 UI 不再自行组合分析模式、文档权限和 intent 来推断长文本链路，而是消费统一执行策略；路由日志同步记录策略字段。
+- 路由进入执行前会校验 Skill 副作用、模型要求、Tool 注册/allowlist，以及 `metadata-only` 和概览任务的正文 Tool 隔离。
+- `ContinuityReviewer` 已成为独立业务意图和 Skill；当前复用可恢复长文本 Workflow，并使用面向人物状态、时间线、设定和伏笔的证据优先提示生成审校报告。
+- `RevisionEditor` 已将选中文档改写、续写和润色从普通聊天分离，声明与实际长文本 Workflow 一致的 Tool 能力；当前只输出草稿，不写回源文档，也不自动生成项目记忆候选。
+- Skill 允许的上下文作用域已改为显式集合；路由会拒绝不属于该 Skill 的 conversation、selected-documents 或 workspace 作用域。
+- 连续性审校报告不会自动转为项目记忆候选，避免把冲突、疑点或修改建议污染为已确认事实。
 
 后续业务实现必须将本地 `structureSegmentation` 输出提升为统一的 `StructureSegmentation` Service，并接入输出清理/重生成和章节索引；不能把全文直接组装进普通聊天，也不能在聊天组件中复制分块和汇总逻辑。

@@ -15,9 +15,13 @@ describe('runtime capability registry', () => {
 
   it('exposes explicit approval and model requirements', () => {
     expect(getSkillDefinition('chapter-boundary-detect')).toMatchObject({
-      approvalPolicy: 'user-confirm', modelRequirements: 'none', sideEffects: ['proposal'],
+      approvalPolicy: 'user-confirm', modelRequirements: 'none', sideEffects: ['proposal'], contextScopes: ['selected-documents'],
     })
     expect(getToolDefinition('stream_chat')).toMatchObject({ permission: 'model-invoke', cancellable: true })
+  })
+
+  it('allows continuity review at selected-document or workspace scope', () => {
+    expect(getSkillDefinition('continuity-review')?.contextScopes).toEqual(['selected-documents', 'workspace'])
   })
 
   it('adds agent, skill and tool capabilities to routed plans', () => {

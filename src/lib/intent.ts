@@ -1,16 +1,21 @@
 import { getTaskCapabilities } from './registry'
 import type { AgentId, SkillId } from './registry'
 import type { AnalysisCoverage, AnalysisMode, SourcePolicy } from '../types'
+import { resolveExecutionStrategy } from './executionStrategy'
+import type { ExecutionStrategy } from './executionStrategy'
+import { assertRoutedTaskPolicy } from './runtimePolicy'
 
 export type TaskIntent =
   | 'structure-segmentation'
   | 'structure-enhancement'
   | 'document-analysis'
+  | 'document-revision'
   | 'character-analysis'
+  | 'continuity-review'
   | 'workspace-analysis'
   | 'general-chat'
 
-export type TaskOperation = 'segment' | 'analyze' | 'chat'
+export type TaskOperation = 'segment' | 'analyze' | 'revise' | 'review' | 'chat'
 export type TaskScope = 'selected-documents' | 'current-document' | 'workspace' | 'conversation'
 export type TaskSideEffect = 'read' | 'draft' | 'proposal'
 export type DocumentAccess = 'none' | 'selected-metadata' | 'selected' | 'workspace-metadata' | 'workspace-focused' | 'workspace'
@@ -30,10 +35,13 @@ export interface TaskPlan {
   sourcePolicy: SourcePolicy
   requiresModel: boolean
   confidence: 'high' | 'medium' | 'low'
+  execution: ExecutionStrategy
 }
 
-function withCapabilities(plan: Omit<TaskPlan, 'agent' | 'skill' | 'allowedTools'>): TaskPlan {
-  return { ...plan, ...getTaskCapabilities(plan.intent, plan.analysisMode) }
+function withCapabilities(plan: Omit<TaskPlan, 'agent' | 'skill' | 'allowedTools' | 'execution'>): TaskPlan {
+  const routed = { ...plan, ...getTaskCapabilities(plan.intent, plan.analysisMode) }
+  assertRoutedTaskPolicy(routed)
+  return { ...routed, execution: resolveExecutionStrategy(routed) }
 }
 
 function referencesSelectedDocuments(prompt: string): boolean {
@@ -42,6 +50,14 @@ function referencesSelectedDocuments(prompt: string): boolean {
 
 function asksAboutCharacterRelations(prompt: string): boolean {
   return /(?:人物|角色)?(?:关系|关联|联系|冲突|合作|感情|亲属关系)|(?:之间|和|与).{0,16}(?:是什么关系|有何关系|关系如何|如何联系|是否有关联)/u.test(prompt)
+}
+
+function asksForContinuityReview(prompt: string): boolean {
+  return /(?:连续性|连贯性|前后矛盾|设定冲突|设定矛盾|时间线冲突|时间矛盾|人物状态冲突|人物状态矛盾|伏笔(?:检查|审校|回收)|吃书|穿帮)/u.test(prompt)
+}
+
+function asksForDocumentRevision(prompt: string): boolean {
+  return /(?:续写|改写|润色|校对|修改|重写|创作|生成)/u.test(prompt)
 }
 
 function asksAboutWorkspace(prompt: string): boolean {
@@ -83,13 +99,12 @@ function deepAnalysisPolicy(prompt: string): Pick<TaskPlan, 'analysisMode' | 'an
  */
 export function classifyTask(value: string, hasContextDocuments: boolean): TaskPlan {
   const prompt = value.trim()
-  const scope: TaskScope = hasContextDocuments ? 'selected-documents' : 'conversation'
 
   if (/(?:重新梳理|深入梳理|语义梳理|隐含场景|剧情阶段|章节命名|结构归纳)/u.test(prompt)) {
     return withCapabilities({
       intent: 'structure-enhancement',
       operation: 'analyze',
-      scope,
+      scope: 'selected-documents',
       sideEffect: 'draft',
       documentAccess: 'selected',
       analysisMode: 'deep',
@@ -104,13 +119,42 @@ export function classifyTask(value: string, hasContextDocuments: boolean): TaskP
     return withCapabilities({
       intent: 'structure-segmentation',
       operation: 'segment',
-      scope,
+      scope: 'selected-documents',
       sideEffect: 'proposal',
       documentAccess: 'selected',
       analysisMode: null,
       analysisCoverage: 'targeted',
       sourcePolicy: 'local-chunks',
       requiresModel: false,
+      confidence: 'high',
+    })
+  }
+
+  if (asksForContinuityReview(prompt)) {
+    const workspaceScope = asksAboutWorkspace(prompt)
+    const policy = deepAnalysisPolicy(prompt)
+    return withCapabilities({
+      intent: 'continuity-review',
+      operation: 'review',
+      scope: workspaceScope ? 'workspace' : 'selected-documents',
+      sideEffect: 'draft',
+      documentAccess: workspaceScope ? 'workspace' : 'selected',
+      ...policy,
+      requiresModel: true,
+      confidence: 'high',
+    })
+  }
+
+  if (hasContextDocuments && referencesSelectedDocuments(prompt) && asksForDocumentRevision(prompt)) {
+    const policy = deepAnalysisPolicy(prompt)
+    return withCapabilities({
+      intent: 'document-revision',
+      operation: 'revise',
+      scope: 'selected-documents',
+      sideEffect: 'draft',
+      documentAccess: 'selected',
+      ...policy,
+      requiresModel: true,
       confidence: 'high',
     })
   }
@@ -136,7 +180,7 @@ export function classifyTask(value: string, hasContextDocuments: boolean): TaskP
     return withCapabilities({
       intent: prompt.includes('人物') ? 'character-analysis' : 'document-analysis',
       operation: 'analyze',
-      scope,
+      scope: 'selected-documents',
       sideEffect: 'draft',
       documentAccess: 'selected',
       ...policy,
@@ -150,7 +194,7 @@ export function classifyTask(value: string, hasContextDocuments: boolean): TaskP
     return withCapabilities({
       intent: 'character-analysis',
       operation: 'analyze',
-      scope,
+      scope: 'selected-documents',
       sideEffect: 'draft',
       documentAccess: 'selected',
       ...policy,
@@ -159,16 +203,29 @@ export function classifyTask(value: string, hasContextDocuments: boolean): TaskP
     })
   }
 
-  const documentAccess = hasContextDocuments && referencesSelectedDocuments(prompt) ? 'selected' : 'none'
+  if (hasContextDocuments && referencesSelectedDocuments(prompt)) {
+    const policy = deepAnalysisPolicy(prompt)
+    return withCapabilities({
+      intent: 'document-analysis',
+      operation: 'analyze',
+      scope: 'selected-documents',
+      sideEffect: 'draft',
+      documentAccess: 'selected',
+      ...policy,
+      requiresModel: true,
+      confidence: 'low',
+    })
+  }
+
   return withCapabilities({
     intent: 'general-chat',
     operation: 'chat',
-    scope: documentAccess === 'selected' ? scope : 'conversation',
+    scope: 'conversation',
     sideEffect: 'draft',
-    documentAccess,
+    documentAccess: 'none',
     analysisMode: null,
-    analysisCoverage: documentAccess === 'selected' ? 'targeted' : 'index-only',
-    sourcePolicy: documentAccess === 'selected' ? 'local-chunks' : 'metadata-only',
+    analysisCoverage: 'index-only',
+    sourcePolicy: 'metadata-only',
     requiresModel: true,
     confidence: 'low',
   })

@@ -116,6 +116,32 @@ function isRelationshipTask(instruction: string): boolean {
   return /(?:人物|角色)?(?:关系|关联|联系|冲突|合作|感情|亲属关系)|(?:是什么关系|有何关系|关系如何|如何联系|是否有关联)/u.test(instruction)
 }
 
+function isContinuityTask(instruction: string): boolean {
+  return /(?:连续性|连贯性|前后矛盾|设定冲突|设定矛盾|时间线冲突|时间矛盾|人物状态冲突|人物状态矛盾|伏笔(?:检查|审校|回收)|吃书|穿帮)/u.test(instruction)
+}
+
+export function chunkTaskGuidance(instruction: string): string {
+  if (isContinuityTask(instruction)) {
+    return '这是连续性审校任务。请提取当前分块中可核验的事实断言：人物状态、时间、地点、物品、世界规则、已埋设或已回收的伏笔，并保留叙述视角和不确定性。当前阶段只收集证据，不要仅凭信息缺失判定冲突。'
+  }
+  return isCreativeTask(instruction)
+    ? '这是创作或改写任务。请提取与任务相关的原文片段、人物状态、语气风格、连续性约束和可执行素材，暂不脱离证据完成最终创作。'
+    : '请为后续汇总提取可核验的事实，不要臆测未出现的内容。'
+}
+
+export function finalTaskGuidance(instruction: string): string {
+  if (isContinuityTask(instruction)) {
+    return '请输出连续性审校报告。先给结论和覆盖范围，再按严重程度列出明确冲突、疑似冲突和待补证项。每个问题必须同时列出相互冲突或需要核对的事实、对应来源证据、影响范围和最小修改建议；证据不足时标记“待补证”，不得把未提及的信息当作矛盾。最后单列已检查但未发现冲突的关键设定与伏笔。'
+  }
+  if (isCreativeTask(instruction)) {
+    return '请根据这些阶段摘要完成用户的创作或改写任务，遵循原文人物、语气和连续性约束；不要把摘要过程本身当作回答。'
+  }
+  if (isRelationshipTask(instruction)) {
+    return '请先直接回答用户询问的人物关系，再说明关系性质、发展变化和关键事件；每个判断都保留来源分块标记或原文证据。若文档没有足够依据，明确标注未知，不要臆测。'
+  }
+  return '请直接完成用户任务，并按任务相关的章节、阶段或主题组织回答；不要机械补充无关的文档概览。关键结论必须保留来源分块标记或原文证据，证据不足时明确标注未知。'
+}
+
 export function batchSummaries(records: SummaryRecord[], contextWindow: number, indexMessage?: string | null): SummaryRecord[][] {
   const limit = Math.max(MIN_CHUNK_TOKENS, batchBudget(contextWindow) - estimateTokens(indexMessage ?? ''))
   const batches: SummaryRecord[][] = []
@@ -148,19 +174,12 @@ async function collectResponse(requestId: string, profileId: string, messages: A
 
 function chunkPrompt(instruction: string, chunk: TextChunk, indexMessage: string | null): string {
   const heading = chunk.heading ? `章节/标题：${chunk.heading}\n` : ''
-  const creativeGuidance = isCreativeTask(instruction)
-    ? '这是创作或改写任务。请提取与任务相关的原文片段、人物状态、语气风格、连续性约束和可执行素材，暂不脱离证据完成最终创作。'
-    : '请为后续汇总提取可核验的事实，不要臆测未出现的内容。'
-  return `你是长文本任务 Agent 的局部 Map Skill。只依据下面这个原文分块处理用户任务。\n\n${indexMessage ? `${indexMessage}\n\n` : ''}用户任务：${instruction}\n${heading}来源：${chunk.sourceId}，行 ${chunk.lineStart}-${chunk.lineEnd}\n\n<chunk id="${chunk.id}">\n${chunk.text}\n</chunk>\n\n${creativeGuidance}\n请输出简洁的结构化要点：内容概要、事件/冲突、人物及其目标或变化、线索/伏笔、可引用的原文证据，以及与用户任务直接相关的素材。每条证据必须附来源标记，格式为 [source: 相对路径 chunk=块ID lines=起始行-结束行 quote="原文短引"]。`
+  return `你是长文本任务 Agent 的局部 Map Skill。只依据下面这个原文分块处理用户任务。\n\n${indexMessage ? `${indexMessage}\n\n` : ''}用户任务：${instruction}\n${heading}来源：${chunk.sourceId}，行 ${chunk.lineStart}-${chunk.lineEnd}\n\n<chunk id="${chunk.id}">\n${chunk.text}\n</chunk>\n\n${chunkTaskGuidance(instruction)}\n请输出简洁的结构化要点：内容概要、事件/冲突、人物及其目标或变化、线索/伏笔、可引用的原文证据，以及与用户任务直接相关的素材。每条证据必须附来源标记，格式为 [source: 相对路径 chunk=块ID lines=起始行-结束行 quote="原文短引"]。`
 }
 
 function summaryPrompt(instruction: string, records: SummaryRecord[], final: boolean, indexMessage: string | null): string {
   const material = records.map((record) => `[${record.sourceId} ${record.chunkId}${record.heading ? ` · ${record.heading}` : ''}]\n${record.text}`).join('\n\n')
-  const finalGuidance = isCreativeTask(instruction)
-    ? '请根据这些阶段摘要完成用户的创作或改写任务，遵循原文人物、语气和连续性约束；不要把摘要过程本身当作回答。'
-    : isRelationshipTask(instruction)
-      ? '请先直接回答用户询问的人物关系，再说明关系性质、发展变化和关键事件；每个判断都保留来源分块标记或原文证据。若文档没有足够依据，明确标注未知，不要臆测。'
-    : '请给出完整回答，覆盖文档类型、概要、结构、故事主线和人物线；按章节或阶段组织，保留来源分块标记作为证据。'
+  const finalGuidance = finalTaskGuidance(instruction)
   return `${final ? '你是长文本任务 Agent 的最终 Synthesis Skill。' : '你是长文本任务 Agent 的阶段 Reduce Skill。'}\n${indexMessage ? `${indexMessage}\n` : ''}用户任务：${instruction}\n\n以下是已经由局部 Map Skill 生成的摘要。它们不是原文，请合并重复事实并标记不确定或相互矛盾之处，不要补写没有依据的情节。\n\n${material}\n\n${final ? finalGuidance : '请压缩为更高层级的摘要，保留故事阶段、人物变化、因果关系、伏笔、任务相关素材和来源标记。'}\n\n最终回答中的每个关键结论都必须附来源标记，格式为 [source: 相对路径 chunk=块ID lines=起始行-结束行 quote="原文短引"]；无法核验的结论标记为“未找到证据”。`
 }
 

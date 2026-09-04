@@ -8,6 +8,7 @@ describe('task routing', () => {
     expect(plan.operation).toBe('segment')
     expect(plan.requiresModel).toBe(false)
     expect(plan.sideEffect).toBe('proposal')
+    expect(plan.execution.currentMode).toBe('deterministic-service')
   })
 
   it('accepts both natural word orders for chapter splitting', () => {
@@ -21,12 +22,18 @@ describe('task routing', () => {
     expect(plan.intent).toBe('general-chat')
     expect(plan.documentAccess).toBe('none')
     expect(plan.requiresModel).toBe(true)
+    expect(plan.execution.currentMode).toBe('direct-model')
   })
 
   it('does not attach unrelated selected documents to ordinary chat', () => {
     expect(classifyTask('帮我想三个标题。', true).documentAccess).toBe('none')
     expect(classifyTask('帮我写一篇文章。', true).documentAccess).toBe('none')
-    expect(classifyTask('根据这个文件改写一版。', true).documentAccess).toBe('selected')
+    const revision = classifyTask('根据这个文件改写一版。', true)
+    expect(revision.intent).toBe('document-revision')
+    expect(revision.agent).toBe('RevisionEditor')
+    expect(revision.skill).toBe('document-revision')
+    expect(revision.operation).toBe('revise')
+    expect(revision.documentAccess).toBe('selected')
   })
 
   it('routes optional semantic restructuring back to the model', () => {
@@ -50,6 +57,36 @@ describe('task routing', () => {
     expect(plan.documentAccess).toBe('selected')
     expect(plan.analysisMode).toBe('deep')
     expect(plan.confidence).toBe('high')
+  })
+
+  it.each(['检查当前项目的连续性', '找出这个项目的设定冲突', '检查当前项目伏笔回收'])(
+    'routes continuity request %s before generic workspace analysis',
+    (prompt) => {
+      const plan = classifyTask(prompt, false)
+      expect(plan.intent).toBe('continuity-review')
+      expect(plan.agent).toBe('ContinuityReviewer')
+      expect(plan.skill).toBe('continuity-review')
+      expect(plan.operation).toBe('review')
+      expect(plan.scope).toBe('workspace')
+      expect(plan.documentAccess).toBe('workspace')
+      expect(plan.execution.agentUpgrade).toBe('recommended')
+    },
+  )
+
+  it('uses selected documents for a bounded continuity review', () => {
+    const plan = classifyTask('检查这几章有没有前后矛盾', true)
+    expect(plan.intent).toBe('continuity-review')
+    expect(plan.scope).toBe('selected-documents')
+    expect(plan.documentAccess).toBe('selected')
+    expect(plan.scope).toBe('selected-documents')
+  })
+
+  it('routes a selected-document question to a document-grounded chain', () => {
+    const plan = classifyTask('根据这个文件回答主角为什么离开', true)
+    expect(plan.intent).toBe('document-analysis')
+    expect(plan.skill).toBe('long-text-analysis')
+    expect(plan.documentAccess).toBe('selected')
+    expect(plan.allowedTools).toContain('chunk_document')
   })
 
   it('routes project-wide file content questions to workspace analysis', () => {
@@ -91,6 +128,7 @@ describe('task routing', () => {
       expect(plan.analysisMode).toBe('overview')
       expect(plan.documentAccess).toBe('workspace-metadata')
       expect(plan.requiresModel).toBe(false)
+      expect(plan.execution.currentMode).toBe('deterministic-service')
     },
   )
 

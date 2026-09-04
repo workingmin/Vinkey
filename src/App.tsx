@@ -24,6 +24,7 @@ import {
 import { calculateContextBudget, selectRecentMessages } from './lib/context'
 import { analyzeLongText, cancelLongTextAnalysis } from './lib/longTextAnalysis'
 import { classifyTask } from './lib/intent'
+import { usesLongTextWorkflow } from './lib/executionStrategy'
 import { isContextRecoveryResponse } from './lib/contextRecovery'
 import { buildMemoryCandidates, buildProjectMemoryContext, selectRelevantMemory } from './lib/projectMemory'
 import { formatStructureResult, segmentDocument } from './lib/structureSegmentation'
@@ -715,13 +716,11 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
     const requestBudget = taskPlan.requiresModel
       ? calculateContextBudget(messages, [], budgetDraft, selectedModel?.contextWindow ?? 32768)
       : null
-    const useLongTextPipeline = taskPlan.analysisMode !== 'focused'
-      && taskPlan.intent !== 'structure-segmentation'
-      && (taskPlan.documentAccess === 'workspace' || taskPlan.documentAccess === 'selected')
+    const useLongTextPipeline = usesLongTextWorkflow(taskPlan.execution)
       && requestContextDocuments.length > 0
     void recordRuntimeEvent(
       'task.routed',
-      `intent=${taskPlan.intent}, operation=${taskPlan.operation}, scope=${taskPlan.scope}, documentAccess=${taskPlan.documentAccess}, analysisMode=${taskPlan.analysisMode ?? 'none'}, coverage=${taskPlan.analysisCoverage}, sourcePolicy=${taskPlan.sourcePolicy}, requiresModel=${taskPlan.requiresModel}, contextDocuments=${requestContextDocuments.length}, estimatedTokens=${requestBudget?.estimatedTokens ?? 0}, limit=${requestBudget?.limit ?? 0}, longText=${useLongTextPipeline}`,
+      `intent=${taskPlan.intent}, operation=${taskPlan.operation}, scope=${taskPlan.scope}, documentAccess=${taskPlan.documentAccess}, analysisMode=${taskPlan.analysisMode ?? 'none'}, coverage=${taskPlan.analysisCoverage}, sourcePolicy=${taskPlan.sourcePolicy}, executionMode=${taskPlan.execution.currentMode}, targetMode=${taskPlan.execution.targetMode}, workflow=${taskPlan.execution.workflow ?? 'none'}, agentUpgrade=${taskPlan.execution.agentUpgrade}, requiresModel=${taskPlan.requiresModel}, contextDocuments=${requestContextDocuments.length}, estimatedTokens=${requestBudget?.estimatedTokens ?? 0}, limit=${requestBudget?.limit ?? 0}`,
     )
     if (requestBudget?.exceedsLimit && !useLongTextPipeline) {
       setError('当前消息和上下文超过模型可用窗口。请缩短输入，或使用“分析文本”让系统自动分块汇总。')
@@ -783,7 +782,9 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
           ? `\n\n> 证据校验：发现 ${result.evidence.length} 条来源引用，其中 ${result.evidence.filter((item) => item.verified).length} 条已通过行号和原文校验。`
           : '\n\n> 证据校验：最终回答没有生成可解析的来源引用。'
         appendChatRunChunk(nextConversationId, `${result.content}${excludedNote}${evidenceNote}`)
-        const candidates = buildMemoryCandidates(result.content, requestContextDocuments.map((document) => document.path), value)
+        const candidates = taskPlan.intent === 'continuity-review' || taskPlan.intent === 'document-revision'
+          ? []
+          : buildMemoryCandidates(result.content, requestContextDocuments.map((document) => document.path), value)
         if (candidates.length > 0) {
           try {
             setPendingMemory(await proposeProjectMemory(candidates))

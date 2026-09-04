@@ -1,5 +1,5 @@
 # Vinkey
-面向文学创作的本地大模型工作台。在本地管理文稿目录，对接 AI 大模型，所有文档数据留存本机，保护创作隐私。
+面向文学创作的本地 AI 工作台。在本地管理文稿目录，对接 AI 大模型，所有文档数据留存本机，保护创作隐私。当前版本不提供 Codex、Claude 等 Agent Runtime 的用户选择入口，也不为此新增需要配置的商用付费 API。
 
 当前项目已完成 Tauri 2 + React + TypeScript + Rust 的 MVP 脚手架。界面采用左侧授权工作区、中央 AI 对话区和右侧编辑/预览区；桌面端文件读写只经过 Rust 的工作区路径守卫。
 
@@ -14,6 +14,8 @@
 - 在授权工作区内进行文档全文搜索
 - 长文本/项目分析完成后生成项目记忆候选；用户确认后保存到项目数据库，并在后续相关对话中作为辅助上下文检索
 - 长文本分析会将任务清单、分块和摘要产物保存到项目 `.vinkey/analysis/jobs/`，应用重启后可发现并恢复未完成任务
+- 将跨章节连续性、设定冲突和伏笔回收检查路由为独立的证据型审校链路；审校疑点不会自动写入项目记忆
+- 将基于选中文档的改写、续写和润色路由到独立草稿链路；结果不会直接写回源文件或自动进入项目记忆
 - 深色和浅色主题；API Key 仅保存到 macOS Keychain / Windows Credential Manager
 - 桌面端记录跨平台 JSONL 运行日志，可从“帮助 → 运行日志”查看并复制最近事件；`app.start` 包含 `commitSha`、Unix 毫秒 `buildTime` 和 `workingTreeDirty`，用于确认实际运行的构建
 
@@ -77,3 +79,4 @@ npm run package:mac -- --install --open
 - [UI 设计：状态、流程与验收](docs/UI_DESIGN_STATES.md)
 - [GitHub 同类项目调研与功能取舍](docs/GITHUB_REFERENCE.md)
 - [Agent 与 Skill 建设计划](docs/AGENT_SKILL_PLAN.md)
+- [AI 业务链路架构与改造方案](docs/AI_BUSINESS_CHAINS.md)
