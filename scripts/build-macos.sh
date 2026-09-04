@@ -40,7 +40,10 @@ done
 cd "$ROOT_DIR"
 npm ci --include=dev
 npm test
-npm run desktop:build:mac
+# Tauri's DMG bundler otherwise drives Finder through AppleScript. That can
+# fail on local machines without Automation permission even though the app
+# bundle is valid. CI mode skips only the Finder-based DMG layout step.
+CI=true npm run desktop:build:mac
 
 APP_SOURCE="$ROOT_DIR/src-tauri/target/release/bundle/macos/Vinkey.app"
 APP_INSTALL_PATH="/Applications/Vinkey.app"
