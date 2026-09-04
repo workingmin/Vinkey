@@ -42,7 +42,7 @@
 | [Aider repository map](https://github.com/Aider-AI/aider/blob/main/aider/repomap.py) | 基于符号/引用生成带 token 上限的 repo map，并按相关性压缩 | 概览采用有预算的结构地图；地图是元数据视图，不是完整文件集合 |
 | [PageIndex agent tools](https://github.com/VectifyAI/PageIndex/blob/main/pageindex/agent_tools.py) | 先使用目录/结构定位，再获取有限页码或节点范围 | 深度分析先定位目标，再按块读取；全量覆盖仍是多个有界请求 |
 
-这些实现的共同点不是简单的“长上下文”，而是**项目锚定、索引/结构优先、相关性检索、受限读取、压缩回传**。因此 Vinkey 对外采用“概览分析 / 深度分析”两个模式，对内继续把覆盖范围拆为 `index-only / targeted / exhaustive`：模式决定是否允许读取正文，覆盖范围决定处理哪些目标，两者不能混用。
+这些实现的共同点不是简单的“长上下文”，而是**项目锚定、索引/结构优先、相关性检索、受限读取、压缩回传**。因此 Vinkey 在 Runtime 内部采用“概览分析 / 深度分析”两种策略，但不把它们做成要求用户主动选择的输入模式；`IntentRouter` 根据问题是否需要正文语义自动判断。覆盖范围继续拆为 `index-only / targeted / exhaustive`：模式决定是否允许读取正文，覆盖范围决定处理哪些目标，两者不能混用。
 
 Vinkey 还增加一条更严格的本地隐私边界：单个文件和全项目正文都不允许作为一个整体进入模型请求。概览只使用不含正文的画像与已有摘要；深度统一按块处理，原始块不进入主对话，远程模型接收原始块需要单独授权。
 

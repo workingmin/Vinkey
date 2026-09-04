@@ -41,6 +41,17 @@ describe('workspace analysis inventory and evidence', () => {
     expect(selectWorkspaceAnalysisTargets(supported, '完整通读这个项目', 'exhaustive')).toHaveLength(30)
   })
 
+  it('prioritizes high-signal project documents for an unqualified deep analysis', () => {
+    const supported = [
+      { path: '章节/第一章.md', name: '第一章.md', kind: 'markdown' as const, reason: 'supported' as const },
+      { path: '项目简介.md', name: '项目简介.md', kind: 'markdown' as const, reason: 'supported' as const },
+      { path: '设定/人物.md', name: '人物.md', kind: 'markdown' as const, reason: 'supported' as const },
+    ]
+    expect(selectWorkspaceAnalysisTargets(supported, '分析这个项目', 'targeted').map((item) => item.path)).toEqual([
+      '项目简介.md', '设定/人物.md', '章节/第一章.md',
+    ])
+  })
+
   it('parses and verifies source line evidence', () => {
     const refs = parseEvidenceReferences('[source: 故事.md chunk=chunk-0 lines=1-2 quote="第一行"]')
     const verified = verifyEvidenceReferences(refs, [{ path: '故事.md', name: '故事.md', content: '第一行\n第二行', size: 11 }])

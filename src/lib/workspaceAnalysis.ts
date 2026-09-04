@@ -55,7 +55,17 @@ export function selectWorkspaceAnalysisTargets(
     const stem = name.replace(/\.[^.]+$/u, '')
     return normalized.includes(name) || (stem.length >= 2 && normalized.includes(stem))
   })
-  return (mentioned.length > 0 ? mentioned : supported).slice(0, MAX_TARGETED_DOCUMENTS)
+  if (mentioned.length > 0) return mentioned.slice(0, MAX_TARGETED_DOCUMENTS)
+  const priority = (document: WorkspaceDocumentRef): number => {
+    const value = document.path.toLocaleLowerCase()
+    if (/(?:readme|说明|简介|梗概|大纲|概要|summary|overview|outline)/u.test(value)) return 3
+    if (/(?:设定|人物|角色|世界|时间线|索引|canon|character|world|timeline|index)/u.test(value)) return 2
+    if (document.kind === 'markdown' || document.kind === 'text') return 1
+    return 0
+  }
+  return [...supported]
+    .sort((left, right) => priority(right) - priority(left) || left.path.localeCompare(right.path, 'zh-CN'))
+    .slice(0, MAX_TARGETED_DOCUMENTS)
 }
 
 export async function readWorkspaceDocuments(

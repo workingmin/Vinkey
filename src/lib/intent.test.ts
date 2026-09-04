@@ -47,8 +47,8 @@ describe('task routing', () => {
     const plan = classifyTask('林晚和林崇山是什么关系？', true)
     expect(plan.intent).toBe('character-analysis')
     expect(plan.operation).toBe('analyze')
-    expect(plan.documentAccess).toBe('selected-metadata')
-    expect(plan.analysisMode).toBe('overview')
+    expect(plan.documentAccess).toBe('selected')
+    expect(plan.analysisMode).toBe('deep')
     expect(plan.confidence).toBe('high')
   })
 
@@ -56,18 +56,29 @@ describe('task routing', () => {
     const plan = classifyTask('分析当前项目有哪些文件内容', false)
     expect(plan.intent).toBe('workspace-analysis')
     expect(plan.scope).toBe('workspace')
-    expect(plan.documentAccess).toBe('workspace-metadata')
-    expect(plan.analysisCoverage).toBe('index-only')
-    expect(plan.sourcePolicy).toBe('metadata-only')
+    expect(plan.documentAccess).toBe('workspace')
+    expect(plan.analysisCoverage).toBe('targeted')
+    expect(plan.sourcePolicy).toBe('local-chunks')
   })
 
-  it.each(['分析这个项目', '介绍这个项目', '这个项目是做什么的', '总结这个项目', '这个项目里有哪些角色'])(
-    'anchors %s to a workspace overview',
+  it.each(['这个项目', '分析这个项目', '介绍这个项目', '这个项目是做什么的', '总结这个项目', '这个项目里有哪些角色'])(
+    'routes semantic workspace question %s to deep analysis',
+    (prompt) => {
+      const plan = classifyTask(prompt, false)
+      expect(plan.scope).toBe('workspace')
+      expect(plan.analysisMode).toBe('deep')
+      expect(plan.documentAccess).toBe('workspace')
+    },
+  )
+
+  it.each(['当前项目有哪些文件', '项目目录结构是什么', '当前工作区有多少个文档', '项目文件类型分布'])(
+    'routes metadata workspace question %s to a deterministic overview',
     (prompt) => {
       const plan = classifyTask(prompt, false)
       expect(plan.scope).toBe('workspace')
       expect(plan.analysisMode).toBe('overview')
       expect(plan.documentAccess).toBe('workspace-metadata')
+      expect(plan.requiresModel).toBe(false)
     },
   )
 
@@ -82,9 +93,8 @@ describe('task routing', () => {
     expect(exhaustive.analysisCoverage).toBe('exhaustive')
   })
 
-  it('uses the selected UI mode unless the prompt explicitly requires depth', () => {
-    expect(classifyTask('分析这个项目', false, 'deep').analysisMode).toBe('deep')
-    expect(classifyTask('深入分析这个项目', false, 'overview').analysisMode).toBe('deep')
-    expect(classifyTask('概览这个项目', false, 'deep').analysisMode).toBe('overview')
+  it('does not confuse a request about file structure with semantic analysis', () => {
+    expect(classifyTask('分析一下当前项目的目录结构', false).analysisMode).toBe('overview')
+    expect(classifyTask('分析当前项目的故事结构', false).analysisMode).toBe('deep')
   })
 })

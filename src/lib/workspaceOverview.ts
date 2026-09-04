@@ -13,7 +13,6 @@ export interface DocumentProfile {
   name: string
   kind: DocumentKind
   sizeBytes: number | null
-  digestStatus: 'unavailable'
 }
 
 export interface WorkspaceProfile {
@@ -26,6 +25,7 @@ export interface WorkspaceProfile {
   documentKindCounts: Partial<Record<DocumentKind, number>>
   documents: DocumentProfile[]
   omittedDocumentCount: number
+  availableDocumentDigestCount: number
   projectDigestStatus: 'unavailable'
 }
 
@@ -40,7 +40,6 @@ export function buildWorkspaceProfile(workspace: WorkspaceSnapshot, limit = DEFA
     name: reference.name,
     kind: reference.kind,
     sizeBytes: null,
-    digestStatus: 'unavailable' as const,
   }))
   const documentKindCounts: Partial<Record<DocumentKind, number>> = {}
   for (const file of files) documentKindCounts[file.kind] = (documentKindCounts[file.kind] ?? 0) + 1
@@ -55,6 +54,7 @@ export function buildWorkspaceProfile(workspace: WorkspaceSnapshot, limit = DEFA
     documentKindCounts,
     documents: files.slice(0, boundedLimit),
     omittedDocumentCount: Math.max(0, files.length - boundedLimit),
+    availableDocumentDigestCount: 0,
     projectDigestStatus: 'unavailable',
   }
 }
@@ -67,12 +67,22 @@ export function buildSelectedDocumentProfiles(
     name: document.name,
     kind: document.kind ?? getDocumentKind(document.name),
     sizeBytes: document.sizeBytes ?? document.size,
-    digestStatus: 'unavailable',
   }))
 }
 
 export function buildWorkspaceOverviewMessage(workspace: WorkspaceSnapshot): string {
-  return `以下是当前工作区的不含正文画像。只依据这些信息回答；不要推断文件内容，缺少已有摘要时明确说明无法判断正文语义。\n\n<workspace-profile>\n${JSON.stringify(buildWorkspaceProfile(workspace), null, 2)}\n</workspace-profile>`
+  return `以下是当前工作区的不含正文画像。请先直接回答其中可确认的项目名称、目录、文件、类型和数量，不要整体拒答；只有用户追问正文语义时才说明当前画像不包含正文。\n\n<workspace-profile>\n${JSON.stringify(buildWorkspaceProfile(workspace), null, 2)}\n</workspace-profile>`
+}
+
+export function formatWorkspaceOverview(workspace: WorkspaceSnapshot): string {
+  const profile = buildWorkspaceProfile(workspace)
+  const kindCounts = Object.entries(profile.documentKindCounts)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([kind, count]) => `${kind} ${count}`)
+    .join('、') || '无文件'
+  const files = profile.documents.map((document) => `- \`${document.path}\`（${document.kind}）`).join('\n') || '- 无文件'
+  const omitted = profile.omittedDocumentCount > 0 ? `\n- 另有 ${profile.omittedDocumentCount} 个文件未在清单中展开` : ''
+  return `## 项目结构概览\n\n- 项目：${profile.name}\n- 目录：${profile.directoryCount} 个\n- 文件：${profile.fileCount} 个，其中 ${profile.analyzableFileCount} 个可进入文本分析，${profile.excludedFileCount} 个因敏感规则或类型限制不纳入\n- 类型分布：${kindCounts}${omitted}\n\n### 文件清单\n\n${files}\n\n> 本回答来自工作区结构元数据，未读取文件正文。`
 }
 
 export function buildSelectedDocumentsOverviewMessage(
