@@ -505,11 +505,12 @@ fn load_characters(connection: &Connection, work_id: &str) -> Result<Vec<Charact
              FROM characters c WHERE c.work_id = ?1 ORDER BY c.canonical_name",
         )
         .map_err(|error| format!("无法读取人物：{error}"))?;
-    statement
+    let result = statement
         .query_map([work_id], character_from_row)
         .map_err(|error| format!("无法读取人物：{error}"))?
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| format!("无法读取人物：{error}"))
+        .map_err(|error| format!("无法读取人物：{error}"));
+    result
 }
 
 #[tauri::command]
@@ -628,14 +629,15 @@ pub fn search_characters(
              ORDER BY c.canonical_name LIMIT ?4",
         )
         .map_err(|error| format!("无法搜索人物：{error}"))?;
-    statement
+    let result = statement
         .query_map(
             params![work_id, match_query, like, limit as i64],
             character_from_row,
         )
         .map_err(|error| format!("无法搜索人物：{error}"))?
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| format!("无法搜索人物：{error}"))
+        .map_err(|error| format!("无法搜索人物：{error}"));
+    result
 }
 
 #[tauri::command]
@@ -875,7 +877,7 @@ pub fn list_character_neighbors(
              ORDER BY r.relation_type, 2",
         )
         .map_err(|error| format!("无法读取人物邻居：{error}"))?;
-    statement
+    let result = statement
         .query_map(params![work_id, character_id], |row| {
             Ok(CharacterNeighbor {
                 relationship_id: row.get(0)?,
@@ -888,7 +890,8 @@ pub fn list_character_neighbors(
         })
         .map_err(|error| format!("无法读取人物邻居：{error}"))?
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| format!("无法读取人物邻居：{error}"))
+        .map_err(|error| format!("无法读取人物邻居：{error}"));
+    result
 }
 
 #[tauri::command]
