@@ -45,6 +45,7 @@ interface AppState {
   setConversation: (conversation: Conversation) => void
   newConversation: () => void
   setConversations: (conversations: ConversationSummary[]) => void
+  removeConversation: (id: string) => void
   setModelProfiles: (profiles: ModelProfile[]) => void
   setActiveModelId: (id: string | null) => void
   setSidebarCollapsed: (collapsed: boolean) => void
@@ -239,6 +240,20 @@ export const useAppStore = create<AppState>((set) => ({
   })),
   newConversation: () => set({ conversationId: null, conversationTitle: '新会话', messages: initialMessages, contextDocuments: [] }),
   setConversations: (conversations) => set({ conversations }),
+  removeConversation: (id) => set((state) => {
+    const completedChatMessages = { ...state.completedChatMessages }
+    delete completedChatMessages[id]
+    const conversations = state.conversations.filter((conversation) => conversation.id !== id)
+    if (state.conversationId !== id) return { conversations, completedChatMessages }
+    return {
+      conversations,
+      completedChatMessages,
+      conversationId: null,
+      conversationTitle: '新会话',
+      messages: initialMessages,
+      contextDocuments: [],
+    }
+  }),
   setModelProfiles: (modelProfiles) => set((state) => ({
     modelProfiles,
     activeModelId: modelProfiles.some((profile) => profile.id === state.activeModelId) ? state.activeModelId : modelProfiles[0]?.id ?? null,
