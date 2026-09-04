@@ -75,32 +75,34 @@ confidence   路由置信度
 Runtime 内部的分析策略统一命名为：
 
 - **概览分析（Overview Analysis）**：回答文件清单、目录结构、数量、类型分布、索引状态等可由元数据直接回答的问题，只使用工作区清单、结构化元数据和已有分析摘要，不在本次请求中读取正文。
+- **聚焦分析（Focused Analysis）**：回答项目用途、性质、介绍和未限定深度的概括问题；先使用已有摘要和项目记忆，不足时只读取少量高信号文件并提供有界摘录，不启动 Map-Reduce。
 - **深度分析（Deep Analysis）**：回答内容、主题、人物、关系、情节、主线、设定、风格或总结等必须理解正文语义的问题。正文仅由受控分析 Worker 按块读取并执行 Map-Reduce，主对话 Agent 只接收阶段摘要、证据引用和覆盖报告。
 
-概览/深度不是用户需要主动选择的产品选项，不在对话输入区提供模式开关。它们是 `IntentRouter` 根据实际问题的可回答性自动生成的执行计划。“概览”表示元数据观察层级；“概要”仍只表示一种输出产物。“深度”表示问题需要进入正文证据链，不等于自动完整通读。
+概览/聚焦/深度不是用户需要主动选择的产品选项，不在对话输入区提供模式开关。它们是 `IntentRouter` 根据实际问题的可回答性自动生成的执行计划。“概览”表示元数据观察层级；“聚焦”表示有限语义证据；“概要”仍只表示一种输出产物；“深度”表示进入正文分块证据链，不等于自动完整通读。
 
 任务描述必须将以下四个维度分开建模：
 
 ```text
 scope         workspace / active-document / selected-documents
-mode          overview / deep
+mode          overview / focused / deep
 coverage      index-only / targeted / exhaustive
-sourcePolicy  metadata-only / local-chunks
+sourcePolicy  metadata-only / local-excerpts / local-chunks
 ```
 
 | 模式 | 默认覆盖 | 数据来源 | 典型请求 |
 | --- | --- | --- | --- |
 | `overview` | `index-only` | `metadata-only` | “项目有哪些文件”“目录结构是什么”“有多少 Markdown 文档” |
-| `deep` | `targeted` | `local-chunks` | “分析这个项目”“项目讲了什么”“有哪些角色”“总结这篇文档” |
+| `focused` | `targeted` | `local-excerpts` | “这个项目做什么”“介绍这个项目”“分析这个项目” |
+| `deep` | `targeted` | `local-chunks` | “项目讲了什么”“有哪些角色”“总结这个项目” |
 | `deep` | `exhaustive` | `local-chunks` | “完整通读当前项目并逐章分析，不要遗漏” |
 
 路由遵守以下不变量：
 
 1. “这个项目”“当前项目”“工作区”等表达先锚定 `scope=workspace`，不能因为没有显式文件名而退化为普通聊天。
-2. 路由先判断问题能否仅凭元数据回答；“文件清单、目录、数量、类型”进入概览，“分析、内容、主题、人物、关系、情节、总结”进入深度。
-3. “分析这个项目”“介绍这个项目”“这个项目是什么”等需要说明内容或性质的请求默认进入 `deep/targeted`；不能为了避免正文读取而返回缺少摘要的空洞拒答。
+2. 路由先判断问题能否仅凭元数据回答；“文件清单、目录、数量、类型”进入概览；项目用途、介绍和未限定深度的概括进入聚焦；人物、关系、情节和总结进入深度。
+3. “分析这个项目”“介绍这个项目”“这个项目是什么”等请求默认进入 `focused/targeted`，先用摘要、记忆和有限高信号文件快速回答；证据不足时建议深度分析，不静默升级。
 4. 只有“完整、全量、全部、通读、不遗漏”等明确覆盖要求，才设置 `coverage=exhaustive`；否则深度模式使用 `targeted`。
-5. Runtime、模型路由器和 Skill 均不得在分类完成后静默把 `metadata-only` 升级为 `local-chunks`；需要正文的问题必须在初始路由阶段直接分类为深度。
+5. Runtime、模型路由器和 Skill 均不得在分类完成后静默把 `metadata-only` 升级为 `local-excerpts`，或把 `local-excerpts` 升级为 `local-chunks`；扩大正文读取范围必须由新的用户请求触发。
 6. `exhaustive` 是覆盖要求，不是单次投喂许可；单个文件乃至全项目正文都禁止一次性放入模型请求，必须逐块处理。
 
 概览链路使用轻量 Service/Tool，而不是把正文伪装成“上下文”：

@@ -9,6 +9,9 @@ const MAX_WORKSPACE_DOCUMENTS = 500
 const MAX_DOCUMENT_BYTES = 64 * 1024 * 1024
 const MAX_WORKSPACE_BYTES = 256 * 1024 * 1024
 const MAX_TARGETED_DOCUMENTS = 24
+const MAX_FOCUSED_DOCUMENTS = 4
+const MAX_FOCUSED_DOCUMENT_BYTES = 128 * 1024
+const MAX_FOCUSED_WORKSPACE_BYTES = 256 * 1024
 
 export interface WorkspaceInventory {
   workspaceId: string
@@ -20,6 +23,7 @@ export interface WorkspaceInventory {
 export interface WorkspaceReadOptions {
   coverage?: 'targeted' | 'exhaustive'
   prompt?: string
+  strategy?: 'focused' | 'deep'
 }
 
 function isSensitive(path: string, name: string): boolean {
@@ -68,13 +72,46 @@ export function selectWorkspaceAnalysisTargets(
     .slice(0, MAX_TARGETED_DOCUMENTS)
 }
 
+export function selectWorkspaceFocusedTargets(
+  supported: WorkspaceDocumentRef[],
+  prompt: string,
+): WorkspaceDocumentRef[] {
+  const normalized = prompt.toLocaleLowerCase()
+  const mentioned = supported.filter((document) => {
+    const path = document.path.toLocaleLowerCase()
+    const name = document.name.toLocaleLowerCase()
+    const stem = name.replace(/\.[^.]+$/u, '')
+    return normalized.includes(path) || normalized.includes(name) || (stem.length >= 2 && normalized.includes(stem))
+  })
+  if (mentioned.length > 0) return mentioned.slice(0, MAX_FOCUSED_DOCUMENTS)
+
+  const priority = (document: WorkspaceDocumentRef): number => {
+    const value = document.path.toLocaleLowerCase()
+    if (/(?:^|\/)(?:readme|summary|overview)(?:\.|\/|$)/u.test(value)) return 5
+    if (/(?:^|\/)(?:(?:项目)?(?:说明|简介|概览)|作品简介)(?:\.|\/|$)/u.test(value)) return 4
+    if (/(?:^|\/)(?:package\.json|pyproject\.toml|cargo\.toml|go\.mod|composer\.json)$/u.test(value)) return 3
+    if (/(?:说明|简介|梗概|大纲|概要|设定|索引|about|outline|canon|index)/u.test(value)) return 2
+    if (document.kind === 'markdown' || document.kind === 'text') return 1
+    return 0
+  }
+  return [...supported]
+    .sort((left, right) => priority(right) - priority(left) || left.path.localeCompare(right.path, 'zh-CN'))
+    .slice(0, MAX_FOCUSED_DOCUMENTS)
+}
+
 export async function readWorkspaceDocuments(
   workspace: WorkspaceSnapshot,
   read: (path: string) => Promise<{ path: string; name: string; content: string; kind: DocumentKind; sizeBytes?: number }>,
   options: WorkspaceReadOptions = {},
 ): Promise<{ documents: ContextDocument[]; excluded: WorkspaceDocumentRef[] }> {
   const inventory = buildWorkspaceInventory(workspace)
-  const targets = selectWorkspaceAnalysisTargets(inventory.supported, options.prompt ?? '', options.coverage ?? 'exhaustive')
+  const focused = options.strategy === 'focused'
+  const targets = focused
+    ? selectWorkspaceFocusedTargets(inventory.supported, options.prompt ?? '')
+    : selectWorkspaceAnalysisTargets(inventory.supported, options.prompt ?? '', options.coverage ?? 'exhaustive')
+  const maxDocumentBytes = focused ? MAX_FOCUSED_DOCUMENT_BYTES : MAX_DOCUMENT_BYTES
+  const maxWorkspaceBytes = focused ? MAX_FOCUSED_WORKSPACE_BYTES : MAX_WORKSPACE_BYTES
+  const maxDocuments = focused ? MAX_FOCUSED_DOCUMENTS : MAX_WORKSPACE_DOCUMENTS
   const targetPaths = new Set(targets.map((document) => document.path))
   const documents: ContextDocument[] = []
   const excluded = [
@@ -83,7 +120,7 @@ export async function readWorkspaceDocuments(
   ]
   let totalBytes = 0
   for (const reference of targets) {
-    if (documents.length >= MAX_WORKSPACE_DOCUMENTS) {
+    if (documents.length >= maxDocuments) {
       excluded.push({ ...reference, reason: 'too-large' })
       continue
     }
@@ -94,7 +131,7 @@ export async function readWorkspaceDocuments(
         continue
       }
       const sizeBytes = document.sizeBytes ?? new TextEncoder().encode(document.content).byteLength
-      if (sizeBytes > MAX_DOCUMENT_BYTES || totalBytes + sizeBytes > MAX_WORKSPACE_BYTES) {
+      if (sizeBytes > maxDocumentBytes || totalBytes + sizeBytes > maxWorkspaceBytes) {
         excluded.push({ ...reference, reason: 'too-large' })
         continue
       }

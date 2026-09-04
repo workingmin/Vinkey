@@ -41,10 +41,15 @@
 | [Claude Code 工作方式](https://code.claude.com/docs/en/how-claude-code-works) | 在 Agent 循环中按需收集上下文并使用工具，必要时以子 Agent 隔离上下文 | 项目问题应触发受控取证循环，而非由聊天层预先注入全项目 |
 | [Aider repository map](https://github.com/Aider-AI/aider/blob/main/aider/repomap.py) | 基于符号/引用生成带 token 上限的 repo map，并按相关性压缩 | 概览采用有预算的结构地图；地图是元数据视图，不是完整文件集合 |
 | [PageIndex agent tools](https://github.com/VectifyAI/PageIndex/blob/main/pageindex/agent_tools.py) | 先使用目录/结构定位，再获取有限页码或节点范围 | 深度分析先定位目标，再按块读取；全量覆盖仍是多个有界请求 |
+| [Continue codebase retrieval](https://github.com/continuedev/continue/blob/main/core/context/retrieval/retrieval.ts) | 在模型上下文预算内检索有限片段，可选 embeddings 和 reranker；无结果时要求改用其他工具 | 快速项目问答应使用有界相关证据，不必直接启动全量 Map/Reduce |
+| [GitHub Copilot Ask mode](https://docs.github.com/en/copilot/how-tos/chat-with-copilot/chat-in-ide) / [CLI research](https://docs.github.com/en/copilot/concepts/agents/copilot-cli/research) | Ask 面向快速代码库问答；Research 明确以深度优先而非速度优先 | 模糊概括问题和深度研究应采用不同执行成本，用户不必用同一路径等待 |
+| [Cline subagents](https://github.com/cline/cline/blob/main/docs/features/subagents.mdx) | 只在广域探索值得额外开销时启用独立上下文；小而聚焦的问题直接处理 | 广域研究是升级路径，不能作为所有语义问题的默认起点 |
 
-这些实现的共同点不是简单的“长上下文”，而是**项目锚定、索引/结构优先、相关性检索、受限读取、压缩回传**。因此 Vinkey 在 Runtime 内部采用“概览分析 / 深度分析”两种策略，但不把它们做成要求用户主动选择的输入模式；`IntentRouter` 根据问题是否需要正文语义自动判断。覆盖范围继续拆为 `index-only / targeted / exhaustive`：模式决定是否允许读取正文，覆盖范围决定处理哪些目标，两者不能混用。
+这些实现的共同点不是简单的“长上下文”，而是**项目锚定、索引/结构优先、相关性检索、受限读取、按需升级和压缩回传**。二元的“概览 / 深度”会把“这个项目做什么”一类需要少量语义证据的问题直接推入昂贵的长文本流水线，因此 Vinkey 增加一个 `focused` 中间模式。它是一种执行合同，不继续拆成多个并列模式：缓存摘要、项目记忆、高信号文件和有限摘录是 `focused` 内部按成本排序的证据来源。
 
-Vinkey 还增加一条更严格的本地隐私边界：单个文件和全项目正文都不允许作为一个整体进入模型请求。概览只使用不含正文的画像与已有摘要；深度统一按块处理，原始块不进入主对话，远程模型接收原始块需要单独授权。
+Runtime 最终采用 `overview / focused / deep` 三种内部模式，仍不要求用户手动选择。`IntentRouter` 根据问题的可回答性和明确深度要求自动判断；覆盖范围继续独立为 `index-only / targeted / exhaustive`。模式决定允许的证据获取方式，覆盖范围决定处理哪些目标，两者不能混用。
+
+Vinkey 还增加一条更严格的本地隐私边界：概览只使用不含正文的画像与已有摘要；聚焦分析只允许少量高信号文件的有界摘录，并使用独立的 `local-excerpts` 策略；深度统一按块处理，原始块不进入主对话。正文摘录和原始块默认都只能发送给回环模型，远程模型接收正文需要单独授权。
 
 ## 人物资产提取专项调研（2026-09-04）
 

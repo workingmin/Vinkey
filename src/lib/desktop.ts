@@ -455,7 +455,7 @@ export async function testModelConnection(input: ModelProfileInput): Promise<Mod
 export async function streamChat(request: ChatRequest, onEvent: (event: ChatStreamEvent) => void): Promise<void> {
   if (!isDesktop()) {
     demoCancellations.delete(request.requestId)
-    const profileCount = request.messages.filter((message) => /<(?:workspace-profile|document-profiles)>/u.test(message.content)).length
+    const profileCount = request.messages.filter((message) => /<(?:workspace-profile|document-profiles|focused-project-evidence)>/u.test(message.content)).length
     const response = `${profileCount > 0 ? '我已收到不含正文的本地画像。\n\n' : ''}这是浏览器演示流。桌面应用会通过 Rust 连接已配置的 Ollama 或 OpenAI 兼容服务；消息会分段到达，并保存在本机数据库中。`
     for (const content of response.match(/.{1,8}/gu) ?? []) {
       if (demoCancellations.has(request.requestId)) throw new Error('请求已停止')
