@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildWorkspaceInventory, parseEvidenceReferences, readWorkspaceDocuments, selectWorkspaceAnalysisTargets, verifyEvidenceReferences } from './workspaceAnalysis'
+import { buildWorkspaceInventory, parseEvidenceReferences, readWorkspaceDocuments, selectWorkspaceAnalysisTargets, selectWorkspaceFocusedTargets, verifyEvidenceReferences } from './workspaceAnalysis'
 import type { WorkspaceSnapshot } from '../types'
 
 const workspace: WorkspaceSnapshot = {
@@ -50,6 +50,31 @@ describe('workspace analysis inventory and evidence', () => {
     expect(selectWorkspaceAnalysisTargets(supported, '分析这个项目', 'targeted').map((item) => item.path)).toEqual([
       '项目简介.md', '设定/人物.md', '章节/第一章.md',
     ])
+  })
+
+  it('limits focused analysis to a few high-signal project files', () => {
+    const supported = [
+      { path: 'src/main.ts', name: 'main.ts', kind: 'code' as const, reason: 'supported' as const },
+      { path: 'README.md', name: 'README.md', kind: 'markdown' as const, reason: 'supported' as const },
+      { path: 'package.json', name: 'package.json', kind: 'code' as const, reason: 'supported' as const },
+      { path: 'docs/项目说明.md', name: '项目说明.md', kind: 'markdown' as const, reason: 'supported' as const },
+      { path: 'src/other.ts', name: 'other.ts', kind: 'code' as const, reason: 'supported' as const },
+    ]
+    expect(selectWorkspaceFocusedTargets(supported, '这个项目搞的什么').map((item) => item.path)).toEqual([
+      'README.md', 'docs/项目说明.md', 'package.json', 'src/main.ts',
+    ])
+  })
+
+  it('applies tighter size limits to focused reads', async () => {
+    const focusedWorkspace: WorkspaceSnapshot = {
+      ...workspace,
+      entries: [{ name: 'README.md', path: 'README.md', kind: 'file', children: [], documentKind: 'markdown' }],
+    }
+    const result = await readWorkspaceDocuments(focusedWorkspace, async (path) => ({
+      path, name: 'README.md', content: 'x', kind: 'markdown' as const, sizeBytes: 129 * 1024,
+    }), { strategy: 'focused', prompt: '介绍这个项目' })
+    expect(result.documents).toHaveLength(0)
+    expect(result.excluded[0].reason).toBe('too-large')
   })
 
   it('parses and verifies source line evidence', () => {

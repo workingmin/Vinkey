@@ -142,6 +142,8 @@ fn is_loopback_base(base_url: &str) -> bool {
 fn enforce_source_policy(request: &ChatRequest, profile: &ModelProfile) -> Result<(), String> {
     match request.source_policy.as_str() {
         "metadata-only" => Ok(()),
+        "local-excerpts" if is_loopback_base(&profile.base_url) => Ok(()),
+        "local-excerpts" => Err("正文摘录仅允许发送到本机回环模型；远程正文授权尚未启用".into()),
         "local-chunks" if is_loopback_base(&profile.base_url) => Ok(()),
         "local-chunks" => Err("正文分块仅允许发送到本机回环模型；远程正文授权尚未启用".into()),
         _ => Err("未知的模型数据来源策略".into()),
@@ -673,5 +675,28 @@ mod tests {
         assert!(is_loopback_base("http://[::1]:8080"));
         assert!(!is_loopback_base("http://192.168.1.5:11434"));
         assert!(!is_loopback_base("https://api.openai.com/v1"));
+    }
+
+    #[test]
+    fn protects_focused_excerpts_with_the_loopback_policy() {
+        let request = ChatRequest {
+            request_id: "request-1".into(),
+            profile_id: "profile-1".into(),
+            source_policy: "local-excerpts".into(),
+            messages: vec![],
+        };
+        let mut profile = ModelProfile {
+            id: "profile-1".into(),
+            name: "Local".into(),
+            kind: "openai-compatible".into(),
+            base_url: "http://127.0.0.1:1234/v1".into(),
+            model: "local-model".into(),
+            context_window: 8192,
+            has_api_key: false,
+            updated_at: 0,
+        };
+        assert!(enforce_source_policy(&request, &profile).is_ok());
+        profile.base_url = "https://api.example.com/v1".into();
+        assert!(enforce_source_policy(&request, &profile).is_err());
     }
 }

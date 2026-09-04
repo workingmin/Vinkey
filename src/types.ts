@@ -3,9 +3,9 @@ export type DocumentKind = 'markdown' | 'text' | 'code' | 'image' | 'pdf' | 'aud
 export type ViewMode = 'edit' | 'split' | 'preview'
 export type ProviderKind = 'ollama' | 'openai-compatible'
 export type ThemeMode = 'dark' | 'light'
-export type AnalysisMode = 'overview' | 'deep'
+export type AnalysisMode = 'overview' | 'focused' | 'deep'
 export type AnalysisCoverage = 'index-only' | 'targeted' | 'exhaustive'
-export type SourcePolicy = 'metadata-only' | 'local-chunks'
+export type SourcePolicy = 'metadata-only' | 'local-excerpts' | 'local-chunks'
 
 export interface WorkspaceEntry {
   name: string

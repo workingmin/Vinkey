@@ -14,6 +14,7 @@ export type SkillId =
   | 'character-arc-extraction'
   | 'document-overview'
   | 'workspace-overview'
+  | 'workspace-focused-analysis'
   | 'workspace-analysis'
 
 export type ToolPermission =
@@ -103,7 +104,7 @@ const toolDefinitions: ToolDefinition[] = [
   },
   {
     name: 'stream_chat', version: '1.0.0', description: '调用已配置的本地或兼容模型并流式返回结果',
-    inputSchema: { type: 'object', required: ['requestId', 'profileId', 'sourcePolicy', 'messages'], properties: { requestId: { type: 'string' }, profileId: { type: 'string' }, sourcePolicy: { enum: ['metadata-only', 'local-chunks'] }, messages: anyArray } },
+    inputSchema: { type: 'object', required: ['requestId', 'profileId', 'sourcePolicy', 'messages'], properties: { requestId: { type: 'string' }, profileId: { type: 'string' }, sourcePolicy: { enum: ['metadata-only', 'local-excerpts', 'local-chunks'] }, messages: anyArray } },
     outputSchema: anyObject, permission: 'model-invoke', sideEffects: ['draft'], timeoutMs: 300_000,
     cancellable: true, auditFields: ['requestId', 'profileId'],
   },
@@ -154,6 +155,12 @@ const skillDefinitions: SkillDefinition[] = [
     name: 'workspace-overview', version: '1.0.0', description: '仅依据工作区画像、文档画像和已有摘要进行项目概览',
     allowedTools: ['get_workspace_profile', 'list_document_profiles', 'get_project_digest'], contextScope: 'workspace', sideEffects: ['draft'],
     approvalPolicy: 'auto', modelRequirements: 'none', failureAndRetry: '索引或摘要不可用时降级为确定性清单概览，不升级正文权限。',
+  },
+  {
+    name: 'workspace-focused-analysis', version: '1.0.0', description: '依据项目画像和少量高信号文件摘录快速回答项目性质与用途',
+    allowedTools: ['get_workspace_profile', 'list_document_profiles', 'get_project_digest', 'read_document', 'stream_chat', 'search_project_memory'],
+    contextScope: 'workspace', sideEffects: ['draft'], approvalPolicy: 'auto', modelRequirements: 'configured',
+    failureAndRetry: '证据不足时明确覆盖范围并建议深度分析，不自动扩大读取目标。',
   },
   {
     name: 'general-conversation', version: '1.0.0', description: '普通对话和创作建议，不写入工作区',
@@ -222,6 +229,13 @@ export function getTaskCapabilities(intent: TaskIntent, analysisMode: AnalysisMo
   }
   if (analysisMode === 'overview' && (intent === 'document-analysis' || intent === 'character-analysis')) {
     return { agent: 'StoryDeconstruction', skill: 'document-overview', allowedTools: ['list_document_profiles', 'get_document_digest', 'stream_chat'] }
+  }
+  if (analysisMode === 'focused' && intent === 'workspace-analysis') {
+    return {
+      agent: 'StoryDeconstruction',
+      skill: 'workspace-focused-analysis',
+      allowedTools: ['get_workspace_profile', 'list_document_profiles', 'get_project_digest', 'read_document', 'stream_chat', 'search_project_memory'],
+    }
   }
   const value = taskCapabilities[intent]
   return { ...value, allowedTools: [...value.allowedTools] }

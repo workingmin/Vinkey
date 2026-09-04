@@ -39,6 +39,15 @@ describe('runtime capability registry', () => {
     expect(plan.allowedTools).toContain('chunk_document')
   })
 
+  it('gives focused analysis bounded read tools without chunk orchestration', () => {
+    const plan = classifyTask('这个项目搞的什么', false)
+    expect(plan.skill).toBe('workspace-focused-analysis')
+    expect(plan.allowedTools).toContain('read_document')
+    expect(plan.allowedTools).toContain('stream_chat')
+    expect(plan.allowedTools).not.toContain('chunk_document')
+    expect(plan.allowedTools).not.toContain('write_analysis_artifact')
+  })
+
   it('keeps overview tool schemas free of raw source fields', () => {
     for (const name of ['get_workspace_profile', 'list_document_profiles', 'get_document_digest', 'get_project_digest']) {
       const schema = JSON.stringify(getToolDefinition(name)?.outputSchema)

@@ -61,13 +61,25 @@ describe('task routing', () => {
     expect(plan.sourcePolicy).toBe('local-chunks')
   })
 
-  it.each(['这个项目', '分析这个项目', '介绍这个项目', '这个项目是做什么的', '总结这个项目', '这个项目里有哪些角色'])(
-    'routes semantic workspace question %s to deep analysis',
+  it.each(['这个项目', '分析这个项目', '介绍这个项目', '这个项目是做什么的', '这个项目搞的什么', '这个项目有什么用'])(
+    'routes broad workspace question %s to focused analysis',
     (prompt) => {
       const plan = classifyTask(prompt, false)
       expect(plan.scope).toBe('workspace')
+      expect(plan.analysisMode).toBe('focused')
+      expect(plan.documentAccess).toBe('workspace-focused')
+      expect(plan.sourcePolicy).toBe('local-excerpts')
+      expect(plan.confidence).toBe('medium')
+    },
+  )
+
+  it.each(['深入分析这个项目', '总结这个项目', '这个项目里有哪些角色', '分析当前项目的故事结构'])(
+    'keeps evidence-heavy workspace question %s on deep analysis',
+    (prompt) => {
+      const plan = classifyTask(prompt, false)
       expect(plan.analysisMode).toBe('deep')
       expect(plan.documentAccess).toBe('workspace')
+      expect(plan.sourcePolicy).toBe('local-chunks')
     },
   )
 

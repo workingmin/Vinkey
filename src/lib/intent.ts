@@ -13,7 +13,7 @@ export type TaskIntent =
 export type TaskOperation = 'segment' | 'analyze' | 'chat'
 export type TaskScope = 'selected-documents' | 'current-document' | 'workspace' | 'conversation'
 export type TaskSideEffect = 'read' | 'draft' | 'proposal'
-export type DocumentAccess = 'none' | 'selected-metadata' | 'selected' | 'workspace-metadata' | 'workspace'
+export type DocumentAccess = 'none' | 'selected-metadata' | 'selected' | 'workspace-metadata' | 'workspace-focused' | 'workspace'
 
 export interface TaskPlan {
   intent: TaskIntent
@@ -54,14 +54,23 @@ function asksForWorkspaceMetadata(prompt: string): boolean {
   return metadataQuestion && !semanticQuestion
 }
 
+function asksForDeepWorkspaceAnalysis(prompt: string): boolean {
+  return exhaustiveCoverage(prompt)
+    || /(?:深入|深度|详细|全面|系统)(?:地)?(?:分析|研究|梳理|解读)|(?:文件内容|正文|讲了什么|写了什么|主题|人物|角色|关系|情节|剧情|故事结构|主线|支线|设定|世界观|风格|摘要|总结|梗概|伏笔)/u.test(prompt)
+}
+
 function exhaustiveCoverage(prompt: string): boolean {
   return /(?:完整|全量|全部|所有|通读|逐章|逐节|逐文件|不要遗漏|不遗漏|一字不漏)/u.test(prompt)
 }
 
 function workspaceAnalysisPolicy(prompt: string): Pick<TaskPlan, 'analysisMode' | 'analysisCoverage' | 'sourcePolicy'> {
-  return asksForWorkspaceMetadata(prompt)
-    ? { analysisMode: 'overview', analysisCoverage: 'index-only', sourcePolicy: 'metadata-only' }
-    : { analysisMode: 'deep', analysisCoverage: exhaustiveCoverage(prompt) ? 'exhaustive' : 'targeted', sourcePolicy: 'local-chunks' }
+  if (asksForWorkspaceMetadata(prompt)) {
+    return { analysisMode: 'overview', analysisCoverage: 'index-only', sourcePolicy: 'metadata-only' }
+  }
+  if (asksForDeepWorkspaceAnalysis(prompt)) {
+    return { analysisMode: 'deep', analysisCoverage: exhaustiveCoverage(prompt) ? 'exhaustive' : 'targeted', sourcePolicy: 'local-chunks' }
+  }
+  return { analysisMode: 'focused', analysisCoverage: 'targeted', sourcePolicy: 'local-excerpts' }
 }
 
 function deepAnalysisPolicy(prompt: string): Pick<TaskPlan, 'analysisMode' | 'analysisCoverage' | 'sourcePolicy'> {
@@ -113,10 +122,12 @@ export function classifyTask(value: string, hasContextDocuments: boolean): TaskP
       operation: 'analyze',
       scope: 'workspace',
       sideEffect: 'draft',
-      documentAccess: policy.analysisMode === 'overview' ? 'workspace-metadata' : 'workspace',
+      documentAccess: policy.analysisMode === 'overview'
+        ? 'workspace-metadata'
+        : policy.analysisMode === 'focused' ? 'workspace-focused' : 'workspace',
       ...policy,
-      requiresModel: policy.analysisMode === 'deep',
-      confidence: 'high',
+      requiresModel: policy.analysisMode !== 'overview',
+      confidence: policy.analysisMode === 'focused' ? 'medium' : 'high',
     })
   }
 

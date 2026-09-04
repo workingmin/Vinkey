@@ -33,6 +33,7 @@ import { getDocumentKind, getLanguageName, isEditableDocument } from './lib/file
 import { findNewTextFiles, flattenWorkspaceFiles } from './lib/tree'
 import { readWorkspaceDocuments } from './lib/workspaceAnalysis'
 import { buildSelectedDocumentsOverviewMessage, formatWorkspaceOverview } from './lib/workspaceOverview'
+import { buildFocusedWorkspaceMessage } from './lib/focusedAnalysis'
 import { isLoopbackModelEndpoint } from './lib/modelPrivacy'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { Menu, MenuItem, PredefinedMenuItem, Submenu } from '@tauri-apps/api/menu'
@@ -581,8 +582,8 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
 
     const selectedModel = activeModel
     if (taskPlan.requiresModel && !selectedModel) { setSettingsOpen(true); return }
-    if (taskPlan.requiresModel && taskPlan.sourcePolicy === 'local-chunks' && selectedModel && !isLoopbackModelEndpoint(selectedModel.baseUrl)) {
-      setError('深度分析会逐块读取正文，当前仅允许使用 localhost 或 127.0.0.1 的本机模型。远程正文授权尚未启用。')
+    if (taskPlan.requiresModel && taskPlan.sourcePolicy !== 'metadata-only' && selectedModel && !isLoopbackModelEndpoint(selectedModel.baseUrl)) {
+      setError(`${taskPlan.analysisMode === 'focused' ? '聚焦分析会读取少量正文摘录' : '深度分析会逐块读取正文'}，当前仅允许使用 localhost 或 127.0.0.1 的本机模型。远程正文授权尚未启用。`)
       return
     }
 
@@ -594,6 +595,28 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
         setError('项目概览需要先打开工作区。')
         return
       }
+    }
+    if (taskPlan.documentAccess === 'workspace-focused') {
+      if (!workspace) {
+        setError('项目聚焦分析需要先打开工作区。')
+        return
+      }
+      setAnalysisStatus('正在定位项目关键文件…')
+      let loaded: Awaited<ReturnType<typeof readWorkspaceDocuments>>
+      try {
+        loaded = await readWorkspaceDocuments(workspace, readDocument, {
+          coverage: 'targeted',
+          prompt: value,
+          strategy: 'focused',
+        })
+      } catch (error) {
+        setAnalysisStatus(null)
+        setError(`读取项目关键文件失败：${String(error)}`)
+        return
+      }
+      requestContextDocuments = loaded.documents
+      excludedWorkspaceDocuments = loaded.excluded
+      overviewContext = buildFocusedWorkspaceMessage(workspace, requestContextDocuments, selectedModel?.contextWindow ?? 32768)
     }
     if (taskPlan.documentAccess === 'selected-metadata') {
       overviewContext = buildSelectedDocumentsOverviewMessage(selectedContextDocuments)
@@ -641,7 +664,8 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
     const requestBudget = taskPlan.requiresModel
       ? calculateContextBudget(messages, [], budgetDraft, selectedModel?.contextWindow ?? 32768)
       : null
-    const useLongTextPipeline = taskPlan.intent !== 'structure-segmentation'
+    const useLongTextPipeline = taskPlan.analysisMode !== 'focused'
+      && taskPlan.intent !== 'structure-segmentation'
       && (taskPlan.documentAccess === 'workspace' || taskPlan.documentAccess === 'selected')
       && requestContextDocuments.length > 0
     void recordRuntimeEvent(
@@ -769,6 +793,9 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
         }
         if (taskPlan.analysisMode === 'overview') {
           appendChatRunChunk(nextConversationId, '\n\n> 分析范围：概览分析 · index-only · metadata-only。本次未读取文件正文。')
+        } else if (taskPlan.analysisMode === 'focused') {
+          const sources = requestContextDocuments.map((document) => `\`${document.path}\``).join('、') || '仅项目画像和已有项目记忆'
+          appendChatRunChunk(nextConversationId, `\n\n> 分析范围：聚焦分析 · targeted · local-excerpts。依据：${sources}。本次未启动全项目分块分析。`)
         }
       }
     } catch (error) {
