@@ -47,7 +47,8 @@ describe('task routing', () => {
     const plan = classifyTask('林晚和林崇山是什么关系？', true)
     expect(plan.intent).toBe('character-analysis')
     expect(plan.operation).toBe('analyze')
-    expect(plan.documentAccess).toBe('selected')
+    expect(plan.documentAccess).toBe('selected-metadata')
+    expect(plan.analysisMode).toBe('overview')
     expect(plan.confidence).toBe('high')
   })
 
@@ -55,6 +56,35 @@ describe('task routing', () => {
     const plan = classifyTask('分析当前项目有哪些文件内容', false)
     expect(plan.intent).toBe('workspace-analysis')
     expect(plan.scope).toBe('workspace')
-    expect(plan.documentAccess).toBe('workspace')
+    expect(plan.documentAccess).toBe('workspace-metadata')
+    expect(plan.analysisCoverage).toBe('index-only')
+    expect(plan.sourcePolicy).toBe('metadata-only')
+  })
+
+  it.each(['分析这个项目', '介绍这个项目', '这个项目是做什么的', '总结这个项目', '这个项目里有哪些角色'])(
+    'anchors %s to a workspace overview',
+    (prompt) => {
+      const plan = classifyTask(prompt, false)
+      expect(plan.scope).toBe('workspace')
+      expect(plan.analysisMode).toBe('overview')
+      expect(plan.documentAccess).toBe('workspace-metadata')
+    },
+  )
+
+  it('separates deep mode from exhaustive coverage', () => {
+    const targeted = classifyTask('详细分析这个项目的人物关系', false)
+    expect(targeted.analysisMode).toBe('deep')
+    expect(targeted.analysisCoverage).toBe('targeted')
+    expect(targeted.documentAccess).toBe('workspace')
+
+    const exhaustive = classifyTask('完整通读当前项目，逐章分析，不要遗漏', false)
+    expect(exhaustive.analysisMode).toBe('deep')
+    expect(exhaustive.analysisCoverage).toBe('exhaustive')
+  })
+
+  it('uses the selected UI mode unless the prompt explicitly requires depth', () => {
+    expect(classifyTask('分析这个项目', false, 'deep').analysisMode).toBe('deep')
+    expect(classifyTask('深入分析这个项目', false, 'overview').analysisMode).toBe('deep')
+    expect(classifyTask('概览这个项目', false, 'deep').analysisMode).toBe('overview')
   })
 })

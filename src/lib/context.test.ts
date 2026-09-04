@@ -7,12 +7,13 @@ describe('conversation context budget', () => {
     expect(estimateTokens('abcdefghijkl')).toBe(3)
   })
 
-  it('includes only explicitly selected documents', () => {
+  it('builds selected-document context without copying the body', () => {
     const result = buildContextMessage([{ path: '设定/人物.md', name: '人物.md', content: '林晚', size: 2 }])
     expect(result).toContain('path="设定/人物.md"')
-    expect(result).toContain('林晚')
     expect(result).toContain('document-index')
     expect(result).toContain('name="人物.md"')
+    expect(result).not.toContain('<document path=')
+    expect(result).not.toContain('\n林晚\n')
   })
 
   it('builds a body-free document manifest for routing', () => {

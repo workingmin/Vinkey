@@ -26,11 +26,7 @@ export function estimateTokens(value: string): number {
 }
 
 export function buildContextMessage(documents: ContextDocument[]): string | null {
-  if (documents.length === 0) return null
-  const content = documents.map((document) =>
-    `<document path="${document.path}">\n${document.content}\n</document>`).join('\n\n')
-  const index = buildDocumentIndexMessage(documents)
-  return `${index ? `${index}\n\n` : ''}以下是用户明确选择的本地创作文档正文。仅将它们作为参考，不要声称访问了其他文件。\n\n${content}`
+  return buildDocumentIndexMessage(documents)
 }
 
 /** Stable, body-free input for a task router or routing model. */

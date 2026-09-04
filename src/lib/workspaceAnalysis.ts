@@ -8,12 +8,18 @@ const GENERATED_NAMES = new Set(['package-lock.json', 'pnpm-lock.yaml', 'yarn.lo
 const MAX_WORKSPACE_DOCUMENTS = 500
 const MAX_DOCUMENT_BYTES = 64 * 1024 * 1024
 const MAX_WORKSPACE_BYTES = 256 * 1024 * 1024
+const MAX_TARGETED_DOCUMENTS = 24
 
 export interface WorkspaceInventory {
   workspaceId: string
   documents: WorkspaceDocumentRef[]
   supported: WorkspaceDocumentRef[]
   excluded: WorkspaceDocumentRef[]
+}
+
+export interface WorkspaceReadOptions {
+  coverage?: 'targeted' | 'exhaustive'
+  prompt?: string
 }
 
 function isSensitive(path: string, name: string): boolean {
@@ -36,15 +42,37 @@ export function buildWorkspaceInventory(workspace: WorkspaceSnapshot): Workspace
   }
 }
 
+export function selectWorkspaceAnalysisTargets(
+  supported: WorkspaceDocumentRef[],
+  prompt: string,
+  coverage: 'targeted' | 'exhaustive',
+): WorkspaceDocumentRef[] {
+  if (coverage === 'exhaustive') return supported
+  const normalized = prompt.toLocaleLowerCase()
+  const pathMatches = supported.filter((document) => normalized.includes(document.path.toLocaleLowerCase()))
+  const mentioned = pathMatches.length > 0 ? pathMatches : supported.filter((document) => {
+    const name = document.name.toLocaleLowerCase()
+    const stem = name.replace(/\.[^.]+$/u, '')
+    return normalized.includes(name) || (stem.length >= 2 && normalized.includes(stem))
+  })
+  return (mentioned.length > 0 ? mentioned : supported).slice(0, MAX_TARGETED_DOCUMENTS)
+}
+
 export async function readWorkspaceDocuments(
   workspace: WorkspaceSnapshot,
   read: (path: string) => Promise<{ path: string; name: string; content: string; kind: DocumentKind; sizeBytes?: number }>,
+  options: WorkspaceReadOptions = {},
 ): Promise<{ documents: ContextDocument[]; excluded: WorkspaceDocumentRef[] }> {
   const inventory = buildWorkspaceInventory(workspace)
+  const targets = selectWorkspaceAnalysisTargets(inventory.supported, options.prompt ?? '', options.coverage ?? 'exhaustive')
+  const targetPaths = new Set(targets.map((document) => document.path))
   const documents: ContextDocument[] = []
-  const excluded = [...inventory.excluded]
+  const excluded = [
+    ...inventory.excluded,
+    ...inventory.supported.filter((document) => !targetPaths.has(document.path)).map((document) => ({ ...document, reason: 'not-targeted' as const })),
+  ]
   let totalBytes = 0
-  for (const reference of inventory.supported) {
+  for (const reference of targets) {
     if (documents.length >= MAX_WORKSPACE_DOCUMENTS) {
       excluded.push({ ...reference, reason: 'too-large' })
       continue

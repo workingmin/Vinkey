@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildWorkspaceInventory, parseEvidenceReferences, readWorkspaceDocuments, verifyEvidenceReferences } from './workspaceAnalysis'
+import { buildWorkspaceInventory, parseEvidenceReferences, readWorkspaceDocuments, selectWorkspaceAnalysisTargets, verifyEvidenceReferences } from './workspaceAnalysis'
 import type { WorkspaceSnapshot } from '../types'
 
 const workspace: WorkspaceSnapshot = {
@@ -32,6 +32,13 @@ describe('workspace analysis inventory and evidence', () => {
     }))
     expect(result.documents).toHaveLength(0)
     expect(result.excluded[0].reason).toBe('too-large')
+  })
+
+  it('keeps targeted and exhaustive coverage separate', () => {
+    const supported = Array.from({ length: 30 }, (_, index) => ({ path: `章节/${index + 1}.md`, name: `${index + 1}.md`, kind: 'markdown' as const, reason: 'supported' as const }))
+    expect(selectWorkspaceAnalysisTargets(supported, '深入分析章节/29.md', 'targeted').map((item) => item.path)).toEqual(['章节/29.md'])
+    expect(selectWorkspaceAnalysisTargets(supported, '深入分析这个项目', 'targeted')).toHaveLength(24)
+    expect(selectWorkspaceAnalysisTargets(supported, '完整通读这个项目', 'exhaustive')).toHaveLength(30)
   })
 
   it('parses and verifies source line evidence', () => {

@@ -3,6 +3,9 @@ export type DocumentKind = 'markdown' | 'text' | 'code' | 'image' | 'pdf' | 'aud
 export type ViewMode = 'edit' | 'split' | 'preview'
 export type ProviderKind = 'ollama' | 'openai-compatible'
 export type ThemeMode = 'dark' | 'light'
+export type AnalysisMode = 'overview' | 'deep'
+export type AnalysisCoverage = 'index-only' | 'targeted' | 'exhaustive'
+export type SourcePolicy = 'metadata-only' | 'local-chunks'
 
 export interface WorkspaceEntry {
   name: string
@@ -22,7 +25,7 @@ export interface WorkspaceDocumentRef {
   path: string
   name: string
   kind: DocumentKind
-  reason?: 'supported' | 'sensitive' | 'unsupported' | 'too-large' | 'read-error'
+  reason?: 'supported' | 'sensitive' | 'unsupported' | 'not-targeted' | 'too-large' | 'read-error'
 }
 
 export interface DocumentSnapshot {
@@ -284,6 +287,7 @@ export interface CharacterNeighbor {
 export interface ChatRequest {
   requestId: string
   profileId: string
+  sourcePolicy: SourcePolicy
   messages: Array<Pick<ChatMessage, 'role' | 'content'>>
 }
 

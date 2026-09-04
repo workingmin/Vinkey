@@ -138,7 +138,7 @@ export function batchSummaries(records: SummaryRecord[], contextWindow: number, 
 async function collectResponse(requestId: string, profileId: string, messages: Array<{ role: 'user' | 'assistant'; content: string }>): Promise<string> {
   let content = ''
   let streamError: string | null = null
-  await streamChat({ requestId, profileId, messages }, (event: ChatStreamEvent) => {
+  await streamChat({ requestId, profileId, sourcePolicy: 'local-chunks', messages }, (event: ChatStreamEvent) => {
     if (event.type === 'chunk') content += event.content
     if (event.type === 'error') streamError = event.message
   })
