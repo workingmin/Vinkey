@@ -61,7 +61,7 @@ npm run package:mac
 npm run package:mac -- --install --open
 ```
 
-其中 `--install` 会将新生成的 `.app` 更新到 `/Applications/Vinkey.app`，`--open` 会启动该版本；不带参数时脚本只构建，不修改 `/Applications`。公开分发前需要配置 Apple Developer ID 证书、公证凭据；Windows 公开分发建议配置代码签名证书。脚本不会内置或读取仓库中的签名密钥。
+其中 `--install` 会将新生成的 `.app` 更新到 `/Applications/Vinkey.app`，`--open` 会启动该版本；不带参数时脚本只构建，不修改 `/Applications`。DMG 使用无 Finder 自动化的兼容模式生成，避免构建被 macOS 的 Apple Events 权限阻止。公开分发前需要配置 Apple Developer ID 证书、公证凭据；Windows 公开分发建议配置代码签名证书。脚本不会内置或读取仓库中的签名密钥。
 
 ## 开发文档
 
