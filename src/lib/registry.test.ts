@@ -23,8 +23,24 @@ describe('runtime capability registry', () => {
   it('adds agent, skill and tool capabilities to routed plans', () => {
     const plan = classifyTask('分析当前项目有哪些文件内容', false)
     expect(plan.agent).toBe('StoryDeconstruction')
+    expect(plan.skill).toBe('workspace-overview')
+    expect(plan.allowedTools).toContain('get_workspace_profile')
+    expect(plan.allowedTools).not.toContain('read_document')
+    expect(plan.allowedTools).not.toContain('chunk_document')
+    expect(plan.allowedTools).toEqual(getTaskCapabilities(plan.intent, plan.analysisMode).allowedTools)
+  })
+
+  it('grants chunk tools only to deep analysis', () => {
+    const plan = classifyTask('深入分析当前项目', false)
     expect(plan.skill).toBe('workspace-analysis')
+    expect(plan.allowedTools).toContain('read_document')
     expect(plan.allowedTools).toContain('chunk_document')
-    expect(plan.allowedTools).toEqual(getTaskCapabilities(plan.intent).allowedTools)
+  })
+
+  it('keeps overview tool schemas free of raw source fields', () => {
+    for (const name of ['get_workspace_profile', 'list_document_profiles', 'get_document_digest', 'get_project_digest']) {
+      const schema = JSON.stringify(getToolDefinition(name)?.outputSchema)
+      expect(schema).not.toMatch(/"(?:content|text|chunk|preview|quote)"\s*:/u)
+    }
   })
 })

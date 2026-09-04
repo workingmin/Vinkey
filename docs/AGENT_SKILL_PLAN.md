@@ -70,6 +70,59 @@ confidence   路由置信度
 
 低置信度输入先由日常聊天 Agent 回答，或只提出一个澄清问题；不能因为出现“故事”“人物”等词就自动修改作品数据。
 
+### 2.1 分析模式与项目锚定
+
+面向用户的分析模式统一命名为：
+
+- **概览分析（Overview Analysis）**：默认模式。回答“这个项目是什么”“分析这个项目”“有哪些文件/人物”等全局问题，只使用工作区清单、结构化元数据、索引状态和已有分析摘要，不在本次请求中读取正文。
+- **深度分析（Deep Analysis）**：用户显式选择或使用“详细、深入、逐章”等表达时启用。正文仅由受控分析 Worker 按块读取并执行 Map-Reduce，主对话 Agent 只接收阶段摘要、证据引用和覆盖报告。
+
+“概览”表示观察层级，适合作为模式名；“概要”表示一种输出格式，保留用于“内容概要”“摘要”等分析产物，不用作工作模式名。“深度”只表示允许进入正文证据链，不等于自动完整通读。
+
+任务描述必须将以下四个维度分开建模：
+
+```text
+scope         workspace / active-document / selected-documents
+mode          overview / deep
+coverage      index-only / targeted / exhaustive
+sourcePolicy  metadata-only / local-chunks
+```
+
+| 模式 | 默认覆盖 | 数据来源 | 典型请求 |
+| --- | --- | --- | --- |
+| `overview` | `index-only` | `metadata-only` | “介绍这个项目”“分析这个项目”“这个项目有哪些角色” |
+| `deep` | `targeted` | `local-chunks` | “深入分析这个项目的人物关系”“详细分析这篇文档” |
+| `deep` | `exhaustive` | `local-chunks` | “完整通读当前项目并逐章分析，不要遗漏” |
+
+路由遵守以下不变量：
+
+1. “这个项目”“当前项目”“工作区”等表达先锚定 `scope=workspace`，不能因为没有显式文件名而退化为普通聊天。
+2. 未出现深度要求时，“分析这个项目”仍为概览分析；“分析”是任务操作，不是读取全文的授权。
+3. 只有用户显式选择深度模式或使用“详细、深入、逐章”等词，才允许从 `overview` 升级为 `deep`。
+4. 只有“完整、全量、全部、通读、不遗漏”等明确覆盖要求，才设置 `coverage=exhaustive`；否则深度模式使用 `targeted`。
+5. Runtime、模型路由器和 Skill 均不得静默把 `metadata-only` 升级为 `local-chunks`。
+6. `exhaustive` 是覆盖要求，不是单次投喂许可；单个文件乃至全项目正文都禁止一次性放入模型请求，必须逐块处理。
+
+概览链路使用轻量 Service/Tool，而不是把正文伪装成“上下文”：
+
+```text
+get_workspace_profile   → 工作区 ID/名称、目录数、文件数、类型分布、索引状态
+list_document_profiles  → 相对路径、类型、字节数、修改时间、标题层级、指纹
+get_document_digest     → 已缓存且带版本/来源的文档摘要；无缓存则返回 unavailable
+get_project_digest      → 已缓存且带覆盖率/版本的项目摘要；无缓存则返回 unavailable
+```
+
+上述 Tool 的输出 schema 禁止出现 `content`、`text`、`chunk`、`preview`、`quote` 等正文字段。确定性元数据不能从首段或正文前缀生成“摘要”；语义摘要只能来自独立的、可失效的分析产物。
+
+深度链路统一为：
+
+```text
+目标解析 → 本地清单/过滤 → 按 ID 读取 → 结构化分块 → Map 局部分析
+        → Reduce 分层汇总 → Synthesis → 证据与覆盖报告 → 主对话回答
+```
+
+每次结果必须报告 `mode`、`coverage`、目标文档数、已处理/排除文档数、分块数、源指纹和摘要版本。原始块只在本地分析 Worker 与获授权的模型端点之间短暂存在；主聊天消息、运行日志、概览索引和 Tool 调用记录均不得保存正文。原始块默认只允许发送到本机或回环模型端点；远程模型处理正文需要后续单独授权，不能继承普通聊天的联网配置。
+
 ## 3. Agent 计划
 
 ### 3.1 P0：必须完成的核心 Agent
@@ -195,6 +248,7 @@ Agent 不直接处理长文本，也不自行管理重试、缓存和文件写�
 | `LongTextAnalysisService` | Map-Reduce 编排人物、事件、主线、伏笔和设定提取 | `AnalysisArtifact` |
 | `ArtifactCacheService` | 按文档/算法/模型/Prompt/schema 版本缓存和增量失效 | 缓存记录 |
 | `EvidenceService` | 将分析结果映射回原文位置 | `EvidenceReference` |
+| `WorkspaceIntelligenceService` | 提供不含正文的工作区画像、文档画像和版本化摘要查询 | `WorkspaceProfile` / `DocumentProfile` / `DigestReference` |
 | `ModelCapabilityService` | 测量有效上下文、速度、格式稳定性和长距离召回 | `ModelCapability` |
 | `JobService` | 后台队列、进度、取消、暂停、恢复、重试和幂等 | `AnalysisJob` |
 
@@ -466,8 +520,9 @@ quality_profile
   → TaskRouter（指令 + 不含正文的文档清单，先判断 intent / scope / operation / side_effect / document_access）
   → Tool/Skill Registry（版本、权限、副作用、超时、可取消性和允许工具）
   ├─ StructureSegmentation → 本地 StructureParser/ChunkService → ChapterSplitResult + 输出文件
-  ├─ 项目级分析 → WorkspaceInventory（敏感/类型/大小过滤）→ 文件索引卡片 → LongTextAnalysis → 项目汇总 + evidence.json
-  ├─ 文档分析 → LongTextAnalysis Service → Chunk/Map/Reduce/Synthesis → Ollama/OpenAI-compatible Provider
+  ├─ 项目概览 → WorkspaceIntelligence（清单/结构元数据/缓存摘要）→ metadata-only 回答
+  ├─ 项目深度分析 → WorkspaceInventory（敏感/类型/大小过滤）→ Chunk/Map/Reduce/Synthesis → 项目汇总 + evidence.json
+  ├─ 文档深度分析 → LongTextAnalysis Service → Chunk/Map/Reduce/Synthesis → 获授权的本地模型 Provider
   ├─ 明确引用文档的创作请求 → context budget → 小文本 stream_chat / 超长文本 Chunk/Map/Reduce/Synthesis
   └─ 普通聊天 → 不读取所选文档正文 → stream_chat → Ollama/OpenAI-compatible Provider
        → SQLite 会话消息
@@ -483,7 +538,7 @@ quality_profile
   → Rust petgraph 统计、连通分量和有限跳数路径
 ```
 
-`chunk_document` 已实现 Rust 逻辑、Tauri 命令、前端类型和调用封装；当前新增的本地 `structureSegmentation` 服务会在模型请求前识别章节/场景候选，并通过文件写入 Tool 在源文档同级生成粗略拆分文件。项目级分析已增加确定性工作区清单、安全过滤、文件索引卡片、全项目长文本编排、内容指纹、任务阶段产物和证据行号校验；不支持或超限文件会进入排除清单，不会发送给模型。长文本任务现在会持久化任务清单，支持列出未完成任务、读取已有分块/摘要产物，并从已完成的 Map 阶段恢复进入 Reduce/Synthesis；恢复前会校验工作区、指令和源文档指纹。
+`chunk_document` 已实现 Rust 逻辑、Tauri 命令、前端类型和调用封装；当前新增的本地 `structureSegmentation` 服务会在模型请求前识别章节/场景候选，并通过文件写入 Tool 在源文档同级生成粗略拆分文件。项目级深度分析已增加确定性工作区清单、安全过滤、全项目长文本编排、内容指纹、任务阶段产物和证据行号校验；不支持或超限文件会进入排除清单，不会发送给模型。长文本任务现在会持久化任务清单，支持列出未完成任务、读取已有分块/摘要产物，并从已完成的 Map 阶段恢复进入 Reduce/Synthesis；恢复前会校验工作区、指令和源文档指纹。概览分析已实现正文零读取的工作区/文档画像，Tool Registry 按模式隔离读取能力；深度模型请求携带 `local-chunks`，并由前端与 Rust 服务层共同限制为回环模型端点。
 
 ### 11.2 尚未实现
 

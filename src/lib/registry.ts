@@ -1,3 +1,4 @@
+import type { AnalysisMode } from '../types'
 import type { TaskIntent, TaskSideEffect } from './intent'
 
 export type AgentId =
@@ -11,6 +12,8 @@ export type SkillId =
   | 'structure-enhancement'
   | 'long-text-analysis'
   | 'character-arc-extraction'
+  | 'document-overview'
+  | 'workspace-overview'
   | 'workspace-analysis'
 
 export type ToolPermission =
@@ -57,6 +60,30 @@ const anyArray = { type: 'array' } as const
 
 const toolDefinitions: ToolDefinition[] = [
   {
+    name: 'get_workspace_profile', version: '1.0.0', description: '获取不含正文和绝对路径的工作区画像',
+    inputSchema: { type: 'object', properties: {} },
+    outputSchema: { type: 'object', properties: { workspaceId: { type: 'string' }, name: { type: 'string' }, directoryCount: { type: 'integer' }, fileCount: { type: 'integer' }, documentKindCounts: anyObject } },
+    permission: 'workspace-read', sideEffects: ['read'], timeoutMs: 5_000, cancellable: false, auditFields: [],
+  },
+  {
+    name: 'list_document_profiles', version: '1.0.0', description: '分页列出不含正文的文档画像',
+    inputSchema: { type: 'object', properties: { cursor: { type: 'integer' }, limit: { type: 'integer' } } },
+    outputSchema: { type: 'object', properties: { documents: anyArray, nextCursor: { type: ['integer', 'null'] } } },
+    permission: 'workspace-read', sideEffects: ['read'], timeoutMs: 5_000, cancellable: false, auditFields: ['cursor', 'limit'],
+  },
+  {
+    name: 'get_document_digest', version: '1.0.0', description: '读取与文档指纹绑定的已有摘要，不触发正文读取',
+    inputSchema: { type: 'object', required: ['path'], properties: { path: { type: 'string' } } },
+    outputSchema: { type: 'object', properties: { status: { type: 'string' }, digestId: { type: ['string', 'null'] }, sourceFingerprint: { type: ['string', 'null'] } } },
+    permission: 'analysis-artifact-read', sideEffects: ['read'], timeoutMs: 5_000, cancellable: false, auditFields: ['path'],
+  },
+  {
+    name: 'get_project_digest', version: '1.0.0', description: '读取与工作区版本绑定的已有项目摘要，不触发正文读取',
+    inputSchema: { type: 'object', properties: {} },
+    outputSchema: { type: 'object', properties: { status: { type: 'string' }, digestId: { type: ['string', 'null'] }, coverage: { type: ['string', 'null'] } } },
+    permission: 'analysis-artifact-read', sideEffects: ['read'], timeoutMs: 5_000, cancellable: false, auditFields: [],
+  },
+  {
     name: 'read_document', version: '1.0.0', description: '读取授权工作区内的规范化文本文件',
     inputSchema: { type: 'object', required: ['path'], properties: { path: { type: 'string' } } },
     outputSchema: anyObject, permission: 'workspace-read', sideEffects: ['read'], timeoutMs: 10_000,
@@ -76,7 +103,7 @@ const toolDefinitions: ToolDefinition[] = [
   },
   {
     name: 'stream_chat', version: '1.0.0', description: '调用已配置的本地或兼容模型并流式返回结果',
-    inputSchema: { type: 'object', required: ['requestId', 'profileId', 'messages'], properties: { requestId: { type: 'string' }, profileId: { type: 'string' }, messages: anyArray } },
+    inputSchema: { type: 'object', required: ['requestId', 'profileId', 'sourcePolicy', 'messages'], properties: { requestId: { type: 'string' }, profileId: { type: 'string' }, sourcePolicy: { enum: ['metadata-only', 'local-chunks'] }, messages: anyArray } },
     outputSchema: anyObject, permission: 'model-invoke', sideEffects: ['draft'], timeoutMs: 300_000,
     cancellable: true, auditFields: ['requestId', 'profileId'],
   },
@@ -118,6 +145,16 @@ const toolDefinitions: ToolDefinition[] = [
 ]
 
 const skillDefinitions: SkillDefinition[] = [
+  {
+    name: 'document-overview', version: '1.0.0', description: '仅依据文档画像和已有摘要进行概览，不读取正文',
+    allowedTools: ['list_document_profiles', 'get_document_digest', 'stream_chat'], contextScope: 'selected-documents', sideEffects: ['draft'],
+    approvalPolicy: 'auto', modelRequirements: 'configured', failureAndRetry: '摘要不可用时只报告结构元数据，不升级正文权限。',
+  },
+  {
+    name: 'workspace-overview', version: '1.0.0', description: '仅依据工作区画像、文档画像和已有摘要进行项目概览',
+    allowedTools: ['get_workspace_profile', 'list_document_profiles', 'get_project_digest', 'stream_chat', 'search_project_memory'], contextScope: 'workspace', sideEffects: ['draft'],
+    approvalPolicy: 'auto', modelRequirements: 'configured', failureAndRetry: '索引或摘要不可用时降级为清单概览，不升级正文权限。',
+  },
   {
     name: 'general-conversation', version: '1.0.0', description: '普通对话和创作建议，不写入工作区',
     allowedTools: ['stream_chat', 'search_project_memory'], contextScope: 'conversation', sideEffects: ['draft'],
@@ -179,7 +216,13 @@ export function getSkillDefinition(name: string): SkillDefinition | undefined {
   return skill ? listSkillDefinitions().find((candidate) => candidate.name === name) : undefined
 }
 
-export function getTaskCapabilities(intent: TaskIntent): TaskCapabilities {
+export function getTaskCapabilities(intent: TaskIntent, analysisMode: AnalysisMode | null = null): TaskCapabilities {
+  if (analysisMode === 'overview' && intent === 'workspace-analysis') {
+    return { agent: 'StoryDeconstruction', skill: 'workspace-overview', allowedTools: ['get_workspace_profile', 'list_document_profiles', 'get_project_digest', 'stream_chat', 'search_project_memory'] }
+  }
+  if (analysisMode === 'overview' && (intent === 'document-analysis' || intent === 'character-analysis')) {
+    return { agent: 'StoryDeconstruction', skill: 'document-overview', allowedTools: ['list_document_profiles', 'get_document_digest', 'stream_chat'] }
+  }
   const value = taskCapabilities[intent]
   return { ...value, allowedTools: [...value.allowedTools] }
 }

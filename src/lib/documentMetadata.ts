@@ -8,11 +8,10 @@ export interface DocumentMetadataCard {
   contentChars: number
   lineCount: number
   estimatedTokens: number
-  preview: string
   headings: string[]
   entityCandidates: string[]
   queryHints: string[]
-  summary: string
+  structuralDescription: string
   answerableQuestions: string[]
 }
 
@@ -34,11 +33,6 @@ function estimateTokens(value: string): number {
 
 function byteLength(value: string): number {
   return new TextEncoder().encode(value).length
-}
-
-function firstBytes(value: string, limit = 160): string {
-  const bytes = new TextEncoder().encode(value).slice(0, limit)
-  return new TextDecoder().decode(bytes).replace(/\uFFFD$/u, '').trim()
 }
 
 function documentType(path: string): string {
@@ -88,15 +82,6 @@ function extractEntityCandidates(content: string, headings: string[]): string[] 
   return selected
 }
 
-function extractSummary(content: string, headings: string[]): string {
-  const paragraphs = content.split(/\r?\n\s*\r?\n/u)
-    .map((paragraph) => paragraph.replace(/^#{1,6}\s+/u, '').trim())
-    .filter((paragraph) => paragraph.length > 0)
-  const body = paragraphs.find((paragraph) => !/^第.{1,30}章/u.test(paragraph)) ?? paragraphs[0] ?? ''
-  const prefix = headings[0] ? `${headings[0]}：` : ''
-  return `${prefix}${Array.from(body).slice(0, 120).join('')}`.slice(0, 160)
-}
-
 function extractAnswerableQuestions(entityCandidates: string[], headings: string[]): string[] {
   const questions: string[] = []
   if (entityCandidates.length >= 2) {
@@ -111,7 +96,6 @@ function extractAnswerableQuestions(entityCandidates: string[], headings: string
 export function buildDocumentMetadata(document: ContextDocument): DocumentMetadataCard {
   const headings = extractHeadings(document.content)
   const entityCandidates = extractEntityCandidates(document.content, headings)
-  const summary = extractSummary(document.content, headings)
   const answerableQuestions = extractAnswerableQuestions(entityCandidates, headings)
   const queryHints = [
     ...headings.slice(0, 8),
@@ -126,11 +110,10 @@ export function buildDocumentMetadata(document: ContextDocument): DocumentMetada
     contentChars: Array.from(document.content).length,
     lineCount: document.content ? document.content.split(/\r?\n/u).length : 0,
     estimatedTokens: estimateTokens(document.content),
-    preview: firstBytes(document.content),
     headings,
     entityCandidates,
     queryHints,
-    summary,
+    structuralDescription: `检测到 ${headings.length} 个标题层级线索、${entityCandidates.length} 个实体候选；正文规模约 ${estimateTokens(document.content)} tokens。`,
     answerableQuestions,
   }
 }
@@ -143,7 +126,7 @@ function escapeAttribute(value: string): string {
   return value.replace(/&/gu, '&amp;').replace(/"/gu, '&quot;').replace(/</gu, '&lt;').replace(/>/gu, '&gt;')
 }
 
-/** Low-cost, body-light index context for routing and query planning. */
+/** Compact structural index. It never copies a body prefix or paragraph excerpt. */
 export function buildDocumentIndexMessage(documents: ContextDocument[]): string | null {
   const cards = buildDocumentMetadataCards(documents)
   if (cards.length === 0) return null
@@ -152,12 +135,11 @@ export function buildDocumentIndexMessage(documents: ContextDocument[]): string 
     `标题/章节线索：${card.headings.join('、') || '未检测到'}`,
     `实体候选（仅用于定位，不代表已证实）：${card.entityCandidates.join('、') || '未检测到'}`,
     `查询提示：${card.queryHints.join('、') || '无'}`,
-    `文件摘要（由本地结构和首段生成，仅用于检索规划）：${card.summary || '空文件'}`,
+    `结构描述：${card.structuralDescription}`,
     `可回答问题候选：${card.answerableQuestions.join('、') || '未生成'}`,
-    `正文前缀预览（仅用于识别文件）：${card.preview || '空文件'}`,
     '</file>',
   ].join('\n')).join('\n\n')
-  return `以下是用户引用文件的本地索引卡片。它们只用于判断文件范围、选择检索方向和组织后续任务；实体候选与前缀预览都不是可靠证据，最终结论必须回到正文或分块证据。\n\n<document-index>\n${files}\n</document-index>`
+  return `以下是用户引用文件的本地结构索引。它只用于判断文件范围、选择检索方向和组织后续任务；实体候选不是可靠证据，最终结论必须回到分块证据。\n\n<document-index>\n${files}\n</document-index>`
 }
 
 /** Prompt for a future metadata extractor pass over summaries or selected chunks. */

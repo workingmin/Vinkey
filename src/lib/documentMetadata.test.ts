@@ -15,9 +15,10 @@ describe('document metadata index cards', () => {
     expect(card.headings).toEqual(['第一章 归港'])
     expect(card.entityCandidates).toContain('林晚')
     expect(card.entityCandidates).toContain('林崇山')
-    expect(card.summary).toContain('第一章 归港')
+    expect(card.structuralDescription).toContain('1 个标题层级线索')
     expect(card.answerableQuestions.some((question) => question.includes('是什么关系'))).toBe(true)
-    expect(card.preview).toContain('林晚回到雾港')
+    expect(card).not.toHaveProperty('preview')
+    expect(card).not.toHaveProperty('summary')
   })
 
   it('builds a compact index for multiple files', () => {
@@ -31,7 +32,8 @@ describe('document metadata index cards', () => {
     expect(index).toContain('<document-index>')
     expect(index).toContain('name="人物.md"')
     expect(index).toContain('chars="8"')
-    expect(index).toContain('正文前缀预览')
-    expect(index).not.toContain('2024 林晚回乡</file>')
+    expect(index).toContain('结构描述')
+    expect(index).not.toContain('2024 林晚回乡')
+    expect(index).not.toContain('正文前缀预览')
   })
 })

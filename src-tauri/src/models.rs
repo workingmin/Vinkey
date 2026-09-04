@@ -64,6 +64,7 @@ pub struct RequestMessage {
 pub struct ChatRequest {
     request_id: String,
     profile_id: String,
+    source_policy: String,
     messages: Vec<RequestMessage>,
 }
 
@@ -124,6 +125,27 @@ fn normalize_base(kind: &str, raw: &str) -> Result<String, String> {
         url.set_path("/v1");
     }
     Ok(url.as_str().trim_end_matches('/').to_string())
+}
+
+fn is_loopback_base(base_url: &str) -> bool {
+    reqwest::Url::parse(base_url)
+        .ok()
+        .and_then(|url| url.host_str().map(str::to_owned))
+        .is_some_and(|host| {
+            host.eq_ignore_ascii_case("localhost")
+                || host
+                    .parse::<std::net::IpAddr>()
+                    .is_ok_and(|address| address.is_loopback())
+        })
+}
+
+fn enforce_source_policy(request: &ChatRequest, profile: &ModelProfile) -> Result<(), String> {
+    match request.source_policy.as_str() {
+        "metadata-only" => Ok(()),
+        "local-chunks" if is_loopback_base(&profile.base_url) => Ok(()),
+        "local-chunks" => Err("正文分块仅允许发送到本机回环模型；远程正文授权尚未启用".into()),
+        _ => Err("未知的模型数据来源策略".into()),
+    }
 }
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -547,6 +569,7 @@ pub async fn stream_chat(
 ) -> Result<(), String> {
     let started = Instant::now();
     let profile = load_profile(&request.profile_id, &database)?;
+    enforce_source_policy(&request, &profile)?;
     let request_id = request.request_id.clone();
     runtime.info(
         "chat.started",
@@ -556,6 +579,7 @@ pub async fn stream_chat(
             "provider": profile.kind.clone(),
             "model": profile.model.clone(),
             "messageCount": request.messages.len(),
+            "sourcePolicy": request.source_policy.clone(),
         })
         .as_object()
         .cloned()
@@ -640,5 +664,14 @@ mod tests {
     fn rejects_non_http_endpoints() {
         assert!(normalize_base("ollama", "file:///tmp/model").is_err());
         assert!(normalize_base("other", "http://localhost").is_err());
+    }
+
+    #[test]
+    fn identifies_only_loopback_model_addresses() {
+        assert!(is_loopback_base("http://localhost:11434"));
+        assert!(is_loopback_base("http://127.0.0.1:1234/v1"));
+        assert!(is_loopback_base("http://[::1]:8080"));
+        assert!(!is_loopback_base("http://192.168.1.5:11434"));
+        assert!(!is_loopback_base("https://api.openai.com/v1"));
     }
 }

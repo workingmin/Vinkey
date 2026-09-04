@@ -59,6 +59,10 @@ Rust application core
   │   ├─ EvidenceService
   │   ├─ ModelCapabilityService
   │   └─ JobService
+  ├─ WorkspaceIntelligenceService
+  │   ├─ WorkspaceProfile
+  │   ├─ DocumentProfile
+  │   └─ VersionedDigest
   ├─ AgentRuntime
   │   ├─ IntentRouter
   │   ├─ TaskPlanner
@@ -81,7 +85,27 @@ Local machine
 
 前端不直接获得通用文件系统和网络能力。所有文件和模型请求均经过 Rust 服务层，以便集中实施权限、超时、取消、日志脱敏和错误映射。
 
-对话输入先经过本地任务路由。路由结果至少包含意图、范围、操作、副作用和是否需要模型：`StructureSegmentation` 直接在源文档同级的 `<源文件名>-章节拆分/` 输出编号文件，不要求配置模型；普通聊天、摘要和语义归纳只有在路由确认需要时才组装上下文并访问模型。首轮拆分完成后，用户可主动确认进入 `structure-enhancement` 进行 AI 重梳理；增强结果默认不覆盖首轮输出。
+对话输入先经过本地任务路由。路由结果至少包含意图、范围、操作、副作用、分析模式、覆盖范围、来源策略和是否需要模型。分析模式为“概览分析（Overview Analysis）”与“深度分析（Deep Analysis）”；覆盖范围独立为 `index-only`、`targeted`、`exhaustive`。`StructureSegmentation` 直接在源文档同级的 `<源文件名>-章节拆分/` 输出编号文件，不要求配置模型；普通聊天、摘要和语义归纳只有在路由确认需要时才组装上下文并访问模型。首轮拆分完成后，用户可主动确认进入 `structure-enhancement` 进行 AI 重梳理；增强结果默认不覆盖首轮输出。
+
+### 3.1 概览与深度数据流
+
+```text
+概览分析
+  → WorkspaceIntelligenceService
+  → 工作区/文档画像 + 已缓存摘要引用
+  → 主对话模型（metadata-only）
+
+深度分析
+  → 目标清单与权限过滤
+  → 本地 Worker 按 ID 读取并结构化分块
+  → Map/Reduce/Synthesis（local-chunks）
+  → 摘要、证据、覆盖报告
+  → 主对话
+```
+
+概览路径不能调用正文读取接口，其 Tool 输出不得包含正文前缀、首段摘录或伪摘要。深度路径即使单个文件能放入上下文窗口，也必须经过分块流水线；`exhaustive` 只改变目标覆盖，不允许把完整文件或整个项目合并到一次请求。主对话始终不接收原始正文块，原始块仅由分析 Worker 处理。
+
+`local-chunks` 默认限制为本机或回环模型端点。普通聊天允许使用已配置的远程模型，不代表用户授权向远程端点发送项目正文；远程正文处理必须具备独立、显式、可审计的授权策略。运行日志只记录模式、覆盖、数量、相对标识和指纹，不记录正文、摘要正文或 Prompt。
 
 ## 4. 工作区权限模型
 

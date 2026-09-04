@@ -32,6 +32,20 @@
 - 多工作区授权记录与撤销、会话导出和数据清理。
 - 长会话摘要、精确 tokenizer 和模型上下文容量注册表。
 
+## 项目级上下文与分析模式调研（2026-09-04）
+
+| 项目/产品 | 已公开的上下文方式 | 对 Vinkey 的结论 |
+| --- | --- | --- |
+| [GitHub Copilot repository indexing](https://docs.github.com/en/copilot/concepts/context/repository-indexing) | 通过仓库索引和语义搜索定位相关代码段，而不是默认把整个仓库放入一次请求 | “这个项目”先锚定工作区，概览优先读取索引；正文检索属于另一条受控链路 |
+| [Cursor codebase search](https://cursor.com/docs/agent/tools/search) | 搜索工具按相关性找代码；Explore 子 Agent 汇总发现，而不是向主上下文倾倒文件正文 | 搜索/分析 Worker 与主对话隔离，主对话消费压缩后的发现和引用 |
+| [Claude Code 工作方式](https://code.claude.com/docs/en/how-claude-code-works) | 在 Agent 循环中按需收集上下文并使用工具，必要时以子 Agent 隔离上下文 | 项目问题应触发受控取证循环，而非由聊天层预先注入全项目 |
+| [Aider repository map](https://github.com/Aider-AI/aider/blob/main/aider/repomap.py) | 基于符号/引用生成带 token 上限的 repo map，并按相关性压缩 | 概览采用有预算的结构地图；地图是元数据视图，不是完整文件集合 |
+| [PageIndex agent tools](https://github.com/VectifyAI/PageIndex/blob/main/pageindex/agent_tools.py) | 先使用目录/结构定位，再获取有限页码或节点范围 | 深度分析先定位目标，再按块读取；全量覆盖仍是多个有界请求 |
+
+这些实现的共同点不是简单的“长上下文”，而是**项目锚定、索引/结构优先、相关性检索、受限读取、压缩回传**。因此 Vinkey 对外采用“概览分析 / 深度分析”两个模式，对内继续把覆盖范围拆为 `index-only / targeted / exhaustive`：模式决定是否允许读取正文，覆盖范围决定处理哪些目标，两者不能混用。
+
+Vinkey 还增加一条更严格的本地隐私边界：单个文件和全项目正文都不允许作为一个整体进入模型请求。概览只使用不含正文的画像与已有摘要；深度统一按块处理，原始块不进入主对话，远程模型接收原始块需要单独授权。
+
 ## 人物资产提取专项调研（2026-09-04）
 
 | 项目/产品 | 可复用的处理方式 | 对 Vinkey 的取舍 |
