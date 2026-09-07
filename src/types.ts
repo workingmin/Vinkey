@@ -113,6 +113,16 @@ export interface TaskJobEvent {
   fields: Record<string, unknown>
 }
 
+export type ServiceErrorCategory = 'model' | 'compatibility' | 'authorization' | 'validation' | 'capacity' | 'io' | 'internal'
+
+export interface ServiceError {
+  code: string
+  category: ServiceErrorCategory
+  message: string
+  retryable: boolean
+  stepId?: string | null
+}
+
 export interface TaskJob {
   taskId: string
   workspaceId: string
@@ -124,6 +134,7 @@ export interface TaskJob {
   steps: TaskJobStep[]
   events: TaskJobEvent[]
   error?: string | null
+  failure?: ServiceError | null
   createdAt: number
   updatedAt: number
 }
@@ -145,6 +156,60 @@ export interface UpdateTaskJobInput {
   error?: string
   eventType?: string
   eventFields?: Record<string, unknown>
+}
+
+export interface StartLongTextWorkerInput {
+  jobId: string
+  instruction: string
+  instructionHash: string
+  profileId: string
+  contextWindow: number
+  sourcePolicy: 'local-chunks'
+  maxTokens: number
+  overlapTokens: number
+  dispatch: {
+    jobId: string
+    workspaceId: string
+    policyVersion: string
+    dispatchVersion: string
+    serviceId: string
+    executionOwner: string
+  }
+  documentIndex?: string | null
+  documents: Array<{ path: string; sourceFingerprint: string }>
+  excludedDocuments: WorkspaceDocumentRef[]
+}
+
+export interface LongTextWorkerOutput {
+  workerVersion: string
+  promptVersion: string
+  outputSchemaVersion: string
+  compatibilityKey: string
+  pipelineCompleted: boolean
+  jobId: string
+  workspaceId: string
+  sourceFingerprints: Record<string, string>
+  manifests: ChunkManifest[]
+  content: string
+  evidence: EvidenceReference[]
+  chunkCount: number
+  summaryCount: number
+  modelInvocationCount: number
+  mapCacheHits: number
+  jobCheckpointHits: number
+  durationMs: number
+  completedAt: number
+}
+
+export interface TaskWorkerEvent {
+  sequence: number
+  timestamp: number
+  jobId: string
+  stage: 'chunking' | 'map' | 'reduce' | 'synthesis' | 'evidence' | 'lifecycle'
+  status: 'running' | 'paused' | 'completed' | 'failed' | 'cancelled'
+  completed: number
+  total: number
+  message: string
 }
 
 export interface AnalysisJobManifest {
@@ -199,6 +264,10 @@ export interface EditorRevisionRequest extends EditorSelection {
 
 export interface DiffProposal extends EditorSelection {
   id: string
+  proposalSetId?: string
+  targetId?: string
+  chunkIndex?: number
+  chunkCount?: number
   replacementText: string
   instruction: string
   sourceModifiedMs: number

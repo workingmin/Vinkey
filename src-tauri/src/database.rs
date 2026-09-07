@@ -251,6 +251,10 @@ fn character_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<CharacterReco
 }
 
 pub fn open(state: &State<'_, DatabaseState>) -> Result<Connection, String> {
+    open_state(state.inner())
+}
+
+pub fn open_state(state: &DatabaseState) -> Result<Connection, String> {
     Connection::open(&state.0).map_err(|error| format!("无法打开本地数据库：{error}"))
 }
 

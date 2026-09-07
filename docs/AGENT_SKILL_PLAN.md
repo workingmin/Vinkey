@@ -214,7 +214,7 @@ get_project_digest      → 已缓存且带覆盖率/版本的项目摘要；无
 | `DialogueAgent` | 角色对话、角色扮演、人物语气保持 |
 | `CopywriterAgent` | 书名、章节名、简介、宣传语和投稿文案 |
 | `ReaderExperienceReviewer` | 检查开篇吸引力、节奏、悬念、情绪曲线和章节结尾 |
-| `ResearchAgent` | 外部资料检索、事实核查和来源整理；默认关闭，单独显示联网范围 |
+| `ResearchAgent` | 外部资料检索、事实核查和来源整理；默认关闭，单独显示联网范围；实现边界见[轻量级联网搜索设计](LIGHTWEIGHT_WEB_RESEARCH.md) |
 | `BatchProductionAgent` | 批量摘要、批量审校、批量生成、暂停、重试和限速 |
 | `TranslationAgent` | 翻译和本地化，保留人物语气和专有名词表 |
 | `PublishingAgent` | 目录整理、格式检查、Markdown/EPUB/DOCX 导出 |
@@ -603,15 +603,15 @@ quality_profile
   → Rust petgraph 统计、连通分量和有限跳数路径
 ```
 
-`chunk_document` 已实现 Rust 逻辑、Tauri 命令、前端类型和调用封装；当前新增的本地 `structureSegmentation` 服务会在模型请求前识别章节/场景候选，并通过文件写入 Tool 在源文档同级生成粗略拆分文件。项目级深度分析已增加确定性工作区清单、安全过滤、全项目长文本编排、内容指纹、任务阶段产物和证据行号校验；不支持或超限文件会进入排除清单，不会发送给模型。长文本任务现在由 Rust `JobService` 持久化 Task/Step/Event/Checkpoint 控制面，支持任务身份校验、列表、恢复、取消及完成/失败状态记录；分块、Map、Reduce、Synthesis Worker 目前仍由前端长文本服务调度。概览分析已实现正文零读取的工作区/文档画像，Tool Registry 按模式隔离读取能力；深度模型请求携带 `local-chunks`，并由前端与 Rust 服务层共同限制为回环模型端点。2026-09-07 已落地统一 `TaskRequest`、显式快捷入口路由、会话 `taskRef` 续问、文档加载后二次策略收敛、逐 Tool 输入/输出合同校验，以及最多 2 个文档、上限约 12,000 tokens 且随模型窗口缩减的有界原文改稿链路。编辑器选区改稿已生成可审核的单文件 `DiffProposal`，应用前校验源指纹和原文范围，且不自动保存。Rust `execute_task` 现已签发版本化 Service Dispatch，统一确定具体 Service、执行阶段、执行所有者、流式需求、后台化资格、Job 身份和澄清结果；前端业务执行不再重新推断 Service。
+`chunk_document` 已实现 Rust 逻辑、Tauri 命令、前端类型和调用封装；当前新增的本地 `structureSegmentation` 服务会在模型请求前识别章节/场景候选，并通过文件写入 Tool 在源文档同级生成粗略拆分文件。项目级深度分析已增加确定性工作区清单、安全过滤、全项目长文本编排、内容指纹、任务阶段产物和证据行号校验；不支持或超限文件会进入排除清单，不会发送给模型。长文本任务现在由 Rust `JobService` 持久化 Task/Step/Event/Checkpoint 控制面；文档复验、Chunk、Map、多层 Reduce、Synthesis、Evidence 校验和最终产物均由 Rust Worker 执行，并可在应用重新启动后复用兼容检查点。概览分析已实现正文零读取的工作区/文档画像，Tool Registry 按模式隔离读取能力；深度模型请求携带 `local-chunks`，并由 Rust 服务层限制为回环模型端点。2026-09-07 已落地统一 `TaskRequest`、显式快捷入口路由、会话 `taskRef` 续问、文档加载后二次策略收敛、逐 Tool 输入/输出合同校验，以及最多 8 个文档、上限约 12,000 tokens 且随模型窗口缩减的有界原文改稿链路。编辑器选区改稿已生成可审核的单文件 `DiffProposal`，应用前校验源指纹和原文范围，且不自动保存。Rust `execute_task` 现已签发版本化 Service Dispatch；桌面长文本任务明确返回 `executionOwner=rust-worker` 和 `frontendStreamingRequired=false`，前端只订阅/回放进度并轮询持久化完成条件。
 
 ### 11.2 尚未实现
 
-1. 完整后台 Worker、跨重启继续执行、步骤级独立重试、模型切换兼容性和按文档增量失效；当前 Rust `JobService` 已持久化 Task/Step/Event/Checkpoint，并支持恢复身份校验、取消和前端存活期间的协作式暂停/继续，但 Map/Reduce/Synthesis 仍由前端驱动。Dispatcher 只标记 `backgroundEligible`，并如实返回 `executionOwner=webview`。
+1. 其余 Rust command 的统一结构化错误、任务中心与后台常驻执行的完整产品化，以及更广泛的源文档增量复用；当前 Worker 失败已持久化稳定错误码/类别/可重试性，任务中心支持失败步骤选择和确认重跑，Map 已按精确 Prompt 与版本化模型配置做跨 Job 内容寻址缓存。该缓存不含 Job ID，不能把 Reduce/Synthesis 结果跨 Job 复用；源文档变化仍会拒绝恢复原 Job。
 2. 基于领域评测的轻量歧义分类；当前已完成确定性低置信度门禁和单问题澄清，低置信度正文请求在任何 Tool 读取前停止，但尚未引入分类模型，也未覆盖需要多轮槽位收集的复杂歧义。
 3. 项目级检索层、`DocumentTriage`、`StoryDeconstruction` 和按目录/主题的持久化分层摘要。
-4. 多文件/逐块 `DiffProposal`、撤销与持久化审核记录，以及完整结构化 canon；单文件编辑器选区提案和冲突校验已落地，人物关系的 SQLite/FTS5/图算法底座已落地，实体抽取、别名消歧、模型提案审核和事件/时间线结构化仍未实现。
-5. 模型能力注册表和本地模型基准测试。
+4. 多文件/逐块 `DiffProposal` 的持久化审核记录与撤销，以及完整结构化 canon；当前最多 8 个文档、逐块冲突检测、基于不可变 baseline 的任意顺序审核已落地，人物关系的 SQLite/FTS5/图算法底座仍待实体抽取和提案审核闭环。
+5. 模型能力注册表的持久化与真实模型跑批；当前已有版本化结构化输出/证据召回/改写忠实度评测、延迟吞吐指标和回归门禁，尚未自动调用 Provider 或写入注册表。
 
 ### 11.3 2026-09-04 业务链路改造进展
 
@@ -644,7 +644,45 @@ quality_profile
 - Rust `execute_task` 已从 admission 扩展为版本化 Service Dispatcher。输入增加 `preflight/final` 阶段和可选恢复 Job ID；输出明确给出 `serviceId`、`executionPhase`、`executionOwner`、`frontendStreamingRequired`、`backgroundEligible`、`jobId` 与结构化 `clarification`。
 - `structure-segmentation`、`workspace-overview`、`focused-analysis`、`long-text-analysis`、`direct-model` 的选择由 Rust 最终裁决；前端只消费 `serviceId` 进入对应实现，不再根据 intent、documentAccess 和 workflow 组合重复决定业务分支。
 - 低置信度、非显式 action 且准备读取文档正文的请求在 preflight 返回 `clarification-required`，不会恢复历史文档、扫描工作区或调用模型。显式 action、已验证续问和恢复 Job 保持确定性直达，避免无意义的额外模型分类延迟。
-- 长文本 Dispatch 返回稳定 Job ID；恢复任务沿用原 Job ID，同时保留当前对话 request ID。当前所有者仍明确为 `webview`，仅标记可后台化，未虚构跨窗口持续运行能力。
+- 长文本 Dispatch 返回稳定 Job ID；恢复任务沿用原 Job ID，同时保留当前对话 request ID。该批实现时执行所有者仍为 `webview`，后续 Worker 第二批已将桌面长文本所有者切换为 `rust-worker`。
 - 下一批按依赖顺序实施：Worker 输入快照与 Rust 生命周期托管 → Map/Reduce/Synthesis 事件流和跨窗口恢复 → 模型能力回归评测 → 多文件逐块 DiffProposal。
+
+### 11.7 2026-09-07 Worker 第一批实施进展
+
+- 新增 Rust `LongTextWorker` Service。启动输入使用拒绝未知字段的强类型合同和语义校验，持久化 `worker-input.json`；恢复时完整比较工作区、指令及哈希、模型配置、预算、来源策略、文档路径/指纹和排除清单，不允许静默改变输入。
+- Rust Worker 只在已授权工作区内重读文本，重新计算 SHA-256 后才分块；每份 `manifest-NNN.json`、`worker-output.json` 和 `job-start.json` 都原子提交。它是受工作区与源指纹约束的内部 Service，不是向 Agent 开放的新 Tool，也不扩大 `allowedTools`。
+- 第一批前端通过 `task-worker-event` 接收 Chunk 进度，并以 Job 状态和 `worker-output.json` 轮询作为可靠完成条件；暂停、继续和取消同时进入 Rust 控制面。该批只完成 `input-validation/document-read/chunking`，模型阶段下沉和启动恢复由下一批完成。
+
+### 11.8 2026-09-07 Worker 第二批实施进展
+
+- Map、分层 Reduce、Synthesis 和 Evidence Validation 已下沉 Rust；`summary-NNNNN.md` 与 `reduce-1-NNNN.md` 等分层文件作为幂等检查点，完成后原子写入 `analysis.md`、`evidence.json`、`job.json` 和 `worker-output.json`。前端在 `pipelineCompleted=true` 时直接消费 Rust 最终结果，浏览器演示才保留 WebView 回退链路。
+- `worker-input.json` 固化 Worker、Prompt、Output Schema 和 Chunk 算法版本，以及 Provider 类型、规范化 URL、模型名、上下文窗口、预算和文档索引哈希。兼容键变化、当前模型配置变化、工作区变化或源指纹变化均 fail closed；API Key 只从凭据库读取，不进入快照。
+- `worker-events.json` 持久化单调 `sequence` 和时间戳，保留最近 1,000 条；前端先订阅实时事件再回放，并按 sequence 去重。实时事件只用于低延迟进度，Job 状态和持久化输出仍是完成事实来源。
+- 启动恢复协调器扫描上次授权工作区中的 `running` Job 并从现有 Map/Reduce/最终产物继续；`paused` Job 不会自动启动，用户显式继续后才恢复。应用进程停止期间不会继续推理，但下次启动可从兼容检查点继续。
+- Reduce 摘要和文档索引按模型上下文预算截断；即使每条摘要都超过批预算，也强制两两归并保证层数下降。Worker 单次模型输出限制为 16 MB，最终 IPC 输出不重复携带包含正文的 manifests。
+- 该批之后按依赖顺序实施：Service Dispatch 授权闭环 → 暂态错误自动重试 → 按文档增量失效和检查点垃圾回收 → 模型能力回归评测 → 多文件逐块 `DiffProposal`。
+
+### 11.9 2026-09-07 Worker 第三批实施进展
+
+- `execute_task(final)` 仅为通过 Rust 策略校验的 `long-text-analysis` 签发 10 分钟内有效的 UUID 授权票据，内存最多保留 256 份。`start_long_text_worker` 再次核对票据与 job、workspace、policy/dispatch 版本、Service 和 `rust-worker` owner；非法、过期或串用票据 fail closed。
+- `worker-input.json` 只保存稳定的 Dispatch 身份并纳入兼容键，不保存授权票据。恢复旧 Job 时可由新会话重新签发票据；启动恢复和显式继续则以此前已授权且完整匹配的持久化快照为依据。
+- Map/Reduce/Synthesis 模型调用对超时、连接中断、429/5xx、流格式中断和空输出最多尝试 3 次，采用 500/1,000 ms 退避。每次重试递增持久化 Step `attempt`，写入 `step.retry_scheduled` 和 Worker 进度事件；配置变化、权限/合同错误、取消和输出上限不会重试。
+- Worker 协议升级为 `long-text-worker-3`，桌面与浏览器回退保持一致。下一批按依赖顺序实施：按文档增量失效与 Reduce 依赖图 → 失配/过期检查点垃圾回收 → 指定步骤人工重跑与统一结构化错误 → 模型能力回归评测 → 多文件逐块 `DiffProposal`。
+
+### 11.10 2026-09-07 Worker 第四批实施进展
+
+- 新增版本化 `worker-checkpoints.json`，为 Map、每层 Reduce 和 Synthesis 产物记录内容哈希、来源文档指纹及上游产物依赖。启动时会校验实际文件哈希并从损坏或孤立节点向下游传播失效，同时删除未被有效清单引用的模型检查点。
+- 新增 `retry_task_worker_step(jobId, stepId)` Rust command 和桌面端封装。只允许重跑 `failed` 的长文本 Job 且目标必须是已出现步骤；启动前复验工作区、Worker/Prompt/Output Schema 版本、当前模型配置和兼容键，随后删除目标步骤及其依赖后代并复用现有 Pipeline。
+- `chunking` 重跑会同时清除 manifest 和全部模型后代；`map` 清除全部 Map 及后代；`reduce-N` 只清除该层及更高依赖层；`synthesis` 保留 Map/Reduce；`evidence` 保留 `analysis.md`。最终输出、完成/失败清单和证据文件会按需重建，删除清单持久化到 `worker.step_retry_requested` 事件。
+- Worker 协议升级为 `long-text-worker-4`，桌面与浏览器回退保持一致。这里完成的是单个 Job 内的依赖级精确失效；源文档变化后创建新 Job 并跨 Job 复用未变化文档的内容寻址缓存仍未实现。
+- 下一批按依赖顺序实施：统一结构化错误与任务中心重跑交互 → 跨 Job 内容寻址 Map 缓存和源文档增量失效 → 模型能力回归评测 → 多文件逐块 `DiffProposal`。
+
+### 11.11 2026-09-07 Worker 第五批实施进展
+
+- Worker 失败会持久化 `TaskJobFailure`，包含稳定 `code/category/retryable/stepId`，同时保留旧 `error` 字符串并兼容读取缺少 `failure` 字段的历史任务。前端统一归一化两种错误形态；任务中心可轮询状态、选择失败步骤、确认重跑、查看检查点/attempt，并展示模型调用、跨 Job 缓存命中和耗时指标。该合同目前覆盖 Worker Job 失败，不代表所有 Rust command 已迁移。
+- 新增工作区级 `_map-cache`。键包含 Map cache schema、Worker/Prompt/Output/Chunk 版本、完整模型兼容配置及实际 Map Prompt hash，不绑定 Job/Dispatch ID；相同 Prompt 可跨 Job 命中，模型、Prompt 或版本变化会 miss，损坏项会删除，最多保留 1,024 项。该机制只复用精确 Map 输入，不跨 Job 复用 Reduce/Synthesis，也不允许恢复源指纹已变化的原 Job。
+- 新增版本化模型能力回归评测框架，要求每个套件用例恰好一条有效观测，计算首 token/总耗时 p95、吞吐、结构化输出成功率、证据召回率和改写忠实度，并基于阈值导出 Direct/Bounded/LongText 资格。当前是可重复评分与基线比较模块，真实 Provider 自动跑批、人工修正量采集和能力注册表持久化尚未实施。
+- `RevisionEditor` 已支持多文件逐块 Proposal：最多 8 个文档、每块默认最多 6,000 UTF-16 字符；路径、范围、原文和 baseline 由本地锁定，模型只能返回 `targetId + replacementText`。未知、重复、额外字段和重叠目标会拒绝，同文件多块从不可变 baseline 重算，允许任意审核顺序；接受只更新编辑器，不自动保存。
+- Worker 协议升级为 `long-text-worker-5`，输出 schema 升级为 `long-text-output-2`。下一批优先实施真实模型评测跑批与注册表持久化、跨会话 Proposal 审核/撤销、全 Service 结构化错误和 ContinuityReviewer 结构化 `ReviewReport`。
 
 后续业务实现必须将本地 `structureSegmentation` 输出提升为统一的 `StructureSegmentation` Service，并接入输出清理/重生成和章节索引；不能把全文直接组装进普通聊天，也不能在聊天组件中复制分块和汇总逻辑。

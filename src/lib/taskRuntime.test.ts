@@ -42,6 +42,15 @@ describe('structured task runtime intake', () => {
     expect(plan.execution.currentMode).toBe('direct-model')
   })
 
+  it('keeps a small multi-file revision in the reviewable proposal workflow', () => {
+    const initial = routeTask(createTaskRequest({ instruction: '统一润色这些文件', actionId: 'document-revision' }), true)
+    const plan = refineTaskForDocuments(initial, Array.from({ length: 4 }, (_, index) => ({
+      path: `${index}.md`, name: `${index}.md`, content: '短文本', size: 3,
+    })))
+    expect(plan.revisionStrategy).toBe('bounded')
+    expect(plan.sourcePolicy).toBe('local-excerpts')
+  })
+
   it('keeps large revisions on the resumable long-text workflow', () => {
     const plan = refineTaskForDocuments(routeTask(createTaskRequest({ instruction: '根据这个文件改写一版', actionId: null }), true), [document('长文本'.repeat(20_000))])
     expect(plan.revisionStrategy).toBe('long')

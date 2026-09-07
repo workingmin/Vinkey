@@ -181,16 +181,33 @@ describe('DiffProposal review', () => {
   }
 
   it('applies a reviewed proposal without saving the document', () => {
-    useAppStore.setState({ tabs: [tab], activePath: tab.path, diffProposal: proposal })
-    useAppStore.getState().applyDiffProposal()
+    useAppStore.setState({ tabs: [tab], activePath: tab.path, diffProposals: [], diffProposalBaselines: {} })
+    useAppStore.getState().setDiffProposals([proposal])
+    useAppStore.getState().applyDiffProposal(proposal.id)
     expect(useAppStore.getState().tabs[0].content).toBe('前-新句-后')
     expect(useAppStore.getState().tabs[0].savedContent).toBe('前-旧句-后')
-    expect(useAppStore.getState().diffProposal?.status).toBe('applied')
+    expect(useAppStore.getState().diffProposals[0]?.status).toBe('applied')
   })
 
   it('rejects stale source ranges', () => {
-    useAppStore.setState({ tabs: [{ ...tab, content: '前-变化-后' }], activePath: tab.path, diffProposal: proposal })
-    expect(() => useAppStore.getState().applyDiffProposal()).toThrow('源文档已变化')
+    useAppStore.setState({ tabs: [tab], activePath: tab.path, diffProposals: [], diffProposalBaselines: {} })
+    useAppStore.getState().setDiffProposals([proposal])
+    useAppStore.setState({ tabs: [{ ...tab, content: '前-变化-后' }] })
+    expect(() => useAppStore.getState().applyDiffProposal(proposal.id)).toThrow('源文档已变化')
+  })
+
+  it('rebuilds multiple accepted chunks from one immutable baseline', () => {
+    const baseline = '甲段|乙段|丙段'
+    const sourceFingerprint = fingerprintDocument(baseline)
+    const proposals: DiffProposal[] = [
+      { ...proposal, id: 'chunk-1', proposalSetId: 'set-1', path: 'chapter.md', from: 0, to: 2, text: '甲段', replacementText: '甲新', sourceFingerprint },
+      { ...proposal, id: 'chunk-2', proposalSetId: 'set-1', path: 'chapter.md', from: 6, to: 8, text: '丙段', replacementText: '丙新', sourceFingerprint },
+    ]
+    useAppStore.setState({ tabs: [{ ...tab, content: baseline, savedContent: baseline }], activePath: tab.path, diffProposals: [], diffProposalBaselines: {} })
+    useAppStore.getState().setDiffProposals(proposals)
+    useAppStore.getState().applyDiffProposal('chunk-1')
+    useAppStore.getState().applyDiffProposal('chunk-2')
+    expect(useAppStore.getState().tabs[0].content).toBe('甲新|乙段|丙新')
   })
 })
 

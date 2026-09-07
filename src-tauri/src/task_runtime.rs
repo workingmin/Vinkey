@@ -1,10 +1,15 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use std::collections::HashSet;
 use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::{Arc, Mutex},
+};
 
 const POLICY_VERSION: &str = "task-policy-1";
 const DISPATCH_VERSION: &str = "service-dispatch-1";
+const WORKER_AUTHORIZATION_TTL_MS: u64 = 10 * 60 * 1_000;
+const MAX_PENDING_WORKER_AUTHORIZATIONS: usize = 256;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -98,9 +103,30 @@ pub struct TaskExecutionDispatch {
     pub frontend_streaming_required: bool,
     pub background_eligible: bool,
     pub job_id: Option<String>,
+    pub authorization_ticket: Option<String>,
     pub clarification: Option<ClarificationRequest>,
     pub plan: TaskPlan,
 }
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkerDispatchIdentity {
+    pub job_id: String,
+    pub workspace_id: String,
+    pub policy_version: String,
+    pub dispatch_version: String,
+    pub service_id: String,
+    pub execution_owner: String,
+}
+
+#[derive(Clone)]
+struct WorkerDispatchAuthorization {
+    identity: WorkerDispatchIdentity,
+    expires_at: u64,
+}
+
+#[derive(Clone, Default)]
+pub struct TaskDispatchState(Arc<Mutex<HashMap<String, WorkerDispatchAuthorization>>>);
 
 struct SkillPolicy {
     agent: &'static str,
@@ -799,6 +825,11 @@ pub fn execute(
     };
     let service_id = clarification.is_none().then(|| service_for(&input.plan));
     let background_eligible = service_id == Some("long-text-analysis");
+    let execution_owner = if background_eligible {
+        "rust-worker"
+    } else {
+        "webview"
+    };
     let job_id = background_eligible.then(|| {
         input
             .resume_job_id
@@ -818,13 +849,101 @@ pub fn execute(
             "ready"
         },
         service_id,
-        execution_owner: "webview",
-        frontend_streaming_required: clarification.is_none() && input.plan.requires_model,
+        execution_owner,
+        frontend_streaming_required: clarification.is_none()
+            && input.plan.requires_model
+            && !background_eligible,
         background_eligible,
         job_id,
+        authorization_ticket: None,
         clarification,
         plan: input.plan,
     })
+}
+
+pub fn issue(
+    input: ExecuteTaskInput,
+    workspace_id: Option<&str>,
+    state: &TaskDispatchState,
+) -> Result<TaskExecutionDispatch, String> {
+    let is_final = input.stage == "final";
+    let mut dispatch = execute(input, workspace_id)?;
+    if !is_final || dispatch.execution_owner != "rust-worker" {
+        return Ok(dispatch);
+    }
+    let identity = WorkerDispatchIdentity {
+        job_id: dispatch
+            .job_id
+            .clone()
+            .ok_or_else(|| "Rust Worker Dispatch 缺少 Job ID".to_string())?,
+        workspace_id: dispatch
+            .workspace_id
+            .clone()
+            .ok_or_else(|| "Rust Worker Dispatch 缺少工作区 ID".to_string())?,
+        policy_version: dispatch.policy_version.into(),
+        dispatch_version: dispatch.dispatch_version.into(),
+        service_id: dispatch
+            .service_id
+            .ok_or_else(|| "Rust Worker Dispatch 缺少 Service".to_string())?
+            .into(),
+        execution_owner: dispatch.execution_owner.into(),
+    };
+    let ticket = uuid::Uuid::new_v4().to_string();
+    let mut authorizations = state
+        .0
+        .lock()
+        .map_err(|_| "任务 Dispatch 授权状态不可用".to_string())?;
+    let timestamp = now_ms();
+    authorizations.retain(|_, authorization| authorization.expires_at > timestamp);
+    if authorizations.len() >= MAX_PENDING_WORKER_AUTHORIZATIONS {
+        return Err("待启动的 Worker Dispatch 授权过多，请稍后重试".into());
+    }
+    authorizations.insert(
+        ticket.clone(),
+        WorkerDispatchAuthorization {
+            identity,
+            expires_at: timestamp.saturating_add(WORKER_AUTHORIZATION_TTL_MS),
+        },
+    );
+    dispatch.authorization_ticket = Some(ticket);
+    Ok(dispatch)
+}
+
+pub fn validate_worker_dispatch(
+    ticket: &str,
+    identity: &WorkerDispatchIdentity,
+    state: &TaskDispatchState,
+) -> Result<(), String> {
+    if ticket.len() > 80 || uuid::Uuid::parse_str(ticket).is_err() {
+        return Err("Worker Dispatch 授权票据无效".into());
+    }
+    validate_worker_identity(identity)?;
+    let timestamp = now_ms();
+    let mut authorizations = state
+        .0
+        .lock()
+        .map_err(|_| "任务 Dispatch 授权状态不可用".to_string())?;
+    authorizations.retain(|_, authorization| authorization.expires_at > timestamp);
+    let authorization = authorizations
+        .get(ticket)
+        .ok_or_else(|| "Worker Dispatch 授权已失效，请重新执行任务准入".to_string())?;
+    if authorization.identity != *identity {
+        return Err("Worker Dispatch 授权与启动身份不匹配".into());
+    }
+    Ok(())
+}
+
+pub fn validate_worker_identity(identity: &WorkerDispatchIdentity) -> Result<(), String> {
+    if identity.policy_version != POLICY_VERSION
+        || identity.dispatch_version != DISPATCH_VERSION
+        || identity.service_id != "long-text-analysis"
+        || identity.execution_owner != "rust-worker"
+        || !valid_id(&identity.job_id)
+        || identity.workspace_id.is_empty()
+    {
+        return Err("Worker Dispatch 身份或版本无效".into());
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -1045,7 +1164,7 @@ mod tests {
     }
 
     #[test]
-    fn dispatches_long_text_with_an_explicit_foreground_owner() {
+    fn dispatches_long_text_to_the_rust_worker() {
         let dispatch = execute(
             ExecuteTaskInput {
                 task_id: "task-long".into(),
@@ -1058,8 +1177,40 @@ mod tests {
         )
         .unwrap();
         assert_eq!(dispatch.service_id, Some("long-text-analysis"));
-        assert_eq!(dispatch.execution_owner, "webview");
+        assert_eq!(dispatch.execution_owner, "rust-worker");
+        assert!(!dispatch.frontend_streaming_required);
         assert!(dispatch.background_eligible);
         assert_eq!(dispatch.job_id.as_deref(), Some("existing-job"));
+    }
+
+    #[test]
+    fn issues_and_validates_a_scoped_worker_authorization() {
+        let state = TaskDispatchState::default();
+        let dispatch = issue(
+            ExecuteTaskInput {
+                task_id: "task-long".into(),
+                stage: "final".into(),
+                resume_job_id: Some("existing-job".into()),
+                request: document_request(),
+                plan: document_plan("medium"),
+            },
+            Some("workspace-1"),
+            &state,
+        )
+        .unwrap();
+        let ticket = dispatch.authorization_ticket.unwrap();
+        let identity = WorkerDispatchIdentity {
+            job_id: dispatch.job_id.unwrap(),
+            workspace_id: dispatch.workspace_id.unwrap(),
+            policy_version: dispatch.policy_version.into(),
+            dispatch_version: dispatch.dispatch_version.into(),
+            service_id: dispatch.service_id.unwrap().into(),
+            execution_owner: dispatch.execution_owner.into(),
+        };
+        validate_worker_dispatch(&ticket, &identity, &state).unwrap();
+
+        let mut mismatched = identity;
+        mismatched.job_id = "another-job".into();
+        assert!(validate_worker_dispatch(&ticket, &mismatched, &state).is_err());
     }
 }

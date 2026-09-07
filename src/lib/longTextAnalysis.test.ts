@@ -16,6 +16,16 @@ describe('long text analysis orchestration', () => {
     expect(batchSummaries(records, 32768)).toEqual([records])
   })
 
+  it('forces reduce batches to shrink when every summary exceeds the budget', () => {
+    const records = Array.from({ length: 5 }, (_, index) => ({
+      sourceId: 'book.md', chunkId: `chunk-${index}`, heading: null, text: '雾'.repeat(4000),
+    }))
+    const batches = batchSummaries(records, 2048, '索引'.repeat(4000))
+    expect(batches).toHaveLength(3)
+    expect(batches.every((batch) => batch.length <= 2)).toBe(true)
+    expect(batches.flat().map((record) => record.chunkId)).toEqual(records.map((record) => record.chunkId))
+  })
+
   it('uses evidence-first guidance for continuity review', () => {
     const chunkGuidance = chunkTaskGuidance('检查当前项目的连续性和设定冲突')
     expect(chunkGuidance).toContain('事实断言')

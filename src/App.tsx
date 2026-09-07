@@ -13,11 +13,12 @@ import remarkGfm from 'remark-gfm'
 import { CodeEditor } from './components/CodeEditor'
 import { FilePreview, downloadBytes } from './components/FilePreview'
 import { SettingsPage } from './components/SettingsPage'
+import { TaskCenter } from './components/TaskCenter'
 import { WorkspaceTree, workspaceActions } from './components/WorkspaceTree'
 import {
   cancelChat, cancelTaskJob, chooseWorkspace, createDirectory, createDocument, deleteConversation, executeTask, isDesktop, listConversations,
   getWindowDiagnostics, getRuntimeDiagnostics, listModelProfiles, loadConversation, readDocument, readFileBytes, refreshWorkspace,
-  listAnalysisJobs, recordRuntimeEvent, writeStructureOutputs,
+  listAnalysisJobs, pauseTaskWorker, recordRuntimeEvent, resumeTaskWorker, writeStructureOutputs,
   saveConversationMessage, saveDocument, searchWorkspace, streamChat, syncNativeWindowTheme,
   confirmProjectMemory, listProjectMemory, proposeProjectMemory, rejectProjectMemory, searchProjectMemory,
   stopOllamaModel,
@@ -39,13 +40,17 @@ import { buildSelectedDocumentsOverviewMessage, formatWorkspaceOverview } from '
 import { buildFocusedWorkspaceMessage } from './lib/focusedAnalysis'
 import { isLoopbackModelEndpoint } from './lib/modelPrivacy'
 import { formatConversationAge } from './lib/conversationTime'
-import { buildSelectionRevisionContract, createDiffProposal, fingerprintDocument, formatDiffProposalMessage } from './lib/diffProposal'
+import {
+  buildMultiFileRevisionContract, buildMultiFileRevisionTargets, buildSelectionRevisionContract,
+  createDiffProposal, createMultiFileDiffProposals, fingerprintDocument,
+  formatDiffProposalMessage, formatMultiFileDiffProposalMessage,
+} from './lib/diffProposal'
 import { shouldStopOllamaBeforeSwitch } from './lib/modelGroups'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { Menu, MenuItem, PredefinedMenuItem, Submenu } from '@tauri-apps/api/menu'
 import type { PredefinedMenuItemOptions } from '@tauri-apps/api/menu'
 
-type ContentPage = 'chat' | 'file'
+type ContentPage = 'chat' | 'file' | 'tasks'
 
 const isMacPlatform = () => typeof navigator !== 'undefined' && /mac/i.test(navigator.platform)
 
@@ -84,6 +89,7 @@ async function installMacMenu(callbacks: {
   const view = await Submenu.new({ text: '查看', items: [
     await menuItem('对话页', () => callbacks.changePage('chat')),
     await menuItem('文件页', () => callbacks.changePage('file')),
+    await menuItem('任务中心', () => callbacks.changePage('tasks')),
     await menuItem('切换浅色/深色主题', callbacks.toggleTheme),
     await menuItem('模型与应用设置', callbacks.openSettings),
   ] })
@@ -186,6 +192,7 @@ function TitleBar({ onPageChange, onOpenWorkspace, onNewDocument, onRefreshWorks
     { label: '查看', items: [
       { label: '对话页', icon: MessageSquareText, action: () => onPageChange('chat') },
       { label: '文件页', icon: FileText, action: () => onPageChange('file') },
+      { label: '任务中心', icon: ListChecks, action: () => onPageChange('tasks') },
       { label: theme === 'dark' ? '切换浅色主题' : '切换深色主题', icon: theme === 'dark' ? Sun : Moon, action: () => setTheme(theme === 'dark' ? 'light' : 'dark') },
       { label: '模型与应用设置', icon: Settings, action: () => setSettingsOpen(true) },
     ] },
@@ -565,8 +572,8 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
   const clearPendingNewFiles = useAppStore((state) => state.clearPendingNewFiles)
   const pendingEditorRevision = useAppStore((state) => state.pendingEditorRevision)
   const clearPendingEditorRevision = useAppStore((state) => state.clearPendingEditorRevision)
-  const diffProposal = useAppStore((state) => state.diffProposal)
-  const setDiffProposal = useAppStore((state) => state.setDiffProposal)
+  const diffProposals = useAppStore((state) => state.diffProposals)
+  const setDiffProposals = useAppStore((state) => state.setDiffProposals)
   const applyDiffProposal = useAppStore((state) => state.applyDiffProposal)
   const rejectDiffProposal = useAppStore((state) => state.rejectDiffProposal)
   const [prompt, setPrompt] = useState('')
@@ -848,7 +855,13 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
       return
     }
     const toolGateway = createToolGateway(taskPlan)
-    const revisionContext = taskPlan.revisionStrategy === 'bounded'
+    const multiRevisionTargets = !editorRevision && taskPlan.intent === 'document-revision' && taskPlan.revisionStrategy === 'bounded'
+      ? buildMultiFileRevisionTargets(requestContextDocuments, value)
+      : []
+    const multiRevisionContract = multiRevisionTargets.length > 0
+      ? buildMultiFileRevisionContract(multiRevisionTargets)
+      : null
+    const revisionContext = taskPlan.revisionStrategy === 'bounded' && !multiRevisionContract
       ? buildRevisionContextMessage(requestContextDocuments, revisionSourceBudget)
       : null
     let memoryContext: string | null = null
@@ -859,7 +872,7 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
       } catch (error) { setError(`读取项目记忆失败：${String(error)}`) }
     }
     const selectionContract = editorRevision ? buildSelectionRevisionContract({ ...editorRevision, instruction: value }) : null
-    const contextDraft = [overviewContext, memoryContext, revisionContext, selectionContract].filter(Boolean).join('\n\n')
+    const contextDraft = [overviewContext, memoryContext, revisionContext, selectionContract, multiRevisionContract].filter(Boolean).join('\n\n')
     const budgetDraft = [value, contextDraft].filter(Boolean).join('\n\n')
     const requestBudget = taskPlan.requiresModel
       ? calculateContextBudget(messages, [], budgetDraft, selectedModel?.contextWindow ?? 32768)
@@ -930,7 +943,7 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
         }, workspace?.id ?? 'workspace', excludedWorkspaceDocuments, taskDispatch.jobId === nextRequestId ? undefined : taskDispatch.jobId ?? undefined, (toolName, input, output) => {
           if (output) toolGateway.assertResult(toolName, output.value)
           else toolGateway.assert(toolName, input)
-        })
+        }, taskDispatch)
         setResumeJobId(null)
         setRecoverableJob(null)
         const excludedNote = taskPlan.documentAccess === 'workspace'
@@ -951,7 +964,7 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
       } else {
         if (!selectedModel) throw new Error('未配置模型')
         const recent = selectRecentMessages([...messages.filter((message) => message.id !== 'welcome'), userMessage], [], contextDraft, selectedModel.contextWindow)
-        const context = [overviewContext, memoryContext, revisionContext].filter(Boolean).join('\n\n') || null
+        const context = [overviewContext, memoryContext, revisionContext, selectionContract, multiRevisionContract].filter(Boolean).join('\n\n') || null
         const modelMessages = [...(context ? [{ role: 'user' as const, content: context }] : []), ...recent.map(({ role, content }) => ({ role, content }))]
         const modelRequest = {
           requestId: nextRequestId,
@@ -964,14 +977,24 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
           if (event.type === 'chunk') {
             firstResponse += event.content
             setChatRunStatus(nextConversationId, 'streaming', null)
-            if (!editorRevision) appendChatRunChunk(nextConversationId, event.content)
+            if (!editorRevision && multiRevisionTargets.length === 0) appendChatRunChunk(nextConversationId, event.content)
           }
           if (event.type === 'error') setError(event.message)
         }))
         if (editorRevision) {
           const proposal = createDiffProposal(firstResponse, { ...editorRevision, instruction: value })
-          setDiffProposal(proposal)
+          setDiffProposals([proposal])
           appendChatRunChunk(nextConversationId, formatDiffProposalMessage(proposal))
+        } else if (multiRevisionTargets.length > 0) {
+          const proposals = createMultiFileDiffProposals(firstResponse, multiRevisionTargets)
+          for (const path of new Set(proposals.map((proposal) => proposal.path))) {
+            if (!useAppStore.getState().tabs.some((tab) => tab.path === path)) {
+              const document = await readDocument(path)
+              useAppStore.getState().openTab({ ...document, savedContent: document.content })
+            }
+          }
+          setDiffProposals(proposals)
+          appendChatRunChunk(nextConversationId, formatMultiFileDiffProposalMessage(proposals))
         }
 
         // Recovery may add a body-free profile, but it never escalates to raw document access.
@@ -1051,10 +1074,12 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
   const togglePause = () => {
     if (!activeChatRun || !longTaskActive) return
     if (pauseRequested) {
+      if (activeLongTaskId) void resumeTaskWorker(activeLongTaskId).catch((error) => setError(String(error)))
       resumeLongTextAnalysis(activeChatRun.requestId)
       setPauseRequested(false)
       setAnalysisStatus('正在恢复长文本任务…')
     } else {
+      if (activeLongTaskId) void pauseTaskWorker(activeLongTaskId).catch((error) => setError(String(error)))
       pauseLongTextAnalysis(activeChatRun.requestId)
       setPauseRequested(true)
       setAnalysisStatus('将在当前步骤完成后暂停…')
@@ -1076,8 +1101,10 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
   }
 
   const applyPendingDiff = () => {
+    const proposal = diffProposals.find((item) => item.status === 'proposed')
+    if (!proposal) return
     try {
-      applyDiffProposal()
+      applyDiffProposal(proposal.id)
       onReviewDiff()
     } catch (error) { setError(String(error)) }
   }
@@ -1114,10 +1141,14 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
   }
 
   return <main className="chat-panel">
-    {diffProposal?.status === 'proposed' && <aside className="new-files-notice diff-proposal-notice" role="status">
-      <div className="new-files-notice-copy"><WandSparkles /><span><strong>选区修改提案待审核</strong><small>{diffProposal.path} · {diffProposal.from}-{diffProposal.to}</small></span></div>
-      <div className="new-files-notice-actions"><button onClick={applyPendingDiff}>应用到编辑器</button><button onClick={rejectDiffProposal}>拒绝</button><button onClick={onReviewDiff}>查看文档</button></div>
-    </aside>}
+    {diffProposals.some((proposal) => proposal.status === 'proposed') && (() => {
+      const proposal = diffProposals.find((item) => item.status === 'proposed')!
+      const pendingCount = diffProposals.filter((item) => item.status === 'proposed').length
+      return <aside className="new-files-notice diff-proposal-notice" role="status">
+        <div className="new-files-notice-copy"><WandSparkles /><span><strong>{pendingCount} 个修改提案待审核</strong><small>{proposal.path} · {proposal.chunkCount ? `${(proposal.chunkIndex ?? 0) + 1}/${proposal.chunkCount} 块` : `${proposal.from}-${proposal.to}`}</small></span></div>
+        <div className="new-files-notice-actions"><button onClick={applyPendingDiff}>接受此块</button><button onClick={() => rejectDiffProposal(proposal.id)}>拒绝此块</button><button onClick={() => { const tab = useAppStore.getState().tabs.find((item) => item.path === proposal.path); if (tab) useAppStore.getState().openTab(tab); onReviewDiff() }}>查看文档</button></div>
+      </aside>
+    })()}
     {recoverableJob && <aside className="new-files-notice memory-notice" role="status">
       <div className="new-files-notice-copy"><RefreshCw /><span><strong>检测到未完成的长文本任务</strong><small>{recoverableJob.instruction.slice(0, 96)}</small></span></div>
       <div className="new-files-notice-actions"><button onClick={() => void prepareResumeJob()}>恢复任务</button><button onClick={() => setRecoverableJob(null)}>忽略</button></div>
@@ -1222,7 +1253,7 @@ function EditorPanel({ onSave, onClose, onOpenChat }: { onSave: () => Promise<vo
   const editorSelection = useAppStore((state) => state.editorSelection)
   const setEditorSelection = useAppStore((state) => state.setEditorSelection)
   const prepareEditorRevision = useAppStore((state) => state.prepareEditorRevision)
-  const diffProposal = useAppStore((state) => state.diffProposal)
+  const diffProposals = useAppStore((state) => state.diffProposals)
   const applyDiffProposal = useAppStore((state) => state.applyDiffProposal)
   const rejectDiffProposal = useAppStore((state) => state.rejectDiffProposal)
   const document = tabs.find((tab) => tab.path === activePath)
@@ -1236,6 +1267,8 @@ function EditorPanel({ onSave, onClose, onOpenChat }: { onSave: () => Promise<vo
   const words = document.content.trim() ? document.content.trim().split(/\s+/).length : 0
   const markdown = document.kind === 'markdown'
   const html = getLanguageName(document.name) === 'html'
+  const documentProposals = diffProposals.filter((proposal) => proposal.path === document.path && proposal.status === 'proposed')
+  const diffProposal = documentProposals[0]
 
   const download = async () => {
     try {
@@ -1266,7 +1299,8 @@ function EditorPanel({ onSave, onClose, onOpenChat }: { onSave: () => Promise<vo
   }
 
   const applyPendingDiff = () => {
-    try { applyDiffProposal() } catch (error) { setError(String(error)) }
+    if (!diffProposal) return
+    try { applyDiffProposal(diffProposal.id) } catch (error) { setError(String(error)) }
   }
 
   return <aside className="editor-panel">
@@ -1290,9 +1324,9 @@ function EditorPanel({ onSave, onClose, onOpenChat }: { onSave: () => Promise<vo
       {!editable && <FilePreview document={document} onError={setError} />}
     </div>
     {diffProposal?.path === document.path && diffProposal.status === 'proposed' && <aside className="editor-diff-proposal" aria-label="选区修改提案">
-      <div><WandSparkles /><span><strong>选区修改提案</strong><small>字符 {diffProposal.from}-{diffProposal.to} · 应用后仍需保存文档</small></span></div>
+      <div><WandSparkles /><span><strong>修改提案 · {documentProposals.length} 块待审核</strong><small>字符 {diffProposal.from}-{diffProposal.to} · 应用后仍需保存文档</small></span></div>
       <p>{diffProposal.replacementText || '（删除选区内容）'}</p>
-      <div><button className="primary-button" onClick={applyPendingDiff}><Check />应用</button><button onClick={rejectDiffProposal}><X />拒绝</button></div>
+      <div><button className="primary-button" onClick={applyPendingDiff}><Check />接受</button><button onClick={() => rejectDiffProposal(diffProposal.id)}><X />拒绝</button></div>
     </aside>}
     <footer className="editor-status">{editable ? <><span>语言 {getLanguageName(document.name)}</span><span>行 {lines}</span><span>{document.content.length} 字符</span><span>{words} 词</span><span>UTF-8</span><span>{document.lineEnding.toUpperCase()}</span><span className={dirty ? 'unsaved' : 'saved'}>{dirty ? '未保存' : <><Check />已保存</>}</span></> : <><span>{document.kind === 'binary' ? '不可编辑' : '仅预览'}</span><span>{document.sizeBytes ? `${Math.ceil(document.sizeBytes / 1024)} KB` : ''}</span></>}</footer>
   </aside>
@@ -1331,20 +1365,24 @@ function ContentPanel({ page, onPageChange, showFileEditor, onOpenDocument, onOp
   const modelProfiles = useAppStore((state) => state.modelProfiles)
   const activeModelId = useAppStore((state) => state.activeModelId)
   const activeModel = modelProfiles.find((profile) => profile.id === activeModelId)
+  const pageTitle = page === 'tasks' ? '任务中心' : conversationTitle || '新会话'
 
   return <section className="content-panel" aria-label="内容区">
     <header className="content-panel-header">
       <div className="content-panel-summary">
-        <strong title={conversationTitle}>{conversationTitle || '新会话'}</strong>
+        <strong title={pageTitle}>{pageTitle}</strong>
         <span title={`${workspace?.name ?? '未打开项目'} · ${activeModel?.model ?? '未选择模型'}`}>{workspace?.name ?? '未打开项目'} · {activeModel?.model ?? '未选择模型'}</span>
       </div>
       <div className="content-switcher" role="tablist" aria-label="内容页面">
         <button role="tab" aria-selected={page === 'chat'} className={page === 'chat' ? 'active' : ''} onClick={() => onPageChange('chat')}><MessageSquareText />对话</button>
         <button role="tab" aria-selected={page === 'file'} className={page === 'file' ? 'active' : ''} onClick={() => onPageChange('file')}><FileText />文件</button>
+        <button role="tab" aria-selected={page === 'tasks'} className={page === 'tasks' ? 'active' : ''} onClick={() => onPageChange('tasks')}><ListChecks />任务</button>
       </div>
     </header>
     <div className="content-panel-body">
-      {page === 'chat' ? <ChatPanel onToggleContext={onToggleContext} onReviewDiff={onReviewDiff} /> : <FileWorkspace showEditor={showFileEditor} onOpenDocument={onOpenDocument} onToggleContext={onToggleContext} onOpenWorkspace={onOpenWorkspace} onRefreshWorkspace={onRefreshWorkspace} onSave={onSave} onCloseEditor={onCloseEditor} onOpenChat={() => onPageChange('chat')} />}
+      {page === 'chat' && <ChatPanel onToggleContext={onToggleContext} onReviewDiff={onReviewDiff} />}
+      {page === 'file' && <FileWorkspace showEditor={showFileEditor} onOpenDocument={onOpenDocument} onToggleContext={onToggleContext} onOpenWorkspace={onOpenWorkspace} onRefreshWorkspace={onRefreshWorkspace} onSave={onSave} onCloseEditor={onCloseEditor} onOpenChat={() => onPageChange('chat')} />}
+      {page === 'tasks' && <TaskCenter />}
     </div>
   </section>
 }

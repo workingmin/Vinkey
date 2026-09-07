@@ -5,10 +5,12 @@ use std::{
     fs,
     io::Write,
     path::{Path, PathBuf},
+    sync::{LazyLock, Mutex},
     time::{SystemTime, UNIX_EPOCH},
 };
 
 const MAX_EVENTS: usize = 500;
+static JOB_WRITE_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -56,6 +58,16 @@ pub struct TaskJobEvent {
     pub fields: Map<String, Value>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskJobFailure {
+    pub code: String,
+    pub category: String,
+    pub message: String,
+    pub retryable: bool,
+    pub step_id: Option<String>,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskJob {
@@ -69,6 +81,8 @@ pub struct TaskJob {
     pub steps: Vec<TaskJobStep>,
     pub events: Vec<TaskJobEvent>,
     pub error: Option<String>,
+    #[serde(default)]
+    pub failure: Option<TaskJobFailure>,
     pub created_at: u64,
     pub updated_at: u64,
 }
@@ -125,6 +139,70 @@ fn transition_allowed(current: &str, next: &str) -> bool {
         )
 }
 
+fn classify_failure(message: &str, step_id: Option<String>) -> TaskJobFailure {
+    let (code, category, retryable) = if [
+        "模型请求失败",
+        "模型请求超时",
+        "模型响应超时",
+        "模型响应连接中断",
+        "读取模型响应失败",
+        "HTTP 408",
+        "HTTP 429",
+        "HTTP 500",
+        "HTTP 502",
+        "HTTP 503",
+        "HTTP 504",
+    ]
+    .iter()
+    .any(|value| message.contains(value))
+    {
+        ("model.transient_exhausted", "model", true)
+    } else if message.contains("模型没有返回可用内容")
+        || message.contains("模型流响应格式无效")
+        || message.contains("模型输出")
+    {
+        ("model.output_invalid", "model", true)
+    } else if message.contains("兼容")
+        || message.contains("版本已过期")
+        || message.contains("配置已变化")
+        || message.contains("源文档已变化")
+        || message.contains("指纹")
+    {
+        ("worker.compatibility_mismatch", "compatibility", false)
+    } else if message.contains("Dispatch")
+        || message.contains("授权")
+        || message.contains("权限")
+        || message.contains("策略")
+        || message.contains("工作区")
+    {
+        ("policy.denied", "authorization", false)
+    } else if message.contains("无效")
+        || message.contains("缺少")
+        || message.contains("不匹配")
+        || message.contains("不支持")
+    {
+        ("worker.input_invalid", "validation", false)
+    } else if message.contains("超过") || message.contains("上限") {
+        ("worker.capacity_exceeded", "capacity", false)
+    } else if message.contains("无法读取")
+        || message.contains("无法写入")
+        || message.contains("无法创建")
+        || message.contains("无法删除")
+        || message.contains("无法提交")
+    {
+        ("io.operation_failed", "io", true)
+    } else {
+        ("worker.failed", "internal", false)
+    };
+    TaskJobFailure {
+        code: code.into(),
+        category: category.into(),
+        message: message.to_string(),
+        retryable,
+        step_id,
+    }
+}
+
 fn task_path(root: &Path, task_id: &str) -> PathBuf {
     root.join(task_id).join("task.json")
 }
@@ -168,6 +246,9 @@ pub fn get(root: &Path, task_id: &str) -> Result<TaskJob, String> {
 }
 
 pub fn start(root: &Path, workspace_id: &str, input: StartTaskJobInput) -> Result<TaskJob, String> {
+    let _guard = JOB_WRITE_LOCK
+        .lock()
+        .map_err(|_| "任务写入状态不可用".to_string())?;
     validate_id(&input.task_id, "任务 ID")?;
     validate_id(&input.task_type, "任务类型")?;
     if input.instruction_hash.is_empty() || input.instruction_hash.len() > 128 {
@@ -189,6 +270,7 @@ pub fn start(root: &Path, workspace_id: &str, input: StartTaskJobInput) -> Resul
         existing.status = "running".into();
         existing.cancel_requested = false;
         existing.error = None;
+        existing.failure = None;
         existing.updated_at = now_ms();
         append_event(&mut existing, None, "task.resumed", Map::new());
         save(root, &existing)?;
@@ -206,6 +288,7 @@ pub fn start(root: &Path, workspace_id: &str, input: StartTaskJobInput) -> Resul
         steps: Vec::new(),
         events: Vec::new(),
         error: None,
+        failure: None,
         created_at: timestamp,
         updated_at: timestamp,
     };
@@ -238,6 +321,9 @@ fn append_event(
 }
 
 pub fn update(root: &Path, input: UpdateTaskJobInput) -> Result<TaskJob, String> {
+    let _guard = JOB_WRITE_LOCK
+        .lock()
+        .map_err(|_| "任务写入状态不可用".to_string())?;
     let mut job = get(root, &input.task_id)?;
     if let Some(status) = input.status.as_deref() {
         validate_status(status)?;
@@ -247,12 +333,14 @@ pub fn update(root: &Path, input: UpdateTaskJobInput) -> Result<TaskJob, String>
         job.status = status.to_string();
         if status != "failed" {
             job.error = None;
+            job.failure = None;
         }
     }
     if let Some(error) = input.error {
         if error.chars().count() > 2_000 {
             return Err("任务错误信息超过限制".into());
         }
+        job.failure = Some(classify_failure(&error, input.step_id.clone()));
         job.error = Some(error);
     }
     if let Some(step_id) = input.step_id.as_deref() {
@@ -294,7 +382,102 @@ pub fn update(root: &Path, input: UpdateTaskJobInput) -> Result<TaskJob, String>
     Ok(job)
 }
 
+pub fn record_retry(
+    root: &Path,
+    task_id: &str,
+    step_id: &str,
+    error: &str,
+    retry_after_ms: u64,
+) -> Result<TaskJob, String> {
+    let _guard = JOB_WRITE_LOCK
+        .lock()
+        .map_err(|_| "任务写入状态不可用".to_string())?;
+    validate_id(task_id, "任务 ID")?;
+    validate_id(step_id, "任务步骤 ID")?;
+    let mut job = get(root, task_id)?;
+    if job.status != "running" {
+        return Err("只有运行中的任务可以安排步骤重试".into());
+    }
+    let timestamp = now_ms();
+    let attempt = {
+        let step = job
+            .steps
+            .iter_mut()
+            .find(|step| step.id == step_id)
+            .ok_or_else(|| "找不到待重试的任务步骤".to_string())?;
+        if step.status != "running" {
+            return Err("只有运行中的任务步骤可以重试".into());
+        }
+        step.attempt = step.attempt.saturating_add(1);
+        step.updated_at = timestamp;
+        step.attempt
+    };
+    job.updated_at = timestamp;
+    append_event(
+        &mut job,
+        Some(step_id.into()),
+        "step.retry_scheduled",
+        Map::from_iter([
+            ("attempt".into(), Value::from(attempt)),
+            ("retryAfterMs".into(), Value::from(retry_after_ms)),
+            (
+                "error".into(),
+                Value::String(error.chars().take(500).collect()),
+            ),
+        ]),
+    );
+    save(root, &job)?;
+    Ok(job)
+}
+
+pub fn record_step_retry_request(
+    root: &Path,
+    task_id: &str,
+    step_id: &str,
+    removed_artifacts: &[String],
+) -> Result<TaskJob, String> {
+    let _guard = JOB_WRITE_LOCK
+        .lock()
+        .map_err(|_| "任务写入状态不可用".to_string())?;
+    validate_id(task_id, "任务 ID")?;
+    validate_id(step_id, "任务步骤 ID")?;
+    let mut job = get(root, task_id)?;
+    if job.status != "failed" {
+        return Err("只有失败的任务可以请求指定步骤重跑".into());
+    }
+    let next_attempt = job
+        .steps
+        .iter()
+        .find(|step| step.id == step_id)
+        .map(|step| step.attempt.saturating_add(1))
+        .ok_or_else(|| "找不到待重跑的任务步骤".to_string())?;
+    job.updated_at = now_ms();
+    append_event(
+        &mut job,
+        Some(step_id.into()),
+        "worker.step_retry_requested",
+        Map::from_iter([
+            ("nextAttempt".into(), Value::from(next_attempt)),
+            (
+                "removedArtifacts".into(),
+                Value::Array(
+                    removed_artifacts
+                        .iter()
+                        .cloned()
+                        .map(Value::String)
+                        .collect(),
+                ),
+            ),
+        ]),
+    );
+    save(root, &job)?;
+    Ok(job)
+}
+
 pub fn cancel(root: &Path, task_id: &str) -> Result<TaskJob, String> {
+    let _guard = JOB_WRITE_LOCK
+        .lock()
+        .map_err(|_| "任务写入状态不可用".to_string())?;
     let mut job = get(root, task_id)?;
     if matches!(job.status.as_str(), "completed" | "cancelled") {
         return Ok(job);
@@ -436,5 +619,133 @@ mod tests {
         assert!(cancelled.cancel_requested);
         assert_eq!(get(directory.path(), "task-3").unwrap().status, "cancelled");
         assert_eq!(list(directory.path()).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn records_a_persisted_step_retry_attempt() {
+        let directory = tempfile::tempdir().unwrap();
+        start(directory.path(), "work", input("task-4")).unwrap();
+        update(
+            directory.path(),
+            UpdateTaskJobInput {
+                task_id: "task-4".into(),
+                status: None,
+                step_id: Some("map".into()),
+                step_kind: Some("map".into()),
+                step_status: Some("running".into()),
+                checkpoint: None,
+                error: None,
+                event_type: Some("step.started".into()),
+                event_fields: Map::new(),
+            },
+        )
+        .unwrap();
+
+        let retried = record_retry(directory.path(), "task-4", "map", "timeout", 500).unwrap();
+        assert_eq!(retried.steps[0].attempt, 2);
+        assert_eq!(
+            retried.events.last().unwrap().event_type,
+            "step.retry_scheduled"
+        );
+        assert_eq!(
+            retried.events.last().unwrap().fields["retryAfterMs"],
+            Value::from(500)
+        );
+    }
+
+    #[test]
+    fn records_a_manual_step_retry_only_for_a_failed_job() {
+        let directory = tempfile::tempdir().unwrap();
+        start(directory.path(), "workspace-1", input("task-5")).unwrap();
+        update(
+            directory.path(),
+            UpdateTaskJobInput {
+                task_id: "task-5".into(),
+                status: Some("failed".into()),
+                step_id: Some("reduce-2".into()),
+                step_kind: Some("reduce".into()),
+                step_status: Some("failed".into()),
+                checkpoint: None,
+                error: Some("model failed".into()),
+                event_type: Some("worker.failed".into()),
+                event_fields: Map::new(),
+            },
+        )
+        .unwrap();
+
+        let requested = record_step_retry_request(
+            directory.path(),
+            "task-5",
+            "reduce-2",
+            &["reduce-2-0001.md".into(), "analysis.md".into()],
+        )
+        .unwrap();
+
+        assert_eq!(requested.status, "failed");
+        assert_eq!(
+            requested.events.last().unwrap().event_type,
+            "worker.step_retry_requested"
+        );
+        assert_eq!(
+            requested.events.last().unwrap().step_id.as_deref(),
+            Some("reduce-2")
+        );
+        assert_eq!(
+            requested.events.last().unwrap().fields["nextAttempt"],
+            Value::from(2)
+        );
+        assert!(record_step_retry_request(directory.path(), "task-5", "missing", &[]).is_err());
+    }
+
+    #[test]
+    fn persists_a_structured_failure_and_clears_it_on_resume() {
+        let directory = tempfile::tempdir().unwrap();
+        start(directory.path(), "workspace-1", input("task-6")).unwrap();
+
+        let failed = update(
+            directory.path(),
+            UpdateTaskJobInput {
+                task_id: "task-6".into(),
+                status: Some("failed".into()),
+                step_id: Some("map".into()),
+                step_kind: Some("map".into()),
+                step_status: Some("failed".into()),
+                checkpoint: None,
+                error: Some("模型服务返回 HTTP 503：busy".into()),
+                event_type: Some("worker.failed".into()),
+                event_fields: Map::new(),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(
+            failed.failure,
+            Some(TaskJobFailure {
+                code: "model.transient_exhausted".into(),
+                category: "model".into(),
+                message: "模型服务返回 HTTP 503：busy".into(),
+                retryable: true,
+                step_id: Some("map".into()),
+            })
+        );
+        assert!(start(directory.path(), "workspace-1", input("task-6"))
+            .unwrap()
+            .failure
+            .is_none());
+    }
+
+    #[test]
+    fn reads_legacy_task_json_without_a_structured_failure() {
+        let directory = tempfile::tempdir().unwrap();
+        let job = start(directory.path(), "workspace-1", input("task-7")).unwrap();
+        let mut legacy = serde_json::to_value(job).unwrap();
+        legacy.as_object_mut().unwrap().remove("failure");
+        write_atomic(
+            &task_path(directory.path(), "task-7"),
+            &serde_json::to_vec_pretty(&legacy).unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(get(directory.path(), "task-7").unwrap().failure, None);
     }
 }

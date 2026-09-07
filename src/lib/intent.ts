@@ -303,7 +303,7 @@ export function refineTaskPlanForDocuments(
   if (plan.intent !== 'document-revision') return plan
   if (plan.revisionStrategy === 'direct') return plan
   const sourceTokens = documents.reduce((sum, document) => sum + estimateTokens(document.content), 0)
-  const bounded = documents.length <= 2 && sourceTokens <= Math.min(MAX_BOUNDED_REVISION_TOKENS, Math.max(256, maxSourceTokens))
+  const bounded = documents.length <= 8 && sourceTokens <= Math.min(MAX_BOUNDED_REVISION_TOKENS, Math.max(256, maxSourceTokens))
   const revised: TaskPlan = {
     ...plan,
     revisionStrategy: bounded ? 'bounded' : 'long',

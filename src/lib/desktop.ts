@@ -1,10 +1,11 @@
 import { Channel, invoke } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
 import { open } from '@tauri-apps/plugin-dialog'
 import type {
   ChatMessage, ChatRequest, ChatStreamEvent, ContextDocument, Conversation, ConversationSummary,
   ChunkManifest, DocumentSnapshot, ModelConnectionResult, ModelProfile, ModelProfileInput, OllamaStopResult, SearchHit,
   AnalysisJobManifest, CharacterGraphBenchmark, CharacterGraphStats, CharacterInput, CharacterMentionInput, CharacterNeighbor, CharacterRecord,
-  StartTaskJobInput, TaskJob, TaskJobStep, UpdateTaskJobInput,
+  LongTextWorkerOutput, StartLongTextWorkerInput, StartTaskJobInput, TaskJob, TaskJobStep, TaskWorkerEvent, UpdateTaskJobInput,
   ProjectMemoryCandidate, ProjectMemoryItem, ProjectMemoryStatus, RelationshipEvidenceInput, RelationshipInput,
   ThemeMode, WorkspaceSnapshot,
 } from '../types'
@@ -264,6 +265,108 @@ export async function cancelTaskJob(taskId: string): Promise<TaskJob> {
     return structuredClone(cancelled)
   }
   return invoke<TaskJob>('cancel_task_job', { taskId })
+}
+
+export async function prepareLongTextWorker(
+  input: StartLongTextWorkerInput,
+  onEvent?: (event: TaskWorkerEvent) => void,
+  authorizationTicket?: string | null,
+): Promise<LongTextWorkerOutput> {
+  if (!isDesktop()) {
+    let sequence = 1
+    await startTaskJob({
+      taskId: input.jobId,
+      taskType: 'long-text-analysis',
+      instructionHash: input.instructionHash,
+      sourceFingerprints: Object.fromEntries(input.documents.map((document) => [document.path, document.sourceFingerprint])),
+    })
+    const manifests: ChunkManifest[] = []
+    onEvent?.({ sequence: sequence++, timestamp: Date.now(), jobId: input.jobId, stage: 'chunking', status: 'running', completed: 0, total: input.documents.length, message: '浏览器演示正在准备分块' })
+    for (const [index, document] of input.documents.entries()) {
+      manifests.push(await chunkDocument(document.path, input.maxTokens, input.overlapTokens))
+      onEvent?.({ sequence: sequence++, timestamp: Date.now(), jobId: input.jobId, stage: 'chunking', status: 'running', completed: index + 1, total: input.documents.length, message: `已完成分块：${document.path}` })
+    }
+    await updateTaskJob({
+      taskId: input.jobId,
+      stepId: 'chunking',
+      stepKind: 'chunking',
+      stepStatus: 'completed',
+      checkpoint: 'worker-output.json',
+      eventType: 'worker.completed',
+    })
+    const output: LongTextWorkerOutput = {
+      workerVersion: 'long-text-worker-5',
+      promptVersion: 'long-text-prompts-1',
+      outputSchemaVersion: 'long-text-output-2',
+      compatibilityKey: 'browser-demo',
+      pipelineCompleted: false,
+      jobId: input.jobId,
+      workspaceId: 'demo-workspace',
+      sourceFingerprints: Object.fromEntries(input.documents.map((document) => [document.path, document.sourceFingerprint])),
+      manifests,
+      content: '',
+      evidence: [],
+      chunkCount: manifests.reduce((sum, manifest) => sum + manifest.chunks.length, 0),
+      summaryCount: 0,
+      modelInvocationCount: 0,
+      mapCacheHits: 0,
+      jobCheckpointHits: 0,
+      durationMs: 0,
+      completedAt: Date.now(),
+    }
+    onEvent?.({ sequence, timestamp: Date.now(), jobId: input.jobId, stage: 'chunking', status: 'completed', completed: manifests.length, total: manifests.length, message: '浏览器演示分块完成' })
+    return output
+  }
+
+  if (!authorizationTicket) throw new Error('Rust Worker 缺少有效的 Dispatch 授权票据')
+
+  const seenSequences = new Set<number>()
+  const dispatchEvent = (event: TaskWorkerEvent) => {
+    if (event.jobId !== input.jobId || seenSequences.has(event.sequence)) return
+    seenSequences.add(event.sequence)
+    onEvent?.(event)
+  }
+  const unlisten = await listen<TaskWorkerEvent>('task-worker-event', ({ payload }) => {
+    dispatchEvent(payload)
+  })
+  try {
+    const replay = await invoke<TaskWorkerEvent[]>('list_task_worker_events', {
+      jobId: input.jobId,
+      afterSequence: null,
+    })
+    replay.forEach(dispatchEvent)
+    await invoke<TaskJob>('start_long_text_worker', { input, authorizationTicket })
+    for (;;) {
+      const output = await invoke<LongTextWorkerOutput | null>('get_long_text_worker_output', { jobId: input.jobId })
+      if (output) return output
+      const job = await getTaskJob(input.jobId)
+      if (job.status === 'failed') throw job.failure ?? new Error(job.error ?? 'Rust Worker 执行失败')
+      if (job.status === 'cancelled') throw new Error('请求已停止')
+      await new Promise((resolve) => window.setTimeout(resolve, 150))
+    }
+  } finally {
+    unlisten()
+  }
+}
+
+export async function pauseTaskWorker(jobId: string): Promise<TaskJob> {
+  if (!isDesktop()) return updateTaskJob({ taskId: jobId, status: 'paused', eventType: 'worker.paused' })
+  return invoke<TaskJob>('pause_task_worker', { jobId })
+}
+
+export async function resumeTaskWorker(jobId: string): Promise<TaskJob> {
+  if (!isDesktop()) return updateTaskJob({ taskId: jobId, status: 'running', eventType: 'worker.resumed' })
+  return invoke<TaskJob>('resume_task_worker', { jobId })
+}
+
+export async function retryTaskWorkerStep(jobId: string, stepId: string): Promise<TaskJob> {
+  if (!isDesktop()) throw new Error('指定 Worker 步骤重跑仅在桌面应用中可用')
+  return invoke<TaskJob>('retry_task_worker_step', { jobId, stepId })
+}
+
+export async function getLongTextWorkerOutput(jobId: string): Promise<LongTextWorkerOutput | null> {
+  if (!isDesktop()) return null
+  return invoke<LongTextWorkerOutput | null>('get_long_text_worker_output', { jobId })
 }
 
 export async function executeTask(input: TaskExecutionInput): Promise<TaskExecutionDispatch> {
