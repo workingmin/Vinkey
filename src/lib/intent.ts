@@ -1,6 +1,7 @@
 import { getTaskCapabilities } from './registry'
 import type { AgentId, SkillId } from './registry'
-import type { AnalysisCoverage, AnalysisMode, SourcePolicy } from '../types'
+import type { AnalysisCoverage, AnalysisMode, ContextDocument, SourcePolicy } from '../types'
+import { estimateTokens } from './context'
 import { resolveExecutionStrategy } from './executionStrategy'
 import type { ExecutionStrategy } from './executionStrategy'
 import { assertRoutedTaskPolicy } from './runtimePolicy'
@@ -16,9 +17,10 @@ export type TaskIntent =
   | 'general-chat'
 
 export type TaskOperation = 'segment' | 'analyze' | 'revise' | 'review' | 'chat'
-export type TaskScope = 'selected-documents' | 'current-document' | 'workspace' | 'conversation'
+export type TaskScope = 'editor-selection' | 'selected-documents' | 'current-document' | 'workspace' | 'conversation'
 export type TaskSideEffect = 'read' | 'draft' | 'proposal'
 export type DocumentAccess = 'none' | 'selected-metadata' | 'selected' | 'workspace-metadata' | 'workspace-focused' | 'workspace'
+export type RevisionStrategy = 'direct' | 'bounded' | 'long' | null
 
 export interface TaskPlan {
   intent: TaskIntent
@@ -35,6 +37,7 @@ export interface TaskPlan {
   sourcePolicy: SourcePolicy
   requiresModel: boolean
   confidence: 'high' | 'medium' | 'low'
+  revisionStrategy: RevisionStrategy
   execution: ExecutionStrategy
 }
 
@@ -97,8 +100,57 @@ function deepAnalysisPolicy(prompt: string): Pick<TaskPlan, 'analysisMode' | 'an
  * Route explicit document operations before assembling a model request.
  * This is deliberately deterministic: ambiguous prompts remain ordinary chat.
  */
-export function classifyTask(value: string, hasContextDocuments: boolean): TaskPlan {
+export function classifyTask(value: string, hasContextDocuments: boolean, actionId: string | null = null): TaskPlan {
   const prompt = value.trim()
+
+  if (actionId === 'structure-segmentation') {
+    return withCapabilities({
+      intent: 'structure-segmentation', operation: 'segment', scope: 'selected-documents', sideEffect: 'proposal',
+      documentAccess: 'selected', analysisMode: null, analysisCoverage: 'targeted', sourcePolicy: 'local-chunks',
+      requiresModel: false, confidence: 'high', revisionStrategy: null,
+    })
+  }
+  if (actionId === 'structure-enhancement') {
+    return withCapabilities({
+      intent: 'structure-enhancement', operation: 'analyze', scope: 'selected-documents', sideEffect: 'draft',
+      documentAccess: 'selected', ...deepAnalysisPolicy(prompt), requiresModel: true, confidence: 'high', revisionStrategy: null,
+    })
+  }
+  if (actionId === 'document-analysis') {
+    const policy = deepAnalysisPolicy(prompt)
+    return withCapabilities({
+      intent: 'document-analysis', operation: 'analyze', scope: 'selected-documents', sideEffect: 'draft',
+      documentAccess: 'selected', ...policy, requiresModel: true, confidence: 'high', revisionStrategy: null,
+    })
+  }
+  if (actionId === 'character-analysis') {
+    const policy = deepAnalysisPolicy(prompt)
+    return withCapabilities({
+      intent: 'character-analysis', operation: 'analyze', scope: 'selected-documents', sideEffect: 'draft',
+      documentAccess: 'selected', ...policy, requiresModel: true, confidence: 'high', revisionStrategy: null,
+    })
+  }
+  if (actionId === 'document-revision') {
+    return withCapabilities({
+      intent: 'document-revision', operation: 'revise', scope: 'selected-documents', sideEffect: 'draft',
+      documentAccess: 'selected', ...deepAnalysisPolicy(prompt), requiresModel: true, confidence: 'high', revisionStrategy: 'long',
+    })
+  }
+  if (actionId === 'continuity-review') {
+    const workspaceScope = asksAboutWorkspace(prompt)
+    return withCapabilities({
+      intent: 'continuity-review', operation: 'review', scope: workspaceScope ? 'workspace' : 'selected-documents', sideEffect: 'draft',
+      documentAccess: workspaceScope ? 'workspace' : 'selected', ...deepAnalysisPolicy(prompt), requiresModel: true, confidence: 'high', revisionStrategy: null,
+    })
+  }
+  if (actionId === 'workspace-analysis') {
+    const policy = workspaceAnalysisPolicy(prompt)
+    return withCapabilities({
+      intent: 'workspace-analysis', operation: 'analyze', scope: 'workspace', sideEffect: 'draft',
+      documentAccess: policy.analysisMode === 'overview' ? 'workspace-metadata' : policy.analysisMode === 'focused' ? 'workspace-focused' : 'workspace',
+      ...policy, requiresModel: policy.analysisMode !== 'overview', confidence: 'high', revisionStrategy: null,
+    })
+  }
 
   if (/(?:重新梳理|深入梳理|语义梳理|隐含场景|剧情阶段|章节命名|结构归纳)/u.test(prompt)) {
     return withCapabilities({
@@ -112,6 +164,7 @@ export function classifyTask(value: string, hasContextDocuments: boolean): TaskP
       sourcePolicy: 'local-chunks',
       requiresModel: true,
       confidence: 'high',
+      revisionStrategy: null,
     })
   }
 
@@ -127,6 +180,7 @@ export function classifyTask(value: string, hasContextDocuments: boolean): TaskP
       sourcePolicy: 'local-chunks',
       requiresModel: false,
       confidence: 'high',
+      revisionStrategy: null,
     })
   }
 
@@ -142,6 +196,7 @@ export function classifyTask(value: string, hasContextDocuments: boolean): TaskP
       ...policy,
       requiresModel: true,
       confidence: 'high',
+      revisionStrategy: null,
     })
   }
 
@@ -156,6 +211,7 @@ export function classifyTask(value: string, hasContextDocuments: boolean): TaskP
       ...policy,
       requiresModel: true,
       confidence: 'high',
+      revisionStrategy: null,
     })
   }
 
@@ -172,6 +228,7 @@ export function classifyTask(value: string, hasContextDocuments: boolean): TaskP
       ...policy,
       requiresModel: policy.analysisMode !== 'overview',
       confidence: policy.analysisMode === 'focused' ? 'medium' : 'high',
+      revisionStrategy: null,
     })
   }
 
@@ -186,6 +243,7 @@ export function classifyTask(value: string, hasContextDocuments: boolean): TaskP
       ...policy,
       requiresModel: true,
       confidence: 'medium',
+      revisionStrategy: null,
     })
   }
 
@@ -200,6 +258,7 @@ export function classifyTask(value: string, hasContextDocuments: boolean): TaskP
       ...policy,
       requiresModel: true,
       confidence: 'high',
+      revisionStrategy: null,
     })
   }
 
@@ -214,6 +273,7 @@ export function classifyTask(value: string, hasContextDocuments: boolean): TaskP
       ...policy,
       requiresModel: true,
       confidence: 'low',
+      revisionStrategy: null,
     })
   }
 
@@ -228,5 +288,29 @@ export function classifyTask(value: string, hasContextDocuments: boolean): TaskP
     sourcePolicy: 'metadata-only',
     requiresModel: true,
     confidence: 'low',
+    revisionStrategy: null,
   })
+}
+
+export const MAX_BOUNDED_REVISION_TOKENS = 12_000
+
+/** Refine document revision after the authorized targets have been loaded. */
+export function refineTaskPlanForDocuments(
+  plan: TaskPlan,
+  documents: ContextDocument[],
+  maxSourceTokens = MAX_BOUNDED_REVISION_TOKENS,
+): TaskPlan {
+  if (plan.intent !== 'document-revision') return plan
+  if (plan.revisionStrategy === 'direct') return plan
+  const sourceTokens = documents.reduce((sum, document) => sum + estimateTokens(document.content), 0)
+  const bounded = documents.length <= 2 && sourceTokens <= Math.min(MAX_BOUNDED_REVISION_TOKENS, Math.max(256, maxSourceTokens))
+  const revised: TaskPlan = {
+    ...plan,
+    revisionStrategy: bounded ? 'bounded' : 'long',
+    sourcePolicy: bounded ? 'local-excerpts' : 'local-chunks',
+    analysisMode: bounded ? null : 'deep',
+    analysisCoverage: bounded ? 'targeted' : plan.analysisCoverage,
+  }
+  assertRoutedTaskPolicy(revised)
+  return { ...revised, execution: resolveExecutionStrategy(revised) }
 }

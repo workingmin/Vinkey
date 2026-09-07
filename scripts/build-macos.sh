@@ -2,19 +2,21 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-INSTALL_APP=false
+INSTALL_APP=true
 OPEN_APP=false
 
 for argument in "$@"; do
   case "$argument" in
     --install) INSTALL_APP=true ;;
+    --no-install) INSTALL_APP=false ;;
     --open) OPEN_APP=true ;;
     -h|--help)
       cat <<'USAGE'
-用法：npm run package:mac -- [--install] [--open]
+用法：npm run package:mac -- [--install|--no-install] [--open]
 
-  --install  将新生成的 Vinkey.app 替换到 /Applications/Vinkey.app
-  --open     构建完成后启动新生成的应用；与 --install 一起使用时启动 /Applications 版本
+  --install     将新生成的 Vinkey.app 更新到 /Applications/Vinkey.app（默认）
+  --no-install  只生成构建产物，不修改 /Applications
+  --open        构建完成后启动应用；默认启动 /Applications 版本
 USAGE
       exit 0
       ;;

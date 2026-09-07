@@ -60,91 +60,180 @@ export interface TaskCapabilities {
   allowedTools: string[]
 }
 
-const anyObject = { type: 'object' } as const
-const anyArray = { type: 'array' } as const
+const emptyObject = { type: 'object', properties: {}, additionalProperties: false } as const
+const pathProperty = { type: 'string', minLength: 1, maxLength: 500 } as const
+const idProperty = { type: 'string', minLength: 1, maxLength: 120, pattern: '^[A-Za-z0-9_.-]+$' } as const
+const nullableString = { type: ['string', 'null'] } as const
+const documentKindProperty = { enum: ['markdown', 'text', 'code', 'image', 'pdf', 'audio', 'video', 'binary'] } as const
+const stringMapSchema = { type: 'object', additionalProperties: { type: 'string' } } as const
+const documentSnapshotSchema = {
+  type: 'object', required: ['path', 'name', 'content', 'kind', 'modifiedMs', 'lineEnding', 'hasBom'],
+  properties: {
+    path: pathProperty, name: { type: 'string', minLength: 1, maxLength: 500 }, content: { type: 'string' }, kind: documentKindProperty,
+    modifiedMs: { type: 'integer', minimum: 0 }, lineEnding: { enum: ['lf', 'crlf'] }, hasBom: { type: 'boolean' },
+    mimeType: nullableString, sizeBytes: { type: 'integer', minimum: 0 },
+  }, additionalProperties: false,
+} as const
+const documentProfileSchema = {
+  type: 'object', required: ['path', 'name', 'kind'], additionalProperties: false,
+  properties: {
+    path: pathProperty, name: { type: 'string', minLength: 1, maxLength: 500 }, kind: documentKindProperty,
+    sizeBytes: { type: 'integer', minimum: 0 }, modifiedMs: { type: 'integer', minimum: 0 },
+  },
+} as const
+const textChunkSchema = {
+  type: 'object',
+  required: ['id', 'sourceId', 'text', 'startChar', 'endChar', 'lineStart', 'lineEnd', 'estimatedTokens', 'splitReason', 'overlapFromPrevious'],
+  additionalProperties: false,
+  properties: {
+    id: { type: 'string', minLength: 1, maxLength: 700 }, sourceId: pathProperty, text: { type: 'string' },
+    startChar: { type: 'integer', minimum: 0 }, endChar: { type: 'integer', minimum: 0 },
+    lineStart: { type: 'integer', minimum: 1 }, lineEnd: { type: 'integer', minimum: 1 },
+    heading: nullableString, estimatedTokens: { type: 'integer', minimum: 0 },
+    splitReason: { type: 'string', minLength: 1, maxLength: 120 }, overlapFromPrevious: { type: 'boolean' },
+  },
+} as const
+const chunkManifestSchema = {
+  type: 'object',
+  required: ['sourceId', 'sourceFingerprint', 'algorithmVersion', 'cacheKey', 'sourceTokens', 'maxTokens', 'overlapTokens', 'chunks'],
+  additionalProperties: false,
+  properties: {
+    sourceId: pathProperty, sourceFingerprint: { type: 'string', minLength: 1, maxLength: 200 },
+    algorithmVersion: { type: 'string', minLength: 1, maxLength: 80 }, cacheKey: { type: 'string', minLength: 1, maxLength: 500 },
+    sourceTokens: { type: 'integer', minimum: 0 }, maxTokens: { type: 'integer', minimum: 1 }, overlapTokens: { type: 'integer', minimum: 0 },
+    chunks: { type: 'array', items: textChunkSchema },
+  },
+} as const
+const workspaceDocumentRefSchema = {
+  type: 'object', required: ['path', 'name', 'kind'], additionalProperties: false,
+  properties: {
+    path: pathProperty, name: { type: 'string', minLength: 1, maxLength: 500 }, kind: documentKindProperty,
+    reason: { enum: ['supported', 'sensitive', 'unsupported', 'not-targeted', 'too-large', 'read-error'] },
+  },
+} as const
+const analysisJobSchema = {
+  type: 'object',
+  required: ['jobId', 'workspaceId', 'instruction', 'status', 'createdAt', 'updatedAt', 'documentCount', 'supportedDocumentCount', 'excludedDocuments', 'sourceFingerprints'],
+  additionalProperties: false,
+  properties: {
+    jobId: idProperty, workspaceId: { type: 'string', minLength: 1, maxLength: 200 }, instruction: { type: 'string', maxLength: 200_000 },
+    status: { enum: ['planned', 'running', 'completed', 'failed', 'cancelled'] },
+    createdAt: { type: 'integer', minimum: 0 }, updatedAt: { type: 'integer', minimum: 0 },
+    documentCount: { type: 'integer', minimum: 0 }, supportedDocumentCount: { type: 'integer', minimum: 0 },
+    excludedDocuments: { type: 'array', items: workspaceDocumentRefSchema }, sourceFingerprints: stringMapSchema,
+    chunkCount: { type: 'integer', minimum: 0 }, summaryCount: { type: 'integer', minimum: 0 }, evidenceCount: { type: 'integer', minimum: 0 },
+    error: nullableString,
+  },
+} as const
+const projectMemorySchema = {
+  type: 'object', required: ['id', 'kind', 'title', 'content', 'sourcePaths', 'confidence', 'status', 'createdAt', 'updatedAt'],
+  additionalProperties: false,
+  properties: {
+    id: idProperty, kind: { enum: ['summary', 'fact', 'character', 'timeline', 'foreshadowing', 'decision'] },
+    title: { type: 'string', minLength: 1, maxLength: 160 }, content: { type: 'string', minLength: 1, maxLength: 20_000 },
+    sourcePaths: { type: 'array', maxItems: 50, items: pathProperty }, confidence: { enum: ['low', 'medium', 'high'] },
+    status: { enum: ['proposed', 'confirmed', 'rejected'] }, createdAt: { type: 'integer', minimum: 0 }, updatedAt: { type: 'integer', minimum: 0 },
+  },
+} as const
 
 const toolDefinitions: ToolDefinition[] = [
   {
     name: 'get_workspace_profile', version: '1.0.0', description: '获取不含正文和绝对路径的工作区画像',
-    inputSchema: { type: 'object', properties: {} },
-    outputSchema: { type: 'object', properties: { workspaceId: { type: 'string' }, name: { type: 'string' }, directoryCount: { type: 'integer' }, fileCount: { type: 'integer' }, documentKindCounts: anyObject } },
+    inputSchema: emptyObject,
+    outputSchema: {
+      type: 'object', required: ['workspaceId', 'name', 'directoryCount', 'fileCount', 'documentKindCounts'], additionalProperties: false,
+      properties: {
+        workspaceId: { type: 'string', minLength: 1, maxLength: 200 }, name: { type: 'string', minLength: 1, maxLength: 500 },
+        directoryCount: { type: 'integer', minimum: 0 }, fileCount: { type: 'integer', minimum: 0 },
+        documentKindCounts: { type: 'object', additionalProperties: { type: 'integer', minimum: 0 } },
+      },
+    },
     permission: 'workspace-read', sideEffects: ['read'], timeoutMs: 5_000, cancellable: false, auditFields: [],
   },
   {
     name: 'list_document_profiles', version: '1.0.0', description: '分页列出不含正文的文档画像',
-    inputSchema: { type: 'object', properties: { cursor: { type: 'integer' }, limit: { type: 'integer' } } },
-    outputSchema: { type: 'object', properties: { documents: anyArray, nextCursor: { type: ['integer', 'null'] } } },
+    inputSchema: { type: 'object', properties: { cursor: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1, maximum: 200 } }, additionalProperties: false },
+    outputSchema: {
+      type: 'object', required: ['documents', 'nextCursor'], additionalProperties: false,
+      properties: { documents: { type: 'array', items: documentProfileSchema }, nextCursor: { type: ['integer', 'null'], minimum: 0 } },
+    },
     permission: 'workspace-read', sideEffects: ['read'], timeoutMs: 5_000, cancellable: false, auditFields: ['cursor', 'limit'],
   },
   {
     name: 'get_document_digest', version: '1.0.0', description: '读取与文档指纹绑定的已有摘要，不触发正文读取',
-    inputSchema: { type: 'object', required: ['path'], properties: { path: { type: 'string' } } },
-    outputSchema: { type: 'object', properties: { status: { type: 'string' }, digestId: { type: ['string', 'null'] }, sourceFingerprint: { type: ['string', 'null'] } } },
+    inputSchema: { type: 'object', required: ['path'], properties: { path: pathProperty }, additionalProperties: false },
+    outputSchema: {
+      type: 'object', required: ['status', 'digestId', 'sourceFingerprint'], additionalProperties: false,
+      properties: { status: { enum: ['available', 'missing', 'stale'] }, digestId: nullableString, sourceFingerprint: nullableString },
+    },
     permission: 'analysis-artifact-read', sideEffects: ['read'], timeoutMs: 5_000, cancellable: false, auditFields: ['path'],
   },
   {
     name: 'get_project_digest', version: '1.0.0', description: '读取与工作区版本绑定的已有项目摘要，不触发正文读取',
-    inputSchema: { type: 'object', properties: {} },
-    outputSchema: { type: 'object', properties: { status: { type: 'string' }, digestId: { type: ['string', 'null'] }, coverage: { type: ['string', 'null'] } } },
+    inputSchema: emptyObject,
+    outputSchema: {
+      type: 'object', required: ['status', 'digestId', 'coverage'], additionalProperties: false,
+      properties: { status: { enum: ['available', 'missing', 'stale'] }, digestId: nullableString, coverage: nullableString },
+    },
     permission: 'analysis-artifact-read', sideEffects: ['read'], timeoutMs: 5_000, cancellable: false, auditFields: [],
   },
   {
     name: 'read_document', version: '1.0.0', description: '读取授权工作区内的规范化文本文件',
-    inputSchema: { type: 'object', required: ['path'], properties: { path: { type: 'string' } } },
-    outputSchema: anyObject, permission: 'workspace-read', sideEffects: ['read'], timeoutMs: 10_000,
+    inputSchema: { type: 'object', required: ['path'], properties: { path: pathProperty }, additionalProperties: false },
+    outputSchema: documentSnapshotSchema, permission: 'workspace-read', sideEffects: ['read'], timeoutMs: 10_000,
     cancellable: false, auditFields: ['path'],
   },
   {
     name: 'search_workspace', version: '1.0.0', description: '在授权工作区内搜索文本',
-    inputSchema: { type: 'object', required: ['query'], properties: { query: { type: 'string' } } },
-    outputSchema: anyArray, permission: 'workspace-read', sideEffects: ['read'], timeoutMs: 15_000,
+    inputSchema: { type: 'object', required: ['query'], properties: { query: { type: 'string', minLength: 1, maxLength: 2_000 } }, additionalProperties: false },
+    outputSchema: { type: 'array', items: { type: 'object', required: ['path', 'line', 'snippet'], additionalProperties: false, properties: { path: pathProperty, line: { type: 'integer', minimum: 1 }, snippet: { type: 'string' } } } }, permission: 'workspace-read', sideEffects: ['read'], timeoutMs: 15_000,
     cancellable: true, auditFields: ['query'],
   },
   {
     name: 'chunk_document', version: '1.0.0', description: '按结构和 token 预算生成可复用分块',
-    inputSchema: { type: 'object', required: ['path'], properties: { path: { type: 'string' }, maxTokens: { type: 'integer' }, overlapTokens: { type: 'integer' } } },
-    outputSchema: anyObject, permission: 'workspace-read', sideEffects: ['read'], timeoutMs: 30_000,
+    inputSchema: { type: 'object', required: ['path', 'maxTokens', 'overlapTokens'], properties: { path: pathProperty, maxTokens: { type: 'integer', minimum: 128, maximum: 6_000 }, overlapTokens: { type: 'integer', minimum: 0, maximum: 1_000 } }, additionalProperties: false },
+    outputSchema: chunkManifestSchema, permission: 'workspace-read', sideEffects: ['read'], timeoutMs: 30_000,
     cancellable: true, auditFields: ['path', 'maxTokens', 'overlapTokens'],
   },
   {
     name: 'stream_chat', version: '1.0.0', description: '调用已配置的本地或兼容模型并流式返回结果',
-    inputSchema: { type: 'object', required: ['requestId', 'profileId', 'sourcePolicy', 'messages'], properties: { requestId: { type: 'string' }, profileId: { type: 'string' }, sourcePolicy: { enum: ['metadata-only', 'local-excerpts', 'local-chunks'] }, messages: anyArray } },
-    outputSchema: anyObject, permission: 'model-invoke', sideEffects: ['draft'], timeoutMs: 300_000,
+    inputSchema: { type: 'object', required: ['requestId', 'profileId', 'sourcePolicy', 'messages'], properties: { requestId: idProperty, profileId: idProperty, sourcePolicy: { type: 'string', enum: ['metadata-only', 'local-excerpts', 'local-chunks'] }, messages: { type: 'array', minItems: 1, items: { type: 'object', required: ['role', 'content'], properties: { role: { type: 'string', enum: ['user', 'assistant'] }, content: { type: 'string' } }, additionalProperties: false } } }, additionalProperties: false },
+    outputSchema: { 'x-streaming': true }, permission: 'model-invoke', sideEffects: ['draft'], timeoutMs: 300_000,
     cancellable: true, auditFields: ['requestId', 'profileId'],
   },
   {
     name: 'create_document', version: '1.0.0', description: '创建用户可见的章节拆分文件',
-    inputSchema: { type: 'object', required: ['path'], properties: { path: { type: 'string' } } },
-    outputSchema: anyObject, permission: 'workspace-write', sideEffects: ['proposal'], timeoutMs: 10_000,
+    inputSchema: { type: 'object', required: ['path'], properties: { path: pathProperty }, additionalProperties: false },
+    outputSchema: documentSnapshotSchema, permission: 'workspace-write', sideEffects: ['proposal'], timeoutMs: 10_000,
     cancellable: false, auditFields: ['path'],
   },
   {
     name: 'create_directory', version: '1.0.0', description: '创建用户可见的章节拆分目录',
-    inputSchema: { type: 'object', required: ['path'], properties: { path: { type: 'string' } } },
-    outputSchema: anyObject, permission: 'workspace-write', sideEffects: ['proposal'], timeoutMs: 10_000,
+    inputSchema: { type: 'object', required: ['path'], properties: { path: pathProperty }, additionalProperties: false },
+    outputSchema: { type: 'null' }, permission: 'workspace-write', sideEffects: ['proposal'], timeoutMs: 10_000,
     cancellable: false, auditFields: ['path'],
   },
   {
     name: 'write_analysis_artifact', version: '1.0.0', description: '保存长文本分析的中间产物或报告',
-    inputSchema: { type: 'object', required: ['jobId', 'name', 'content'], properties: { jobId: { type: 'string' }, name: { type: 'string' }, content: { type: 'string' } } },
-    outputSchema: { type: 'string' }, permission: 'analysis-artifact-write', sideEffects: ['draft'], timeoutMs: 10_000,
+    inputSchema: { type: 'object', required: ['jobId', 'name', 'content'], properties: { jobId: idProperty, name: { type: 'string', minLength: 1, maxLength: 180 }, content: { type: 'string', maxLength: 16_777_216 } }, additionalProperties: false },
+    outputSchema: { type: ['string', 'null'] }, permission: 'analysis-artifact-write', sideEffects: ['draft'], timeoutMs: 10_000,
     cancellable: false, auditFields: ['jobId', 'name'],
   },
   {
     name: 'read_analysis_artifact', version: '1.0.0', description: '读取可恢复长文本任务的中间产物',
-    inputSchema: { type: 'object', required: ['jobId', 'name'], properties: { jobId: { type: 'string' }, name: { type: 'string' } } },
-    outputSchema: { type: 'string' }, permission: 'analysis-artifact-read', sideEffects: ['read'], timeoutMs: 10_000,
+    inputSchema: { type: 'object', required: ['jobId', 'name'], properties: { jobId: idProperty, name: { type: 'string', minLength: 1, maxLength: 180 } }, additionalProperties: false },
+    outputSchema: { type: ['string', 'null'] }, permission: 'analysis-artifact-read', sideEffects: ['read'], timeoutMs: 10_000,
     cancellable: false, auditFields: ['jobId', 'name'],
   },
   {
     name: 'list_analysis_jobs', version: '1.0.0', description: '列出当前工作区可恢复的分析任务',
-    inputSchema: { type: 'object', properties: {} }, outputSchema: anyArray, permission: 'analysis-artifact-read',
+    inputSchema: emptyObject, outputSchema: { type: 'array', items: analysisJobSchema }, permission: 'analysis-artifact-read',
     sideEffects: ['read'], timeoutMs: 10_000, cancellable: false, auditFields: [],
   },
   {
     name: 'search_project_memory', version: '1.0.0', description: '检索当前项目已确认的长期记忆',
-    inputSchema: { type: 'object', required: ['query'], properties: { query: { type: 'string' }, maxResults: { type: 'integer' } } },
-    outputSchema: anyArray, permission: 'memory-read', sideEffects: ['read'], timeoutMs: 10_000,
+    inputSchema: { type: 'object', required: ['query'], properties: { query: { type: 'string', minLength: 1, maxLength: 2_000 }, maxResults: { type: 'integer', minimum: 1, maximum: 100 } }, additionalProperties: false },
+    outputSchema: { type: 'array', items: projectMemorySchema }, permission: 'memory-read', sideEffects: ['read'], timeoutMs: 10_000,
     cancellable: false, auditFields: ['query'],
   },
 ]
@@ -195,7 +284,7 @@ const skillDefinitions: SkillDefinition[] = [
   {
     name: 'document-revision', version: '1.0.0', description: '依据选中文档执行改写、续写或润色并输出草稿',
     allowedTools: ['read_document', 'chunk_document', 'stream_chat', 'write_analysis_artifact', 'read_analysis_artifact', 'list_analysis_jobs', 'search_project_memory'],
-    contextScopes: ['selected-documents'], sideEffects: ['draft'], approvalPolicy: 'auto', modelRequirements: 'configured',
+    contextScopes: ['editor-selection', 'selected-documents'], sideEffects: ['draft'], approvalPolicy: 'auto', modelRequirements: 'configured',
     failureAndRetry: '只输出草稿，不直接写回源文档；保留已完成阶段并允许恢复。',
   },
   {

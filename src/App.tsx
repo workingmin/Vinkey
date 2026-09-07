@@ -1,9 +1,9 @@
 import {
   Bot, Check, ChevronDown, ChevronRight, CirclePlus, Download, Eye, FileText, Folder, FolderOpen,
   MessageSquareText, PanelLeftClose, PanelLeftOpen, PanelRightClose,
-  Save, Search, Send, Settings, Square, X, Minus, Maximize2, Minimize2,
+  Save, Search, Send, Settings, Square, X, Minus, Maximize2, Minimize2, Pause, Play,
   RotateCcw, RotateCw, Copy, Scissors, Clipboard, Moon, Sun, Keyboard, ListChecks, RefreshCw,
-  ScrollText, Trash2,
+  ScrollText, Trash2, WandSparkles,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
@@ -15,16 +15,18 @@ import { FilePreview, downloadBytes } from './components/FilePreview'
 import { SettingsPage } from './components/SettingsPage'
 import { WorkspaceTree, workspaceActions } from './components/WorkspaceTree'
 import {
-  cancelChat, chooseWorkspace, createDirectory, createDocument, deleteConversation, isDesktop, listConversations,
+  cancelChat, cancelTaskJob, chooseWorkspace, createDirectory, createDocument, deleteConversation, executeTask, isDesktop, listConversations,
   getWindowDiagnostics, getRuntimeDiagnostics, listModelProfiles, loadConversation, readDocument, readFileBytes, refreshWorkspace,
   listAnalysisJobs, recordRuntimeEvent, writeStructureOutputs,
   saveConversationMessage, saveDocument, searchWorkspace, streamChat, syncNativeWindowTheme,
   confirmProjectMemory, listProjectMemory, proposeProjectMemory, rejectProjectMemory, searchProjectMemory,
+  stopOllamaModel,
 } from './lib/desktop'
-import { calculateContextBudget, selectRecentMessages } from './lib/context'
-import { analyzeLongText, cancelLongTextAnalysis } from './lib/longTextAnalysis'
-import { classifyTask } from './lib/intent'
-import { usesLongTextWorkflow } from './lib/executionStrategy'
+import { buildRevisionContextMessage, calculateContextBudget, selectRecentMessages } from './lib/context'
+import { analyzeLongText, cancelLongTextAnalysis, pauseLongTextAnalysis, resumeLongTextAnalysis } from './lib/longTextAnalysis'
+import { buildConversationReference, createTaskMessageRef, createTaskRequest, refineTaskForDocuments, routeTask } from './lib/taskRuntime'
+import type { TaskExecutionDispatch } from './lib/taskRuntime'
+import { createToolGateway } from './lib/runtimePolicy'
 import { isContextRecoveryResponse } from './lib/contextRecovery'
 import { buildMemoryCandidates, buildProjectMemoryContext, selectRelevantMemory } from './lib/projectMemory'
 import { formatStructureResult, segmentDocument } from './lib/structureSegmentation'
@@ -37,6 +39,8 @@ import { buildSelectedDocumentsOverviewMessage, formatWorkspaceOverview } from '
 import { buildFocusedWorkspaceMessage } from './lib/focusedAnalysis'
 import { isLoopbackModelEndpoint } from './lib/modelPrivacy'
 import { formatConversationAge } from './lib/conversationTime'
+import { buildSelectionRevisionContract, createDiffProposal, fingerprintDocument, formatDiffProposalMessage } from './lib/diffProposal'
+import { shouldStopOllamaBeforeSwitch } from './lib/modelGroups'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { Menu, MenuItem, PredefinedMenuItem, Submenu } from '@tauri-apps/api/menu'
 import type { PredefinedMenuItemOptions } from '@tauri-apps/api/menu'
@@ -533,7 +537,7 @@ function ChatMessageItem({ message, activity, onCopyError }: {
   </article>
 }
 
-function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Promise<void> }) {
+function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: string) => Promise<void>; onReviewDiff: () => void }) {
   const workspace = useAppStore((state) => state.workspace)
   const messages = useAppStore((state) => state.messages)
   const contextDocuments = useAppStore((state) => state.contextDocuments)
@@ -542,6 +546,7 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
   const conversationTitle = useAppStore((state) => state.conversationTitle)
   const modelProfiles = useAppStore((state) => state.modelProfiles)
   const activeModelId = useAppStore((state) => state.activeModelId)
+  const autoStopOllamaModels = useAppStore((state) => state.autoStopOllamaModels)
   const beginChatRun = useAppStore((state) => state.beginChatRun)
   const setChatRunStatus = useAppStore((state) => state.setChatRunStatus)
   const appendChatRunChunk = useAppStore((state) => state.appendChatRunChunk)
@@ -558,19 +563,52 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
   const setError = useAppStore((state) => state.setError)
   const pendingNewFiles = useAppStore((state) => state.pendingNewFiles)
   const clearPendingNewFiles = useAppStore((state) => state.clearPendingNewFiles)
+  const pendingEditorRevision = useAppStore((state) => state.pendingEditorRevision)
+  const clearPendingEditorRevision = useAppStore((state) => state.clearPendingEditorRevision)
+  const diffProposal = useAppStore((state) => state.diffProposal)
+  const setDiffProposal = useAppStore((state) => state.setDiffProposal)
+  const applyDiffProposal = useAppStore((state) => state.applyDiffProposal)
+  const rejectDiffProposal = useAppStore((state) => state.rejectDiffProposal)
   const [prompt, setPrompt] = useState('')
+  const [pendingActionId, setPendingActionId] = useState<string | null>(null)
   const [analysisStatus, setAnalysisStatus] = useState<string | null>(null)
+  const [longTaskActive, setLongTaskActive] = useState(false)
+  const [activeLongTaskId, setActiveLongTaskId] = useState<string | null>(null)
+  const [pauseRequested, setPauseRequested] = useState(false)
   const [pendingMemory, setPendingMemory] = useState<ProjectMemoryItem[]>([])
   const [recoverableJob, setRecoverableJob] = useState<AnalysisJobManifest | null>(null)
   const [resumeJobId, setResumeJobId] = useState<string | null>(null)
   const [mention, setMention] = useState<{ start: number; end: number; query: string } | null>(null)
   const [mentionIndex, setMentionIndex] = useState(0)
+  const [switchingModel, setSwitchingModel] = useState(false)
   const promptRef = useRef<HTMLTextAreaElement>(null)
   const activeModel = modelProfiles.find((profile) => profile.id === activeModelId) ?? null
   const activeChatRun = conversationId ? chatRuns[conversationId] : undefined
   const busy = Boolean(activeChatRun)
   const budget = calculateContextBudget(messages, contextDocuments, prompt, activeModel?.contextWindow ?? 32768)
   const activeStatus = activeChatRun ? chatStatusMeta[activeChatRun.status] : null
+
+  const switchModel = async (nextId: string) => {
+    if (switchingModel || busy || nextId === activeModelId) return
+    const next = modelProfiles.find((profile) => profile.id === nextId)
+    if (!next) return
+    setSwitchingModel(true)
+    try {
+      if (shouldStopOllamaBeforeSwitch(activeModel, next, autoStopOllamaModels) && activeModel) await stopOllamaModel(activeModel.id)
+    } catch (error) {
+      setError(`旧模型卸载失败，已继续切换：${String(error)}`)
+    } finally {
+      setActiveModelId(nextId)
+      setSwitchingModel(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!pendingEditorRevision) return
+    setPendingActionId('document-revision')
+    setPrompt(pendingEditorRevision.instruction)
+    window.setTimeout(() => promptRef.current?.focus(), 0)
+  }, [pendingEditorRevision])
 
   useEffect(() => {
     if (!workspace) { setPendingMemory([]); return }
@@ -622,14 +660,102 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
   const send = async () => {
     const value = prompt.trim()
     if (!value || busy) return
-    let selectedContextDocuments = contextDocuments
+    const editorRevision = pendingActionId === 'document-revision' ? pendingEditorRevision : null
+    let selectedContextDocuments = editorRevision
+      ? [{ path: editorRevision.path, name: editorRevision.documentName, content: editorRevision.text, size: editorRevision.text.length, kind: getDocumentKind(editorRevision.documentName) }]
+      : contextDocuments
     const activeDocument = activePath ? tabs.find((tab) => tab.path === activePath) : undefined
-    let taskPlan = classifyTask(value, selectedContextDocuments.length > 0 || Boolean(activeDocument))
+    const nextRequestId = crypto.randomUUID()
+    const conversationRef = buildConversationReference(messages)
+    const explicitTargets = editorRevision
+      ? [{ id: `${editorRevision.path}#${editorRevision.from}:${editorRevision.to}`, kind: 'selection' as const }]
+      : selectedContextDocuments.length > 0
+      ? selectedContextDocuments.map((document) => ({ id: document.path, kind: 'document' as const }))
+      : []
+    const taskRequest = createTaskRequest({
+      entryPoint: editorRevision ? 'editor-selection' : 'chat',
+      actionId: pendingActionId,
+      instruction: value,
+      targets: explicitTargets,
+      conversationRef: { ...conversationRef, conversationId },
+    })
+    let taskPlan = routeTask(taskRequest, selectedContextDocuments.length > 0 || Boolean(activeDocument))
     const needsSelectedDocument = taskPlan.documentAccess === 'selected' || taskPlan.documentAccess === 'selected-metadata'
     if (needsSelectedDocument && selectedContextDocuments.length === 0 && activeDocument) {
-      addContextDocument({ path: activeDocument.path, name: activeDocument.name, content: activeDocument.content, size: activeDocument.content.length, sizeBytes: activeDocument.sizeBytes, kind: activeDocument.kind })
-      selectedContextDocuments = useAppStore.getState().contextDocuments
-      taskPlan = classifyTask(value, selectedContextDocuments.length > 0)
+      if (taskRequest.targets.length === 0) taskRequest.targets = [{ id: activeDocument.path, kind: 'document' }]
+      taskPlan = routeTask(taskRequest, true)
+    }
+    let taskDispatch: TaskExecutionDispatch
+    try {
+      taskDispatch = await executeTask({ taskId: nextRequestId, stage: 'preflight', resumeJobId, request: taskRequest, plan: taskPlan })
+      taskPlan = taskDispatch.plan
+    } catch (error) {
+      setAnalysisStatus(null)
+      setError(`任务策略校验失败：${String(error)}`)
+      return
+    }
+    if (taskDispatch.executionPhase === 'clarification-required') {
+      const question = taskDispatch.clarification?.question ?? '请补充本次请求需要处理的具体范围。'
+      const now = Date.now()
+      const nextConversationId = conversationId ?? crypto.randomUUID()
+      const nextTitle = conversationId ? conversationTitle : value.replace(/\s+/g, ' ').slice(0, 28)
+      const userMessage = {
+        id: crypto.randomUUID(), role: 'user' as const, content: value, createdAt: now,
+        taskRef: createTaskMessageRef(taskRequest, taskPlan, nextRequestId),
+      }
+      const assistantMessage = { id: crypto.randomUUID(), role: 'assistant' as const, content: question, createdAt: now + 1 }
+      if (!conversationId) setConversation({ id: nextConversationId, title: nextTitle, messages, updatedAt: now })
+      setPrompt('')
+      setPendingActionId(null)
+      setMention(null)
+      beginChatRun({
+        conversationId: nextConversationId,
+        conversationTitle: nextTitle,
+        requestId: nextRequestId,
+        status: 'thinking',
+        statusMessage: null,
+        activityLog: [],
+        userMessage,
+        assistantMessage,
+      })
+      endChatRun(nextConversationId, false)
+      try {
+        await saveConversationMessage(nextConversationId, nextTitle, userMessage)
+        await saveConversationMessage(nextConversationId, nextTitle, { ...assistantMessage, completedAt: Date.now() })
+        setConversations(await listConversations())
+      } catch (error) { setError(String(error)) }
+      return
+    }
+    if (needsSelectedDocument && selectedContextDocuments.length === 0) {
+      const inheritedPaths = taskRequest.targets.filter((target) => target.kind === 'document').map((target) => target.id)
+      try {
+        if (taskPlan.documentAccess === 'selected-metadata') {
+          const workspaceFiles = workspace ? flattenWorkspaceFiles(workspace.entries) : []
+          selectedContextDocuments = inheritedPaths.map((path) => {
+            const open = tabs.find((tab) => tab.path === path)
+            const entry = workspaceFiles.find((candidate) => candidate.path === path)
+            return {
+              path,
+              name: open?.name ?? entry?.name ?? path.split('/').at(-1) ?? path,
+              content: '',
+              size: open?.content.length ?? 0,
+              sizeBytes: open?.sizeBytes,
+              kind: open?.kind ?? entry?.documentKind ?? getDocumentKind(path),
+            }
+          })
+        } else {
+          const gateway = createToolGateway(taskPlan)
+          for (const path of inheritedPaths) {
+            const document = await gateway.call('read_document', { path }, () => readDocument(path))
+            addContextDocument({ path, name: document.name, content: document.content, size: document.content.length, sizeBytes: document.sizeBytes, kind: document.kind })
+          }
+          selectedContextDocuments = useAppStore.getState().contextDocuments
+          taskPlan = routeTask(taskRequest, selectedContextDocuments.length > 0)
+        }
+      } catch (error) {
+        setError(`恢复上一任务文档失败：${String(error)}`)
+        return
+      }
     }
 
     const selectedModel = activeModel
@@ -656,7 +782,10 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
       setAnalysisStatus('正在定位项目关键文件…')
       let loaded: Awaited<ReturnType<typeof readWorkspaceDocuments>>
       try {
-        loaded = await readWorkspaceDocuments(workspace, readDocument, {
+        loaded = await readWorkspaceDocuments(workspace, (path) => {
+          const gateway = createToolGateway(taskPlan)
+          return gateway.call('read_document', { path }, () => readDocument(path))
+        }, {
           coverage: 'targeted',
           prompt: value,
           strategy: 'focused',
@@ -681,7 +810,10 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
       setAnalysisStatus('正在扫描项目文件…')
       let loaded: Awaited<ReturnType<typeof readWorkspaceDocuments>>
       try {
-        loaded = await readWorkspaceDocuments(workspace, readDocument, {
+        loaded = await readWorkspaceDocuments(workspace, (path) => {
+          const gateway = createToolGateway(taskPlan)
+          return gateway.call('read_document', { path }, () => readDocument(path))
+        }, {
           coverage: taskPlan.analysisCoverage === 'exhaustive' ? 'exhaustive' : 'targeted',
           prompt: value,
         })
@@ -705,22 +837,38 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
         : '文档分析需要先选择或打开文档。')
       return
     }
+    const revisionSourceBudget = Math.min(12_000, Math.max(512, Math.floor((selectedModel?.contextWindow ?? 32_768) * 0.55)))
+    taskPlan = refineTaskForDocuments(taskPlan, requestContextDocuments, revisionSourceBudget)
+    try {
+      taskDispatch = await executeTask({ taskId: nextRequestId, stage: 'final', resumeJobId, request: taskRequest, plan: taskPlan })
+      taskPlan = taskDispatch.plan
+    } catch (error) {
+      setAnalysisStatus(null)
+      setError(`任务策略校验失败：${String(error)}`)
+      return
+    }
+    const toolGateway = createToolGateway(taskPlan)
+    const revisionContext = taskPlan.revisionStrategy === 'bounded'
+      ? buildRevisionContextMessage(requestContextDocuments, revisionSourceBudget)
+      : null
     let memoryContext: string | null = null
-    if (workspace && taskPlan.requiresModel && taskPlan.intent !== 'structure-segmentation') {
+    if (workspace && taskPlan.requiresModel && taskPlan.allowedTools.includes('search_project_memory')) {
       try {
-        const memory = await searchProjectMemory(value)
+        const memory = await toolGateway.call('search_project_memory', { query: value, maxResults: 12 }, () => searchProjectMemory(value))
         memoryContext = buildProjectMemoryContext(selectRelevantMemory(memory, value))
       } catch (error) { setError(`读取项目记忆失败：${String(error)}`) }
     }
-    const budgetDraft = [value, overviewContext, memoryContext].filter(Boolean).join('\n\n')
+    const selectionContract = editorRevision ? buildSelectionRevisionContract({ ...editorRevision, instruction: value }) : null
+    const contextDraft = [overviewContext, memoryContext, revisionContext, selectionContract].filter(Boolean).join('\n\n')
+    const budgetDraft = [value, contextDraft].filter(Boolean).join('\n\n')
     const requestBudget = taskPlan.requiresModel
       ? calculateContextBudget(messages, [], budgetDraft, selectedModel?.contextWindow ?? 32768)
       : null
-    const useLongTextPipeline = usesLongTextWorkflow(taskPlan.execution)
+    const useLongTextPipeline = taskDispatch.serviceId === 'long-text-analysis'
       && requestContextDocuments.length > 0
     void recordRuntimeEvent(
       'task.routed',
-      `intent=${taskPlan.intent}, operation=${taskPlan.operation}, scope=${taskPlan.scope}, documentAccess=${taskPlan.documentAccess}, analysisMode=${taskPlan.analysisMode ?? 'none'}, coverage=${taskPlan.analysisCoverage}, sourcePolicy=${taskPlan.sourcePolicy}, executionMode=${taskPlan.execution.currentMode}, targetMode=${taskPlan.execution.targetMode}, workflow=${taskPlan.execution.workflow ?? 'none'}, agentUpgrade=${taskPlan.execution.agentUpgrade}, requiresModel=${taskPlan.requiresModel}, contextDocuments=${requestContextDocuments.length}, estimatedTokens=${requestBudget?.estimatedTokens ?? 0}, limit=${requestBudget?.limit ?? 0}`,
+      `intent=${taskPlan.intent}, operation=${taskPlan.operation}, scope=${taskPlan.scope}, documentAccess=${taskPlan.documentAccess}, analysisMode=${taskPlan.analysisMode ?? 'none'}, coverage=${taskPlan.analysisCoverage}, sourcePolicy=${taskPlan.sourcePolicy}, service=${taskDispatch.serviceId ?? 'none'}, owner=${taskDispatch.executionOwner}, backgroundEligible=${taskDispatch.backgroundEligible}, executionMode=${taskPlan.execution.currentMode}, targetMode=${taskPlan.execution.targetMode}, workflow=${taskPlan.execution.workflow ?? 'none'}, agentUpgrade=${taskPlan.execution.agentUpgrade}, requiresModel=${taskPlan.requiresModel}, contextDocuments=${requestContextDocuments.length}, estimatedTokens=${requestBudget?.estimatedTokens ?? 0}, limit=${requestBudget?.limit ?? 0}`,
     )
     if (requestBudget?.exceedsLimit && !useLongTextPipeline) {
       setError('当前消息和上下文超过模型可用窗口。请缩短输入，或使用“分析文本”让系统自动分块汇总。')
@@ -731,10 +879,14 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
     const nextTitle = conversationId ? conversationTitle : value.replace(/\s+/g, ' ').slice(0, 28)
     if (!conversationId) setConversation({ id: nextConversationId, title: nextTitle, messages, updatedAt: now })
     setPrompt('')
+    setPendingActionId(null)
+    if (editorRevision) clearPendingEditorRevision()
     setMention(null)
-    const userMessage = { id: crypto.randomUUID(), role: 'user' as const, content: value, createdAt: now }
+    const userMessage = {
+      id: crypto.randomUUID(), role: 'user' as const, content: value, createdAt: now,
+      taskRef: createTaskMessageRef(taskRequest, taskPlan, nextRequestId),
+    }
     const assistantMessage = { id: crypto.randomUUID(), role: 'assistant' as const, content: '', createdAt: now + 1 }
-    const nextRequestId = crypto.randomUUID()
     beginChatRun({
       conversationId: nextConversationId,
       conversationTitle: nextTitle,
@@ -745,11 +897,14 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
       userMessage,
       assistantMessage,
     })
+    setLongTaskActive(useLongTextPipeline)
+    setActiveLongTaskId(useLongTextPipeline ? taskDispatch.jobId : null)
+    setPauseRequested(false)
     try {
       await saveConversationMessage(nextConversationId, nextTitle, userMessage)
       setConversations(await listConversations())
       setChatRunStatus(nextConversationId, 'thinking', null)
-      if (taskPlan.intent === 'structure-segmentation') {
+      if (taskDispatch.serviceId === 'structure-segmentation') {
         setChatRunStatus(nextConversationId, 'fetching', '正在读取文档结构…')
         const structureDocuments = requestContextDocuments.filter((document) => document.content.trim().length > 0)
         if (structureDocuments.length === 0) throw new Error('当前选择的文件没有可解析的文本内容。')
@@ -761,7 +916,7 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
           'structure.segmented',
           `documents=${proposals.length}, outputs=${outputPaths.length}, segments=${proposals.reduce((sum, proposal) => sum + proposal.segments.length, 0)}, model=none`,
         )
-      } else if (taskPlan.documentAccess === 'workspace-metadata' && workspace) {
+      } else if (taskDispatch.serviceId === 'workspace-overview' && workspace) {
         setChatRunStatus(nextConversationId, 'tool_calling', '正在整理项目结构…')
         appendChatRunChunk(nextConversationId, formatWorkspaceOverview(workspace))
       } else if (useLongTextPipeline) {
@@ -772,7 +927,10 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
           const message = `${progress.message} · ${progress.completed}/${progress.total}`
           setChatRunStatus(nextConversationId, progress.stage === 'chunking' ? 'fetching' : 'tool_calling', message)
           setAnalysisStatus(message)
-        }, workspace?.id ?? 'workspace', excludedWorkspaceDocuments, resumeJobId ?? undefined)
+        }, workspace?.id ?? 'workspace', excludedWorkspaceDocuments, taskDispatch.jobId === nextRequestId ? undefined : taskDispatch.jobId ?? undefined, (toolName, input, output) => {
+          if (output) toolGateway.assertResult(toolName, output.value)
+          else toolGateway.assert(toolName, input)
+        })
         setResumeJobId(null)
         setRecoverableJob(null)
         const excludedNote = taskPlan.documentAccess === 'workspace'
@@ -792,22 +950,29 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
         }
       } else {
         if (!selectedModel) throw new Error('未配置模型')
-        const recent = selectRecentMessages([...messages.filter((message) => message.id !== 'welcome'), userMessage], [], budgetDraft, selectedModel.contextWindow)
-        const context = [overviewContext, memoryContext].filter(Boolean).join('\n\n') || null
-        let firstResponse = ''
-        await streamChat({
+        const recent = selectRecentMessages([...messages.filter((message) => message.id !== 'welcome'), userMessage], [], contextDraft, selectedModel.contextWindow)
+        const context = [overviewContext, memoryContext, revisionContext].filter(Boolean).join('\n\n') || null
+        const modelMessages = [...(context ? [{ role: 'user' as const, content: context }] : []), ...recent.map(({ role, content }) => ({ role, content }))]
+        const modelRequest = {
           requestId: nextRequestId,
           profileId: selectedModel.id,
           sourcePolicy: taskPlan.sourcePolicy,
-          messages: [...(context ? [{ role: 'user' as const, content: context }] : []), ...recent.map(({ role, content }) => ({ role, content }))],
-        }, (event) => {
+          messages: modelMessages,
+        }
+        let firstResponse = ''
+        await toolGateway.call('stream_chat', modelRequest, () => streamChat(modelRequest, (event) => {
           if (event.type === 'chunk') {
             firstResponse += event.content
             setChatRunStatus(nextConversationId, 'streaming', null)
-            appendChatRunChunk(nextConversationId, event.content)
+            if (!editorRevision) appendChatRunChunk(nextConversationId, event.content)
           }
           if (event.type === 'error') setError(event.message)
-        })
+        }))
+        if (editorRevision) {
+          const proposal = createDiffProposal(firstResponse, { ...editorRevision, instruction: value })
+          setDiffProposal(proposal)
+          appendChatRunChunk(nextConversationId, formatDiffProposalMessage(proposal))
+        }
 
         // Recovery may add a body-free profile, but it never escalates to raw document access.
         const recoveryDocuments = requestContextDocuments.length > 0
@@ -829,19 +994,20 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
             'context.recovery',
             `reason=model-context-refusal, documents=${recoveryDocuments.length}, sourcePolicy=metadata-only, estimatedTokens=${recoveryBudget.estimatedTokens}, limit=${recoveryBudget.limit}`,
           )
-          const recoveryRecent = selectRecentMessages([...messages.filter((message) => message.id !== 'welcome'), userMessage], [], budgetDraft, selectedModel.contextWindow)
-          await streamChat({
+          const recoveryRecent = selectRecentMessages([...messages.filter((message) => message.id !== 'welcome'), userMessage], [], [contextDraft, recoveryContext].filter(Boolean).join('\n\n'), selectedModel.contextWindow)
+          const recoveryRequest = {
             requestId: nextRequestId,
             profileId: selectedModel.id,
-            sourcePolicy: 'metadata-only',
+            sourcePolicy: 'metadata-only' as const,
             messages: [...(recoveryContext ? [{ role: 'user' as const, content: recoveryContext }] : []), ...recoveryRecent.map(({ role, content }) => ({ role, content }))],
-          }, (event) => {
+          }
+          await toolGateway.call('stream_chat', recoveryRequest, () => streamChat(recoveryRequest, (event) => {
             if (event.type === 'chunk') {
               setChatRunStatus(nextConversationId, 'streaming', null)
               appendChatRunChunk(nextConversationId, event.content)
             }
             if (event.type === 'error') setError(event.message)
-          })
+          }))
         }
         if (taskPlan.analysisMode === 'overview') {
           appendChatRunChunk(nextConversationId, '\n\n> 分析范围：概览分析 · index-only · metadata-only。本次未读取文件正文。')
@@ -859,6 +1025,9 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
       if (!message.includes('请求已停止')) setError(message)
     } finally {
       setAnalysisStatus(null)
+      setLongTaskActive(false)
+      setActiveLongTaskId(null)
+      setPauseRequested(false)
       const completedBeforeEnd = useAppStore.getState().chatRuns[nextConversationId]?.assistantMessage
       endChatRun(nextConversationId, !completedBeforeEnd?.content)
       const completed = useAppStore.getState().completedChatMessages[nextConversationId]
@@ -874,8 +1043,22 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
   const stop = async () => {
     if (!activeChatRun || activeChatRun.status === 'stopping') return
     setChatRunStatus(activeChatRun.conversationId, 'stopping', null)
-    if (analysisStatus) cancelLongTextAnalysis(activeChatRun.requestId)
+    if (longTaskActive) cancelLongTextAnalysis(activeChatRun.requestId)
+    if (longTaskActive) await cancelTaskJob(activeLongTaskId ?? activeChatRun.requestId).catch(() => undefined)
     await cancelChat(activeChatRun.requestId)
+  }
+
+  const togglePause = () => {
+    if (!activeChatRun || !longTaskActive) return
+    if (pauseRequested) {
+      resumeLongTextAnalysis(activeChatRun.requestId)
+      setPauseRequested(false)
+      setAnalysisStatus('正在恢复长文本任务…')
+    } else {
+      pauseLongTextAnalysis(activeChatRun.requestId)
+      setPauseRequested(true)
+      setAnalysisStatus('将在当前步骤完成后暂停…')
+    }
   }
 
   const approvePendingMemory = async () => {
@@ -890,6 +1073,13 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
       await rejectProjectMemory(pendingMemory.map((item) => item.id))
       setPendingMemory([])
     } catch (error) { setError(`拒绝项目记忆失败：${String(error)}`) }
+  }
+
+  const applyPendingDiff = () => {
+    try {
+      applyDiffProposal()
+      onReviewDiff()
+    } catch (error) { setError(String(error)) }
   }
 
   const prepareResumeJob = async () => {
@@ -924,6 +1114,10 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
   }
 
   return <main className="chat-panel">
+    {diffProposal?.status === 'proposed' && <aside className="new-files-notice diff-proposal-notice" role="status">
+      <div className="new-files-notice-copy"><WandSparkles /><span><strong>选区修改提案待审核</strong><small>{diffProposal.path} · {diffProposal.from}-{diffProposal.to}</small></span></div>
+      <div className="new-files-notice-actions"><button onClick={applyPendingDiff}>应用到编辑器</button><button onClick={rejectDiffProposal}>拒绝</button><button onClick={onReviewDiff}>查看文档</button></div>
+    </aside>}
     {recoverableJob && <aside className="new-files-notice memory-notice" role="status">
       <div className="new-files-notice-copy"><RefreshCw /><span><strong>检测到未完成的长文本任务</strong><small>{recoverableJob.instruction.slice(0, 96)}</small></span></div>
       <div className="new-files-notice-actions"><button onClick={() => void prepareResumeJob()}>恢复任务</button><button onClick={() => setRecoverableJob(null)}>忽略</button></div>
@@ -956,12 +1150,12 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
           {contextDocuments.map((document) => <button className="composer-context-chip" key={document.path} title={`移除引用：${document.path}`} onClick={() => void onToggleContext(document.path)}><FileText /><span>{document.name}</span><X /></button>)}
         </div>}
         {contextDocuments.length > 0 && <div className="composer-analysis-actions" aria-label="文档分析快捷入口">
-          <button onClick={() => setPrompt('请分析已选文档，输出内容概要、结构、故事主线和人物线报告。')}><FileText />分析文本</button>
-          <button onClick={() => setPrompt('请在当前项目中按已选文档的章节和场景边界生成拆分文件；首轮使用本地规则粗分，不覆盖原文。')}><ListChecks />拆分章节</button>
-          <button onClick={() => setPrompt('请从已选文档中整理主要人物、人物关系、目标变化和人物线，输出可回溯的分析报告。')}><Bot />提取人物线</button>
+          <button onClick={() => { setPendingActionId('document-analysis'); setPrompt('请分析已选文档，输出内容概要、结构、故事主线和人物线报告。') }}><FileText />分析文本</button>
+          <button onClick={() => { setPendingActionId('structure-segmentation'); setPrompt('请在当前项目中按已选文档的章节和场景边界生成拆分文件；首轮使用本地规则粗分，不覆盖原文。') }}><ListChecks />拆分章节</button>
+          <button onClick={() => { setPendingActionId('character-analysis'); setPrompt('请从已选文档中整理主要人物、人物关系、目标变化和人物线，输出可回溯的分析报告。') }}><Bot />提取人物线</button>
         </div>}
         {workspace && <div className="composer-analysis-actions" aria-label="项目分析快捷入口">
-          <button onClick={() => setPrompt('分析当前项目的内容、结构和跨文件关系，并为关键结论附来源证据。')}><FolderOpen />分析整个项目</button>
+          <button onClick={() => { setPendingActionId('workspace-analysis'); setPrompt('分析当前项目的内容、结构和跨文件关系，并为关键结论附来源证据。') }}><FolderOpen />分析整个项目</button>
         </div>}
         {mention && <div id="mention-menu" className="mention-menu" role="listbox" aria-label="引用工作区文件">
           {mentionFiles.length > 0 ? mentionFiles.map((entry, index) => {
@@ -986,7 +1180,7 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
           aria-controls={mention ? 'mention-menu' : undefined}
           aria-activedescendant={mention && mentionFiles.length > 0 ? `mention-option-${mentionIndex}` : undefined}
           value={prompt}
-          onChange={(event) => { setPrompt(event.target.value); updateMention(event.target.value, event.target.selectionStart) }}
+          onChange={(event) => { setPendingActionId(null); setPrompt(event.target.value); updateMention(event.target.value, event.target.selectionStart) }}
           onClick={(event) => updateMention(event.currentTarget.value, event.currentTarget.selectionStart)}
           onBlur={(event) => {
             const nextFocus = event.relatedTarget
@@ -1005,9 +1199,10 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
           placeholder="描述你想续写、修改或梳理的内容..."
         />
         <div className="composer-tools">
-          {modelProfiles.length > 0 ? <label className="composer-model-selector" title="切换模型"><Bot /><select aria-label="当前模型" value={activeModelId ?? ''} onChange={(event) => setActiveModelId(event.target.value)}>{modelProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name} · {profile.model}</option>)}</select><ChevronDown /></label>
+          {modelProfiles.length > 0 ? <label className="composer-model-selector" title="切换模型"><Bot /><select aria-label="当前模型" value={activeModelId ?? ''} disabled={busy || switchingModel} onChange={(event) => void switchModel(event.target.value)}>{modelProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name} · {profile.model}</option>)}</select><ChevronDown /></label>
             : <button className="composer-model-selector missing" onClick={() => setSettingsOpen(true)}><Bot /><span>添加模型</span></button>}
-          <span className={`composer-hint ${budget.exceedsLimit && !analysisStatus && !activeStatus ? 'over-limit' : ''}`} title={activeStatus?.title ?? `预计 ${budget.estimatedTokens} / ${budget.limit} tokens`}>{analysisStatus ?? activeStatus?.label ?? `上下文 ${budget.usedPercent}% · Enter 发送`}</span>
+          <span className={`composer-hint ${budget.exceedsLimit && !analysisStatus && !activeStatus ? 'over-limit' : ''}`} title={activeStatus?.title ?? `预计 ${budget.estimatedTokens} / ${budget.limit} tokens`}>{pauseRequested ? '暂停请求已提交' : analysisStatus ?? activeStatus?.label ?? `上下文 ${budget.usedPercent}% · Enter 发送`}</span>
+          {longTaskActive && <button className="pause-button" aria-label={pauseRequested ? '继续长文本任务' : '暂停长文本任务'} title={pauseRequested ? '继续长文本任务' : '在当前步骤完成后暂停'} onClick={togglePause}>{pauseRequested ? <Play /> : <Pause />}</button>}
           <button className="send-button" aria-label={activeChatRun?.status === 'stopping' ? '正在停止' : busy ? '停止生成' : '发送'} disabled={activeChatRun?.status === 'stopping' || (!prompt.trim() && !busy)} onClick={busy ? () => void stop() : () => void send()}>{busy ? <Square /> : <Send />}</button>
         </div>
       </div>
@@ -1015,7 +1210,7 @@ function ChatPanel({ onToggleContext }: { onToggleContext: (path: string) => Pro
   </main>
 }
 
-function EditorPanel({ onSave, onClose }: { onSave: () => Promise<void>; onClose: () => void }) {
+function EditorPanel({ onSave, onClose, onOpenChat }: { onSave: () => Promise<void>; onClose: () => void; onOpenChat: () => void }) {
   const tabs = useAppStore((state) => state.tabs)
   const activePath = useAppStore((state) => state.activePath)
   const viewMode = useAppStore((state) => state.viewMode)
@@ -1024,7 +1219,14 @@ function EditorPanel({ onSave, onClose }: { onSave: () => Promise<void>; onClose
   const setViewMode = useAppStore((state) => state.setViewMode)
   const theme = useAppStore((state) => state.theme)
   const setError = useAppStore((state) => state.setError)
+  const editorSelection = useAppStore((state) => state.editorSelection)
+  const setEditorSelection = useAppStore((state) => state.setEditorSelection)
+  const prepareEditorRevision = useAppStore((state) => state.prepareEditorRevision)
+  const diffProposal = useAppStore((state) => state.diffProposal)
+  const applyDiffProposal = useAppStore((state) => state.applyDiffProposal)
+  const rejectDiffProposal = useAppStore((state) => state.rejectDiffProposal)
   const document = tabs.find((tab) => tab.path === activePath)
+  useEffect(() => setEditorSelection(null), [activePath, setEditorSelection])
   if (!document) return null
   const editable = isEditableDocument(document.kind)
   const dirty = editable && document.content !== document.savedContent
@@ -1053,6 +1255,20 @@ function EditorPanel({ onSave, onClose }: { onSave: () => Promise<void>; onClose
     else window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
   }
 
+  const reviseSelection = () => {
+    if (!editorSelection || editorSelection.path !== document.path || !editorSelection.text) return
+    prepareEditorRevision({
+      ...editorSelection, documentName: document.name, sourceModifiedMs: document.modifiedMs,
+      sourceFingerprint: fingerprintDocument(document.content),
+      instruction: '请润色选中内容，保持原意、人物语气和上下文连续性。',
+    })
+    onOpenChat()
+  }
+
+  const applyPendingDiff = () => {
+    try { applyDiffProposal() } catch (error) { setError(String(error)) }
+  }
+
   return <aside className="editor-panel">
     <div className="document-tabs">
       <div className="document-tab active"><FileText /><span>{document.name}</span>{dirty && <i title="未保存" />}<IconButton label="关闭文档" onClick={() => closeTab(document.path)}><X /></IconButton></div>
@@ -1060,6 +1276,7 @@ function EditorPanel({ onSave, onClose }: { onSave: () => Promise<void>; onClose
     <div className="editor-toolbar">
       <span className="document-path" title={document.path}>{document.path}</span>
       {editable && <IconButton label="保存文档" onClick={() => void onSave()} disabled={!dirty}><Save /></IconButton>}
+      {editable && <IconButton label="用 AI 修改选区" onClick={reviseSelection} disabled={!editorSelection || editorSelection.path !== document.path || !editorSelection.text}><WandSparkles /></IconButton>}
       {editable && markdown && <div className="segmented" aria-label="文档视图">
         {modes.map((mode) => <button key={mode} className={viewMode === mode ? 'active' : ''} onClick={() => setViewMode(mode)}>{modeLabels[mode]}</button>)}
       </div>}
@@ -1068,15 +1285,20 @@ function EditorPanel({ onSave, onClose }: { onSave: () => Promise<void>; onClose
       <IconButton label="收起编辑器" onClick={onClose}><PanelRightClose /></IconButton>
     </div>
     <div className={`editor-content mode-${viewMode}`}>
-      {editable && (viewMode !== 'preview' || !markdown) && <CodeEditor key={`${document.path}:${theme}:${document.kind}`} value={document.content} filename={document.name} editable themeMode={theme} onChange={(content) => updateContent(document.path, content)} />}
+      {editable && (viewMode !== 'preview' || !markdown) && <CodeEditor key={`${document.path}:${theme}:${document.kind}`} value={document.content} filename={document.name} editable themeMode={theme} onChange={(content) => updateContent(document.path, content)} onSelectionChange={(selection) => setEditorSelection(selection ? { ...selection, path: document.path } : null)} />}
       {editable && viewMode !== 'edit' && markdown && <div className="markdown-preview"><ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw, rehypeSanitize]}>{document.content}</ReactMarkdown></div>}
       {!editable && <FilePreview document={document} onError={setError} />}
     </div>
+    {diffProposal?.path === document.path && diffProposal.status === 'proposed' && <aside className="editor-diff-proposal" aria-label="选区修改提案">
+      <div><WandSparkles /><span><strong>选区修改提案</strong><small>字符 {diffProposal.from}-{diffProposal.to} · 应用后仍需保存文档</small></span></div>
+      <p>{diffProposal.replacementText || '（删除选区内容）'}</p>
+      <div><button className="primary-button" onClick={applyPendingDiff}><Check />应用</button><button onClick={rejectDiffProposal}><X />拒绝</button></div>
+    </aside>}
     <footer className="editor-status">{editable ? <><span>语言 {getLanguageName(document.name)}</span><span>行 {lines}</span><span>{document.content.length} 字符</span><span>{words} 词</span><span>UTF-8</span><span>{document.lineEnding.toUpperCase()}</span><span className={dirty ? 'unsaved' : 'saved'}>{dirty ? '未保存' : <><Check />已保存</>}</span></> : <><span>{document.kind === 'binary' ? '不可编辑' : '仅预览'}</span><span>{document.sizeBytes ? `${Math.ceil(document.sizeBytes / 1024)} KB` : ''}</span></>}</footer>
   </aside>
 }
 
-function FileWorkspace({ showEditor, onOpenDocument, onToggleContext, onOpenWorkspace, onRefreshWorkspace, onSave, onCloseEditor }: {
+function FileWorkspace({ showEditor, onOpenDocument, onToggleContext, onOpenWorkspace, onRefreshWorkspace, onSave, onCloseEditor, onOpenChat }: {
   showEditor: boolean
   onOpenDocument: (path: string) => Promise<void>
   onToggleContext: (path: string) => Promise<void>
@@ -1084,14 +1306,15 @@ function FileWorkspace({ showEditor, onOpenDocument, onToggleContext, onOpenWork
   onRefreshWorkspace: () => Promise<void>
   onSave: () => Promise<void>
   onCloseEditor: () => void
+  onOpenChat: () => void
 }) {
   return <div className={`file-workspace ${showEditor ? 'with-editor' : 'list-only'}`}>
     <FileBrowserPanel onOpenDocument={onOpenDocument} onToggleContext={onToggleContext} onOpenWorkspace={onOpenWorkspace} onRefreshWorkspace={onRefreshWorkspace} />
-    {showEditor && <EditorPanel onSave={onSave} onClose={onCloseEditor} />}
+    {showEditor && <EditorPanel onSave={onSave} onClose={onCloseEditor} onOpenChat={onOpenChat} />}
   </div>
 }
 
-function ContentPanel({ page, onPageChange, showFileEditor, onOpenDocument, onOpenWorkspace, onRefreshWorkspace, onSave, onCloseEditor, onToggleContext }: {
+function ContentPanel({ page, onPageChange, showFileEditor, onOpenDocument, onOpenWorkspace, onRefreshWorkspace, onSave, onCloseEditor, onToggleContext, onReviewDiff }: {
   page: ContentPage
   onPageChange: (page: ContentPage) => void
   showFileEditor: boolean
@@ -1101,6 +1324,7 @@ function ContentPanel({ page, onPageChange, showFileEditor, onOpenDocument, onOp
   onSave: () => Promise<void>
   onCloseEditor: () => void
   onToggleContext: (path: string) => Promise<void>
+  onReviewDiff: () => void
 }) {
   const workspace = useAppStore((state) => state.workspace)
   const conversationTitle = useAppStore((state) => state.conversationTitle)
@@ -1120,7 +1344,7 @@ function ContentPanel({ page, onPageChange, showFileEditor, onOpenDocument, onOp
       </div>
     </header>
     <div className="content-panel-body">
-      {page === 'chat' ? <ChatPanel onToggleContext={onToggleContext} /> : <FileWorkspace showEditor={showFileEditor} onOpenDocument={onOpenDocument} onToggleContext={onToggleContext} onOpenWorkspace={onOpenWorkspace} onRefreshWorkspace={onRefreshWorkspace} onSave={onSave} onCloseEditor={onCloseEditor} />}
+      {page === 'chat' ? <ChatPanel onToggleContext={onToggleContext} onReviewDiff={onReviewDiff} /> : <FileWorkspace showEditor={showFileEditor} onOpenDocument={onOpenDocument} onToggleContext={onToggleContext} onOpenWorkspace={onOpenWorkspace} onRefreshWorkspace={onRefreshWorkspace} onSave={onSave} onCloseEditor={onCloseEditor} onOpenChat={() => onPageChange('chat')} />}
     </div>
   </section>
 }
@@ -1348,7 +1572,7 @@ export function App() {
     <TitleBar onPageChange={changeContentPage} onOpenWorkspace={() => void openWorkspaceFromMenu()} onNewDocument={() => void newDocumentFromMenu()} onRefreshWorkspace={() => void refreshWorkspaceFromMenu()} onCloseDocument={closeDocumentFromMenu} onSave={() => void saveActive()} onShowShortcuts={showShortcuts} onShowAbout={showAbout} onShowWindowDiagnostics={showWindowDiagnostics} onShowRuntimeDiagnostics={() => void showRuntimeDiagnostics()} />
     <div className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`} data-theme={theme}>
       <ProjectSessionSidebar onPageChange={changeContentPage} onOpenWorkspace={() => void openWorkspaceFromMenu()} onRefreshWorkspace={() => void refreshWorkspaceFromMenu()} onOpenDocument={openDocument} />
-      {settingsOpen ? <SettingsPage /> : <ContentPanel page={contentPage} onPageChange={changeContentPage} showFileEditor={fileEditorVisible && hasActiveDocument} onOpenDocument={openDocument} onOpenWorkspace={() => void openWorkspaceFromMenu()} onRefreshWorkspace={refreshWorkspaceFromMenu} onSave={saveActive} onCloseEditor={() => setFileEditorVisible(false)} onToggleContext={toggleDocumentContext} />}
+      {settingsOpen ? <SettingsPage /> : <ContentPanel page={contentPage} onPageChange={changeContentPage} showFileEditor={fileEditorVisible && hasActiveDocument} onOpenDocument={openDocument} onOpenWorkspace={() => void openWorkspaceFromMenu()} onRefreshWorkspace={refreshWorkspaceFromMenu} onSave={saveActive} onCloseEditor={() => setFileEditorVisible(false)} onToggleContext={toggleDocumentContext} onReviewDiff={() => { setContentPage('file'); setFileEditorVisible(true); setSettingsOpen(false) }} />}
       {error && <div className="error-banner" role="alert"><span>{error}</span><button aria-label="关闭错误提示" onClick={() => setError(null)}><X /></button></div>}
     </div>
     {runtimeDiagnosticsOpen && <div className="runtime-diagnostics-backdrop" role="presentation" onClick={() => setRuntimeDiagnosticsOpen(false)}>

@@ -1,8 +1,9 @@
-import { ArrowLeft, Bot, Check, Palette, PlugZap, Plus, Save, Settings, Trash2, X } from 'lucide-react'
+import { ArrowLeft, Bot, Check, Layers3, Palette, PlugZap, Plus, RefreshCw, Save, Settings, Square, Trash2, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { deleteModelProfile, listModelProfiles, saveModelProfile, testModelConnection } from '../lib/desktop'
+import { deleteModelProfile, listModelProfiles, saveModelProfile, stopOllamaModel, testModelConnection } from '../lib/desktop'
+import { createGroupProfileInput, isLocalOllamaProfile, isOllamaModelInstalled, isSameOllamaModel, MINIMUM_OLLAMA_MODEL_GROUP, shouldStopOllamaBeforeSwitch } from '../lib/modelGroups'
 import { useAppStore } from '../store'
-import type { ModelConnectionResult, ModelProfileInput, ProviderKind } from '../types'
+import type { ModelConnectionResult, ModelProfile, ModelProfileInput, ProviderKind } from '../types'
 
 function emptyProfile(kind: ProviderKind = 'ollama'): ModelProfileInput {
   return {
@@ -10,17 +11,19 @@ function emptyProfile(kind: ProviderKind = 'ollama'): ModelProfileInput {
     name: kind === 'ollama' ? '本地 Ollama' : 'OpenAI 兼容模型',
     kind,
     baseUrl: kind === 'ollama' ? 'http://localhost:11434' : 'https://api.openai.com/v1',
-    model: kind === 'ollama' ? 'qwen2.5:7b' : '',
-    contextWindow: 32768,
+    model: kind === 'ollama' ? 'qwen3:8b' : '',
+    contextWindow: kind === 'ollama' ? MINIMUM_OLLAMA_MODEL_GROUP.contextWindow : 32768,
   }
 }
 
 export function SettingsPage() {
   const profiles = useAppStore((state) => state.modelProfiles)
   const activeModelId = useAppStore((state) => state.activeModelId)
+  const autoStopOllamaModels = useAppStore((state) => state.autoStopOllamaModels)
   const theme = useAppStore((state) => state.theme)
   const setProfiles = useAppStore((state) => state.setModelProfiles)
   const setActiveModelId = useAppStore((state) => state.setActiveModelId)
+  const setAutoStopOllamaModels = useAppStore((state) => state.setAutoStopOllamaModels)
   const setSettingsOpen = useAppStore((state) => state.setSettingsOpen)
   const setTheme = useAppStore((state) => state.setTheme)
   const setError = useAppStore((state) => state.setError)
@@ -30,6 +33,10 @@ export function SettingsPage() {
   const [testing, setTesting] = useState(false)
   const [saving, setSaving] = useState(false)
   const [connection, setConnection] = useState<ModelConnectionResult | null>(null)
+  const [groupConnection, setGroupConnection] = useState<ModelConnectionResult | null>(null)
+  const [groupScanning, setGroupScanning] = useState(false)
+  const [groupApplying, setGroupApplying] = useState(false)
+  const [stoppingModel, setStoppingModel] = useState(false)
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -49,40 +56,132 @@ export function SettingsPage() {
     setConnection(null)
   }, [selected])
 
-  const reload = async (preferredId?: string) => {
+  const activate = async (nextId: string, availableProfiles: ModelProfile[], previousActive?: ModelProfile | null, skipStop = false) => {
+    const previous = previousActive ?? profiles.find((profile) => profile.id === activeModelId)
+    const next = availableProfiles.find((profile) => profile.id === nextId)
+    if (!next) return
+    try {
+      if (!skipStop && shouldStopOllamaBeforeSwitch(previous, next, autoStopOllamaModels) && previous) await stopOllamaModel(previous.id)
+    } catch (error) {
+      setError(`旧模型卸载失败，已继续切换：${String(error)}`)
+    } finally {
+      setActiveModelId(nextId)
+    }
+  }
+
+  const reload = async (preferredId?: string, previousActive?: ModelProfile | null, skipStop = false) => {
     const values = await listModelProfiles()
     setProfiles(values)
     const next = preferredId ?? values[0]?.id ?? null
     setSelectedId(next)
-    if (next) setActiveModelId(next)
+    if (next) await activate(next, values, previousActive, skipStop)
   }
 
   const save = async () => {
     setSaving(true)
     try {
+      const previousActive = profiles.find((profile) => profile.id === activeModelId) ?? null
+      const nextProfile = { ...previousActive, ...draft, hasApiKey: previousActive?.hasApiKey ?? false, updatedAt: Date.now() } as ModelProfile
+      let stopHandledBeforeSave = false
+      if (previousActive && shouldStopOllamaBeforeSwitch(previousActive, nextProfile, autoStopOllamaModels)) {
+        stopHandledBeforeSave = true
+        try {
+          await stopOllamaModel(previousActive.id)
+        } catch (error) {
+          setError(`旧模型卸载失败，已继续保存：${String(error)}`)
+        }
+      }
       const profile = await saveModelProfile(draft)
       setDraft({ ...draft, apiKey: undefined, clearApiKey: undefined })
-      await reload(profile.id)
+      await reload(profile.id, previousActive, stopHandledBeforeSave)
     } catch (error) { setError(String(error)) } finally { setSaving(false) }
   }
 
   const test = async () => {
     setTesting(true)
     setConnection(null)
-    try { setConnection(await testModelConnection(draft)) }
+    try {
+      const result = await testModelConnection(draft)
+      setConnection(result)
+      if (draft.kind === 'ollama' && isLocalOllamaProfile(draft)) setGroupConnection(result)
+    }
     catch (error) { setConnection({ ok: false, message: String(error), models: [] }) }
     finally { setTesting(false) }
   }
 
   const remove = async () => {
     if (!selected || !window.confirm(`删除模型配置“${selected.name}”？系统凭据库中的 API Key 也会删除。`)) return
-    try { await deleteModelProfile(selected.id); await reload() } catch (error) { setError(String(error)) }
+    const previousActive = profiles.find((profile) => profile.id === activeModelId) ?? null
+    let stopHandledBeforeDelete = false
+    try {
+      if (autoStopOllamaModels && selected.id === activeModelId && isLocalOllamaProfile(selected)) {
+        stopHandledBeforeDelete = true
+        try { await stopOllamaModel(selected.id) } catch (error) { setError(`模型卸载失败，已继续删除：${String(error)}`) }
+      }
+      await deleteModelProfile(selected.id)
+      await reload(undefined, previousActive, stopHandledBeforeDelete)
+    } catch (error) { setError(String(error)) }
   }
 
   const changeKind = (kind: ProviderKind) => {
     const next = emptyProfile(kind)
     setDraft({ ...draft, kind, baseUrl: next.baseUrl, model: next.model, name: next.name })
     setConnection(null)
+  }
+
+  const scanMinimumGroup = async () => {
+    setGroupScanning(true)
+    try {
+      setGroupConnection(await testModelConnection(createGroupProfileInput(MINIMUM_OLLAMA_MODEL_GROUP.members[0])))
+    } catch (error) {
+      setGroupConnection({ ok: false, message: String(error), models: [] })
+    } finally {
+      setGroupScanning(false)
+    }
+  }
+
+  useEffect(() => { void scanMinimumGroup() }, [])
+
+  const installedGroupMembers = MINIMUM_OLLAMA_MODEL_GROUP.members.filter((member) => isOllamaModelInstalled(groupConnection?.models ?? [], member.model))
+  const configuredGroupMembers = MINIMUM_OLLAMA_MODEL_GROUP.members.filter((member) => profiles.some((profile) => isLocalOllamaProfile(profile) && isSameOllamaModel(profile.model, member.model)))
+  const unconfiguredInstalledGroupMembers = installedGroupMembers.filter((member) => !configuredGroupMembers.some((configured) => configured.id === member.id))
+
+  const applyMinimumGroup = async () => {
+    if (!groupConnection?.ok || installedGroupMembers.length === 0) return
+    setGroupApplying(true)
+    try {
+      const previousActive = profiles.find((profile) => profile.id === activeModelId) ?? null
+      let available = await listModelProfiles()
+      for (const member of unconfiguredInstalledGroupMembers) {
+        const saved = await saveModelProfile(createGroupProfileInput(member))
+        available = [saved, ...available.filter((profile) => profile.id !== saved.id)]
+      }
+      available = await listModelProfiles()
+      setProfiles(available)
+      const primary = available.find((profile) => isLocalOllamaProfile(profile) && isSameOllamaModel(profile.model, 'qwen3:8b'))
+        ?? available.find((profile) => isLocalOllamaProfile(profile) && installedGroupMembers.some((member) => isSameOllamaModel(profile.model, member.model)))
+      if (primary) {
+        setSelectedId(primary.id)
+        await activate(primary.id, available, previousActive)
+      }
+    } catch (error) {
+      setError(`模型组配置失败：${String(error)}`)
+    } finally {
+      setGroupApplying(false)
+    }
+  }
+
+  const stopSelectedModel = async () => {
+    if (!selected || !isLocalOllamaProfile(selected)) return
+    setStoppingModel(true)
+    try {
+      const result = await stopOllamaModel(selected.id)
+      setConnection({ ok: true, message: result.message, models: connection?.models ?? [] })
+    } catch (error) {
+      setError(`停止模型失败：${String(error)}`)
+    } finally {
+      setStoppingModel(false)
+    }
   }
 
   return <section className="settings-page">
@@ -109,6 +208,30 @@ export function SettingsPage() {
           </button>)}
         </aside>
         <div className="settings-form">
+          <section className="model-group-section" aria-labelledby="minimum-model-group-title">
+            <header>
+              <div><span className="model-group-icon"><Layers3 /></span><span><b id="minimum-model-group-title">{MINIMUM_OLLAMA_MODEL_GROUP.name}</b><small>{MINIMUM_OLLAMA_MODEL_GROUP.description} · {MINIMUM_OLLAMA_MODEL_GROUP.contextWindow.toLocaleString('zh-CN')} tokens</small></span></div>
+              <div className="model-group-actions">
+                <button className="icon-button" title="检测本机 Ollama" aria-label="检测本机 Ollama" disabled={groupScanning} onClick={() => void scanMinimumGroup()}><RefreshCw className={groupScanning ? 'spinning' : ''} /></button>
+                <button className="secondary-button" disabled={!groupConnection?.ok || unconfiguredInstalledGroupMembers.length === 0 || groupApplying} onClick={() => void applyMinimumGroup()}>{unconfiguredInstalledGroupMembers.length === 0 && groupConnection?.ok ? <Check /> : <Plus />}{groupApplying ? '配置中...' : unconfiguredInstalledGroupMembers.length === 0 && groupConnection?.ok ? '已同步' : '添加已安装项'}</button>
+              </div>
+            </header>
+            <div className="model-group-status"><span className={groupConnection?.ok ? 'online' : ''} />{groupScanning ? '正在检测本机 Ollama...' : groupConnection?.ok ? `发现 ${groupConnection.models.length} 个模型；组内已安装 ${installedGroupMembers.length}/${MINIMUM_OLLAMA_MODEL_GROUP.members.length}，已配置 ${configuredGroupMembers.length}/${MINIMUM_OLLAMA_MODEL_GROUP.members.length}` : groupConnection?.message ?? '尚未检测本机 Ollama'}</div>
+            <div className="model-group-members">
+              {MINIMUM_OLLAMA_MODEL_GROUP.members.map((member) => {
+                const installed = isOllamaModelInstalled(groupConnection?.models ?? [], member.model)
+                const configured = configuredGroupMembers.some((candidate) => candidate.id === member.id)
+                return <div key={member.id} className="model-group-member"><span className={`model-role ${member.role}`}>{member.roleLabel}</span><span><b>{member.model}</b><small>{member.description}</small></span><span className={installed ? 'installed' : 'missing'}>{configured ? '已配置' : installed ? '已安装' : '未安装'}</span><small>{member.size}</small></div>
+              })}
+            </div>
+            <div className="model-group-preference">
+              <span><label htmlFor="auto-stop-ollama-models">切换时自动停止旧模型</label><small>仅作用于本机 Ollama；手动停止命令始终可用</small></span>
+              <label className="toggle-switch">
+                <input id="auto-stop-ollama-models" type="checkbox" checked={autoStopOllamaModels} onChange={(event) => setAutoStopOllamaModels(event.target.checked)} />
+                <span aria-hidden="true" />
+              </label>
+            </div>
+          </section>
           <div className="field-group"><label>接口类型</label><div className="segmented large"><button className={draft.kind === 'ollama' ? 'active' : ''} onClick={() => changeKind('ollama')}>Ollama</button><button className={draft.kind === 'openai-compatible' ? 'active' : ''} onClick={() => changeKind('openai-compatible')}>OpenAI 兼容</button></div></div>
           <div className="field-grid">
             <div className="field-group"><label htmlFor="profile-name">配置名称</label><input id="profile-name" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></div>
@@ -120,6 +243,7 @@ export function SettingsPage() {
           {connection && <div className={`connection-result ${connection.ok ? 'success' : 'failure'}`}><span>{connection.ok ? <Check /> : <X />}</span><div><b>{connection.message}</b>{connection.models.length > 0 && <small>可用模型：{connection.models.slice(0, 8).join('、')}{connection.models.length > 8 ? ` 等 ${connection.models.length} 个` : ''}</small>}</div></div>}
           <div className="settings-actions">
             {selected && <button className="danger-button" onClick={() => void remove()}><Trash2 />删除</button>}
+            {selected && isLocalOllamaProfile(selected) && <button className="secondary-button" disabled={stoppingModel} onClick={() => void stopSelectedModel()}><Square />{stoppingModel ? '停止中...' : '停止驻留'}</button>}
             <span />
             <button className="secondary-button" disabled={testing} onClick={() => void test()}><PlugZap />{testing ? '测试中...' : '测试连接'}</button>
             <button className="primary-button" disabled={saving} onClick={() => void save()}><Save />{saving ? '保存中...' : '保存并启用'}</button>

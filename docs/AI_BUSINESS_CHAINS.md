@@ -90,7 +90,7 @@ Codex、Claude 及其他 Agent 系统只作为 Runtime 能力、Tool 协议、Sk
 | 跨章节连续性、设定冲突、伏笔检查 | 尚未形成独立链路 | Hybrid | 推荐 | 建立 ReviewPlan、证据检索、冲突聚类和 ReviewReport |
 | 人物候选、消歧、关系语义校验 | 数据底座已实现，抽取审核未实现 | Hybrid | 推荐 | 确定性候选 → 模型局部校验 → Proposal → 人工确认 |
 | Canon 导入与记忆更新 | 仅有项目记忆候选 | Adaptive Agent | 推荐 | 版本化 CanonProposal/MemoryProposal，不允许自动确认 |
-| 多文件改稿和 DiffProposal | 尚未实现 | Adaptive Agent | 推荐 | 先计划影响范围，再生成逐文件 diff，逐块接受 |
+| 多文件改稿和 DiffProposal | 编辑器选区单文件提案已实现；多文件未实现 | Adaptive Agent | 推荐 | 先计划影响范围，再生成逐文件 diff，逐块接受 |
 | 大纲构建、场景规划、多阶段写作 | 尚未实现 | Adaptive Agent | 推荐 | 通过 OutlineDraft/SceneBrief/Draft 合同串联，不直接落盘 |
 | 批量审校、暂停、恢复、失败重试 | 长文本链路部分具备 | Fixed/Hybrid | 可选 | 统一 Job/Step/Event、幂等键、限速和失败策略 |
 | 外部研究与事实核查 | 尚未实现 | Adaptive Agent | 推荐 | 网络单独授权、来源白名单、引用和缓存失效 |
@@ -313,18 +313,26 @@ Agent architecture references / internal prototypes
 - [x] 首轮路由策略校验：在任务执行前检查 Skill 副作用、模型依赖、Tool 注册和 allowlist，以及 metadata-only 的正文 Tool 隔离。
 - [x] Skill 声明允许的上下文作用域；路由对 conversation、selected-documents、workspace 执行 fail-closed 校验。
 - [x] 选中文档改写从普通聊天分离为 `RevisionEditor` / `document-revision`，授权能力与长文本 Workflow 对齐。
-- [ ] 将 Tool/Skill 输入输出 schema 从描述升级为完整运行时校验。
-- 实现 ToolGateway 的 allowlist、权限、副作用和审计检查。
-- 统一 `TaskStep`、`TaskEvent`、错误类型和幂等键。
-- 保持现有模型 Provider 与 Agent Runtime 解耦。
+- [x] 引入首轮 ToolGateway，在正文读取、模型调用、分块和分析产物读写前逐次检查 allowlist、来源策略和副作用。
+- [x] 为所有已注册 Tool 补齐逐字段输入/输出合同，并在 ToolGateway 调用前后执行递归 JSON Schema 校验；覆盖对象、数组、必填字段、额外字段、类型、enum/const、长度/范围和组合合同。
+- [x] Rust `JobService` 与会话 `taskRef` command 使用强类型反序列化和字段/状态校验，拒绝非法任务状态、目标与恢复身份。
+- [x] 增加统一 Rust `execute_task(TaskRequest + TaskPlan)`；在任何 AI Tool 读取前完成 preflight，并在文档预算收敛后请求 final Dispatch。
+- [x] 将 `execute_task` 扩展为版本化 Service Dispatcher，返回 Service、阶段、执行所有者、流式需求、后台化资格、Job ID 和澄清结果。
+- [ ] 将同等合同校验扩展到其余 Rust command 边界，并对 Registry schema 增加启动时自检和版本迁移策略。
+- [ ] 补齐 ToolGateway 的任务/步骤身份、审计字段过滤、超时和结构化错误。
+- [x] 统一首轮 `TaskJob`、`TaskJobStep`、`TaskJobEvent`、检查点和恢复身份合同。
+- [ ] 统一跨 Service 错误类型、超时和幂等键。
+- [x] 保持现有模型 Provider 与 Agent Runtime 解耦。
 
 验收：未注册 Tool、Skill 越权 Tool、schema 不合法结果和未确认写操作全部 fail closed。
 
 ### 阶段 2：固定工作流下沉
 
-- 将长文本编排从 React 下沉到 Rust `JobService`。
+- [x] Rust `JobService` 持久化 Task/Step/Event/Checkpoint，提供 start/resume/update/get/list/cancel command，并校验任务、指令和源指纹身份。
+- [ ] 将 Map/Reduce/Synthesis Worker 的调度从前端下沉到 Rust；当前 JobService 只承担控制面和持久化，实际 Worker 仍由前端长文本服务驱动。
 - 分离 Map Worker、Reduce Worker、Synthesis 和 Evidence Validation。
-- 支持步骤级重试、暂停/恢复、模型切换和增量失效。
+- [x] 增加长文本任务协作式暂停/继续 UI；暂停在当前 Tool/模型步骤完成后的下一个阶段边界生效，并将 `paused/running` 事件写入 JobService。
+- [ ] 补齐无窗口后台执行、步骤级独立重试、模型切换兼容性和按文档增量失效；当前支持前端存活期间暂停、失败恢复、取消和按任务源指纹拒绝不安全恢复。
 
 验收：关闭窗口后可恢复；已完成 Map 不重复调用；模型切换不会复用不兼容缓存。
 
@@ -335,7 +343,7 @@ Agent architecture references / internal prototypes
 
 两个试点均以 `VinkeyNativeRuntime` 完成产品实现和验收。Codex/Claude 只用于设计对照、离线事件回放或不需要新增付费 API 配置的开发期原型，不作为试点完成条件。
 
-当前进度：`ContinuityReviewer` 已完成独立意图、可选文档/工作区作用域、执行策略和证据优先的长文本报告提示；`RevisionEditor` 已从普通聊天链路分离。二者当前仍由 Fixed Workflow 执行，目标形态标记为 `hybrid-agent-workflow`，且审校报告和改写草稿都不会自动进入项目记忆。正式 Agent Tool Loop、结构化 `ReviewReport` / `DiffProposal` schema 和对照评测尚未实施。
+当前进度：`ContinuityReviewer` 已完成独立意图、可选文档/工作区作用域、执行策略和证据优先的长文本报告提示；`RevisionEditor` 已从普通聊天链路分离，编辑器选区可生成绑定本地路径、范围、原文和源指纹的单文件 `DiffProposal`，模型只能提供 `replacementText`，应用前再次检测冲突且不会自动保存。二者当前仍由 Fixed Workflow 执行，目标形态标记为 `hybrid-agent-workflow`，且审校报告和改写提案都不会自动进入项目记忆。正式 Agent Tool Loop、结构化 `ReviewReport`、多文件 `DiffProposal` 和对照评测尚未实施。
 
 验收：比较任务完成率、证据准确率、Tool 误调用率、人工修正量、延迟、token、恢复成功率和隐私边界。
 
@@ -349,16 +357,95 @@ Agent architecture references / internal prototypes
 
 只有业务链路评测证明 `VinkeyNativeRuntime` 存在明确缺口，候选 Agent Harness 明显改善结果，并且满足无需新增商用付费 API 配置、本地正文授权、可观测、版本固定和跨平台打包要求，才讨论内部集成。集成后仍不提供 Codex/Claude Adapter 选择项；不满足任一条件则停留在架构参考或开发实验。
 
+### 阶段 6：下一阶段业务链路优化计划
+
+本阶段先修正“路由声明与实际执行脱节”的基础问题，再优化不同任务的成本/质量分流，最后以两个低副作用 Agent 试点验证自适应编排收益。阶段目标不是让所有消息都进入 Agent Loop，而是让所有 AI 任务都经过同一份 `TaskRequest → TaskPolicy → ToolGateway` 合同，并且只在动态决策带来明确收益时升级。
+
+#### 6.1 入口统一与级联路由（P0）
+
+**目标**：把 `IntentRouter` 从 React 内的前置分类器提升为 Runtime Service；统一聊天、右键、选区、工具栏、项目页和命令面板的 AI 任务入口。
+
+- 引入 `TaskIntake`，统一 `entryPoint`、`actionId`、`targets`、选区范围、会话引用和用户约束；显式入口直接携带结构化 intent，不再用固定中文提示词重新识别。
+- 将自由文本路由拆为确定性规则、轻量分类和澄清三段；只有歧义输入才调用分类模型，低置信度不能自动进入深度读取、Agent Loop 或写操作。
+- 用上一任务 ID 和不含正文的会话摘要支持“继续”“按刚才方案改”等续问，淘汰只用 `hasContextDocuments` 判断上下文的方式。
+- 明确编辑器打开、手工编辑和显式保存不属于 AI 路由范围，避免无意义的路由延迟。
+
+**验收**：所有 AI 入口都能生成同一 `TaskRequest`；显式入口不产生额外分类模型调用；低置信度只返回普通回答或一个澄清问题；路由日志能解释入口、目标、决策和成本预算。
+
+#### 6.2 ToolGateway 与 Runtime 强制边界（P0）
+
+**目标**：让 `allowedTools`、Skill 合同和来源策略在每次调用时真正生效，而不只是路由时的静态校验。
+
+- 将 `read_document`、`chunk_document`、`stream_chat`、分析产物和 Proposal 操作收口到统一 `ToolGateway`；前端和 Agent 不得直接调用 Tauri command。
+- 为 Tool/Skill 输入和输出接入运行时 JSON Schema 校验，拒绝未注册 Tool、Skill 越权、上下文作用域不符、`metadata-only` 读取正文和未经确认的写操作。
+- 在 `TaskPlan` 中增加 `outputContract`、`clarificationPolicy`、`budgetPolicy`、源指纹和幂等键；每次 Tool 调用绑定 task/step 身份和审计字段。
+- 统一错误分类、取消、超时和重试边界，确保模型失败不会触发隐式写入或静默扩大正文读取范围。
+
+**验收**：绕过 UI 直接调用受保护 Tool 也会被拒绝；非法 schema、过期源指纹和未确认 Proposal 全部 fail closed；审计记录不包含正文、完整 Prompt 或 API Key。
+
+#### 6.3 任务成本与质量分流（P0）
+
+**目标**：修复短改稿被错误升级成长文本流水线，以及摘要被误用于重建正文的问题。
+
+- 标题、灵感、无正文短写作继续走 Direct Model；选区级润色/压缩/扩写走“原文选区 + `DiffProposal`”的单次或有界 Revision Workflow。
+- 单场景/单章在预算内时，直接读取目标原文、必要 canon 和相邻场景；只有多章、多文件或超预算任务才进入 Chunk/Map/Reduce。
+- 长文问答、总结、人物线和伏笔分析继续使用固定 Workflow，结果必须带覆盖范围、源指纹、分块数和可验证证据。
+- 多文件改稿先做影响范围定位，再按原文片段生成逐文件 diff；Map/Reduce 摘要只用于规划和发现，不作为最终正文的唯一输入。
+- 建立模型能力注册表和任务预算：记录首 token 延迟、tokens/s、总耗时、token 消耗、结构化输出成功率、证据召回率、改写忠实度和人工修正量。
+
+**验收**：同一测试集对比 Direct/Bounded/LongText 三条链路，短改稿 p95 延迟和 token 消耗显著低于长文链路；分析任务的证据准确率、覆盖率和改写任务的源文忠实度分别达到预设阈值；任何模式升级都有用户可见原因或新的用户请求。
+
+#### 6.4 JobService 与两个 Agent 试点（P1）
+
+**目标**：把长文本编排从 React 下沉为可恢复任务，再验证 Agent 在动态决策场景的真实收益。
+
+- Rust `JobService` 管理 `Task/Step/Event/Checkpoint`，支持窗口关闭后的恢复、步骤级重试、暂停、取消、幂等和按源指纹增量失效。
+- 先落地只读 `ContinuityReviewer`：确定性检索候选冲突，Agent 负责选择证据窗口、处理冲突分支和综合 `ReviewReport`。
+- 再落地 `CanonIngestion`：确定性实体/提及候选 → 模型局部消歧 → `CanonProposal` → 用户确认；禁止直接写入正式 canon。
+- 试点期间保留 Fixed Workflow 作为回退路径；Agent 只在满足至少两个 Agent 化条件且预计有收益时启用。
+
+**验收**：与固定流水线 A/B 对比任务完成率、证据准确率、Tool 误调用率、人工修正量、延迟、token、恢复成功率和隐私违规数；若 Agent 未达到收益门槛，保留固定链路，不扩大 Agent 范围。
+
+#### 6.5 依赖与交付顺序
+
+```text
+TaskIntake / IntentRouter
+  → TaskPolicy / ToolGateway / Schema
+  → JobService / Task-Step-Event
+  → 短改稿分流与 DiffProposal
+  → ContinuityReviewer / CanonIngestion 试点
+  → Outline / Scene / Draft 多阶段创作
+```
+
+本阶段暂不推进外部研究、托管 Agent 或 Codex/Claude Harness 集成；这些工作必须等待本地 Runtime、权限边界和评测数据稳定后再进入阶段 5 的集成评审。
+
+#### 6.6 2026-09-07 实施状态
+
+- 已完成 `TaskRequest` / `TaskIntake` 前端合同，聊天和现有 AI 快捷入口统一进入 `routeTask`；显式 `actionId` 或 intent 优先于提示词规则，目标 ID 会去空、去重。
+- 已在 SQLite 消息中持久化不含正文的 `taskRef`；“继续”“接着”“按刚才”“沿用”等续问可以继承上一安全的读取/草稿意图与文档目标，不继承 Proposal 副作用，也不恢复历史选区正文。
+- 已完成文档加载后的策略二次收敛：最多 2 个文档且原文约 12,000 tokens 内的修改走 `bounded + direct-model`，携带有界、来源标记的原文；更大任务保留可恢复长文本 Workflow。
+- 已建立首轮 `ToolGateway`，工作区正文读取、直接模型调用和长文本流程中的分块、模型、分析产物读写均执行逐次授权；所有已注册 Tool 具备逐字段输入/输出 schema，调用前后均 fail closed 校验。
+- 已实现 Rust `JobService` 控制面及文件持久化，长文本流程记录 Chunk/Map/Reduce/Synthesis 步骤、事件和检查点，并在完成、失败和取消时同步任务状态。Map/Reduce/Synthesis Worker 仍由前端编排，尚未成为无窗口后台 Worker。
+- 已实现编辑器选区 `DiffProposal`：路径、范围、原文和源指纹由本地锁定，模型只返回替换文本；用户可查看、接受或拒绝，接受仅更新编辑器且仍需显式保存。
+- 已实现 Rust `execute_task` 策略控制：Rust 独立复验 intent/Agent/Skill、Tool allowlist、作用域、副作用、正文策略和 ExecutionStrategy；前端在读取 Tool 前和最终执行前分别请求 Dispatch。
+- 已实现长文本任务协作式暂停/继续；运行中的单次模型调用不会被破坏性中断，状态会在下一步骤边界进入 `paused`，继续后恢复 `running`。跨窗口后台执行仍未实现。
+- 已补充入口、短/长改稿分流、Tool 输入/输出拒绝、续问继承、选区冲突、Rust Dispatch/澄清和 JobService 状态测试。阶段 6 仍缺后台 Worker、多文件 DiffProposal 和模型能力评测。
+- 已将 Rust `execute_task` 扩展为 Service Dispatcher：两阶段请求得到版本化 Dispatch，包含具体 Service、执行所有者、流式需求、后台化资格、稳定 Job ID 和澄清结果。前端业务分支只消费 `serviceId`，但 Service 实现与模型流当前仍由 WebView 承载。
+- 已完成第一层低置信度门禁：隐式且低置信度的正文读取在 preflight 返回一个最小澄清问题，并在任何正文 Tool、工作区扫描或模型调用前停止；显式 action、安全续问和恢复 Job 不增加分类模型调用。
+- 当前长文本链路仅声明 `backgroundEligible=true`，同时明确 `executionOwner=webview`。尚未完成 Worker 输入快照、Rust Worker 生命周期、跨窗口事件订阅和无 WebView 持续运行，因此不能视为后台执行已完成。
+
 ## 8. 当前优先级
 
 | 优先级 | 工作项 | 原因 |
 | --- | --- | --- |
-| P0 | ExecutionStrategy、ToolGateway、Task/Step/Event 合同 | 所有后续链路和 Adapter 的共同底座 |
-| P0 | 长文本 Workflow 下沉与检查点完善 | 当前编排集中在 React，恢复粒度不足 |
-| P0 | ContinuityReviewer 只读试点 | 高用户价值、低副作用、适合验证 Agent 收益 |
-| P0 | Canon/人物关系 Proposal 链路 | 已有 SQLite 图底座，可形成业务闭环 |
-| P1 | DiffProposal 和 RevisionEditor | 需要先完成审批与冲突合同 |
-| P1 | Outline/Scene/Draft 多阶段创作 | 依赖 Proposal、记忆和模型能力路由 |
+| P0 | Worker 输入快照与 Rust 生命周期托管 | Dispatcher 已完成，但当前仍明确由 WebView 执行 |
+| P0 | Map/Reduce/Synthesis 后台 Worker、事件流与跨窗口恢复 | 协作式暂停已完成，但窗口关闭后执行仍会停止 |
+| P0 | 歧义分类回归集与可选轻量分类模型 | 确定性低置信度门禁和最小澄清已完成，需用数据控制漏判与打断率 |
+| P0 | 模型能力注册表与 Direct/Bounded/LongText 回归评测 | 用延迟、格式成功率、证据和忠实度数据校准分流阈值 |
+| P1 | ContinuityReviewer 只读试点 | 高用户价值、低副作用，适合验证 Agent 动态决策收益 |
+| P1 | Canon/人物关系 Proposal 链路 | 已有 SQLite 图底座，可形成候选、证据、确认闭环 |
+| P1 | DiffProposal 多文件改稿 | 依赖 ToolGateway、源指纹、审批与冲突合同 |
+| P2 | Outline/Scene/Draft 多阶段创作 | 依赖 Proposal、记忆、任务恢复和模型能力路由 |
 | P2 | Codex/Claude Agent Harness 内部原型 | 仅验证具体业务缺口；无需新增付费 API 配置，不形成用户选项 |
 | P2 | 外部研究、托管 Agent、联网 Skill | 隐私和来源治理成本较高 |
 

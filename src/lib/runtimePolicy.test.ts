@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { classifyTask } from './intent'
-import { assertRoutedTaskPolicy, validateRoutedTaskPolicy } from './runtimePolicy'
+import { assertRoutedTaskPolicy, assertToolResult, validateRoutedTaskPolicy } from './runtimePolicy'
 
 describe('routed task runtime policy', () => {
   it('accepts every currently routed business chain', () => {
@@ -47,5 +47,26 @@ describe('routed task runtime policy', () => {
     const plan = classifyTask('普通聊天', false)
     const errors = validateRoutedTaskPolicy({ ...plan, allowedTools: ['search_project_memory'] })
     expect(errors).toContain('模型任务必须通过 stream_chat 调用模型')
+  })
+
+  it('validates Tool output contracts', () => {
+    expect(() => assertToolResult('read_document', {
+      path: 'a.md', name: 'a.md', content: 'text', kind: 'markdown', modifiedMs: 1, lineEnding: 'lf', hasBom: false,
+    })).not.toThrow()
+    expect(() => assertToolResult('read_document', { path: 'a.md' })).toThrow('输出不符合 schema')
+    expect(() => assertToolResult('stream_chat', undefined)).not.toThrow()
+    expect(() => assertToolResult('write_analysis_artifact', null)).not.toThrow()
+    expect(() => assertToolResult('chunk_document', {
+      sourceId: 'a.md', sourceFingerprint: 'sha256', algorithmVersion: '1', cacheKey: 'a',
+      sourceTokens: 2, maxTokens: 128, overlapTokens: 0,
+      chunks: [{
+        id: '章节/a.md:chunk-1', sourceId: 'a.md', text: '正文', startChar: 0, endChar: 2,
+        lineStart: 1, lineEnd: 1, estimatedTokens: 2, splitReason: 'document', overlapFromPrevious: false,
+      }],
+    })).not.toThrow()
+    expect(() => assertToolResult('chunk_document', {
+      sourceId: 'a.md', sourceFingerprint: 'sha256', algorithmVersion: '1', cacheKey: 'a',
+      sourceTokens: 2, maxTokens: 128, overlapTokens: 0, chunks: [{ id: 'chunk-1' }],
+    })).toThrow('输出不符合 schema')
   })
 })

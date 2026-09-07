@@ -29,6 +29,33 @@ export function buildContextMessage(documents: ContextDocument[]): string | null
   return buildDocumentIndexMessage(documents)
 }
 
+/** Build a bounded, source-labelled body context for revision tasks. */
+export function buildRevisionContextMessage(documents: ContextDocument[], maxTokens = 12_000): string | null {
+  if (documents.length === 0) return null
+  const sections: string[] = []
+  let remaining = Math.max(256, maxTokens)
+  for (const document of documents) {
+    if (remaining <= 128) break
+    const header = `来源文件：${document.path}\n`
+    const headerTokens = estimateTokens(header) + 32
+    const allowance = Math.max(128, remaining - headerTokens)
+    let body = document.content
+    if (estimateTokens(body) > allowance) {
+      let lower = 0
+      let upper = body.length
+      while (lower < upper) {
+        const middle = Math.ceil((lower + upper) / 2)
+        if (estimateTokens(body.slice(0, middle)) <= allowance) lower = middle
+        else upper = middle - 1
+      }
+      body = `${body.slice(0, lower).trimEnd()}\n[原文已按任务预算截断]`
+    }
+    sections.push(`${header}<source-document>\n${body}\n</source-document>`)
+    remaining -= estimateTokens(header) + estimateTokens(body) + 32
+  }
+  return `以下是允许用于本次创作修改的原文上下文。只修改用户要求的范围，不修改来源文件；最终输出草稿或 diff，不要声称已写回文件。\n\n${sections.join('\n\n')}`
+}
+
 /** Stable, body-free input for a task router or routing model. */
 export function buildRoutingContext(documents: ContextDocument[]): string | null {
   if (documents.length === 0) return null

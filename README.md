@@ -57,13 +57,13 @@ macOS 应在 macOS 构建机执行：
 npm run package:mac
 ```
 
-产物为 `.app` 和 `.dmg`。需要更新本机安装版本并启动新应用时执行：
+产物为 `.app` 和 `.dmg`，并默认将新生成的应用更新到 `/Applications/Vinkey.app`。构建后需要立即启动新应用时执行：
 
 ```bash
-npm run package:mac -- --install --open
+npm run package:mac -- --open
 ```
 
-其中 `--install` 会将新生成的 `.app` 更新到 `/Applications/Vinkey.app`，`--open` 会启动该版本；不带参数时脚本只构建，不修改 `/Applications`。DMG 使用无 Finder 自动化的兼容模式生成，避免构建被 macOS 的 Apple Events 权限阻止。公开分发前需要配置 Apple Developer ID 证书、公证凭据；Windows 公开分发建议配置代码签名证书。脚本不会内置或读取仓库中的签名密钥。
+不带参数时脚本会构建并安装，`--open` 会启动安装后的版本；如需只生成构建产物而不修改 `/Applications`，请传入 `--no-install`。`--install` 仍可用于显式指定安装。DMG 使用无 Finder 自动化的兼容模式生成，避免构建被 macOS 的 Apple Events 权限阻止。公开分发前需要配置 Apple Developer ID 证书、公证凭据；Windows 公开分发建议配置代码签名证书。脚本不会内置或读取仓库中的签名密钥。
 
 ## 开发文档
 
@@ -80,3 +80,4 @@ npm run package:mac -- --install --open
 - [GitHub 同类项目调研与功能取舍](docs/GITHUB_REFERENCE.md)
 - [Agent 与 Skill 建设计划](docs/AGENT_SKILL_PLAN.md)
 - [AI 业务链路架构与改造方案](docs/AI_BUSINESS_CHAINS.md)
+- [Ollama 中文创作模型组与最低配置测试基线](docs/OLLAMA_MODEL_GROUPS.md)

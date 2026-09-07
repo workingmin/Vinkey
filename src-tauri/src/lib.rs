@@ -13,10 +13,12 @@ use tauri::{AppHandle, Manager, State, WebviewWindow};
 
 mod character_graph;
 mod database;
+mod job_service;
 mod long_text;
 mod models;
 mod runtime_log;
 mod search;
+mod task_runtime;
 
 #[derive(Default)]
 pub(crate) struct WorkspaceState(Mutex<Option<Workspace>>);
@@ -310,6 +312,62 @@ pub(crate) fn analysis_jobs_dir(workspace: &Workspace) -> PathBuf {
     workspace_vinkey_dir(workspace)
         .join("analysis")
         .join("jobs")
+}
+
+#[tauri::command]
+fn start_task_job(
+    input: job_service::StartTaskJobInput,
+    state: State<'_, WorkspaceState>,
+) -> Result<job_service::TaskJob, String> {
+    let workspace = lock_workspace(&state)?;
+    job_service::start(&analysis_jobs_dir(&workspace), &workspace.id, input)
+}
+
+#[tauri::command]
+fn update_task_job(
+    input: job_service::UpdateTaskJobInput,
+    state: State<'_, WorkspaceState>,
+) -> Result<job_service::TaskJob, String> {
+    let workspace = lock_workspace(&state)?;
+    job_service::update(&analysis_jobs_dir(&workspace), input)
+}
+
+#[tauri::command]
+fn get_task_job(
+    task_id: String,
+    state: State<'_, WorkspaceState>,
+) -> Result<job_service::TaskJob, String> {
+    let workspace = lock_workspace(&state)?;
+    job_service::get(&analysis_jobs_dir(&workspace), &task_id)
+}
+
+#[tauri::command]
+fn list_task_jobs(state: State<'_, WorkspaceState>) -> Result<Vec<job_service::TaskJob>, String> {
+    let workspace = lock_workspace(&state)?;
+    job_service::list(&analysis_jobs_dir(&workspace))
+}
+
+#[tauri::command]
+fn cancel_task_job(
+    task_id: String,
+    state: State<'_, WorkspaceState>,
+) -> Result<job_service::TaskJob, String> {
+    let workspace = lock_workspace(&state)?;
+    job_service::cancel(&analysis_jobs_dir(&workspace), &task_id)
+}
+
+#[tauri::command]
+fn execute_task(
+    input: task_runtime::ExecuteTaskInput,
+    state: State<'_, WorkspaceState>,
+) -> Result<task_runtime::TaskExecutionDispatch, String> {
+    let workspace_id = state
+        .0
+        .lock()
+        .map_err(|_| "工作区状态不可用".to_string())?
+        .as_ref()
+        .map(|workspace| workspace.id.clone());
+    task_runtime::execute(input, workspace_id.as_deref())
 }
 
 fn validate_analysis_artifact_name(name: &str) -> Result<&Path, String> {
@@ -1133,6 +1191,12 @@ pub fn run() {
             write_analysis_artifact,
             read_analysis_artifact,
             list_analysis_jobs,
+            start_task_job,
+            update_task_job,
+            get_task_job,
+            list_task_jobs,
+            cancel_task_job,
+            execute_task,
             read_file_bytes,
             save_document,
             create_document,
@@ -1146,6 +1210,7 @@ pub fn run() {
             models::save_model_profile,
             models::delete_model_profile,
             models::test_model_connection,
+            models::stop_ollama_model,
             models::stream_chat,
             models::cancel_chat,
             database::list_conversations,

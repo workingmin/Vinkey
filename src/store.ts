@@ -3,7 +3,9 @@ import type {
   ChatMessage, ContextDocument, Conversation, ConversationSummary, DocumentTab,
   ModelProfile, ThemeMode, ViewMode, WorkspaceSnapshot,
   ChatActivity, ChatRunStatus,
+  DiffProposal, EditorRevisionRequest, EditorSelection,
 } from './types'
+import { applyDiffProposal as applyProposalToContent } from './lib/diffProposal'
 
 const MAX_CHAT_ACTIVITY_LOG = 80
 
@@ -21,6 +23,7 @@ interface AppState {
   completedChatMessages: Record<string, ChatMessage>
   modelProfiles: ModelProfile[]
   activeModelId: string | null
+  autoStopOllamaModels: boolean
   settingsOpen: boolean
   sidebarCollapsed: boolean
   settingsSidebarBeforeOpen: boolean | null
@@ -28,6 +31,9 @@ interface AppState {
   theme: ThemeMode
   viewMode: ViewMode
   error: string | null
+  editorSelection: EditorSelection | null
+  pendingEditorRevision: EditorRevisionRequest | null
+  diffProposal: DiffProposal | null
   setWorkspace: (workspace: WorkspaceSnapshot) => void
   openTab: (tab: DocumentTab) => void
   closeTab: (path: string) => void
@@ -48,10 +54,17 @@ interface AppState {
   removeConversation: (id: string) => void
   setModelProfiles: (profiles: ModelProfile[]) => void
   setActiveModelId: (id: string | null) => void
+  setAutoStopOllamaModels: (enabled: boolean) => void
   setSidebarCollapsed: (collapsed: boolean) => void
   setSettingsOpen: (open: boolean) => void
   setTheme: (theme: ThemeMode) => void
   setError: (error: string | null) => void
+  setEditorSelection: (selection: EditorSelection | null) => void
+  prepareEditorRevision: (request: EditorRevisionRequest) => void
+  clearPendingEditorRevision: () => void
+  setDiffProposal: (proposal: DiffProposal | null) => void
+  applyDiffProposal: () => void
+  rejectDiffProposal: () => void
 }
 
 export interface ChatRun {
@@ -83,7 +96,7 @@ function mergeRunMessages(messages: ChatMessage[], run: ChatRun | undefined): Ch
   return merged
 }
 
-export const useAppStore = create<AppState>((set) => ({
+export const useAppStore = create<AppState>((set, get) => ({
   workspace: null,
   tabs: [],
   activePath: null,
@@ -97,6 +110,7 @@ export const useAppStore = create<AppState>((set) => ({
   completedChatMessages: {},
   modelProfiles: [],
   activeModelId: localStorage.getItem('vinkey.activeModelId'),
+  autoStopOllamaModels: localStorage.getItem('vinkey.autoStopOllamaModels') !== 'false',
   settingsOpen: false,
   sidebarCollapsed: localStorage.getItem('vinkey.sidebarCollapsed') === 'true',
   settingsSidebarBeforeOpen: null,
@@ -104,7 +118,12 @@ export const useAppStore = create<AppState>((set) => ({
   theme: localStorage.getItem('vinkey.theme') === 'light' ? 'light' : 'dark',
   viewMode: 'edit',
   error: null,
-  setWorkspace: (workspace) => set({ workspace }),
+  editorSelection: null,
+  pendingEditorRevision: null,
+  diffProposal: null,
+  setWorkspace: (workspace) => set((state) => state.workspace?.id && state.workspace.id !== workspace.id
+    ? { workspace, editorSelection: null, pendingEditorRevision: null, diffProposal: null }
+    : { workspace }),
   openTab: (tab) => set((state) => ({
     tabs: state.tabs.some((item) => item.path === tab.path) ? state.tabs : [...state.tabs, tab],
     activePath: tab.path,
@@ -238,7 +257,7 @@ export const useAppStore = create<AppState>((set) => ({
     settingsSidebarBeforeOpen: null,
     settingsSidebarUserOverride: false,
   })),
-  newConversation: () => set({ conversationId: null, conversationTitle: '新会话', messages: initialMessages, contextDocuments: [] }),
+  newConversation: () => set({ conversationId: null, conversationTitle: '新会话', messages: initialMessages, contextDocuments: [], editorSelection: null, pendingEditorRevision: null }),
   setConversations: (conversations) => set({ conversations }),
   removeConversation: (id) => set((state) => {
     const completedChatMessages = { ...state.completedChatMessages }
@@ -259,6 +278,10 @@ export const useAppStore = create<AppState>((set) => ({
     activeModelId: modelProfiles.some((profile) => profile.id === state.activeModelId) ? state.activeModelId : modelProfiles[0]?.id ?? null,
   })),
   setActiveModelId: (activeModelId) => { if (activeModelId) localStorage.setItem('vinkey.activeModelId', activeModelId); set({ activeModelId }) },
+  setAutoStopOllamaModels: (autoStopOllamaModels) => {
+    localStorage.setItem('vinkey.autoStopOllamaModels', String(autoStopOllamaModels))
+    set({ autoStopOllamaModels })
+  },
   setSidebarCollapsed: (sidebarCollapsed) => {
     localStorage.setItem('vinkey.sidebarCollapsed', String(sidebarCollapsed))
     set((state) => ({
@@ -287,4 +310,23 @@ export const useAppStore = create<AppState>((set) => ({
   }),
   setTheme: (theme) => { localStorage.setItem('vinkey.theme', theme); set({ theme }) },
   setError: (error) => set({ error }),
+  setEditorSelection: (editorSelection) => set({ editorSelection }),
+  prepareEditorRevision: (pendingEditorRevision) => set({ pendingEditorRevision }),
+  clearPendingEditorRevision: () => set({ pendingEditorRevision: null }),
+  setDiffProposal: (diffProposal) => set({ diffProposal }),
+  applyDiffProposal: () => {
+    const state = get()
+    const proposal = state.diffProposal
+    if (!proposal) return
+    const tab = state.tabs.find((item) => item.path === proposal.path)
+    if (!tab) throw new Error('DiffProposal 的目标文档未打开。')
+    const content = applyProposalToContent(tab.content, proposal)
+    set({
+      tabs: state.tabs.map((item) => item.path === proposal.path ? { ...item, content } : item),
+      diffProposal: { ...proposal, status: 'applied' }, editorSelection: null,
+    })
+  },
+  rejectDiffProposal: () => set((state) => ({
+    diffProposal: state.diffProposal ? { ...state.diffProposal, status: 'rejected' } : null,
+  })),
 }))

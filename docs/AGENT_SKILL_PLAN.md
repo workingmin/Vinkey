@@ -50,16 +50,21 @@ audit_fields
 
 ## 2. 用户入口模型
 
-所有入口最后统一成以下任务描述：
+所有 AI 入口先统一成不含正文的 `TaskRequest`，再由 Runtime 生成 `TaskPlan`。普通文件打开、手工编辑和显式保存属于编辑器操作，不进入意图识别；但只要入口会调用模型、分析正文、执行 AI Tool 或产生 Proposal，就必须经过统一任务入口和策略校验。
 
 ```text
-intent       用户意图
-scope        选中文本 / 当前文档 / 当前章节 / 当前作品 / 全部工作区
-target       目标文件、章节或作品 ID
-operation    分析 / 规划 / 写作 / 修改 / 导入 / 导出 / 聊天
-side_effect  read / draft / proposal / write / network
-confidence   路由置信度
+entryPoint       chat / context-menu / editor-selection / toolbar / project / command-palette
+actionId         显式命令 ID；自由对话为空
+instruction      用户原始要求
+intent           用户意图；显式入口可预填，自由对话由路由判断
+scope            选中文本 / 当前文档 / 当前章节 / 当前作品 / 全部工作区
+targets          文件、选区、章节、作品等稳定 ID，不用提示词拼接目标名称
+userConstraints  风格、长度、格式、禁止项和其他用户约束
+conversationRef  会话 ID、上一任务 ID 和不含正文的会话摘要引用
+requestedEffect  read / draft / proposal / write / network
 ```
+
+`TaskPlan` 在此基础上补充 `confidence`、`documentAccess`、`analysisMode`、`coverage`、`sourcePolicy`、`executionMode`、`allowedTools`、`outputContract` 和失败/澄清策略。入口提供的是事实和用户请求，不自行授予 Tool 权限。
 
 推荐入口包括：
 
@@ -70,9 +75,37 @@ confidence   路由置信度
 5. **项目/大纲页**：完善想法、创建人物、构建世界、生成大纲。
 6. **命令面板**：执行跨页面任务并查看任务进度。
 
-低置信度输入先由日常聊天 Agent 回答，或只提出一个澄清问题；不能因为出现“故事”“人物”等词就自动修改作品数据。
+### 2.1 “所有入口”的准确边界与级联路由
 
-### 2.1 分析模式与项目锚定
+`IntentRouter` 是 Runtime Service，不是领域 Agent，也不生成正文。所有 AI 对话提交都必须经过它，但不要求每次提交都增加一次模型调用。显式按钮、菜单和编辑器选区已经提供了可靠意图时，应直接生成结构化 `TaskRequest`；自由文本或会话续问才需要意图识别。
+
+统一入口采用由低成本到高成本的级联路由：
+
+```text
+AI 入口
+  → TaskIntake：规范化入口、目标、选区、会话引用和用户约束
+  → 确定性路由：显式 actionId、高置信规则、隐私和成本门槛
+  → 歧义判定：仅在必要时使用轻量分类模型，或提出一个澄清问题
+  → TaskPolicy：生成并校验 ExecutionPlan
+  → Runtime / ToolGateway
+      ├─ Deterministic Service
+      ├─ Direct Model Call
+      ├─ Fixed Workflow
+      └─ Adaptive Agent / Hybrid Agent Workflow
+```
+
+路由优先级和不变量如下：
+
+1. `actionId`、编辑器选区和用户显式选择的目标优先于自然语言猜测；快捷入口不得通过拼接固定中文提示词重新识别自身意图。
+2. 路由只接收路径、类型、大小、选区坐标、摘要引用和会话任务引用等不含正文的信息。正文只能在 `TaskPlan` 校验完成后由获授权 Tool 读取。
+3. 路由需要结合当前消息、上一任务和不含正文的会话摘要解析“继续”“按刚才方案改”“那人物关系呢”等续问；不能只接收一个 `hasContextDocuments` 布尔值。
+4. 低置信度不得直接进入深度分析、全量读取、Agent Loop 或写操作。系统应保持普通聊天、继承上一任务的安全范围，或提出一个最小澄清问题。
+5. 所有 AI 执行只能通过统一 `execute_task(TaskRequest)` 进入 Runtime。前端组件和 Agent/Skill 不得直接调用模型或拼接任意 Tauri command；ToolGateway 在每次 Tool 调用时再次校验 Task、Skill、allowlist、schema、来源策略和副作用。
+6. 普通打开、浏览、手工编辑和显式保存仍可直接使用受控编辑器 Service，不需要为了“所有入口”承担意图识别延迟。
+
+该设计与主流创作工作台的可观察交互一致：自由对话隐藏路由，明确的 Rewrite、Story Bible、场景或选区操作携带结构化上下文；复杂编排只在确有多步决策收益时使用 Agent。Vinkey 不以“所有消息都调用路由模型”换取形式上的统一。
+
+### 2.2 分析模式与项目锚定
 
 Runtime 内部的分析策略统一命名为：
 
@@ -129,13 +162,37 @@ get_project_digest      → 已缓存且带覆盖率/版本的项目摘要；无
 
 每次结果必须报告 `mode`、`coverage`、目标文档数、已处理/排除文档数、分块数、源指纹和摘要版本。原始块只在本地分析 Worker 与获授权的模型端点之间短暂存在；主聊天消息、运行日志、概览索引和 Tool 调用记录均不得保存正文。原始块默认只允许发送到本机或回环模型端点；远程模型处理正文需要后续单独授权，不能继承普通聊天的联网配置。
 
-## 3. Agent 计划
+### 2.3 短任务、长分析与创作修改分流
 
-### 3.1 P0：必须完成的核心 Agent
+`analysisMode` 只描述信息获取深度，不能同时充当创作修改的执行策略。路由必须结合目标粒度、输入 token、输出合同和是否需要原文措辞，区分以下链路：
+
+| 任务 | 默认执行 | 关键约束 |
+| --- | --- | --- |
+| 标题、灵感、无正文短写作 | Direct Model Call | 不读取未引用文档 |
+| 编辑器选区润色、压缩、扩写 | Direct Model Call + `DiffProposal` | 直接使用选区原文，不经过摘要 |
+| 单场景/单章改写且上下文可容纳 | Bounded Revision Workflow | 原文、必要 canon 和相邻场景进入有界上下文 |
+| 长文问答、总结、人物线分析 | Fixed Analysis Workflow | Chunk/Map/Reduce/Synthesis，保留证据和覆盖率 |
+| 多章/多文件改稿 | Hybrid Revision Workflow | 先定位影响范围，再按原文片段生成逐文件 diff，不从摘要重建正文 |
+| 连续性、Canon 导入 | Adaptive Agent / Hybrid | 动态检索、冲突处理、结构化 Proposal 和人工确认 |
+
+任何需要保持措辞、语气或精确修改位置的创作任务，都不能只把 Map/Reduce 摘要交给最终模型。摘要适合发现和规划，实际生成必须重新取得经过授权的目标原文片段，并绑定源指纹和选区范围。
+
+## 3. Runtime 与 Agent 计划
+
+### 3.1 P0：必须完成的 Runtime 核心
+
+| 组件 | 适用入口 | 责任边界 | 主要输出 |
+| --- | --- | --- | --- |
+| `TaskIntake` | 所有 AI 入口 | 规范化入口元数据、目标、选区、会话引用和用户约束；不读取正文 | `TaskRequest` |
+| `IntentRouter` | 所有 AI 任务 | 级联判断意图、范围和置信度；显式入口不调用分类模型；不生成正文 | 路由决策 |
+| `TaskPolicy` | 所有已路由任务 | 决定来源策略、副作用、执行模式、允许 Tool 和输出合同 | `TaskPlan` / `ExecutionPlan` |
+| `ToolGateway` | 所有 AI Tool 调用 | 运行时校验 schema、权限、allowlist、来源策略、副作用和审计字段 | `ToolResult` / 拒绝原因 |
+| `JobService` | Workflow、Agent、Hybrid | 管理步骤、事件、取消、暂停、恢复、重试和幂等 | `TaskHandle` / `TaskEvent` |
+
+### 3.2 P0：必须完成的核心 Agent
 
 | Agent | 主要入口 | 责任边界 | 主要输出 |
 | --- | --- | --- | --- |
-| `IntentRouter` | 所有入口 | 判断意图、范围、副作用和目标 Agent；不生成正文 | `TaskPlan` |
 | `GeneralConversation` | 普通问题、创作陪伴、低置信度输入 | 日常聊天、写作建议、轻量头脑风暴；不写文件、不更新 canon | 普通回答 |
 | `IdeaDevelopment` | “完善这个想法”“给几个故事方向” | 将灵感发展为题材、主题、冲突、人物目标和完整故事梗概 | `ConceptDraft` |
 | `DocumentTriage` | 指定文件或选中文本 | 判断文件类型、文学体裁、语言、长度和可分析性 | `DocumentClassification` |
@@ -149,7 +206,7 @@ get_project_digest      → 已缓存且带覆盖率/版本的项目摘要；无
 | `CanonIngestion` | 从已有文本导入作品设定 | 将人物、地点、事件、关系和伏笔转为待确认结构化候选 | `CanonProposal` |
 | `MemoryKeeper` | 章节确认后、任务完成后 | 只维护已确认的事实、摘要、角色状态和线索状态 | `MemoryUpdateProposal` |
 
-### 3.2 P1：通用创作场景 Agent
+### 3.3 P1：通用创作场景 Agent
 
 | Agent | 责任 |
 | --- | --- |
@@ -162,7 +219,7 @@ get_project_digest      → 已缓存且带覆盖率/版本的项目摘要；无
 | `TranslationAgent` | 翻译和本地化，保留人物语气和专有名词表 |
 | `PublishingAgent` | 目录整理、格式检查、Markdown/EPUB/DOCX 导出 |
 
-### 3.3 P2：可选扩展 Agent
+### 3.4 P2：可选扩展 Agent
 
 - `StyleCoach`：分析写作风格、句式、节奏和视角；不默认模仿特定在世作者。
 - `GenreMarketAnalyst`：题材趋势、读者预期和作品定位。
@@ -523,13 +580,15 @@ quality_profile
   → React 状态与编辑器
 
 聊天输入
-  → TaskRouter（指令 + 不含正文的文档清单，先判断 intent / scope / operation / side_effect / document_access）
+  → TaskIntake（生成不含正文的 TaskRequest；显式 actionId 优先）
+  → IntentRouter / TaskPolicy（判断 intent / scope / operation / side_effect / document_access / execution）
+  → ToolGateway（逐次校验 Tool allowlist、来源策略、副作用及完整输入/输出合同）
   → Tool/Skill Registry（版本、权限、副作用、超时、可取消性和允许工具）
   ├─ StructureSegmentation → 本地 StructureParser/ChunkService → ChapterSplitResult + 输出文件
   ├─ 项目概览 → WorkspaceIntelligence（清单/结构元数据/缓存摘要）→ metadata-only 回答
   ├─ 项目深度分析 → WorkspaceInventory（敏感/类型/大小过滤）→ Chunk/Map/Reduce/Synthesis → 项目汇总 + evidence.json
   ├─ 文档深度分析 → LongTextAnalysis Service → Chunk/Map/Reduce/Synthesis → 获授权的本地模型 Provider
-  ├─ 明确引用文档的创作请求 → context budget → 小文本 stream_chat / 超长文本 Chunk/Map/Reduce/Synthesis
+  ├─ 明确引用文档的创作请求 → context budget → 有界原文改稿 / 超长文本 Chunk/Map/Reduce/Synthesis
   └─ 普通聊天 → 不读取所选文档正文 → stream_chat → Ollama/OpenAI-compatible Provider
        → SQLite 会话消息
 
@@ -544,14 +603,14 @@ quality_profile
   → Rust petgraph 统计、连通分量和有限跳数路径
 ```
 
-`chunk_document` 已实现 Rust 逻辑、Tauri 命令、前端类型和调用封装；当前新增的本地 `structureSegmentation` 服务会在模型请求前识别章节/场景候选，并通过文件写入 Tool 在源文档同级生成粗略拆分文件。项目级深度分析已增加确定性工作区清单、安全过滤、全项目长文本编排、内容指纹、任务阶段产物和证据行号校验；不支持或超限文件会进入排除清单，不会发送给模型。长文本任务现在会持久化任务清单，支持列出未完成任务、读取已有分块/摘要产物，并从已完成的 Map 阶段恢复进入 Reduce/Synthesis；恢复前会校验工作区、指令和源文档指纹。概览分析已实现正文零读取的工作区/文档画像，Tool Registry 按模式隔离读取能力；深度模型请求携带 `local-chunks`，并由前端与 Rust 服务层共同限制为回环模型端点。
+`chunk_document` 已实现 Rust 逻辑、Tauri 命令、前端类型和调用封装；当前新增的本地 `structureSegmentation` 服务会在模型请求前识别章节/场景候选，并通过文件写入 Tool 在源文档同级生成粗略拆分文件。项目级深度分析已增加确定性工作区清单、安全过滤、全项目长文本编排、内容指纹、任务阶段产物和证据行号校验；不支持或超限文件会进入排除清单，不会发送给模型。长文本任务现在由 Rust `JobService` 持久化 Task/Step/Event/Checkpoint 控制面，支持任务身份校验、列表、恢复、取消及完成/失败状态记录；分块、Map、Reduce、Synthesis Worker 目前仍由前端长文本服务调度。概览分析已实现正文零读取的工作区/文档画像，Tool Registry 按模式隔离读取能力；深度模型请求携带 `local-chunks`，并由前端与 Rust 服务层共同限制为回环模型端点。2026-09-07 已落地统一 `TaskRequest`、显式快捷入口路由、会话 `taskRef` 续问、文档加载后二次策略收敛、逐 Tool 输入/输出合同校验，以及最多 2 个文档、上限约 12,000 tokens 且随模型窗口缩减的有界原文改稿链路。编辑器选区改稿已生成可审核的单文件 `DiffProposal`，应用前校验源指纹和原文范围，且不自动保存。Rust `execute_task` 现已签发版本化 Service Dispatch，统一确定具体 Service、执行阶段、执行所有者、流式需求、后台化资格、Job 身份和澄清结果；前端业务执行不再重新推断 Service。
 
 ### 11.2 尚未实现
 
-1. 完整 Tool/Skill 执行注册表和 IntentRouter（当前已落地版本化的 Tool/Skill 描述、权限/副作用/超时合同，并由 TaskRouter 返回 Agent、Skill 和允许 Tool；尚未接入统一执行器、JSON Schema 运行时校验和动态路由）。
-2. 完整 `AnalysisJob` 后台队列服务、跨重启暂停/恢复、取消/重试幂等，以及模型摘要产物的增量失效（当前已具备任务 JSON 产物、任务列表、产物读取和 Map 阶段恢复）。
+1. 完整后台 Worker、跨重启继续执行、步骤级独立重试、模型切换兼容性和按文档增量失效；当前 Rust `JobService` 已持久化 Task/Step/Event/Checkpoint，并支持恢复身份校验、取消和前端存活期间的协作式暂停/继续，但 Map/Reduce/Synthesis 仍由前端驱动。Dispatcher 只标记 `backgroundEligible`，并如实返回 `executionOwner=webview`。
+2. 基于领域评测的轻量歧义分类；当前已完成确定性低置信度门禁和单问题澄清，低置信度正文请求在任何 Tool 读取前停止，但尚未引入分类模型，也未覆盖需要多轮槽位收集的复杂歧义。
 3. 项目级检索层、`DocumentTriage`、`StoryDeconstruction` 和按目录/主题的持久化分层摘要。
-4. 文档 `Proposal`/diff 审核以及完整结构化 canon；人物关系的 SQLite/FTS5/图算法底座已落地，实体抽取、别名消歧、模型提案审核和事件/时间线结构化仍未实现。
+4. 多文件/逐块 `DiffProposal`、撤销与持久化审核记录，以及完整结构化 canon；单文件编辑器选区提案和冲突校验已落地，人物关系的 SQLite/FTS5/图算法底座已落地，实体抽取、别名消歧、模型提案审核和事件/时间线结构化仍未实现。
 5. 模型能力注册表和本地模型基准测试。
 
 ### 11.3 2026-09-04 业务链路改造进展
@@ -563,5 +622,29 @@ quality_profile
 - `RevisionEditor` 已将选中文档改写、续写和润色从普通聊天分离，声明与实际长文本 Workflow 一致的 Tool 能力；当前只输出草稿，不写回源文档，也不自动生成项目记忆候选。
 - Skill 允许的上下文作用域已改为显式集合；路由会拒绝不属于该 Skill 的 conversation、selected-documents 或 workspace 作用域。
 - 连续性审校报告不会自动转为项目记忆候选，避免把冲突、疑点或修改建议污染为已确认事实。
+
+### 11.4 2026-09-07 第二批实施进展
+
+- Rust `JobService` 已提供 `start/update/get/list/cancel` command，使用工作区内原子任务状态文件保存步骤、事件和检查点；任务恢复会校验工作区、任务类型、指令哈希和全部源指纹。
+- Tool Registry 已为所有注册 Tool 补齐逐字段输入/输出 schema，ToolGateway 在执行前校验输入、执行后校验输出；Rust Job 和会话任务引用边界同时执行强类型及字段校验。
+- 会话消息已保存不含正文的 `taskRef`。安全的读取/草稿续问可继承上一意图和文档目标，Proposal 不继承，历史选区不恢复。
+- 编辑器选区可进入 `RevisionEditor` 的 direct-model 链路；模型只能输出 `replacementText`，本地构造并审核 `DiffProposal`，应用前校验全文指纹、范围和选区原文，应用后仍需用户保存。
+- 下一批按依赖顺序实施：统一 Rust `execute_task` 与策略复验 → 后台 Worker/暂停 UI → 轻量歧义分类与澄清 → 模型能力评测 → 多文件逐块 DiffProposal。
+
+### 11.5 2026-09-07 第三批实施进展
+
+- 新增 Rust `execute_task` 准入 command，使用强类型 `TaskRequest`、`TaskPlan` 和 `ExecutionStrategy` 合同；独立检查 action/intent、Agent/Skill、精确 Tool 集合、作用域、副作用、来源策略、文档目标和执行模式组合。
+- AI 请求在任何正文读取或工作区扫描前先完成初次准入；文档加载和改稿预算分流完成后，以同一 task ID 对最终计划二次准入。Rust 拒绝后不会继续调用 Tool 或模型。
+- 长文本任务新增暂停/继续按钮和阶段边界检查。暂停请求不会截断正在输出的模型响应；当前步骤结束后 JobService 写入 `paused`，继续时写回 `running`，取消仍具有更高优先级。
+- 恢复旧 Job 时，前端请求 ID 与持久化 Job ID 分离处理，暂停事件和取消操作始终写入原 Job，避免错误更新新会话请求 ID。
+- 下一批按依赖顺序实施：Service Dispatcher/后台 Worker → 轻量歧义分类与最小澄清 → 模型能力回归评测 → 多文件逐块 DiffProposal。
+
+### 11.6 2026-09-07 第四批实施进展
+
+- Rust `execute_task` 已从 admission 扩展为版本化 Service Dispatcher。输入增加 `preflight/final` 阶段和可选恢复 Job ID；输出明确给出 `serviceId`、`executionPhase`、`executionOwner`、`frontendStreamingRequired`、`backgroundEligible`、`jobId` 与结构化 `clarification`。
+- `structure-segmentation`、`workspace-overview`、`focused-analysis`、`long-text-analysis`、`direct-model` 的选择由 Rust 最终裁决；前端只消费 `serviceId` 进入对应实现，不再根据 intent、documentAccess 和 workflow 组合重复决定业务分支。
+- 低置信度、非显式 action 且准备读取文档正文的请求在 preflight 返回 `clarification-required`，不会恢复历史文档、扫描工作区或调用模型。显式 action、已验证续问和恢复 Job 保持确定性直达，避免无意义的额外模型分类延迟。
+- 长文本 Dispatch 返回稳定 Job ID；恢复任务沿用原 Job ID，同时保留当前对话 request ID。当前所有者仍明确为 `webview`，仅标记可后台化，未虚构跨窗口持续运行能力。
+- 下一批按依赖顺序实施：Worker 输入快照与 Rust 生命周期托管 → Map/Reduce/Synthesis 事件流和跨窗口恢复 → 模型能力回归评测 → 多文件逐块 DiffProposal。
 
 后续业务实现必须将本地 `structureSegmentation` 输出提升为统一的 `StructureSegmentation` Service，并接入输出清理/重生成和章节索引；不能把全文直接组装进普通聊天，也不能在聊天组件中复制分块和汇总逻辑。

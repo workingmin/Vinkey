@@ -10,7 +10,7 @@ import { EditorState, type Extension } from '@codemirror/state'
 import { EditorView, keymap } from '@codemirror/view'
 import { defaultKeymap, historyKeymap } from '@codemirror/commands'
 import { useEffect, useRef } from 'react'
-import type { ThemeMode } from '../types'
+import type { EditorSelection, ThemeMode } from '../types'
 import { getLanguageName } from '../lib/fileTypes'
 
 interface CodeEditorProps {
@@ -19,6 +19,7 @@ interface CodeEditorProps {
   themeMode: ThemeMode
   editable?: boolean
   onChange: (value: string) => void
+  onSelectionChange?: (selection: Omit<EditorSelection, 'path'> | null) => void
 }
 
 const envLanguage = StreamLanguage.define({
@@ -63,11 +64,13 @@ function createTheme(themeMode: ThemeMode) {
   }, { dark: !light })
 }
 
-export function CodeEditor({ value, filename, themeMode, editable = true, onChange }: CodeEditorProps) {
+export function CodeEditor({ value, filename, themeMode, editable = true, onChange, onSelectionChange }: CodeEditorProps) {
   const host = useRef<HTMLDivElement>(null)
   const view = useRef<EditorView | null>(null)
   const onChangeRef = useRef(onChange)
+  const onSelectionChangeRef = useRef(onSelectionChange)
   onChangeRef.current = onChange
+  onSelectionChangeRef.current = onSelectionChange
 
   useEffect(() => {
     if (!host.current) return
@@ -85,6 +88,14 @@ export function CodeEditor({ value, filename, themeMode, editable = true, onChan
           EditorView.editable.of(editable),
           EditorView.updateListener.of((update) => {
             if (update.docChanged && editable) onChangeRef.current(update.state.doc.toString())
+            if (update.selectionSet || update.docChanged) {
+              const selection = update.state.selection.main
+              onSelectionChangeRef.current?.(selection.empty ? null : {
+                from: selection.from,
+                to: selection.to,
+                text: update.state.sliceDoc(selection.from, selection.to),
+              })
+            }
           }),
         ],
       }),

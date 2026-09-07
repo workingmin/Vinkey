@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildContextMessage, buildRoutingContext, calculateContextBudget, estimateTokens, selectRecentMessages } from './context'
+import { buildContextMessage, buildRevisionContextMessage, buildRoutingContext, calculateContextBudget, estimateTokens, selectRecentMessages } from './context'
 
 describe('conversation context budget', () => {
   it('estimates CJK text more densely than ASCII text', () => {
@@ -14,6 +14,13 @@ describe('conversation context budget', () => {
     expect(result).toContain('name="人物.md"')
     expect(result).not.toContain('<document path=')
     expect(result).not.toContain('\n林晚\n')
+  })
+
+  it('builds bounded source-labelled revision context', () => {
+    const result = buildRevisionContextMessage([{ path: 'a.md', name: 'a.md', content: '原文内容', size: 4, kind: 'markdown' }], 512)
+    expect(result).toContain('来源文件：a.md')
+    expect(result).toContain('<source-document>')
+    expect(result).toContain('原文内容')
   })
 
   it('builds a body-free document manifest for routing', () => {

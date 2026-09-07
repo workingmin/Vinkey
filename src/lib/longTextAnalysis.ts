@@ -1,4 +1,4 @@
-import { chunkDocument, readAnalysisArtifact, streamChat, writeAnalysisArtifact } from './desktop'
+import { chunkDocument, readAnalysisArtifact, startTaskJob, streamChat, updateTaskJob, writeAnalysisArtifact } from './desktop'
 import { estimateTokens } from './context'
 import { buildDocumentIndexMessage, buildDocumentMetadataCards } from './documentMetadata'
 import { parseEvidenceReferences, verifyEvidenceReferences } from './workspaceAnalysis'
@@ -32,6 +32,7 @@ export interface SummaryRecord {
 const MIN_CHUNK_TOKENS = 128
 const MAX_CHUNK_TOKENS = 6000
 const cancelledAnalyses = new Set<string>()
+const pausedAnalyses = new Set<string>()
 
 function formatCount(value: number): string {
   return new Intl.NumberFormat('zh-CN').format(value)
@@ -72,19 +73,54 @@ function chunkAnalysisMessage(chunks: Awaited<ReturnType<typeof chunkDocument>>[
 
 export function cancelLongTextAnalysis(requestId: string): void {
   cancelledAnalyses.add(requestId)
+  pausedAnalyses.delete(requestId)
+}
+
+export function pauseLongTextAnalysis(requestId: string): void {
+  pausedAnalyses.add(requestId)
+}
+
+export function resumeLongTextAnalysis(requestId: string): void {
+  pausedAnalyses.delete(requestId)
 }
 
 function assertNotCancelled(requestId: string): void {
   if (cancelledAnalyses.has(requestId)) throw new Error('请求已停止')
 }
 
-async function readJsonArtifact<T>(jobId: string, name: string): Promise<T | null> {
+async function waitWhilePaused(requestId: string, jobId: string): Promise<void> {
+  if (!pausedAnalyses.has(requestId)) return
+  await updateTaskJob({ taskId: jobId, status: 'paused', eventType: 'task.paused' })
+  while (pausedAnalyses.has(requestId)) {
+    assertNotCancelled(requestId)
+    await new Promise((resolve) => window.setTimeout(resolve, 150))
+  }
+  assertNotCancelled(requestId)
+  await updateTaskJob({ taskId: jobId, status: 'running', eventType: 'task.resumed' })
+}
+
+export interface GuardedToolOutput { value: unknown }
+type ToolCallGuard = (toolName: string, input: unknown, output?: GuardedToolOutput) => void
+
+async function guardedCall<T>(toolName: string, input: unknown, operation: () => Promise<T>, guard?: ToolCallGuard): Promise<T> {
+  guard?.(toolName, input)
+  const output = await operation()
+  guard?.(toolName, input, { value: output })
+  return output
+}
+
+async function readJsonArtifact<T>(jobId: string, name: string, guard?: ToolCallGuard): Promise<T | null> {
+  // Authorization failures must propagate; only a missing/corrupt artifact is recoverable.
+  const input = { jobId, name }
+  guard?.('read_analysis_artifact', input)
+  let value: string | null
   try {
-    const value = await readAnalysisArtifact(jobId, name)
-    return value ? JSON.parse(value) as T : null
+    value = await readAnalysisArtifact(jobId, name)
   } catch {
     return null
   }
+  guard?.('read_analysis_artifact', input, { value })
+  try { return value ? JSON.parse(value) as T : null } catch { return null }
 }
 
 function analysisInputBudget(contextWindow: number): number {
@@ -161,13 +197,14 @@ export function batchSummaries(records: SummaryRecord[], contextWindow: number, 
   return batches
 }
 
-async function collectResponse(requestId: string, profileId: string, messages: Array<{ role: 'user' | 'assistant'; content: string }>): Promise<string> {
+async function collectResponse(requestId: string, profileId: string, messages: Array<{ role: 'user' | 'assistant'; content: string }>, guard?: ToolCallGuard): Promise<string> {
   let content = ''
   let streamError: string | null = null
-  await streamChat({ requestId, profileId, sourcePolicy: 'local-chunks', messages }, (event: ChatStreamEvent) => {
+  const request = { requestId, profileId, sourcePolicy: 'local-chunks' as const, messages }
+  await guardedCall('stream_chat', request, () => streamChat(request, (event: ChatStreamEvent) => {
     if (event.type === 'chunk') content += event.content
     if (event.type === 'error') streamError = event.message
-  })
+  }), guard)
   if (streamError) throw new Error(streamError)
   return content.trim()
 }
@@ -192,23 +229,25 @@ export async function analyzeLongText(
   workspaceId = 'selected-documents',
   excludedDocuments: WorkspaceDocumentRef[] = [],
   resumeJobId?: string,
+  toolCallGuard?: ToolCallGuard,
 ): Promise<LongTextAnalysisResult> {
   if (documents.length === 0) throw new Error('没有可分析的文档')
-  const jobId = resumeJobId ?? crypto.randomUUID()
+  const jobId = resumeJobId ?? requestId
   const maxTokens = chunkBudget(profile.contextWindow)
   const indexMessage = buildDocumentIndexMessage(documents)
   const startedAt = Date.now()
   const cards = buildDocumentMetadataCards(documents)
   const sourceFingerprints: Record<string, string> = {}
+  let jobStarted = false
   try {
     for (const document of documents) {
       const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(document.content))
       sourceFingerprints[document.path] = [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, '0')).join('')
     }
     if (resumeJobId) {
-      const previous = await readJsonArtifact<AnalysisJobManifest>(jobId, 'job-failed.json')
-        ?? await readJsonArtifact<AnalysisJobManifest>(jobId, 'job-start.json')
-        ?? await readJsonArtifact<AnalysisJobManifest>(jobId, 'job.json')
+      const previous = await readJsonArtifact<AnalysisJobManifest>(jobId, 'job-failed.json', toolCallGuard)
+        ?? await readJsonArtifact<AnalysisJobManifest>(jobId, 'job-start.json', toolCallGuard)
+        ?? await readJsonArtifact<AnalysisJobManifest>(jobId, 'job.json', toolCallGuard)
       if (!previous) throw new Error('找不到可恢复的分析任务，请重新开始')
       if (previous.status === 'completed') throw new Error('该分析任务已经完成，无需恢复')
       if (previous.workspaceId !== workspaceId) throw new Error('分析任务属于其他工作区，无法恢复')
@@ -220,75 +259,123 @@ export async function analyzeLongText(
       if (!fingerprintsMatch) {
         throw new Error('源文档已变化，无法安全恢复旧任务，请重新开始')
       }
-    } else {
-      await writeAnalysisArtifact(jobId, 'index.json', JSON.stringify({ cards, createdAt: startedAt, sourceFingerprints }, null, 2))
-      await writeAnalysisArtifact(jobId, 'job-start.json', JSON.stringify({
+    }
+    const instructionDigest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(instruction))
+    const instructionHash = [...new Uint8Array(instructionDigest)].map((value) => value.toString(16).padStart(2, '0')).join('')
+    await startTaskJob({ taskId: jobId, taskType: 'long-text-analysis', instructionHash, sourceFingerprints })
+    jobStarted = true
+    await updateTaskJob({
+      taskId: jobId, stepId: 'chunking', stepKind: 'chunking', stepStatus: 'running',
+      eventType: 'step.started', eventFields: { documentCount: documents.length },
+    })
+    if (!resumeJobId) {
+      const indexContent = JSON.stringify({ cards, createdAt: startedAt, sourceFingerprints }, null, 2)
+      await guardedCall('write_analysis_artifact', { jobId, name: 'index.json', content: indexContent }, () => writeAnalysisArtifact(jobId, 'index.json', indexContent), toolCallGuard)
+      const startContent = JSON.stringify({
         jobId, workspaceId, instruction, status: 'running', createdAt: startedAt, updatedAt: startedAt,
         documentCount: documents.length + excludedDocuments.length, supportedDocumentCount: documents.length,
         excludedDocuments, sourceFingerprints,
-      } satisfies AnalysisJobManifest, null, 2))
+      } satisfies AnalysisJobManifest, null, 2)
+      await guardedCall('write_analysis_artifact', { jobId, name: 'job-start.json', content: startContent }, () => writeAnalysisArtifact(jobId, 'job-start.json', startContent), toolCallGuard)
     }
     const manifests = []
     onProgress?.({ stage: 'chunking', completed: 0, total: documents.length, message: chunkingPreparationMessage(documents, maxTokens, Math.min(128, Math.floor(maxTokens / 8))) })
     for (const [index, document] of documents.entries()) {
+      await waitWhilePaused(requestId, jobId)
       assertNotCancelled(requestId)
       const cached = resumeJobId
-        ? await readJsonArtifact<Awaited<ReturnType<typeof chunkDocument>>>(jobId, `manifest-${String(index + 1).padStart(3, '0')}.json`)
+        ? await readJsonArtifact<Awaited<ReturnType<typeof chunkDocument>>>(jobId, `manifest-${String(index + 1).padStart(3, '0')}.json`, toolCallGuard)
         : null
       if (cached && cached.sourceId === document.path && cached.sourceFingerprint === sourceFingerprints[document.path]) {
         manifests.push(cached)
         onProgress?.({ stage: 'chunking', completed: index + 1, total: documents.length, message: `复用已完成分块：${document.name}（${cached.chunks.length} 块）` })
         continue
       }
-      const manifest = await chunkDocument(document.path, maxTokens, Math.min(128, Math.floor(maxTokens / 8)))
+      const overlapTokens = Math.min(128, Math.floor(maxTokens / 8))
+      const manifest = await guardedCall('chunk_document', { path: document.path, maxTokens, overlapTokens }, () => chunkDocument(document.path, maxTokens, overlapTokens), toolCallGuard)
       manifests.push(manifest)
-      await writeAnalysisArtifact(jobId, `manifest-${String(index + 1).padStart(3, '0')}.json`, JSON.stringify(manifest, null, 2))
+      const manifestName = `manifest-${String(index + 1).padStart(3, '0')}.json`
+      const manifestContent = JSON.stringify(manifest, null, 2)
+      await guardedCall('write_analysis_artifact', { jobId, name: manifestName, content: manifestContent }, () => writeAnalysisArtifact(jobId, manifestName, manifestContent), toolCallGuard)
       onProgress?.({ stage: 'chunking', completed: index + 1, total: documents.length, message: documentChunkMessage(document, manifest) })
     }
+    await updateTaskJob({
+      taskId: jobId, stepId: 'chunking', stepStatus: 'completed', checkpoint: `manifests:${manifests.length}`,
+      eventType: 'step.completed', eventFields: { chunkCount: manifests.reduce((sum, manifest) => sum + manifest.chunks.length, 0) },
+    })
 
     const chunks = manifests.flatMap((manifest) => manifest.chunks)
     const summaries: SummaryRecord[] = []
+    await updateTaskJob({
+      taskId: jobId, stepId: 'map', stepKind: 'map', stepStatus: 'running',
+      eventType: 'step.started', eventFields: { chunkCount: chunks.length },
+    })
     onProgress?.({ stage: 'map', completed: 0, total: chunks.length, message: chunkAnalysisMessage(chunks) })
     for (const [index, chunk] of chunks.entries()) {
+      await waitWhilePaused(requestId, jobId)
       assertNotCancelled(requestId)
       onProgress?.({ stage: 'map', completed: index, total: chunks.length, message: `正在分析第 ${index + 1}/${chunks.length} 块（${chunk.sourceId}，约 ${formatCount(chunk.estimatedTokens)} tokens）…` })
       const cached = resumeJobId
-        ? await readAnalysisArtifact(jobId, `summary-${String(index + 1).padStart(5, '0')}.md`)
+        ? await guardedCall('read_analysis_artifact', { jobId, name: `summary-${String(index + 1).padStart(5, '0')}.md` }, () => readAnalysisArtifact(jobId, `summary-${String(index + 1).padStart(5, '0')}.md`), toolCallGuard)
         : null
-      const text = cached ?? await collectResponse(requestId, profile.id, [{ role: 'user', content: chunkPrompt(instruction, chunk, indexMessage) }])
+      const text = cached ?? await collectResponse(requestId, profile.id, [{ role: 'user', content: chunkPrompt(instruction, chunk, indexMessage) }], toolCallGuard)
       if (text) summaries.push({ sourceId: chunk.sourceId, chunkId: chunk.id, heading: chunk.heading, text: clipToTokens(text, batchBudget(profile.contextWindow) - 64), evidence: verifyEvidenceReferences(parseEvidenceReferences(text), documents) })
-      if (cached === null) await writeAnalysisArtifact(jobId, `summary-${String(index + 1).padStart(5, '0')}.md`, text)
+      if (cached === null) {
+        const name = `summary-${String(index + 1).padStart(5, '0')}.md`
+        await guardedCall('write_analysis_artifact', { jobId, name, content: text }, () => writeAnalysisArtifact(jobId, name, text), toolCallGuard)
+      }
       onProgress?.({ stage: 'map', completed: index + 1, total: chunks.length, message: `${cached === null ? '已完成' : '复用已完成'}第 ${index + 1}/${chunks.length} 块（${chunk.sourceId}）` })
     }
     if (summaries.length === 0) throw new Error('模型没有返回可汇总的分块结果')
+    await updateTaskJob({
+      taskId: jobId, stepId: 'map', stepStatus: 'completed', checkpoint: `summaries:${summaries.length}`,
+      eventType: 'step.completed', eventFields: { summaryCount: summaries.length },
+    })
 
     let level = 0
     let current = summaries
     while (batchSummaries(current, profile.contextWindow, indexMessage).length > 1) {
       const batches = batchSummaries(current, profile.contextWindow, indexMessage)
       const next: SummaryRecord[] = []
+      const reduceStepId = `reduce-${level + 1}`
+      await updateTaskJob({
+        taskId: jobId, stepId: reduceStepId, stepKind: 'reduce', stepStatus: 'running',
+        eventType: 'step.started', eventFields: { batchCount: batches.length },
+      })
       onProgress?.({ stage: 'reduce', completed: 0, total: batches.length, message: `正在汇总第 ${level + 1} 层摘要：${formatCount(current.length)} 条摘要分 ${formatCount(batches.length)} 批处理…` })
       for (const [index, batch] of batches.entries()) {
+        await waitWhilePaused(requestId, jobId)
         assertNotCancelled(requestId)
         onProgress?.({ stage: 'reduce', completed: index, total: batches.length, message: `正在处理第 ${index + 1}/${batches.length} 批阶段汇总…` })
-        const text = await collectResponse(requestId, profile.id, [{ role: 'user', content: summaryPrompt(instruction, batch, false, indexMessage) }])
+        const text = await collectResponse(requestId, profile.id, [{ role: 'user', content: summaryPrompt(instruction, batch, false, indexMessage) }], toolCallGuard)
         if (text) next.push({ sourceId: 'summary', chunkId: `level-${level}-${index}`, heading: null, text: clipToTokens(text, batchBudget(profile.contextWindow) - 64), evidence: batch.flatMap((record) => record.evidence ?? []) })
-        await writeAnalysisArtifact(jobId, `reduce-${level + 1}-${String(index + 1).padStart(4, '0')}.md`, text)
+        const name = `reduce-${level + 1}-${String(index + 1).padStart(4, '0')}.md`
+        await guardedCall('write_analysis_artifact', { jobId, name, content: text }, () => writeAnalysisArtifact(jobId, name, text), toolCallGuard)
         onProgress?.({ stage: 'reduce', completed: index + 1, total: batches.length, message: `已完成第 ${index + 1}/${batches.length} 批阶段汇总` })
       }
       if (next.length === 0) throw new Error('模型没有返回可用的阶段汇总')
+      await updateTaskJob({
+        taskId: jobId, stepId: reduceStepId, stepStatus: 'completed', checkpoint: `summaries:${next.length}`,
+        eventType: 'step.completed', eventFields: { summaryCount: next.length },
+      })
       current = next
       level += 1
     }
 
+    await waitWhilePaused(requestId, jobId)
     assertNotCancelled(requestId)
+    await updateTaskJob({
+      taskId: jobId, stepId: 'synthesis', stepKind: 'synthesis', stepStatus: 'running',
+      eventType: 'step.started', eventFields: { summaryCount: current.length },
+    })
     onProgress?.({ stage: 'synthesis', completed: 0, total: 1, message: `正在综合 ${formatCount(current.length)} 条阶段摘要，完成最终任务…` })
-    const content = await collectResponse(requestId, profile.id, [{ role: 'user', content: summaryPrompt(instruction, current, true, indexMessage) }])
+    const content = await collectResponse(requestId, profile.id, [{ role: 'user', content: summaryPrompt(instruction, current, true, indexMessage) }], toolCallGuard)
     const finalEvidence = verifyEvidenceReferences(parseEvidenceReferences(content), documents)
     const evidence = [...finalEvidence, ...current.flatMap((record) => record.evidence ?? [])]
       .filter((item, index, values) => values.findIndex((other) => other.sourceId === item.sourceId && other.lineStart === item.lineStart && other.lineEnd === item.lineEnd && other.quote === item.quote) === index)
-    await writeAnalysisArtifact(jobId, 'analysis.md', content)
-    await writeAnalysisArtifact(jobId, 'evidence.json', JSON.stringify(evidence, null, 2))
+    await guardedCall('write_analysis_artifact', { jobId, name: 'analysis.md', content }, () => writeAnalysisArtifact(jobId, 'analysis.md', content), toolCallGuard)
+    const evidenceContent = JSON.stringify(evidence, null, 2)
+    await guardedCall('write_analysis_artifact', { jobId, name: 'evidence.json', content: evidenceContent }, () => writeAnalysisArtifact(jobId, 'evidence.json', evidenceContent), toolCallGuard)
     const completedAt = Date.now()
     const manifest: AnalysisJobManifest = {
       jobId, workspaceId, instruction, status: 'completed', createdAt: startedAt, updatedAt: completedAt,
@@ -296,7 +383,12 @@ export async function analyzeLongText(
       sourceFingerprints, chunkCount: chunks.length, summaryCount: summaries.length,
       evidenceCount: evidence.filter((item) => item.verified).length,
     }
-    await writeAnalysisArtifact(jobId, 'job.json', JSON.stringify(manifest, null, 2))
+    const manifestContent = JSON.stringify(manifest, null, 2)
+    await guardedCall('write_analysis_artifact', { jobId, name: 'job.json', content: manifestContent }, () => writeAnalysisArtifact(jobId, 'job.json', manifestContent), toolCallGuard)
+    await updateTaskJob({
+      taskId: jobId, status: 'completed', stepId: 'synthesis', stepStatus: 'completed', checkpoint: 'analysis.md',
+      eventType: 'task.completed', eventFields: { chunkCount: chunks.length, evidenceCount: evidence.length },
+    })
     onProgress?.({ stage: 'synthesis', completed: 1, total: 1, message: '长文本任务完成' })
     return { content, jobId, chunkCount: chunks.length, summaryCount: summaries.length, evidence }
   } catch (error) {
@@ -306,9 +398,21 @@ export async function analyzeLongText(
       createdAt: startedAt, updatedAt: Date.now(), documentCount: documents.length + excludedDocuments.length,
       supportedDocumentCount: documents.length, excludedDocuments, sourceFingerprints, error: message,
     }
-    await writeAnalysisArtifact(jobId, 'job-failed.json', JSON.stringify(failed, null, 2)).catch(() => undefined)
+    try {
+      const failedContent = JSON.stringify(failed, null, 2)
+      await guardedCall('write_analysis_artifact', { jobId, name: 'job-failed.json', content: failedContent }, () => writeAnalysisArtifact(jobId, 'job-failed.json', failedContent), toolCallGuard)
+    } catch {
+      // Failure reporting must not replace the original task error.
+    }
+    if (jobStarted) {
+      await updateTaskJob({
+        taskId: jobId, status: failed.status, error: message.slice(0, 2_000),
+        eventType: failed.status === 'cancelled' ? 'task.cancelled' : 'task.failed',
+      }).catch(() => undefined)
+    }
     throw error
   } finally {
     cancelledAnalyses.delete(requestId)
+    pausedAnalyses.delete(requestId)
   }
 }

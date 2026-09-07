@@ -30,6 +30,25 @@ pub struct StoredMessage {
     pub created_at: u64,
     pub completed_at: Option<u64>,
     pub activity_log: Option<serde_json::Value>,
+    pub task_ref: Option<StoredTaskRef>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StoredTaskTarget {
+    id: String,
+    kind: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StoredTaskRef {
+    task_id: String,
+    intent: String,
+    scope: String,
+    action_id: Option<String>,
+    targets: Vec<StoredTaskTarget>,
+    side_effect: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -271,7 +290,8 @@ fn init_conversation_schema(connection: &Connection) -> Result<(), rusqlite::Err
            content TEXT NOT NULL,
            created_at INTEGER NOT NULL,
            completed_at INTEGER,
-           activity_log TEXT
+           activity_log TEXT,
+           task_ref TEXT
          );
          CREATE INDEX IF NOT EXISTS messages_conversation_id ON messages(conversation_id, created_at);
          CREATE TABLE IF NOT EXISTS project_memory (
@@ -366,6 +386,7 @@ fn init_conversation_schema(connection: &Connection) -> Result<(), rusqlite::Err
     for statement in [
         "ALTER TABLE messages ADD COLUMN completed_at INTEGER",
         "ALTER TABLE messages ADD COLUMN activity_log TEXT",
+        "ALTER TABLE messages ADD COLUMN task_ref TEXT",
     ] {
         let _ = connection.execute(statement, []);
     }
@@ -380,6 +401,57 @@ fn validate_memory_id(id: &str) -> Result<(), String> {
             .all(|value| value.is_ascii_alphanumeric() || matches!(value, '-' | '_'))
     {
         return Err("项目记忆 ID 无效".into());
+    }
+    Ok(())
+}
+
+fn validate_task_ref(task: &StoredTaskRef) -> Result<(), String> {
+    validate_memory_id(&task.task_id)?;
+    if !matches!(
+        task.intent.as_str(),
+        "structure-segmentation"
+            | "structure-enhancement"
+            | "document-analysis"
+            | "document-revision"
+            | "character-analysis"
+            | "continuity-review"
+            | "workspace-analysis"
+            | "general-chat"
+    ) {
+        return Err("消息任务意图无效".into());
+    }
+    if !matches!(
+        task.scope.as_str(),
+        "editor-selection"
+            | "selected-documents"
+            | "current-document"
+            | "workspace"
+            | "conversation"
+    ) {
+        return Err("消息任务作用域无效".into());
+    }
+    if !matches!(task.side_effect.as_str(), "read" | "draft" | "proposal") {
+        return Err("消息任务副作用无效".into());
+    }
+    if task
+        .action_id
+        .as_ref()
+        .map(|value| value.len() > 120)
+        .unwrap_or(false)
+        || task.targets.len() > 100
+    {
+        return Err("消息任务入口或目标数量无效".into());
+    }
+    for target in &task.targets {
+        if target.id.trim().is_empty()
+            || target.id.len() > 600
+            || !matches!(
+                target.kind.as_str(),
+                "document" | "selection" | "chapter" | "work"
+            )
+        {
+            return Err("消息任务目标无效".into());
+        }
     }
     Ok(())
 }
@@ -975,7 +1047,7 @@ pub fn load_conversation(
         )
         .map_err(|_| "找不到该会话".to_string())?;
     let mut statement = connection.prepare(
-        "SELECT id, role, content, created_at, completed_at, activity_log FROM messages WHERE conversation_id = ?1 ORDER BY created_at, rowid"
+        "SELECT id, role, content, created_at, completed_at, activity_log, task_ref FROM messages WHERE conversation_id = ?1 ORDER BY created_at, rowid"
     ).map_err(|error| format!("无法读取消息：{error}"))?;
     let rows = statement
         .query_map([&id], |row| {
@@ -987,6 +1059,9 @@ pub fn load_conversation(
                 completed_at: row.get::<_, Option<i64>>(4)?.map(|value| value as u64),
                 activity_log: row
                     .get::<_, Option<String>>(5)?
+                    .and_then(|value| serde_json::from_str(&value).ok()),
+                task_ref: row
+                    .get::<_, Option<String>>(6)?
                     .and_then(|value| serde_json::from_str(&value).ok()),
             })
         })
@@ -1013,6 +1088,15 @@ pub fn save_conversation_message(
     if !matches!(message.role.as_str(), "user" | "assistant" | "system") {
         return Err("无效消息角色".into());
     }
+    if let Some(task_ref) = message.task_ref.as_ref() {
+        validate_task_ref(task_ref)?;
+    }
+    let task_ref = message
+        .task_ref
+        .as_ref()
+        .map(serde_json::to_string)
+        .transpose()
+        .map_err(|error| format!("无法序列化消息任务引用：{error}"))?;
     let mut connection = open_project_for_commands(&state, &legacy)?;
     let transaction = connection
         .transaction()
@@ -1030,8 +1114,8 @@ pub fn save_conversation_message(
         )
         .map_err(|error| format!("无法保存会话：{error}"))?;
     transaction.execute(
-        "INSERT OR REPLACE INTO messages(id, conversation_id, role, content, created_at, completed_at, activity_log) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        params![message.id, conversation_id, message.role, message.content, message.created_at as i64, message.completed_at.map(|value| value as i64), message.activity_log.map(|value| value.to_string())],
+        "INSERT OR REPLACE INTO messages(id, conversation_id, role, content, created_at, completed_at, activity_log, task_ref) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        params![message.id, conversation_id, message.role, message.content, message.created_at as i64, message.completed_at.map(|value| value as i64), message.activity_log.map(|value| value.to_string()), task_ref],
     ).map_err(|error| format!("无法保存消息：{error}"))?;
     transaction
         .commit()
@@ -1272,5 +1356,21 @@ mod tests {
             )
             .expect("fts query");
         assert_eq!(indexed, 1);
+    }
+
+    #[test]
+    fn initializes_persisted_task_reference_column() {
+        let directory = tempfile::tempdir().expect("temp directory");
+        let path = directory.path().join("conversation.sqlite3");
+        init(&path).expect("database schema");
+        let connection = Connection::open(path).expect("database connection");
+        let count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name = 'task_ref'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("task_ref column");
+        assert_eq!(count, 1);
     }
 }

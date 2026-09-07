@@ -24,6 +24,10 @@ describe('runtime capability registry', () => {
     expect(getSkillDefinition('continuity-review')?.contextScopes).toEqual(['selected-documents', 'workspace'])
   })
 
+  it('allows revision only for an explicit editor selection or selected documents', () => {
+    expect(getSkillDefinition('document-revision')?.contextScopes).toEqual(['editor-selection', 'selected-documents'])
+  })
+
   it('adds agent, skill and tool capabilities to routed plans', () => {
     const plan = classifyTask('当前项目有哪些文件', false)
     expect(plan.agent).toBe('StoryDeconstruction')

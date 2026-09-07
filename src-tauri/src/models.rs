@@ -53,6 +53,13 @@ pub struct ConnectionResult {
     models: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OllamaStopResult {
+    stopped: bool,
+    message: String,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct RequestMessage {
     role: String,
@@ -137,6 +144,16 @@ fn is_loopback_base(base_url: &str) -> bool {
                     .parse::<std::net::IpAddr>()
                     .is_ok_and(|address| address.is_loopback())
         })
+}
+
+fn normalize_ollama_model_name(value: &str) -> String {
+    value.trim().to_ascii_lowercase()
+}
+
+fn ollama_model_names_match(left: &str, right: &str) -> bool {
+    let left = normalize_ollama_model_name(left);
+    let right = normalize_ollama_model_name(right);
+    left == right || format!("{left}:latest") == right || left == format!("{right}:latest")
 }
 
 fn enforce_source_policy(request: &ChatRequest, profile: &ModelProfile) -> Result<(), String> {
@@ -439,6 +456,79 @@ pub async fn test_model_connection(
     }
 }
 
+async fn unload_local_ollama(profile: &ModelProfile) -> Result<OllamaStopResult, String> {
+    let running = response_or_error(
+        client()?
+            .get(format!("{}/api/ps", profile.base_url))
+            .send()
+            .await
+            .map_err(|error| format!("无法查询本机 Ollama 驻留模型：{error}"))?,
+    )
+    .await?
+    .json::<Value>()
+    .await
+    .map_err(|_| "本机 Ollama 驻留模型响应格式无效".to_string())?;
+    let is_running = running
+        .get("models")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|item| item.get("name").or_else(|| item.get("model")))
+        .filter_map(Value::as_str)
+        .any(|name| ollama_model_names_match(name, &profile.model));
+    if !is_running {
+        return Ok(OllamaStopResult {
+            stopped: false,
+            message: format!("模型 {} 当前未驻留", profile.model),
+        });
+    }
+
+    response_or_error(
+        client()?
+            .post(format!("{}/api/generate", profile.base_url))
+            .json(&json!({ "model": profile.model, "keep_alive": 0 }))
+            .send()
+            .await
+            .map_err(|error| format!("无法停止本机 Ollama 模型：{error}"))?,
+    )
+    .await?;
+    Ok(OllamaStopResult {
+        stopped: true,
+        message: format!("已停止驻留模型 {}", profile.model),
+    })
+}
+
+#[tauri::command]
+pub async fn stop_ollama_model(
+    profile_id: String,
+    state: State<'_, DatabaseState>,
+    runtime: State<'_, RuntimeLogState>,
+) -> Result<OllamaStopResult, String> {
+    validate_id(&profile_id)?;
+    let profile = load_profile(&profile_id, &state)?;
+    if profile.kind != "ollama" || !is_loopback_base(&profile.base_url) {
+        return Err("仅本机回环地址的 Ollama 配置可以停止驻留模型".into());
+    }
+    let started = Instant::now();
+    let result = unload_local_ollama(&profile).await;
+    match &result {
+        Ok(value) => runtime.info(
+            "model.ollama_stopped",
+            serde_json::json!({
+                "profileId": profile.id,
+                "model": profile.model,
+                "stopped": value.stopped,
+                "durationMs": started.elapsed().as_millis(),
+            })
+            .as_object()
+            .cloned()
+            .unwrap_or_default(),
+        ),
+        Err(message) => runtime.error("model.ollama_stop_failed", message),
+    }
+    result
+}
+
 async fn response_or_error(response: reqwest::Response) -> Result<reqwest::Response, String> {
     let status = response.status();
     if status.is_success() {
@@ -675,6 +765,13 @@ mod tests {
         assert!(is_loopback_base("http://[::1]:8080"));
         assert!(!is_loopback_base("http://192.168.1.5:11434"));
         assert!(!is_loopback_base("https://api.openai.com/v1"));
+    }
+
+    #[test]
+    fn matches_ollama_latest_aliases_only() {
+        assert!(ollama_model_names_match("qwen3:8b", "QWEN3:8B"));
+        assert!(ollama_model_names_match("model", "model:latest"));
+        assert!(!ollama_model_names_match("qwen3:8b", "qwen3:14b"));
     }
 
     #[test]

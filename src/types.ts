@@ -93,6 +93,60 @@ export interface EvidenceReference {
 
 export type AnalysisJobStatus = 'planned' | 'running' | 'completed' | 'failed' | 'cancelled'
 
+export type TaskJobStatus = AnalysisJobStatus | 'paused'
+export type TaskJobStepStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+
+export interface TaskJobStep {
+  id: string
+  kind: string
+  status: TaskJobStepStatus
+  attempt: number
+  checkpoint?: string | null
+  updatedAt: number
+}
+
+export interface TaskJobEvent {
+  sequence: number
+  stepId?: string | null
+  eventType: string
+  timestamp: number
+  fields: Record<string, unknown>
+}
+
+export interface TaskJob {
+  taskId: string
+  workspaceId: string
+  taskType: string
+  instructionHash: string
+  status: TaskJobStatus
+  cancelRequested: boolean
+  sourceFingerprints: Record<string, string>
+  steps: TaskJobStep[]
+  events: TaskJobEvent[]
+  error?: string | null
+  createdAt: number
+  updatedAt: number
+}
+
+export interface StartTaskJobInput {
+  taskId: string
+  taskType: string
+  instructionHash: string
+  sourceFingerprints: Record<string, string>
+}
+
+export interface UpdateTaskJobInput {
+  taskId: string
+  status?: TaskJobStatus
+  stepId?: string
+  stepKind?: string
+  stepStatus?: TaskJobStepStatus
+  checkpoint?: string
+  error?: string
+  eventType?: string
+  eventFields?: Record<string, unknown>
+}
+
 export interface AnalysisJobManifest {
   jobId: string
   workspaceId: string
@@ -117,6 +171,40 @@ export interface ChatMessage {
   createdAt: number
   completedAt?: number
   activityLog?: ChatActivity[]
+  taskRef?: TaskMessageRef | null
+}
+
+export interface TaskMessageRef {
+  taskId: string
+  intent: string
+  scope: string
+  actionId?: string | null
+  targets: Array<{ id: string; kind: 'document' | 'selection' | 'chapter' | 'work' }>
+  sideEffect: 'read' | 'draft' | 'proposal'
+}
+
+export interface EditorSelection {
+  path: string
+  from: number
+  to: number
+  text: string
+}
+
+export interface EditorRevisionRequest extends EditorSelection {
+  documentName: string
+  instruction: string
+  sourceModifiedMs: number
+  sourceFingerprint: string
+}
+
+export interface DiffProposal extends EditorSelection {
+  id: string
+  replacementText: string
+  instruction: string
+  sourceModifiedMs: number
+  sourceFingerprint: string
+  status: 'proposed' | 'applied' | 'rejected'
+  createdAt: number
 }
 
 export interface Conversation {
@@ -153,6 +241,11 @@ export interface ModelConnectionResult {
   ok: boolean
   message: string
   models: string[]
+}
+
+export interface OllamaStopResult {
+  stopped: boolean
+  message: string
 }
 
 export interface SearchHit {

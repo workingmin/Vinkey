@@ -2,19 +2,23 @@ import { Channel, invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
 import type {
   ChatMessage, ChatRequest, ChatStreamEvent, ContextDocument, Conversation, ConversationSummary,
-  ChunkManifest, DocumentSnapshot, ModelConnectionResult, ModelProfile, ModelProfileInput, SearchHit,
+  ChunkManifest, DocumentSnapshot, ModelConnectionResult, ModelProfile, ModelProfileInput, OllamaStopResult, SearchHit,
   AnalysisJobManifest, CharacterGraphBenchmark, CharacterGraphStats, CharacterInput, CharacterMentionInput, CharacterNeighbor, CharacterRecord,
+  StartTaskJobInput, TaskJob, TaskJobStep, UpdateTaskJobInput,
   ProjectMemoryCandidate, ProjectMemoryItem, ProjectMemoryStatus, RelationshipEvidenceInput, RelationshipInput,
   ThemeMode, WorkspaceSnapshot,
 } from '../types'
 import { getDocumentKind } from './fileTypes'
 import { buildStructureOutputs } from './structureSegmentation'
 import type { StructureProposal } from './structureSegmentation'
+import { createTaskExecutionDispatch, validateTaskExecutionInput } from './taskRuntime'
+import type { TaskExecutionDispatch, TaskExecutionInput } from './taskRuntime'
 
 const PROFILE_KEY = 'vinkey.demo.modelProfiles'
 const CONVERSATION_KEY = 'vinkey.demo.conversations'
 const MEMORY_KEY = 'vinkey.demo.projectMemory'
 const demoCancellations = new Set<string>()
+const demoTaskJobs = new Map<string, TaskJob>()
 
 export interface RuntimeDiagnostics {
   path: string
@@ -198,6 +202,76 @@ export async function listAnalysisJobs(): Promise<AnalysisJobManifest[]> {
   return invoke<AnalysisJobManifest[]>('list_analysis_jobs')
 }
 
+export async function startTaskJob(input: StartTaskJobInput): Promise<TaskJob> {
+  if (!isDesktop()) {
+    const existing = demoTaskJobs.get(input.taskId)
+    const now = Date.now()
+    const job: TaskJob = existing
+      ? { ...existing, status: 'running', cancelRequested: false, error: null, updatedAt: now }
+      : {
+          ...input, workspaceId: 'demo-workspace', status: 'running', cancelRequested: false,
+          steps: [], events: [], createdAt: now, updatedAt: now,
+        }
+    demoTaskJobs.set(input.taskId, job)
+    return structuredClone(job)
+  }
+  return invoke<TaskJob>('start_task_job', { input })
+}
+
+export async function updateTaskJob(input: UpdateTaskJobInput): Promise<TaskJob> {
+  if (!isDesktop()) {
+    const job = demoTaskJobs.get(input.taskId)
+    if (!job) throw new Error('找不到任务')
+    const now = Date.now()
+    const steps = [...job.steps]
+    if (input.stepId) {
+      const index = steps.findIndex((step) => step.id === input.stepId)
+      const step = {
+        id: input.stepId, kind: input.stepKind ?? steps[index]?.kind ?? input.stepId,
+        status: input.stepStatus ?? 'running', attempt: steps[index]?.attempt ?? 1,
+        checkpoint: input.checkpoint ?? steps[index]?.checkpoint ?? null, updatedAt: now,
+      } satisfies TaskJobStep
+      if (index >= 0) steps[index] = step
+      else steps.push(step)
+    }
+    const next: TaskJob = { ...job, status: input.status ?? job.status, error: input.error ?? (input.status === 'failed' ? job.error : null), steps, updatedAt: now }
+    demoTaskJobs.set(input.taskId, next)
+    return structuredClone(next)
+  }
+  return invoke<TaskJob>('update_task_job', { input: { ...input, eventFields: input.eventFields ?? {} } })
+}
+
+export async function getTaskJob(taskId: string): Promise<TaskJob> {
+  if (!isDesktop()) {
+    const job = demoTaskJobs.get(taskId)
+    if (!job) throw new Error('找不到任务')
+    return structuredClone(job)
+  }
+  return invoke<TaskJob>('get_task_job', { taskId })
+}
+
+export async function listTaskJobs(): Promise<TaskJob[]> {
+  if (!isDesktop()) return [...demoTaskJobs.values()].sort((left, right) => right.updatedAt - left.updatedAt).map((job) => structuredClone(job))
+  return invoke<TaskJob[]>('list_task_jobs')
+}
+
+export async function cancelTaskJob(taskId: string): Promise<TaskJob> {
+  if (!isDesktop()) {
+    const job = demoTaskJobs.get(taskId)
+    if (!job) throw new Error('找不到任务')
+    const cancelled = { ...job, status: 'cancelled' as const, cancelRequested: true, updatedAt: Date.now() }
+    demoTaskJobs.set(taskId, cancelled)
+    return structuredClone(cancelled)
+  }
+  return invoke<TaskJob>('cancel_task_job', { taskId })
+}
+
+export async function executeTask(input: TaskExecutionInput): Promise<TaskExecutionDispatch> {
+  validateTaskExecutionInput(input)
+  if (!isDesktop()) return createTaskExecutionDispatch(input, demoWorkspace().id)
+  return invoke<TaskExecutionDispatch>('execute_task', { input })
+}
+
 export async function saveDocument(document: DocumentSnapshot): Promise<DocumentSnapshot> {
   if (!isDesktop()) {
     const saved = { ...document, modifiedMs: Date.now() }
@@ -251,9 +325,10 @@ export async function writeStructureOutputs(
   return written
 }
 
-export async function createDirectory(path: string): Promise<void> {
-  if (!isDesktop()) return
+export async function createDirectory(path: string): Promise<null> {
+  if (!isDesktop()) return null
   await invoke('create_directory', { path })
+  return null
 }
 
 export async function searchWorkspace(query: string): Promise<SearchHit[]> {
@@ -393,7 +468,7 @@ export async function findCharacterPath(workId: string, sourceCharacterId: strin
 function defaultDemoProfile(): ModelProfile {
   return {
     id: 'demo-ollama', name: 'Ollama · 浏览器演示', kind: 'ollama', baseUrl: 'http://localhost:11434',
-    model: 'qwen2.5:7b', contextWindow: 32768, hasApiKey: false, updatedAt: Date.now(),
+    model: 'qwen3:8b', contextWindow: 16384, hasApiKey: false, updatedAt: Date.now(),
   }
 }
 
@@ -447,16 +522,24 @@ export async function deleteModelProfile(id: string): Promise<void> {
 export async function testModelConnection(input: ModelProfileInput): Promise<ModelConnectionResult> {
   if (!isDesktop()) {
     await new Promise((resolve) => window.setTimeout(resolve, 350))
-    return { ok: true, message: '浏览器演示连接正常', models: input.kind === 'ollama' ? ['qwen2.5:7b', 'qwen2.5:14b', 'llama3.2:latest'] : [input.model || 'custom-model'] }
+    return { ok: true, message: '浏览器演示连接正常', models: input.kind === 'ollama' ? ['openbmb/minicpm4.1:latest', 'qwen3:8b', 'llama3.2:latest'] : [input.model || 'custom-model'] }
   }
   return invoke<ModelConnectionResult>('test_model_connection', { input })
+}
+
+export async function stopOllamaModel(profileId: string): Promise<OllamaStopResult> {
+  if (!isDesktop()) return { stopped: true, message: '浏览器演示已释放模型' }
+  return invoke<OllamaStopResult>('stop_ollama_model', { profileId })
 }
 
 export async function streamChat(request: ChatRequest, onEvent: (event: ChatStreamEvent) => void): Promise<void> {
   if (!isDesktop()) {
     demoCancellations.delete(request.requestId)
     const profileCount = request.messages.filter((message) => /<(?:workspace-profile|document-profiles|focused-project-evidence)>/u.test(message.content)).length
-    const response = `${profileCount > 0 ? '我已收到不含正文的本地画像。\n\n' : ''}这是浏览器演示流。桌面应用会通过 Rust 连接已配置的 Ollama 或 OpenAI 兼容服务；消息会分段到达，并保存在本机数据库中。`
+    const selection = request.messages.map((message) => message.content.match(/<source-selection>\n([\s\S]*?)\n<\/source-selection>/u)?.[1]).find(Boolean)
+    const response = selection !== undefined
+      ? JSON.stringify({ replacementText: `${selection.trim()}（演示修改）` })
+      : `${profileCount > 0 ? '我已收到不含正文的本地画像。\n\n' : ''}这是浏览器演示流。桌面应用会通过 Rust 连接已配置的 Ollama 或 OpenAI 兼容服务；消息会分段到达，并保存在本机数据库中。`
     for (const content of response.match(/.{1,8}/gu) ?? []) {
       if (demoCancellations.has(request.requestId)) throw new Error('请求已停止')
       await new Promise((resolve) => window.setTimeout(resolve, 45))

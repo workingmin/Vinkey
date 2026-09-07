@@ -2,7 +2,8 @@
 
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useAppStore, type ChatRun } from './store'
-import type { ChatMessage, Conversation } from './types'
+import type { ChatMessage, Conversation, DiffProposal, DocumentTab } from './types'
+import { fingerprintDocument } from './lib/diffProposal'
 
 const message = (id: string, role: ChatMessage['role'], content: string, createdAt: number): ChatMessage => ({
   id, role, content, createdAt,
@@ -21,6 +22,18 @@ const run = (conversationId: string): ChatRun => ({
   activityLog: [],
   userMessage: message(`user-${conversationId}`, 'user', '问题', 2),
   assistantMessage: message(`assistant-${conversationId}`, 'assistant', '', 3),
+})
+
+describe('local model preferences', () => {
+  it('persists whether model switching should stop the previous Ollama model', () => {
+    useAppStore.getState().setAutoStopOllamaModels(false)
+    expect(useAppStore.getState().autoStopOllamaModels).toBe(false)
+    expect(localStorage.getItem('vinkey.autoStopOllamaModels')).toBe('false')
+
+    useAppStore.getState().setAutoStopOllamaModels(true)
+    expect(useAppStore.getState().autoStopOllamaModels).toBe(true)
+    expect(localStorage.getItem('vinkey.autoStopOllamaModels')).toBe('true')
+  })
 })
 
 describe('conversation chat runs', () => {
@@ -154,6 +167,30 @@ describe('conversation chat runs', () => {
     expect(state.conversationTitle).toBe('新会话')
     expect(state.contextDocuments).toEqual([])
     expect(state.completedChatMessages.a).toBeUndefined()
+  })
+})
+
+describe('DiffProposal review', () => {
+  const tab: DocumentTab = {
+    path: 'chapter.md', name: 'chapter.md', content: '前-旧句-后', savedContent: '前-旧句-后', kind: 'markdown',
+    modifiedMs: 1, lineEnding: 'lf', hasBom: false,
+  }
+  const proposal: DiffProposal = {
+    id: 'proposal-1', path: 'chapter.md', from: 2, to: 4, text: '旧句', replacementText: '新句',
+    instruction: '润色', sourceModifiedMs: 1, sourceFingerprint: fingerprintDocument('前-旧句-后'), status: 'proposed', createdAt: 1,
+  }
+
+  it('applies a reviewed proposal without saving the document', () => {
+    useAppStore.setState({ tabs: [tab], activePath: tab.path, diffProposal: proposal })
+    useAppStore.getState().applyDiffProposal()
+    expect(useAppStore.getState().tabs[0].content).toBe('前-新句-后')
+    expect(useAppStore.getState().tabs[0].savedContent).toBe('前-旧句-后')
+    expect(useAppStore.getState().diffProposal?.status).toBe('applied')
+  })
+
+  it('rejects stale source ranges', () => {
+    useAppStore.setState({ tabs: [{ ...tab, content: '前-变化-后' }], activePath: tab.path, diffProposal: proposal })
+    expect(() => useAppStore.getState().applyDiffProposal()).toThrow('源文档已变化')
   })
 })
 
