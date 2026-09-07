@@ -1,10 +1,11 @@
-import { chunkDocument, readAnalysisArtifact, startTaskJob, streamChat, updateTaskJob, writeAnalysisArtifact } from './desktop'
+import { prepareLongTextWorker, readAnalysisArtifact, streamChat, updateTaskJob, writeAnalysisArtifact } from './desktop'
 import { estimateTokens } from './context'
 import { buildDocumentIndexMessage, buildDocumentMetadataCards } from './documentMetadata'
 import { parseEvidenceReferences, verifyEvidenceReferences } from './workspaceAnalysis'
 import type { AnalysisJobManifest, ChatStreamEvent, ContextDocument, EvidenceReference, ModelProfile, TextChunk, WorkspaceDocumentRef } from '../types'
+import type { TaskExecutionDispatch } from './taskRuntime'
 
-export type AnalysisStage = 'chunking' | 'map' | 'reduce' | 'synthesis'
+export type AnalysisStage = 'chunking' | 'map' | 'reduce' | 'synthesis' | 'evidence' | 'lifecycle'
 
 export interface AnalysisProgress {
   stage: AnalysisStage
@@ -59,13 +60,7 @@ function chunkingPreparationMessage(documents: ContextDocument[], maxTokens: num
   return `准备分块：${documents.length} 个文档，共 ${formatCount(totalChars)} 字，约 ${formatCount(totalTokens)} tokens。策略：优先按标题、段落和句子切分，超出预算时再硬切；单块上限 ${formatCount(maxTokens)} tokens，块间保留 ${formatCount(overlapTokens)} tokens 重叠。`
 }
 
-function documentChunkMessage(document: ContextDocument, manifest: Awaited<ReturnType<typeof chunkDocument>>): string {
-  const charRange = range(manifest.chunks.map((chunk) => charCount(chunk.text)))
-  const tokenRange = range(manifest.chunks.map((chunk) => chunk.estimatedTokens))
-  return `已分块 ${document.name}：${formatCount(charCount(document.content))} 字（约 ${formatCount(manifest.sourceTokens)} tokens）→ ${formatCount(manifest.chunks.length)} 块；实际每块约 ${formatCount(charRange[0])}-${formatCount(charRange[1])} 字、${formatCount(tokenRange[0])}-${formatCount(tokenRange[1])} tokens。`
-}
-
-function chunkAnalysisMessage(chunks: Awaited<ReturnType<typeof chunkDocument>>['chunks']): string {
+function chunkAnalysisMessage(chunks: TextChunk[]): string {
   const charRange = range(chunks.map((chunk) => charCount(chunk.text)))
   const tokenRange = range(chunks.map((chunk) => chunk.estimatedTokens))
   return `准备逐块分析：共 ${formatCount(chunks.length)} 块；每块实际约 ${formatCount(charRange[0])}-${formatCount(charRange[1])} 字、${formatCount(tokenRange[0])}-${formatCount(tokenRange[1])} tokens。`
@@ -139,9 +134,25 @@ function batchBudget(contextWindow: number): number {
 
 function clipToTokens(value: string, limit: number): string {
   if (estimateTokens(value) <= limit) return value
-  let end = Math.min(value.length, Math.max(1, limit * 2))
-  while (end > 1 && estimateTokens(value.slice(0, end)) > limit) end = Math.floor(end * 0.8)
-  return `${value.slice(0, end).trim()}\n[该阶段摘要已按上下文预算截断]`
+  const marker = '\n[该阶段摘要已按上下文预算截断]'
+  let end = Math.min(value.length, Math.max(1, (limit - estimateTokens(marker)) * 2))
+  let clipped = `${value.slice(0, end).trim()}${marker}`
+  while (end > 1 && estimateTokens(clipped) > limit) {
+    end = Math.floor(end * 0.8)
+    clipped = `${value.slice(0, end).trim()}${marker}`
+  }
+  return clipped
+}
+
+function effectiveDocumentIndex(indexMessage: string | null | undefined, contextWindow: number): string | null {
+  return indexMessage
+    ? clipToTokens(indexMessage, Math.max(64, Math.floor(analysisInputBudget(contextWindow) / 4)))
+    : null
+}
+
+function summaryClipLimit(contextWindow: number, indexMessage?: string | null): number {
+  const indexTokens = estimateTokens(effectiveDocumentIndex(indexMessage, contextWindow) ?? '')
+  return Math.max(64, Math.floor((batchBudget(contextWindow) - indexTokens - 64) / 2))
 }
 
 function isCreativeTask(instruction: string): boolean {
@@ -179,7 +190,7 @@ export function finalTaskGuidance(instruction: string): string {
 }
 
 export function batchSummaries(records: SummaryRecord[], contextWindow: number, indexMessage?: string | null): SummaryRecord[][] {
-  const limit = Math.max(MIN_CHUNK_TOKENS, batchBudget(contextWindow) - estimateTokens(indexMessage ?? ''))
+  const limit = Math.max(MIN_CHUNK_TOKENS, batchBudget(contextWindow) - estimateTokens(effectiveDocumentIndex(indexMessage, contextWindow) ?? ''))
   const batches: SummaryRecord[][] = []
   let current: SummaryRecord[] = []
   let used = 0
@@ -194,6 +205,9 @@ export function batchSummaries(records: SummaryRecord[], contextWindow: number, 
     used += cost
   }
   if (current.length > 0) batches.push(current)
+  if (batches.length === records.length && records.length > 1) {
+    return Array.from({ length: Math.ceil(records.length / 2) }, (_, index) => records.slice(index * 2, index * 2 + 2))
+  }
   return batches
 }
 
@@ -209,15 +223,17 @@ async function collectResponse(requestId: string, profileId: string, messages: A
   return content.trim()
 }
 
-function chunkPrompt(instruction: string, chunk: TextChunk, indexMessage: string | null): string {
+function chunkPrompt(instruction: string, chunk: TextChunk, indexMessage: string | null, contextWindow: number): string {
   const heading = chunk.heading ? `章节/标题：${chunk.heading}\n` : ''
-  return `你是长文本任务 Agent 的局部 Map Skill。只依据下面这个原文分块处理用户任务。\n\n${indexMessage ? `${indexMessage}\n\n` : ''}用户任务：${instruction}\n${heading}来源：${chunk.sourceId}，行 ${chunk.lineStart}-${chunk.lineEnd}\n\n<chunk id="${chunk.id}">\n${chunk.text}\n</chunk>\n\n${chunkTaskGuidance(instruction)}\n请输出简洁的结构化要点：内容概要、事件/冲突、人物及其目标或变化、线索/伏笔、可引用的原文证据，以及与用户任务直接相关的素材。每条证据必须附来源标记，格式为 [source: 相对路径 chunk=块ID lines=起始行-结束行 quote="原文短引"]。`
+  const index = effectiveDocumentIndex(indexMessage, contextWindow)
+  return `你是长文本任务 Agent 的局部 Map Skill。只依据下面这个原文分块处理用户任务。\n\n${index ? `${index}\n\n` : ''}用户任务：${instruction}\n${heading}来源：${chunk.sourceId}，行 ${chunk.lineStart}-${chunk.lineEnd}\n\n<chunk id="${chunk.id}">\n${chunk.text}\n</chunk>\n\n${chunkTaskGuidance(instruction)}\n请输出简洁的结构化要点：内容概要、事件/冲突、人物及其目标或变化、线索/伏笔、可引用的原文证据，以及与用户任务直接相关的素材。每条证据必须附来源标记，格式为 [source: 相对路径 chunk=块ID lines=起始行-结束行 quote="原文短引"]。`
 }
 
-function summaryPrompt(instruction: string, records: SummaryRecord[], final: boolean, indexMessage: string | null): string {
+function summaryPrompt(instruction: string, records: SummaryRecord[], final: boolean, indexMessage: string | null, contextWindow: number): string {
   const material = records.map((record) => `[${record.sourceId} ${record.chunkId}${record.heading ? ` · ${record.heading}` : ''}]\n${record.text}`).join('\n\n')
   const finalGuidance = finalTaskGuidance(instruction)
-  return `${final ? '你是长文本任务 Agent 的最终 Synthesis Skill。' : '你是长文本任务 Agent 的阶段 Reduce Skill。'}\n${indexMessage ? `${indexMessage}\n` : ''}用户任务：${instruction}\n\n以下是已经由局部 Map Skill 生成的摘要。它们不是原文，请合并重复事实并标记不确定或相互矛盾之处，不要补写没有依据的情节。\n\n${material}\n\n${final ? finalGuidance : '请压缩为更高层级的摘要，保留故事阶段、人物变化、因果关系、伏笔、任务相关素材和来源标记。'}\n\n最终回答中的每个关键结论都必须附来源标记，格式为 [source: 相对路径 chunk=块ID lines=起始行-结束行 quote="原文短引"]；无法核验的结论标记为“未找到证据”。`
+  const index = effectiveDocumentIndex(indexMessage, contextWindow)
+  return `${final ? '你是长文本任务 Agent 的最终 Synthesis Skill。' : '你是长文本任务 Agent 的阶段 Reduce Skill。'}\n${index ? `${index}\n` : ''}用户任务：${instruction}\n\n以下是已经由局部 Map Skill 生成的摘要。它们不是原文，请合并重复事实并标记不确定或相互矛盾之处，不要补写没有依据的情节。\n\n${material}\n\n${final ? finalGuidance : '请压缩为更高层级的摘要，保留故事阶段、人物变化、因果关系、伏笔、任务相关素材和来源标记。'}\n\n最终回答中的每个关键结论都必须附来源标记，格式为 [source: 相对路径 chunk=块ID lines=起始行-结束行 quote="原文短引"]；无法核验的结论标记为“未找到证据”。`
 }
 
 export async function analyzeLongText(
@@ -230,6 +246,7 @@ export async function analyzeLongText(
   excludedDocuments: WorkspaceDocumentRef[] = [],
   resumeJobId?: string,
   toolCallGuard?: ToolCallGuard,
+  workerDispatch?: TaskExecutionDispatch,
 ): Promise<LongTextAnalysisResult> {
   if (documents.length === 0) throw new Error('没有可分析的文档')
   const jobId = resumeJobId ?? requestId
@@ -262,46 +279,56 @@ export async function analyzeLongText(
     }
     const instructionDigest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(instruction))
     const instructionHash = [...new Uint8Array(instructionDigest)].map((value) => value.toString(16).padStart(2, '0')).join('')
-    await startTaskJob({ taskId: jobId, taskType: 'long-text-analysis', instructionHash, sourceFingerprints })
+    const overlapTokens = Math.min(128, Math.floor(maxTokens / 8))
+    if (!workerDispatch?.jobId || workerDispatch.jobId !== jobId || workerDispatch.serviceId !== 'long-text-analysis') {
+      throw new Error('长文本 Worker 缺少匹配的 Service Dispatch')
+    }
     jobStarted = true
-    await updateTaskJob({
-      taskId: jobId, stepId: 'chunking', stepKind: 'chunking', stepStatus: 'running',
-      eventType: 'step.started', eventFields: { documentCount: documents.length },
-    })
+    const prepared = await prepareLongTextWorker({
+      jobId,
+      instruction,
+      instructionHash,
+      profileId: profile.id,
+      contextWindow: profile.contextWindow,
+      sourcePolicy: 'local-chunks',
+      maxTokens,
+      overlapTokens,
+      dispatch: {
+        jobId: workerDispatch.jobId,
+        workspaceId: workerDispatch.workspaceId ?? workspaceId,
+        policyVersion: workerDispatch.policyVersion,
+        dispatchVersion: workerDispatch.dispatchVersion,
+        serviceId: workerDispatch.serviceId,
+        executionOwner: workerDispatch.executionOwner,
+      },
+      documentIndex: indexMessage,
+      documents: documents.map((document) => ({ path: document.path, sourceFingerprint: sourceFingerprints[document.path] })),
+      excludedDocuments,
+    }, (event) => onProgress?.({
+      stage: event.stage,
+      completed: event.completed,
+      total: event.total,
+      message: event.message,
+    }), workerDispatch.authorizationTicket)
+    if (prepared.pipelineCompleted) {
+      return {
+        content: prepared.content,
+        jobId: prepared.jobId,
+        chunkCount: prepared.chunkCount,
+        summaryCount: prepared.summaryCount,
+        evidence: prepared.evidence,
+      }
+    }
     if (!resumeJobId) {
       const indexContent = JSON.stringify({ cards, createdAt: startedAt, sourceFingerprints }, null, 2)
       await guardedCall('write_analysis_artifact', { jobId, name: 'index.json', content: indexContent }, () => writeAnalysisArtifact(jobId, 'index.json', indexContent), toolCallGuard)
-      const startContent = JSON.stringify({
-        jobId, workspaceId, instruction, status: 'running', createdAt: startedAt, updatedAt: startedAt,
-        documentCount: documents.length + excludedDocuments.length, supportedDocumentCount: documents.length,
-        excludedDocuments, sourceFingerprints,
-      } satisfies AnalysisJobManifest, null, 2)
-      await guardedCall('write_analysis_artifact', { jobId, name: 'job-start.json', content: startContent }, () => writeAnalysisArtifact(jobId, 'job-start.json', startContent), toolCallGuard)
     }
-    const manifests = []
-    onProgress?.({ stage: 'chunking', completed: 0, total: documents.length, message: chunkingPreparationMessage(documents, maxTokens, Math.min(128, Math.floor(maxTokens / 8))) })
-    for (const [index, document] of documents.entries()) {
-      await waitWhilePaused(requestId, jobId)
-      assertNotCancelled(requestId)
-      const cached = resumeJobId
-        ? await readJsonArtifact<Awaited<ReturnType<typeof chunkDocument>>>(jobId, `manifest-${String(index + 1).padStart(3, '0')}.json`, toolCallGuard)
-        : null
-      if (cached && cached.sourceId === document.path && cached.sourceFingerprint === sourceFingerprints[document.path]) {
-        manifests.push(cached)
-        onProgress?.({ stage: 'chunking', completed: index + 1, total: documents.length, message: `复用已完成分块：${document.name}（${cached.chunks.length} 块）` })
-        continue
-      }
-      const overlapTokens = Math.min(128, Math.floor(maxTokens / 8))
-      const manifest = await guardedCall('chunk_document', { path: document.path, maxTokens, overlapTokens }, () => chunkDocument(document.path, maxTokens, overlapTokens), toolCallGuard)
-      manifests.push(manifest)
-      const manifestName = `manifest-${String(index + 1).padStart(3, '0')}.json`
-      const manifestContent = JSON.stringify(manifest, null, 2)
-      await guardedCall('write_analysis_artifact', { jobId, name: manifestName, content: manifestContent }, () => writeAnalysisArtifact(jobId, manifestName, manifestContent), toolCallGuard)
-      onProgress?.({ stage: 'chunking', completed: index + 1, total: documents.length, message: documentChunkMessage(document, manifest) })
-    }
-    await updateTaskJob({
-      taskId: jobId, stepId: 'chunking', stepStatus: 'completed', checkpoint: `manifests:${manifests.length}`,
-      eventType: 'step.completed', eventFields: { chunkCount: manifests.reduce((sum, manifest) => sum + manifest.chunks.length, 0) },
+    const manifests = prepared.manifests
+    onProgress?.({
+      stage: 'chunking',
+      completed: manifests.length,
+      total: manifests.length,
+      message: `${chunkingPreparationMessage(documents, maxTokens, overlapTokens)} Rust Worker 已完成 ${manifests.length} 份 manifest。`,
     })
 
     const chunks = manifests.flatMap((manifest) => manifest.chunks)
@@ -318,8 +345,8 @@ export async function analyzeLongText(
       const cached = resumeJobId
         ? await guardedCall('read_analysis_artifact', { jobId, name: `summary-${String(index + 1).padStart(5, '0')}.md` }, () => readAnalysisArtifact(jobId, `summary-${String(index + 1).padStart(5, '0')}.md`), toolCallGuard)
         : null
-      const text = cached ?? await collectResponse(requestId, profile.id, [{ role: 'user', content: chunkPrompt(instruction, chunk, indexMessage) }], toolCallGuard)
-      if (text) summaries.push({ sourceId: chunk.sourceId, chunkId: chunk.id, heading: chunk.heading, text: clipToTokens(text, batchBudget(profile.contextWindow) - 64), evidence: verifyEvidenceReferences(parseEvidenceReferences(text), documents) })
+      const text = cached ?? await collectResponse(requestId, profile.id, [{ role: 'user', content: chunkPrompt(instruction, chunk, indexMessage, profile.contextWindow) }], toolCallGuard)
+      if (text) summaries.push({ sourceId: chunk.sourceId, chunkId: chunk.id, heading: chunk.heading, text: clipToTokens(text, summaryClipLimit(profile.contextWindow, indexMessage)), evidence: verifyEvidenceReferences(parseEvidenceReferences(text), documents) })
       if (cached === null) {
         const name = `summary-${String(index + 1).padStart(5, '0')}.md`
         await guardedCall('write_analysis_artifact', { jobId, name, content: text }, () => writeAnalysisArtifact(jobId, name, text), toolCallGuard)
@@ -347,8 +374,8 @@ export async function analyzeLongText(
         await waitWhilePaused(requestId, jobId)
         assertNotCancelled(requestId)
         onProgress?.({ stage: 'reduce', completed: index, total: batches.length, message: `正在处理第 ${index + 1}/${batches.length} 批阶段汇总…` })
-        const text = await collectResponse(requestId, profile.id, [{ role: 'user', content: summaryPrompt(instruction, batch, false, indexMessage) }], toolCallGuard)
-        if (text) next.push({ sourceId: 'summary', chunkId: `level-${level}-${index}`, heading: null, text: clipToTokens(text, batchBudget(profile.contextWindow) - 64), evidence: batch.flatMap((record) => record.evidence ?? []) })
+        const text = await collectResponse(requestId, profile.id, [{ role: 'user', content: summaryPrompt(instruction, batch, false, indexMessage, profile.contextWindow) }], toolCallGuard)
+        if (text) next.push({ sourceId: 'summary', chunkId: `level-${level}-${index}`, heading: null, text: clipToTokens(text, summaryClipLimit(profile.contextWindow, indexMessage)), evidence: batch.flatMap((record) => record.evidence ?? []) })
         const name = `reduce-${level + 1}-${String(index + 1).padStart(4, '0')}.md`
         await guardedCall('write_analysis_artifact', { jobId, name, content: text }, () => writeAnalysisArtifact(jobId, name, text), toolCallGuard)
         onProgress?.({ stage: 'reduce', completed: index + 1, total: batches.length, message: `已完成第 ${index + 1}/${batches.length} 批阶段汇总` })
@@ -369,7 +396,7 @@ export async function analyzeLongText(
       eventType: 'step.started', eventFields: { summaryCount: current.length },
     })
     onProgress?.({ stage: 'synthesis', completed: 0, total: 1, message: `正在综合 ${formatCount(current.length)} 条阶段摘要，完成最终任务…` })
-    const content = await collectResponse(requestId, profile.id, [{ role: 'user', content: summaryPrompt(instruction, current, true, indexMessage) }], toolCallGuard)
+    const content = await collectResponse(requestId, profile.id, [{ role: 'user', content: summaryPrompt(instruction, current, true, indexMessage, profile.contextWindow) }], toolCallGuard)
     const finalEvidence = verifyEvidenceReferences(parseEvidenceReferences(content), documents)
     const evidence = [...finalEvidence, ...current.flatMap((record) => record.evidence ?? [])]
       .filter((item, index, values) => values.findIndex((other) => other.sourceId === item.sourceId && other.lineStart === item.lineStart && other.lineEnd === item.lineEnd && other.quote === item.quote) === index)

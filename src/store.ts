@@ -5,7 +5,7 @@ import type {
   ChatActivity, ChatRunStatus,
   DiffProposal, EditorRevisionRequest, EditorSelection,
 } from './types'
-import { applyDiffProposal as applyProposalToContent } from './lib/diffProposal'
+import { applyDiffProposalSet, fingerprintDocument } from './lib/diffProposal'
 
 const MAX_CHAT_ACTIVITY_LOG = 80
 
@@ -33,7 +33,8 @@ interface AppState {
   error: string | null
   editorSelection: EditorSelection | null
   pendingEditorRevision: EditorRevisionRequest | null
-  diffProposal: DiffProposal | null
+  diffProposals: DiffProposal[]
+  diffProposalBaselines: Record<string, string>
   setWorkspace: (workspace: WorkspaceSnapshot) => void
   openTab: (tab: DocumentTab) => void
   closeTab: (path: string) => void
@@ -62,9 +63,9 @@ interface AppState {
   setEditorSelection: (selection: EditorSelection | null) => void
   prepareEditorRevision: (request: EditorRevisionRequest) => void
   clearPendingEditorRevision: () => void
-  setDiffProposal: (proposal: DiffProposal | null) => void
-  applyDiffProposal: () => void
-  rejectDiffProposal: () => void
+  setDiffProposals: (proposals: DiffProposal[]) => void
+  applyDiffProposal: (proposalId: string) => void
+  rejectDiffProposal: (proposalId: string) => void
 }
 
 export interface ChatRun {
@@ -120,9 +121,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   error: null,
   editorSelection: null,
   pendingEditorRevision: null,
-  diffProposal: null,
+  diffProposals: [],
+  diffProposalBaselines: {},
   setWorkspace: (workspace) => set((state) => state.workspace?.id && state.workspace.id !== workspace.id
-    ? { workspace, editorSelection: null, pendingEditorRevision: null, diffProposal: null }
+    ? { workspace, editorSelection: null, pendingEditorRevision: null, diffProposals: [], diffProposalBaselines: {} }
     : { workspace }),
   openTab: (tab) => set((state) => ({
     tabs: state.tabs.some((item) => item.path === tab.path) ? state.tabs : [...state.tabs, tab],
@@ -313,20 +315,39 @@ export const useAppStore = create<AppState>((set, get) => ({
   setEditorSelection: (editorSelection) => set({ editorSelection }),
   prepareEditorRevision: (pendingEditorRevision) => set({ pendingEditorRevision }),
   clearPendingEditorRevision: () => set({ pendingEditorRevision: null }),
-  setDiffProposal: (diffProposal) => set({ diffProposal }),
-  applyDiffProposal: () => {
+  setDiffProposals: (diffProposals) => set((state) => ({
+    diffProposals,
+    diffProposalBaselines: Object.fromEntries(diffProposals.map((proposal) => {
+      const proposalSetId = proposal.proposalSetId ?? proposal.id
+      const key = `${proposalSetId}\0${proposal.path}`
+      const tab = state.tabs.find((item) => item.path === proposal.path)
+      if (!tab) throw new Error('DiffProposal 的目标文档未打开。')
+      if (fingerprintDocument(tab.content) !== proposal.sourceFingerprint) throw new Error('源文档已变化，无法登记 DiffProposal。')
+      return [key, tab.content]
+    })),
+  })),
+  applyDiffProposal: (proposalId) => {
     const state = get()
-    const proposal = state.diffProposal
-    if (!proposal) return
+    const proposal = state.diffProposals.find((item) => item.id === proposalId)
+    if (!proposal || proposal.status !== 'proposed') return
     const tab = state.tabs.find((item) => item.path === proposal.path)
     if (!tab) throw new Error('DiffProposal 的目标文档未打开。')
-    const content = applyProposalToContent(tab.content, proposal)
+    const proposalSetId = proposal.proposalSetId ?? proposal.id
+    const key = `${proposalSetId}\0${proposal.path}`
+    const baseline = state.diffProposalBaselines[key]
+    if (baseline === undefined) throw new Error('DiffProposal 缺少本地基线。')
+    const previouslyApplied = state.diffProposals.filter((item) =>
+      item.path === proposal.path && (item.proposalSetId ?? item.id) === proposalSetId && item.status === 'applied')
+    const expected = applyDiffProposalSet(baseline, previouslyApplied)
+    if (tab.content !== expected) throw new Error('源文档已变化，无法安全应用 DiffProposal。')
+    const content = applyDiffProposalSet(baseline, [...previouslyApplied, proposal])
     set({
       tabs: state.tabs.map((item) => item.path === proposal.path ? { ...item, content } : item),
-      diffProposal: { ...proposal, status: 'applied' }, editorSelection: null,
+      diffProposals: state.diffProposals.map((item) => item.id === proposalId ? { ...item, status: 'applied' } : item),
+      editorSelection: null,
     })
   },
-  rejectDiffProposal: () => set((state) => ({
-    diffProposal: state.diffProposal ? { ...state.diffProposal, status: 'rejected' } : null,
+  rejectDiffProposal: (proposalId) => set((state) => ({
+    diffProposals: state.diffProposals.map((proposal) => proposal.id === proposalId ? { ...proposal, status: 'rejected' } : proposal),
   })),
 }))

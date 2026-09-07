@@ -18,6 +18,7 @@ use tauri::{ipc::Channel, State};
 
 const KEYRING_SERVICE: &str = "com.vinkey.desktop";
 const CHAT_TIMEOUT_SECS: u64 = 300;
+const MAX_WORKER_CHAT_BYTES: usize = 16 * 1024 * 1024;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -62,8 +63,8 @@ pub struct OllamaStopResult {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct RequestMessage {
-    role: String,
-    content: String,
+    pub(crate) role: String,
+    pub(crate) content: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -73,6 +74,16 @@ pub struct ChatRequest {
     profile_id: String,
     source_policy: String,
     messages: Vec<RequestMessage>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct WorkerModelCompatibility {
+    pub profile_id: String,
+    pub provider_kind: String,
+    pub base_url: String,
+    pub model: String,
+    pub context_window: u32,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -219,11 +230,41 @@ fn profile_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ModelProfile> {
     })
 }
 
-fn load_profile(id: &str, state: &State<'_, DatabaseState>) -> Result<ModelProfile, String> {
-    database::open(state)?.query_row(
+fn load_profile_at(id: &str, state: &DatabaseState) -> Result<ModelProfile, String> {
+    database::open_state(state)?.query_row(
         "SELECT id, name, kind, base_url, model, context_window, has_api_key, updated_at FROM model_profiles WHERE id = ?1",
         [id], profile_from_row,
     ).map_err(|_| "找不到模型配置".to_string())
+}
+
+fn load_profile(id: &str, state: &State<'_, DatabaseState>) -> Result<ModelProfile, String> {
+    load_profile_at(id, state.inner())
+}
+
+fn worker_compatibility(profile: &ModelProfile) -> WorkerModelCompatibility {
+    WorkerModelCompatibility {
+        profile_id: profile.id.clone(),
+        provider_kind: profile.kind.clone(),
+        base_url: profile.base_url.clone(),
+        model: profile.model.clone(),
+        context_window: profile.context_window,
+    }
+}
+
+pub(crate) fn worker_model_compatibility(
+    profile_id: &str,
+    database: &DatabaseState,
+) -> Result<WorkerModelCompatibility, String> {
+    validate_id(profile_id)?;
+    let profile = load_profile_at(profile_id, database)?;
+    let request = ChatRequest {
+        request_id: "worker-preflight".into(),
+        profile_id: profile_id.into(),
+        source_policy: "local-chunks".into(),
+        messages: Vec::new(),
+    };
+    enforce_source_policy(&request, &profile)?;
+    Ok(worker_compatibility(&profile))
 }
 
 #[tauri::command]
@@ -547,14 +588,10 @@ async fn response_or_error(response: reqwest::Response) -> Result<reqwest::Respo
     Err(format!("模型服务返回 HTTP {status}：{detail}"))
 }
 
-fn emit_stream_line(
-    line: &[u8],
-    provider_kind: &str,
-    channel: &Channel<ChatStreamEvent>,
-) -> Result<(), String> {
+fn stream_line_content(line: &[u8], provider_kind: &str) -> Result<Option<String>, String> {
     let line = String::from_utf8_lossy(line).trim().to_string();
     if line.is_empty() {
-        return Ok(());
+        return Ok(None);
     }
     let payload = if provider_kind == "ollama" {
         line.as_str()
@@ -562,7 +599,7 @@ fn emit_stream_line(
         line.strip_prefix("data:").map(str::trim).unwrap_or("")
     };
     if payload.is_empty() || payload == "[DONE]" {
-        return Ok(());
+        return Ok(None);
     }
     let value: Value =
         serde_json::from_str(payload).map_err(|_| "模型流响应格式无效".to_string())?;
@@ -573,21 +610,19 @@ fn emit_stream_line(
     }
     .and_then(Value::as_str)
     .unwrap_or("");
-    if !content.is_empty() {
-        let _ = channel.send(ChatStreamEvent::Chunk {
-            content: content.to_string(),
-        });
-    }
-    Ok(())
+    Ok((!content.is_empty()).then(|| content.to_string()))
 }
 
-async fn run_stream(
-    request: ChatRequest,
-    profile: ModelProfile,
-    key: Option<String>,
-    channel: Channel<ChatStreamEvent>,
-    cancel: Arc<AtomicBool>,
+async fn run_stream_with(
+    request: &ChatRequest,
+    profile: &ModelProfile,
+    key: Option<&str>,
+    cancel: &AtomicBool,
+    mut on_chunk: impl FnMut(&str) -> Result<(), String>,
 ) -> Result<(), String> {
+    if cancel.load(Ordering::Relaxed) {
+        return Err("请求已停止".into());
+    }
     let messages = request
         .messages
         .iter()
@@ -605,7 +640,7 @@ async fn run_stream(
         )
     };
     let mut builder = chat_client()?.post(url).json(&body);
-    if let Some(value) = key.as_deref().filter(|value| !value.is_empty()) {
+    if let Some(value) = key.filter(|value| !value.is_empty()) {
         builder = builder.bearer_auth(value);
     }
     let response = response_or_error(builder.send().await.map_err(|error| {
@@ -641,14 +676,74 @@ async fn run_stream(
         })?);
         while let Some(position) = buffer.iter().position(|byte| *byte == b'\n') {
             let line = buffer.drain(..=position).collect::<Vec<_>>();
-            emit_stream_line(&line, &profile.kind, &channel)?;
+            if let Some(content) = stream_line_content(&line, &profile.kind)? {
+                on_chunk(&content)?;
+            }
         }
     }
     if !buffer.is_empty() {
-        emit_stream_line(&buffer, &profile.kind, &channel)?;
+        if let Some(content) = stream_line_content(&buffer, &profile.kind)? {
+            on_chunk(&content)?;
+        }
     }
+    Ok(())
+}
+
+async fn run_stream(
+    request: ChatRequest,
+    profile: ModelProfile,
+    key: Option<String>,
+    channel: Channel<ChatStreamEvent>,
+    cancel: Arc<AtomicBool>,
+) -> Result<(), String> {
+    run_stream_with(&request, &profile, key.as_deref(), &cancel, |content| {
+        let _ = channel.send(ChatStreamEvent::Chunk {
+            content: content.to_string(),
+        });
+        Ok(())
+    })
+    .await?;
     let _ = channel.send(ChatStreamEvent::Done);
     Ok(())
+}
+
+fn append_worker_chunk(content: &mut String, chunk: &str) -> Result<(), String> {
+    if content.len().saturating_add(chunk.len()) > MAX_WORKER_CHAT_BYTES {
+        return Err("Worker 模型输出超过 16 MB 限制".into());
+    }
+    content.push_str(chunk);
+    Ok(())
+}
+
+pub(crate) async fn complete_worker_chat(
+    profile_id: &str,
+    messages: Vec<RequestMessage>,
+    database: &DatabaseState,
+    expected: &WorkerModelCompatibility,
+    cancel: &AtomicBool,
+) -> Result<String, String> {
+    let profile = load_profile_at(profile_id, database)?;
+    if worker_compatibility(&profile) != *expected {
+        return Err("模型配置已变化，不能复用当前 Worker 检查点".into());
+    }
+    let request = ChatRequest {
+        request_id: "background-worker".into(),
+        profile_id: profile_id.into(),
+        source_policy: "local-chunks".into(),
+        messages,
+    };
+    enforce_source_policy(&request, &profile)?;
+    let key = if profile.has_api_key {
+        Some(get_secret(&profile.id)?)
+    } else {
+        None
+    };
+    let mut content = String::new();
+    run_stream_with(&request, &profile, key.as_deref(), cancel, |chunk| {
+        append_worker_chunk(&mut content, chunk)
+    })
+    .await?;
+    Ok(content.trim().to_string())
 }
 
 #[tauri::command]
@@ -795,5 +890,15 @@ mod tests {
         assert!(enforce_source_policy(&request, &profile).is_ok());
         profile.base_url = "https://api.example.com/v1".into();
         assert!(enforce_source_policy(&request, &profile).is_err());
+    }
+
+    #[test]
+    fn bounds_collected_worker_model_output() {
+        let mut content = "x".repeat(MAX_WORKER_CHAT_BYTES - 1);
+        append_worker_chunk(&mut content, "y").unwrap();
+        assert_eq!(content.len(), MAX_WORKER_CHAT_BYTES);
+        assert!(append_worker_chunk(&mut content, "z")
+            .unwrap_err()
+            .contains("16 MB"));
     }
 }

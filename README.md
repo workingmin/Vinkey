@@ -80,4 +80,5 @@ npm run package:mac -- --open
 - [GitHub 同类项目调研与功能取舍](docs/GITHUB_REFERENCE.md)
 - [Agent 与 Skill 建设计划](docs/AGENT_SKILL_PLAN.md)
 - [AI 业务链路架构与改造方案](docs/AI_BUSINESS_CHAINS.md)
+- [轻量级联网搜索设计](docs/LIGHTWEIGHT_WEB_RESEARCH.md)
 - [Ollama 中文创作模型组与最低配置测试基线](docs/OLLAMA_MODEL_GROUPS.md)

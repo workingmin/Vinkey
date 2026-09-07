@@ -19,6 +19,7 @@ mod models;
 mod runtime_log;
 mod search;
 mod task_runtime;
+mod worker_service;
 
 #[derive(Default)]
 pub(crate) struct WorkspaceState(Mutex<Option<Workspace>>);
@@ -351,15 +352,113 @@ fn list_task_jobs(state: State<'_, WorkspaceState>) -> Result<Vec<job_service::T
 fn cancel_task_job(
     task_id: String,
     state: State<'_, WorkspaceState>,
+    workers: State<'_, worker_service::WorkerRuntimeState>,
 ) -> Result<job_service::TaskJob, String> {
     let workspace = lock_workspace(&state)?;
+    worker_service::signal_cancel(&task_id, &workers)?;
     job_service::cancel(&analysis_jobs_dir(&workspace), &task_id)
+}
+
+#[tauri::command]
+fn start_long_text_worker(
+    input: worker_service::StartLongTextWorkerInput,
+    authorization_ticket: String,
+    app: AppHandle,
+    state: State<'_, WorkspaceState>,
+    database: State<'_, database::DatabaseState>,
+    workers: State<'_, worker_service::WorkerRuntimeState>,
+    dispatches: State<'_, task_runtime::TaskDispatchState>,
+) -> Result<job_service::TaskJob, String> {
+    let workspace = lock_workspace(&state)?;
+    if input.dispatch.workspace_id != workspace.id {
+        return Err("Worker Dispatch 属于其他工作区".into());
+    }
+    task_runtime::validate_worker_dispatch(&authorization_ticket, &input.dispatch, &dispatches)?;
+    worker_service::start(
+        &analysis_jobs_dir(&workspace),
+        &workspace,
+        &database,
+        input,
+        workers.inner().clone(),
+        app,
+    )
+}
+
+#[tauri::command]
+fn get_long_text_worker_output(
+    job_id: String,
+    state: State<'_, WorkspaceState>,
+) -> Result<Option<worker_service::LongTextWorkerOutput>, String> {
+    let workspace = lock_workspace(&state)?;
+    worker_service::output(&analysis_jobs_dir(&workspace), &job_id)
+}
+
+#[tauri::command]
+fn list_task_worker_events(
+    job_id: String,
+    after_sequence: Option<u64>,
+    state: State<'_, WorkspaceState>,
+) -> Result<Vec<worker_service::TaskWorkerEvent>, String> {
+    let workspace = lock_workspace(&state)?;
+    worker_service::events(&analysis_jobs_dir(&workspace), &job_id, after_sequence)
+}
+
+#[tauri::command]
+fn pause_task_worker(
+    job_id: String,
+    app: AppHandle,
+    state: State<'_, WorkspaceState>,
+    workers: State<'_, worker_service::WorkerRuntimeState>,
+) -> Result<job_service::TaskJob, String> {
+    let workspace = lock_workspace(&state)?;
+    worker_service::pause(&analysis_jobs_dir(&workspace), &job_id, &workers, &app)
+}
+
+#[tauri::command]
+fn resume_task_worker(
+    job_id: String,
+    app: AppHandle,
+    state: State<'_, WorkspaceState>,
+    database: State<'_, database::DatabaseState>,
+    workers: State<'_, worker_service::WorkerRuntimeState>,
+) -> Result<job_service::TaskJob, String> {
+    let workspace = lock_workspace(&state)?;
+    worker_service::resume(
+        &analysis_jobs_dir(&workspace),
+        &workspace,
+        &database,
+        &job_id,
+        workers.inner().clone(),
+        app,
+    )
+}
+
+#[tauri::command]
+fn retry_task_worker_step(
+    job_id: String,
+    step_id: String,
+    app: AppHandle,
+    state: State<'_, WorkspaceState>,
+    database: State<'_, database::DatabaseState>,
+    workers: State<'_, worker_service::WorkerRuntimeState>,
+) -> Result<job_service::TaskJob, String> {
+    let workspace = lock_workspace(&state)?;
+    worker_service::retry_step(
+        &analysis_jobs_dir(&workspace),
+        &workspace,
+        &database,
+        &job_id,
+        &step_id,
+        workers.inner().clone(),
+        app,
+    )
 }
 
 #[tauri::command]
 fn execute_task(
     input: task_runtime::ExecuteTaskInput,
     state: State<'_, WorkspaceState>,
+    dispatches: State<'_, task_runtime::TaskDispatchState>,
 ) -> Result<task_runtime::TaskExecutionDispatch, String> {
     let workspace_id = state
         .0
@@ -367,7 +466,7 @@ fn execute_task(
         .map_err(|_| "工作区状态不可用".to_string())?
         .as_ref()
         .map(|workspace| workspace.id.clone());
-    task_runtime::execute(input, workspace_id.as_deref())
+    task_runtime::issue(input, workspace_id.as_deref(), &dispatches)
 }
 
 fn validate_analysis_artifact_name(name: &str) -> Result<&Path, String> {
@@ -1126,6 +1225,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(WorkspaceState::default())
         .manage(models::ChatCancellation::default())
+        .manage(worker_service::WorkerRuntimeState::default())
+        .manage(task_runtime::TaskDispatchState::default())
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             fs::create_dir_all(&data_dir)?;
@@ -1167,9 +1268,9 @@ pub fn run() {
                     eprintln!("无法写入 macOS 窗口诊断日志：{error}");
                 }
             }
-            let database_path = data_dir.join("vinkey.sqlite3");
-            database::init(&database_path)?;
-            app.manage(database::DatabaseState(database_path));
+            let database_state = database::DatabaseState(data_dir.join("vinkey.sqlite3"));
+            database::init(&database_state.0)?;
+            app.manage(database_state.clone());
             if let Some(workspace) = restore_workspace_preference(app.handle()) {
                 runtime.set_workspace_root(workspace.root.clone());
                 runtime.info("workspace.restored", log_fields([
@@ -1177,8 +1278,21 @@ pub fn run() {
                     ("name", Value::String(workspace.name.clone())),
                 ]));
                 if let Ok(mut state) = app.state::<WorkspaceState>().0.lock() {
-                    *state = Some(workspace);
+                    *state = Some(workspace.clone());
                 }
+                let restored = worker_service::restore_running(
+                    &analysis_jobs_dir(&workspace),
+                    &workspace,
+                    &database_state,
+                    app.state::<worker_service::WorkerRuntimeState>()
+                        .inner()
+                        .clone(),
+                    app.handle().clone(),
+                )?;
+                runtime.info(
+                    "worker.restore_coordinator",
+                    log_fields([("restoredJobs", Value::from(restored))]),
+                );
             }
             runtime.info("app.ready", Map::new());
             Ok(())
@@ -1196,6 +1310,12 @@ pub fn run() {
             get_task_job,
             list_task_jobs,
             cancel_task_job,
+            start_long_text_worker,
+            get_long_text_worker_output,
+            list_task_worker_events,
+            pause_task_worker,
+            resume_task_worker,
+            retry_task_worker_step,
             execute_task,
             read_file_bytes,
             save_document,

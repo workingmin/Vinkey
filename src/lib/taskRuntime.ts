@@ -57,6 +57,7 @@ export interface TaskExecutionDispatch {
   frontendStreamingRequired: boolean
   backgroundEligible: boolean
   jobId: string | null
+  authorizationTicket: string | null
   clarification: { code: 'confirm-document-body-access'; question: string } | null
   plan: TaskPlan
 }
@@ -139,6 +140,7 @@ export function createTaskExecutionDispatch(input: TaskExecutionInput, workspace
     frontendStreamingRequired: !needsClarification && input.plan.requiresModel,
     backgroundEligible,
     jobId: backgroundEligible ? input.resumeJobId ?? input.taskId : null,
+    authorizationTicket: null,
     clarification: needsClarification ? {
       code: 'confirm-document-body-access',
       question: input.plan.scope === 'workspace'
