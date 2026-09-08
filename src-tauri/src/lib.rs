@@ -20,6 +20,7 @@ mod runtime_log;
 mod search;
 mod task_runtime;
 mod worker_service;
+mod window_controls;
 
 #[derive(Default)]
 pub(crate) struct WorkspaceState(Mutex<Option<Workspace>>);
@@ -1256,6 +1257,7 @@ pub fn run() {
             // macOS window chrome is configured before creation in tauri.macos.conf.json.
             #[cfg(target_os = "macos")]
             if let Some(window) = app.get_webview_window("main") {
+                window_controls::install(&window).map_err(std::io::Error::other)?;
                 let decorated = window.is_decorated()?;
                 let theme = window.theme()?;
                 let inner_size = window.inner_size()?;
@@ -1322,6 +1324,7 @@ pub fn run() {
             create_document,
             create_directory,
             sync_native_window_theme,
+            window_controls::sync_native_window_controls,
             get_window_diagnostics,
             get_runtime_diagnostics,
             record_runtime_event,

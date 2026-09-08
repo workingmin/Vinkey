@@ -125,6 +125,11 @@ export async function syncNativeWindowTheme(theme: ThemeMode): Promise<string | 
   return invoke<string>('sync_native_window_theme', { theme })
 }
 
+export async function syncNativeWindowControls(sidebarWidth: number): Promise<void> {
+  if (!isDesktop()) return
+  await invoke('sync_native_window_controls', { sidebarWidth })
+}
+
 export async function getWindowDiagnostics(): Promise<string> {
   if (!isDesktop()) return '窗口诊断仅在桌面应用中可用。'
   return invoke<string>('get_window_diagnostics')

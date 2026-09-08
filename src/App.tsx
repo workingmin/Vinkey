@@ -40,6 +40,7 @@ import { buildSelectedDocumentsOverviewMessage, formatWorkspaceOverview } from '
 import { buildFocusedWorkspaceMessage } from './lib/focusedAnalysis'
 import { isLoopbackModelEndpoint } from './lib/modelPrivacy'
 import { formatConversationAge } from './lib/conversationTime'
+import { observeNativeWindowControls } from './lib/nativeWindowControls'
 import {
   buildMultiFileRevisionContract, buildMultiFileRevisionTargets, buildSelectionRevisionContract,
   createDiffProposal, createMultiFileDiffProposals, fingerprintDocument,
@@ -267,6 +268,14 @@ function ProjectSessionSidebar({ onPageChange, onOpenWorkspace, onRefreshWorkspa
   const [projectExpanded, setProjectExpanded] = useState(true)
   const [currentTime, setCurrentTime] = useState(() => Date.now())
   const [deletingConversationIds, setDeletingConversationIds] = useState<Set<string>>(() => new Set())
+  const sidebarRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    if (!isDesktop() || !isMacPlatform() || !sidebarRef.current) return
+    return observeNativeWindowControls(sidebarRef.current, (cause) => {
+      setError(`macOS 窗口按钮布局同步失败：${String(cause)}`)
+    })
+  }, [setError])
 
   useEffect(() => {
     const timer = window.setInterval(() => setCurrentTime(Date.now()), 60_000)
@@ -331,7 +340,7 @@ function ProjectSessionSidebar({ onPageChange, onOpenWorkspace, onRefreshWorkspa
   const conversationCount = conversations.length + (!conversationId ? 1 : 0)
   const visibleResultCount = conversationMatches.length + searchHits.length
 
-  return <aside className={`session-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`} aria-label="项目与会话栏">
+  return <aside ref={sidebarRef} className={`session-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`} aria-label="项目与会话栏">
     <header className="session-sidebar-header" data-tauri-drag-region>
       <div className="session-brand-row" data-tauri-drag-region>
         <div className="session-brand" data-tauri-drag-region><span>V</span><div><strong>Vinkey</strong><small>本地创作工作台</small></div></div>
