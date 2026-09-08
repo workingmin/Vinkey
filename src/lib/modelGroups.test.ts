@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createGroupProfileInput, isOllamaModelInstalled, isSameOllamaModel, MINIMUM_OLLAMA_MODEL_GROUP, shouldStopOllamaBeforeSwitch } from './modelGroups'
+import { createGroupProfileInput, isOllamaModelInstalled, isSameOllamaModel, MINIMUM_OLLAMA_MODEL_GROUP, modelRoleForTask, readModelAssignments, recommendModel, reconcileModelAssignments, shouldStopOllamaBeforeSwitch } from './modelGroups'
 import type { ModelProfile } from '../types'
 
 function profile(overrides: Partial<ModelProfile> = {}): ModelProfile {
@@ -11,6 +11,37 @@ function profile(overrides: Partial<ModelProfile> = {}): ModelProfile {
 }
 
 describe('minimum Ollama model group', () => {
+  it('migrates existing roles without replacing explicit choices', () => {
+    const values = [profile(), profile({ id: 'fast', model: 'openbmb/minicpm4.1:latest' })]
+    expect(reconcileModelAssignments({}, values, 'one')).toEqual({ general: 'one', efficient: 'fast' })
+    expect(reconcileModelAssignments({ general: 'fast', efficient: null }, values, 'one')).toEqual({ general: 'fast', efficient: null })
+    expect(reconcileModelAssignments({ general: 'deleted' }, values, 'one').general).toBeNull()
+  })
+
+  it('ignores malformed persisted assignments', () => {
+    expect(readModelAssignments('broken')).toEqual({})
+    expect(readModelAssignments('null')).toEqual({})
+    expect(readModelAssignments('{"general":42,"efficient":"fast","extra":"bad"}')).toEqual({ efficient: 'fast' })
+  })
+
+  it('routes analysis to efficient and writing or review to general', () => {
+    expect(modelRoleForTask({ intent: 'document-analysis' })).toBe('efficient')
+    expect(modelRoleForTask({ intent: 'workspace-analysis' })).toBe('efficient')
+    expect(modelRoleForTask({ intent: 'character-analysis' })).toBe('efficient')
+    expect(modelRoleForTask({ intent: 'document-revision' })).toBe('general')
+    expect(modelRoleForTask({ intent: 'continuity-review' })).toBe('general')
+    expect(modelRoleForTask({ intent: 'general-chat' })).toBe('general')
+  })
+
+  it('only recommends discovered chat models and allows one model for both roles', () => {
+    const models = ['text-embedding-3-small', 'gpt-4.1', 'gpt-4.1-mini']
+    expect(recommendModel(models, 'efficient')).toBe('gpt-4.1-mini')
+    expect(recommendModel(models, 'general')).toBe('gpt-4.1')
+    expect(recommendModel(['custom'], 'efficient')).toBe('custom')
+    expect(recommendModel(['custom'], 'general')).toBe('custom')
+    expect(recommendModel(['text-embedding-3-small'], 'efficient')).toBeNull()
+    expect(recommendModel([], 'general')).toBeNull()
+  })
   it('contains only minimum-tier models with stable profile ids', () => {
     expect(MINIMUM_OLLAMA_MODEL_GROUP.members.map((member) => member.model)).toEqual([
       'openbmb/minicpm4.1:latest', 'qwen3:8b',

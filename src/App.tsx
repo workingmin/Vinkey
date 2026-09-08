@@ -46,7 +46,7 @@ import {
   createDiffProposal, createMultiFileDiffProposals, fingerprintDocument,
   formatDiffProposalMessage, formatMultiFileDiffProposalMessage,
 } from './lib/diffProposal'
-import { shouldStopOllamaBeforeSwitch } from './lib/modelGroups'
+import { modelRoleForTask, shouldStopOllamaBeforeSwitch } from './lib/modelGroups'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { Menu, MenuItem, PredefinedMenuItem, Submenu } from '@tauri-apps/api/menu'
 import type { PredefinedMenuItemOptions } from '@tauri-apps/api/menu'
@@ -430,23 +430,28 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
   const [mentionIndex, setMentionIndex] = useState(0)
   const [switchingModel, setSwitchingModel] = useState(false)
   const promptRef = useRef<HTMLTextAreaElement>(null)
-  const activeModel = modelProfiles.find((profile) => profile.id === activeModelId) ?? null
+  const modelAssignments = useAppStore((state) => state.modelAssignments)
+  const [modelOverrideId, setModelOverrideId] = useState<string | null>(null)
+  const activeModel = modelProfiles.find((profile) => profile.id === (modelOverrideId ?? modelAssignments.general)) ?? null
   const activeChatRun = conversationId ? chatRuns[conversationId] : undefined
   const busy = Boolean(activeChatRun)
   const budget = calculateContextBudget(messages, contextDocuments, prompt, activeModel?.contextWindow ?? 32768)
   const activeStatus = activeChatRun ? chatStatusMeta[activeChatRun.status] : null
 
   const switchModel = async (nextId: string) => {
-    if (switchingModel || busy || nextId === activeModelId) return
+    if (switchingModel || busy) return
+    if (!nextId) { setModelOverrideId(null); return }
     const next = modelProfiles.find((profile) => profile.id === nextId)
     if (!next) return
     setSwitchingModel(true)
     try {
-      if (shouldStopOllamaBeforeSwitch(activeModel, next, autoStopOllamaModels) && activeModel) await stopOllamaModel(activeModel.id)
+      const previous = modelProfiles.find((profile) => profile.id === activeModelId)
+      if (Object.keys(chatRuns).length === 0 && shouldStopOllamaBeforeSwitch(previous, next, autoStopOllamaModels) && previous) await stopOllamaModel(previous.id)
     } catch (error) {
       setError(`旧模型卸载失败，已继续切换：${String(error)}`)
     } finally {
       setActiveModelId(nextId)
+      setModelOverrideId(nextId)
       setSwitchingModel(false)
     }
   }
@@ -615,7 +620,8 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
       }
     }
 
-    const selectedModel = activeModel
+    const role = modelRoleForTask(taskPlan)
+    const selectedModel = modelProfiles.find((profile) => profile.id === (modelOverrideId ?? modelAssignments[role])) ?? null
     if (taskPlan.requiresModel && !selectedModel) { setSettingsOpen(true); return }
     if (taskPlan.requiresModel && taskPlan.sourcePolicy !== 'metadata-only' && selectedModel && !isLoopbackModelEndpoint(selectedModel.baseUrl)) {
       setError(`${taskPlan.analysisMode === 'focused' ? '聚焦分析会读取少量正文摘录' : '深度分析会逐块读取正文'}，当前仅允许使用 localhost 或 127.0.0.1 的本机模型。远程正文授权尚未启用。`)
@@ -764,6 +770,14 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
     setActiveLongTaskId(useLongTextPipeline ? taskDispatch.jobId : null)
     setPauseRequested(false)
     try {
+      if (selectedModel && taskPlan.requiresModel) {
+        const previous = modelProfiles.find((profile) => profile.id === activeModelId)
+        if (Object.keys(useAppStore.getState().chatRuns).length === 1 && shouldStopOllamaBeforeSwitch(previous, selectedModel, autoStopOllamaModels) && previous) {
+          try { await stopOllamaModel(previous.id) }
+          catch (error) { setError(`旧模型卸载失败，已继续执行：${String(error)}`) }
+        }
+        setActiveModelId(selectedModel.id)
+      }
       await saveConversationMessage(nextConversationId, nextTitle, userMessage, workspace?.id)
       setConversations(await listConversations(workspace?.id))
       setChatRunStatus(nextConversationId, 'thinking', null)
@@ -1080,7 +1094,7 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
           placeholder="描述你想续写、修改或梳理的内容..."
         />
         <div className="composer-tools">
-          {modelProfiles.length > 0 ? <label className="composer-model-selector" title="切换模型"><Bot /><select aria-label="当前模型" value={activeModelId ?? ''} disabled={busy || switchingModel} onChange={(event) => void switchModel(event.target.value)}>{modelProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name} · {profile.model}</option>)}</select><ChevronDown /></label>
+          {modelProfiles.length > 0 ? <label className="composer-model-selector" title="模型选择"><Bot /><select aria-label="当前模型" value={modelOverrideId ?? ''} disabled={busy || switchingModel} onChange={(event) => void switchModel(event.target.value)}><option value="">按功能自动选择</option>{modelProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.model} · {profile.baseUrl}</option>)}</select><ChevronDown /></label>
             : <button className="composer-model-selector missing" onClick={() => setSettingsOpen(true)}><Bot /><span>添加模型</span></button>}
           <span className={`composer-hint ${budget.exceedsLimit && !analysisStatus && !activeStatus ? 'over-limit' : ''}`} title={activeStatus?.title ?? `预计 ${budget.estimatedTokens} / ${budget.limit} tokens`}>{pauseRequested ? '暂停请求已提交' : analysisStatus ?? activeStatus?.label ?? `上下文 ${budget.usedPercent}% · Enter 发送`}</span>
           {longTaskActive && <button className="pause-button" aria-label={pauseRequested ? '继续长文本任务' : '暂停长文本任务'} title={pauseRequested ? '继续长文本任务' : '在当前步骤完成后暂停'} onClick={togglePause}>{pauseRequested ? <Play /> : <Pause />}</button>}

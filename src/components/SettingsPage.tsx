@@ -1,255 +1,243 @@
-import { ArrowLeft, Bot, Check, Layers3, Palette, PlugZap, Plus, RefreshCw, Save, Settings, Square, Trash2, X } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
-import { deleteModelProfile, listModelProfiles, saveModelProfile, stopOllamaModel, testModelConnection } from '../lib/desktop'
-import { createGroupProfileInput, isLocalOllamaProfile, isOllamaModelInstalled, isSameOllamaModel, MINIMUM_OLLAMA_MODEL_GROUP, shouldStopOllamaBeforeSwitch } from '../lib/modelGroups'
+import { ArrowLeft, Bot, Check, ChevronDown, CircleAlert, PlugZap, Plus, RefreshCw, Save, Sparkles, Square, Trash2, Zap } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { deleteModelConnection, discoverConnectionModels, isDesktop, listModelConnections, listModelProfiles, saveModelConnection, saveModelProfile, stopOllamaModel } from '../lib/desktop'
+import { isLocalOllamaProfile, recommendModel, type ModelGroupRole } from '../lib/modelGroups'
 import { useAppStore } from '../store'
-import type { ModelConnectionResult, ModelProfile, ModelProfileInput, ProviderKind } from '../types'
+import type { ModelConnection, ModelConnectionInput, ModelConnectionResult, ModelProfile } from '../types'
 
-function emptyProfile(kind: ProviderKind = 'ollama'): ModelProfileInput {
-  return {
-    id: crypto.randomUUID(),
-    name: kind === 'ollama' ? '本地 Ollama' : 'OpenAI 兼容模型',
-    kind,
-    baseUrl: kind === 'ollama' ? 'http://localhost:11434' : 'https://api.openai.com/v1',
-    model: kind === 'ollama' ? 'qwen3:8b' : '',
-    contextWindow: kind === 'ollama' ? MINIMUM_OLLAMA_MODEL_GROUP.contextWindow : 32768,
-  }
+function emptyConnection(): ModelConnectionInput {
+  return { id: crypto.randomUUID(), name: '本地 Ollama', kind: 'ollama', baseUrl: 'http://localhost:11434' }
 }
 
+const roles = [
+  { id: 'efficient', name: '轻量高效', description: '提取、摘要与分块分析', icon: Zap },
+  { id: 'general', name: '综合创作', description: '对话、主笔、润色与审校', icon: Sparkles },
+] as const
+
 export function SettingsPage() {
-  const profiles = useAppStore((state) => state.modelProfiles)
-  const activeModelId = useAppStore((state) => state.activeModelId)
-  const autoStopOllamaModels = useAppStore((state) => state.autoStopOllamaModels)
-  const theme = useAppStore((state) => state.theme)
-  const setProfiles = useAppStore((state) => state.setModelProfiles)
-  const setActiveModelId = useAppStore((state) => state.setActiveModelId)
-  const setAutoStopOllamaModels = useAppStore((state) => state.setAutoStopOllamaModels)
-  const setSettingsOpen = useAppStore((state) => state.setSettingsOpen)
-  const setTheme = useAppStore((state) => state.setTheme)
-  const setError = useAppStore((state) => state.setError)
-  const [section, setSection] = useState<'models' | 'general'>('models')
-  const [selectedId, setSelectedId] = useState(activeModelId)
-  const [draft, setDraft] = useState<ModelProfileInput>(() => emptyProfile())
-  const [testing, setTesting] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [connection, setConnection] = useState<ModelConnectionResult | null>(null)
-  const [groupConnection, setGroupConnection] = useState<ModelConnectionResult | null>(null)
-  const [groupScanning, setGroupScanning] = useState(false)
-  const [groupApplying, setGroupApplying] = useState(false)
-  const [stoppingModel, setStoppingModel] = useState(false)
+  const { modelProfiles: profiles, modelAssignments, autoStopOllamaModels, pendingChatRequests, chatRuns,
+    setModelProfiles, setModelAssignment, setAutoStopOllamaModels, setSettingsOpen } = useAppStore()
+  const [connections, setConnections] = useState<ModelConnection[]>([])
+  const [catalogs, setCatalogs] = useState<Record<string, ModelConnectionResult>>({})
+  const [scanning, setScanning] = useState<string[]>([])
+  const [draft, setDraft] = useState<ModelConnectionInput>(emptyConnection)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [dirty, setDirty] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState<{ error: boolean; text: string } | null>(null)
+  const alive = useRef(true)
+  const selected = connections.find((connection) => connection.id === selectedId)
+  const locked = busy || loading || pendingChatRequests > 0 || Object.keys(chatRuns).length > 0
 
-  useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setSettingsOpen(false)
+  const scan = async (connection: ModelConnectionInput) => {
+    setScanning((values) => [...values, connection.id])
+    let result: ModelConnectionResult
+    try { result = await discoverConnectionModels(connection) }
+    catch (error) { result = { ok: false, message: String(error), models: [] } }
+    if (alive.current) {
+      setCatalogs((values) => ({ ...values, [connection.id]: result }))
+      setScanning((values) => values.filter((id) => id !== connection.id))
     }
-    window.addEventListener('keydown', closeOnEscape)
-    return () => window.removeEventListener('keydown', closeOnEscape)
-  }, [setSettingsOpen])
-
-  const selected = useMemo(() => profiles.find((profile) => profile.id === selectedId), [profiles, selectedId])
-  useEffect(() => {
-    if (!selected) return
-    setDraft({
-      id: selected.id, name: selected.name, kind: selected.kind, baseUrl: selected.baseUrl,
-      model: selected.model, contextWindow: selected.contextWindow,
-    })
-    setConnection(null)
-  }, [selected])
-
-  const activate = async (nextId: string, availableProfiles: ModelProfile[], previousActive?: ModelProfile | null, skipStop = false) => {
-    const previous = previousActive ?? profiles.find((profile) => profile.id === activeModelId)
-    const next = availableProfiles.find((profile) => profile.id === nextId)
-    if (!next) return
-    try {
-      if (!skipStop && shouldStopOllamaBeforeSwitch(previous, next, autoStopOllamaModels) && previous) await stopOllamaModel(previous.id)
-    } catch (error) {
-      setError(`旧模型卸载失败，已继续切换：${String(error)}`)
-    } finally {
-      setActiveModelId(nextId)
-    }
+    return result
   }
 
-  const reload = async (preferredId?: string, previousActive?: ModelProfile | null, skipStop = false) => {
-    const values = await listModelProfiles()
-    setProfiles(values)
-    const next = preferredId ?? values[0]?.id ?? null
-    setSelectedId(next)
-    if (next) await activate(next, values, previousActive, skipStop)
+  useEffect(() => {
+    alive.current = true
+    let cancelled = false
+    void (async () => {
+      try {
+        const values = await listModelConnections()
+        const available = await listModelProfiles()
+        if (cancelled) return
+        setConnections(values)
+        setModelProfiles(available)
+        if (values[0]) { setSelectedId(values[0].id); setDraft(values[0]) }
+        setLoading(false)
+        await Promise.all(values.map(scan))
+      } catch (error) {
+        if (!cancelled) { setNotice({ error: true, text: String(error) }); setLoading(false) }
+      }
+    })()
+    return () => { cancelled = true; alive.current = false }
+  }, [setModelProfiles])
+
+  const discard = () => !dirty || window.confirm('放弃尚未保存的连接修改？')
+  const close = () => { if (!busy && discard()) setSettingsOpen(false) }
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') close() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+
+  const edit = (changes: Partial<ModelConnectionInput>) => { setDraft((value) => ({ ...value, ...changes })); setDirty(true); setNotice(null) }
+  const chooseConnection = (connection?: ModelConnection) => {
+    if (!discard()) return
+    setSelectedId(connection?.id ?? null)
+    setDraft(connection ?? emptyConnection())
+    setDirty(false)
+    setNotice(null)
   }
 
   const save = async () => {
-    setSaving(true)
+    if (locked) return
+    setBusy(true)
+    setNotice(null)
     try {
-      const previousActive = profiles.find((profile) => profile.id === activeModelId) ?? null
-      const nextProfile = { ...previousActive, ...draft, hasApiKey: previousActive?.hasApiKey ?? false, updatedAt: Date.now() } as ModelProfile
-      let stopHandledBeforeSave = false
-      if (previousActive && shouldStopOllamaBeforeSwitch(previousActive, nextProfile, autoStopOllamaModels)) {
-        stopHandledBeforeSave = true
-        try {
-          await stopOllamaModel(previousActive.id)
-        } catch (error) {
-          setError(`旧模型卸载失败，已继续保存：${String(error)}`)
-        }
-      }
-      const profile = await saveModelProfile(draft)
-      setDraft({ ...draft, apiKey: undefined, clearApiKey: undefined })
-      await reload(profile.id, previousActive, stopHandledBeforeSave)
-    } catch (error) { setError(String(error)) } finally { setSaving(false) }
-  }
-
-  const test = async () => {
-    setTesting(true)
-    setConnection(null)
-    try {
-      const result = await testModelConnection(draft)
-      setConnection(result)
-      if (draft.kind === 'ollama' && isLocalOllamaProfile(draft)) setGroupConnection(result)
-    }
-    catch (error) { setConnection({ ok: false, message: String(error), models: [] }) }
-    finally { setTesting(false) }
+      const url = new URL(draft.baseUrl.trim())
+      if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) throw new Error('请输入不含凭据、查询参数或片段的 HTTP / HTTPS 服务地址')
+      if (!draft.name.trim()) throw new Error('连接名称不能为空')
+      const saved = await saveModelConnection(draft)
+      setConnections((values) => [saved, ...values.filter((value) => value.id !== saved.id)])
+      setSelectedId(saved.id)
+      setDraft(saved)
+      setDirty(false)
+      setModelProfiles(await listModelProfiles())
+      const result = await scan(saved)
+      setNotice({ error: !result.ok, text: result.ok ? `连接已保存，发现 ${result.models.length} 个模型` : `连接已保存；获取模型失败：${result.message}` })
+    } catch (error) { setNotice({ error: true, text: String(error) }) }
+    finally { setBusy(false) }
   }
 
   const remove = async () => {
-    if (!selected || !window.confirm(`删除模型配置“${selected.name}”？系统凭据库中的 API Key 也会删除。`)) return
-    const previousActive = profiles.find((profile) => profile.id === activeModelId) ?? null
-    let stopHandledBeforeDelete = false
+    if (!selected || locked || !window.confirm(`删除连接“${selected.name}”？该连接的凭据及模型配置将删除，相关功能分配会清空。`)) return
+    setBusy(true)
     try {
-      if (autoStopOllamaModels && selected.id === activeModelId && isLocalOllamaProfile(selected)) {
-        stopHandledBeforeDelete = true
-        try { await stopOllamaModel(selected.id) } catch (error) { setError(`模型卸载失败，已继续删除：${String(error)}`) }
+      await deleteModelConnection(selected.id)
+      const values = connections.filter((value) => value.id !== selected.id)
+      setConnections(values)
+      setCatalogs((previous) => Object.fromEntries(Object.entries(previous).filter(([id]) => id !== selected.id)))
+      setModelProfiles(await listModelProfiles())
+      setSelectedId(values[0]?.id ?? null)
+      setDraft(values[0] ?? emptyConnection())
+      setDirty(false)
+      setNotice({ error: false, text: '连接已删除' })
+    } catch (error) { setNotice({ error: true, text: String(error) }) }
+    finally { setBusy(false) }
+  }
+
+  const saveAssignment = async (role: ModelGroupRole, connection: ModelConnection, model: string) => {
+    const available = await listModelProfiles()
+    const existing = available.find((profile) => profile.connectionId === connection.id && profile.model === model)
+    const profile = existing ?? await saveModelProfile({
+      id: crypto.randomUUID(), connectionId: connection.id, name: `${connection.name} · ${model}`,
+      kind: connection.kind, baseUrl: connection.baseUrl, model, contextWindow: connection.kind === 'ollama' ? 16384 : 32768,
+    })
+    setModelProfiles(await listModelProfiles())
+    setModelAssignment(role, profile.id)
+  }
+
+  const assign = async (role: ModelGroupRole, value: string) => {
+    if (locked) return
+    if (!value) { setModelAssignment(role, null); return }
+    setBusy(true)
+    setNotice(null)
+    try {
+      const [connectionId, model] = JSON.parse(value) as [string, string]
+      const connection = connections.find((item) => item.id === connectionId)
+      if (!connection) throw new Error('连接已不存在')
+      await saveAssignment(role, connection, model)
+    } catch (error) { setNotice({ error: true, text: String(error) }) }
+    finally { setBusy(false) }
+  }
+
+  const smartAssign = async () => {
+    if (!selected || locked || dirty) return
+    const models = catalogs[selected.id]?.ok ? catalogs[selected.id].models : []
+    setBusy(true)
+    try {
+      for (const role of roles) {
+        const model = recommendModel(models, role.id)
+        if (!model) throw new Error('此连接没有可用于创作的模型')
+        await saveAssignment(role.id, selected, model)
       }
-      await deleteModelProfile(selected.id)
-      await reload(undefined, previousActive, stopHandledBeforeDelete)
-    } catch (error) { setError(String(error)) }
+      setNotice({ error: false, text: `已从“${selected.name}”分配两类功能模型` })
+    } catch (error) { setNotice({ error: true, text: String(error) }) }
+    finally { setBusy(false) }
   }
 
-  const changeKind = (kind: ProviderKind) => {
-    const next = emptyProfile(kind)
-    setDraft({ ...draft, kind, baseUrl: next.baseUrl, model: next.model, name: next.name })
-    setConnection(null)
+  const updateContext = async (profile: ModelProfile, value: number) => {
+    if (locked || value === profile.contextWindow) return
+    if (!Number.isInteger(value) || value < 2048 || value > 2000000) { setNotice({ error: true, text: '上下文窗口必须在 2048 到 2000000 之间' }); return }
+    setBusy(true)
+    try { await saveModelProfile({ ...profile, contextWindow: value }); setModelProfiles(await listModelProfiles()) }
+    catch (error) { setNotice({ error: true, text: String(error) }) }
+    finally { setBusy(false) }
   }
 
-  const scanMinimumGroup = async () => {
-    setGroupScanning(true)
+  const stopModels = async () => {
+    setBusy(true)
     try {
-      setGroupConnection(await testModelConnection(createGroupProfileInput(MINIMUM_OLLAMA_MODEL_GROUP.members[0])))
-    } catch (error) {
-      setGroupConnection({ ok: false, message: String(error), models: [] })
-    } finally {
-      setGroupScanning(false)
-    }
+      const local = profiles.filter((profile) => profile.connectionId === selectedId && isLocalOllamaProfile(profile))
+      for (const profile of local) await stopOllamaModel(profile.id)
+      setNotice({ error: false, text: '已停止此连接中配置的本机模型' })
+    } catch (error) { setNotice({ error: true, text: String(error) }) }
+    finally { setBusy(false) }
   }
 
-  useEffect(() => { void scanMinimumGroup() }, [])
+  const availableCount = Object.values(catalogs).reduce((count, result) => count + (result.ok ? result.models.length : 0), 0)
+  const selectedCatalog = selectedId ? catalogs[selectedId] : undefined
 
-  const installedGroupMembers = MINIMUM_OLLAMA_MODEL_GROUP.members.filter((member) => isOllamaModelInstalled(groupConnection?.models ?? [], member.model))
-  const configuredGroupMembers = MINIMUM_OLLAMA_MODEL_GROUP.members.filter((member) => profiles.some((profile) => isLocalOllamaProfile(profile) && isSameOllamaModel(profile.model, member.model)))
-  const unconfiguredInstalledGroupMembers = installedGroupMembers.filter((member) => !configuredGroupMembers.some((configured) => configured.id === member.id))
-
-  const applyMinimumGroup = async () => {
-    if (!groupConnection?.ok || installedGroupMembers.length === 0) return
-    setGroupApplying(true)
-    try {
-      const previousActive = profiles.find((profile) => profile.id === activeModelId) ?? null
-      let available = await listModelProfiles()
-      for (const member of unconfiguredInstalledGroupMembers) {
-        const saved = await saveModelProfile(createGroupProfileInput(member))
-        available = [saved, ...available.filter((profile) => profile.id !== saved.id)]
-      }
-      available = await listModelProfiles()
-      setProfiles(available)
-      const primary = available.find((profile) => isLocalOllamaProfile(profile) && isSameOllamaModel(profile.model, 'qwen3:8b'))
-        ?? available.find((profile) => isLocalOllamaProfile(profile) && installedGroupMembers.some((member) => isSameOllamaModel(profile.model, member.model)))
-      if (primary) {
-        setSelectedId(primary.id)
-        await activate(primary.id, available, previousActive)
-      }
-    } catch (error) {
-      setError(`模型组配置失败：${String(error)}`)
-    } finally {
-      setGroupApplying(false)
-    }
-  }
-
-  const stopSelectedModel = async () => {
-    if (!selected || !isLocalOllamaProfile(selected)) return
-    setStoppingModel(true)
-    try {
-      const result = await stopOllamaModel(selected.id)
-      setConnection({ ok: true, message: result.message, models: connection?.models ?? [] })
-    } catch (error) {
-      setError(`停止模型失败：${String(error)}`)
-    } finally {
-      setStoppingModel(false)
-    }
-  }
-
-  return <section className="settings-page">
-    <aside className="settings-nav">
-      <div className="settings-heading"><Settings /><span>设置</span></div>
-      <button className={section === 'models' ? 'active' : ''} onClick={() => setSection('models')}><Bot />模型</button>
-      <button className={section === 'general' ? 'active' : ''} onClick={() => setSection('general')}><Palette />外观</button>
-    </aside>
-    <div className="settings-content">
-      <header className="settings-toolbar">
-        <div><h1>{section === 'models' ? '模型与连接' : '外观'}</h1><p>{section === 'models' ? '配置本机、局域网或 OpenAI 兼容模型服务' : '界面偏好仅保存在本机'}</p></div>
-        <button className="icon-button" title="返回工作区" aria-label="返回工作区" onClick={() => setSettingsOpen(false)}><ArrowLeft /></button>
-      </header>
-      {section === 'general' ? <div className="settings-form narrow">
-        <div className="setting-row">
-          <div><label>主题</label><small>可随时切换，不影响文档内容</small></div>
-          <div className="segmented large"><button className={theme === 'dark' ? 'active' : ''} onClick={() => setTheme('dark')}>深色</button><button className={theme === 'light' ? 'active' : ''} onClick={() => setTheme('light')}>浅色</button></div>
+  return <section className="settings-page" aria-label="模型设置">
+    <header className="settings-toolbar">
+      <div><h1>模型与连接</h1><p>{isDesktop() ? '设置' : '浏览器演示'} · {connections.length} 个连接 · {availableCount} 个可用模型</p></div>
+      <button className="icon-button" title="返回工作区" aria-label="返回工作区" disabled={busy} onClick={close}><ArrowLeft /></button>
+    </header>
+    {notice && <div role={notice.error ? 'alert' : 'status'} className={`settings-notice ${notice.error ? 'failure' : ''}`}>{notice.error ? <CircleAlert /> : <Check />}<span>{notice.text}</span></div>}
+    <div className="model-settings-scroll">
+      <section className="model-assignments" aria-labelledby="model-assignments-title">
+        <div className="settings-section-heading"><h2 id="model-assignments-title">功能模型</h2>{locked && !loading && <small>{busy ? '正在保存...' : '任务运行中'}</small>}</div>
+        <div className="model-assignment-grid">
+          {roles.map(({ id, name, description, icon: Icon }) => {
+            const profile = profiles.find((item) => item.id === modelAssignments[id])
+            const source = connections.find((item) => item.id === profile?.connectionId)
+            const value = profile ? JSON.stringify([profile.connectionId, profile.model]) : ''
+            const listed = source && catalogs[source.id]?.ok && catalogs[source.id].models.includes(profile?.model ?? '')
+            return <article className={`model-assignment ${id}`} key={id}>
+              <header><Icon /><div><h3>{name}</h3><p>{description}</p></div><span className={profile ? 'configured' : ''}>{profile ? '已配置' : '未配置'}</span></header>
+              <label className="assignment-select"><select aria-label={`${name}模型`} value={value} disabled={locked} onChange={(event) => void assign(id, event.target.value)}>
+                <option value="">未配置</option>
+                {profile && !listed && <option value={value}>{profile.model}（当前配置）</option>}
+                {connections.map((connection) => <optgroup key={connection.id} label={`${connection.name} · ${connection.baseUrl}`}>
+                  {(catalogs[connection.id]?.ok ? catalogs[connection.id].models : []).map((model) => <option key={model} value={JSON.stringify([connection.id, model])}>{model} · {connection.name}</option>)}
+                </optgroup>)}
+              </select><ChevronDown /></label>
+              <div className="assignment-source"><PlugZap /><div><strong>{source?.name ?? '未选择连接'}</strong><span>{source?.baseUrl ?? profile?.baseUrl ?? '无连接来源'}</span></div></div>
+              {profile && source && !listed && !scanning.includes(source.id) && <small className="assignment-warning"><CircleAlert />{catalogs[source.id]?.ok ? '服务列表中未找到当前模型' : '模型可用性尚未确认'}</small>}
+              {profile && <details className="assignment-advanced"><summary>运行参数</summary><label>上下文窗口<input key={`${profile.id}:${profile.contextWindow}`} aria-label={`${name}上下文窗口`} type="number" min={2048} max={2000000} step={1024} defaultValue={profile.contextWindow} disabled={locked} onBlur={(event) => void updateContext(profile, Number(event.target.value))} />tokens</label></details>}
+            </article>
+          })}
         </div>
-      </div> : <div className="model-settings-layout">
-        <aside className="profile-list">
-          <button className="add-profile" onClick={() => { setSelectedId(null); setDraft(emptyProfile()); setConnection(null) }}><Plus />新增配置</button>
-          {profiles.map((profile) => <button key={profile.id} className={selectedId === profile.id ? 'active' : ''} onClick={() => setSelectedId(profile.id)}>
-            <span className={`provider-mark ${profile.kind}`}><Bot /></span><span><b>{profile.name}</b><small>{profile.model}</small></span>{profile.id === activeModelId && <Check />}
-          </button>)}
-        </aside>
-        <div className="settings-form">
-          <section className="model-group-section" aria-labelledby="minimum-model-group-title">
-            <header>
-              <div><span className="model-group-icon"><Layers3 /></span><span><b id="minimum-model-group-title">{MINIMUM_OLLAMA_MODEL_GROUP.name}</b><small>{MINIMUM_OLLAMA_MODEL_GROUP.description} · {MINIMUM_OLLAMA_MODEL_GROUP.contextWindow.toLocaleString('zh-CN')} tokens</small></span></div>
-              <div className="model-group-actions">
-                <button className="icon-button" title="检测本机 Ollama" aria-label="检测本机 Ollama" disabled={groupScanning} onClick={() => void scanMinimumGroup()}><RefreshCw className={groupScanning ? 'spinning' : ''} /></button>
-                <button className="secondary-button" disabled={!groupConnection?.ok || unconfiguredInstalledGroupMembers.length === 0 || groupApplying} onClick={() => void applyMinimumGroup()}>{unconfiguredInstalledGroupMembers.length === 0 && groupConnection?.ok ? <Check /> : <Plus />}{groupApplying ? '配置中...' : unconfiguredInstalledGroupMembers.length === 0 && groupConnection?.ok ? '已同步' : '添加已安装项'}</button>
+      </section>
+
+      <section className="model-connections" aria-labelledby="model-connections-title">
+        <div className="settings-section-heading"><h2 id="model-connections-title">模型连接</h2><button className="secondary-button" disabled={locked} onClick={() => chooseConnection()}><Plus />新增连接</button></div>
+        <div className="connection-workspace">
+          <aside className="connection-list" aria-label="连接列表">
+            {loading ? <p>正在读取连接...</p> : connections.length === 0 ? <p>暂无连接</p> : connections.map((connection) => <button key={connection.id} disabled={busy} className={connection.id === selectedId ? 'active' : ''} onClick={() => chooseConnection(connection)}>
+              <PlugZap /><span><b>{connection.name}</b><small>{connection.baseUrl}</small><small>{scanning.includes(connection.id) ? '获取模型中...' : catalogs[connection.id]?.ok ? `${catalogs[connection.id].models.length} 个模型` : '连接不可用'}</small></span>
+              <span className={`connection-dot ${catalogs[connection.id]?.ok ? 'online' : ''}`} />
+            </button>)}
+          </aside>
+          <form className="connection-form" onSubmit={(event) => { event.preventDefault(); void save() }}>
+            <fieldset disabled={locked || Boolean(selectedId && scanning.includes(selectedId))}>
+              <div className="connection-form-heading"><h3>{selected ? '连接详情' : '新增连接'}</h3>{dirty && <small>未保存</small>}</div>
+              <div className="field-grid">
+                <div className="field-group"><label htmlFor="connection-name">连接名称</label><input id="connection-name" required value={draft.name} onChange={(event) => edit({ name: event.target.value })} /></div>
+                <div className="field-group"><label htmlFor="connection-kind">接口类型</label><select id="connection-kind" value={draft.kind} onChange={(event) => { const kind = event.target.value as ModelConnectionInput['kind']; edit({ kind, baseUrl: kind === 'ollama' ? 'http://localhost:11434' : 'https://api.openai.com/v1' }) }}><option value="ollama">Ollama</option><option value="openai-compatible">OpenAI 兼容</option></select></div>
               </div>
-            </header>
-            <div className="model-group-status"><span className={groupConnection?.ok ? 'online' : ''} />{groupScanning ? '正在检测本机 Ollama...' : groupConnection?.ok ? `发现 ${groupConnection.models.length} 个模型；组内已安装 ${installedGroupMembers.length}/${MINIMUM_OLLAMA_MODEL_GROUP.members.length}，已配置 ${configuredGroupMembers.length}/${MINIMUM_OLLAMA_MODEL_GROUP.members.length}` : groupConnection?.message ?? '尚未检测本机 Ollama'}</div>
-            <div className="model-group-members">
-              {MINIMUM_OLLAMA_MODEL_GROUP.members.map((member) => {
-                const installed = isOllamaModelInstalled(groupConnection?.models ?? [], member.model)
-                const configured = configuredGroupMembers.some((candidate) => candidate.id === member.id)
-                return <div key={member.id} className="model-group-member"><span className={`model-role ${member.role}`}>{member.roleLabel}</span><span><b>{member.model}</b><small>{member.description}</small></span><span className={installed ? 'installed' : 'missing'}>{configured ? '已配置' : installed ? '已安装' : '未安装'}</span><small>{member.size}</small></div>
-              })}
-            </div>
-            <div className="model-group-preference">
-              <span><label htmlFor="auto-stop-ollama-models">切换时自动停止旧模型</label><small>仅作用于本机 Ollama；手动停止命令始终可用</small></span>
-              <label className="toggle-switch">
-                <input id="auto-stop-ollama-models" type="checkbox" checked={autoStopOllamaModels} onChange={(event) => setAutoStopOllamaModels(event.target.checked)} />
-                <span aria-hidden="true" />
-              </label>
-            </div>
-          </section>
-          <div className="field-group"><label>接口类型</label><div className="segmented large"><button className={draft.kind === 'ollama' ? 'active' : ''} onClick={() => changeKind('ollama')}>Ollama</button><button className={draft.kind === 'openai-compatible' ? 'active' : ''} onClick={() => changeKind('openai-compatible')}>OpenAI 兼容</button></div></div>
-          <div className="field-grid">
-            <div className="field-group"><label htmlFor="profile-name">配置名称</label><input id="profile-name" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></div>
-            <div className="field-group"><label htmlFor="context-window">上下文窗口</label><input id="context-window" type="number" min="2048" max="2000000" step="1024" value={draft.contextWindow} onChange={(event) => setDraft({ ...draft, contextWindow: Number(event.target.value) })} /></div>
-          </div>
-          <div className="field-group"><label htmlFor="base-url">Base URL</label><input id="base-url" spellCheck={false} value={draft.baseUrl} onChange={(event) => setDraft({ ...draft, baseUrl: event.target.value })} /><small>{draft.kind === 'ollama' ? '示例：http://localhost:11434 或局域网 Ollama 地址' : '示例：https://api.openai.com/v1、LM Studio 或 vLLM 地址'}</small></div>
-          <div className="field-group"><label htmlFor="model-name">模型</label><input id="model-name" list="detected-models" spellCheck={false} value={draft.model} onChange={(event) => setDraft({ ...draft, model: event.target.value })} /><datalist id="detected-models">{connection?.models.map((model) => <option key={model} value={model} />)}</datalist></div>
-          {draft.kind === 'openai-compatible' && <div className="field-group"><label htmlFor="api-key">API Key</label><input id="api-key" type="password" autoComplete="off" placeholder={selected?.hasApiKey ? '已保存在系统凭据库；留空保持不变' : '本机服务可留空'} value={draft.apiKey ?? ''} onChange={(event) => setDraft({ ...draft, apiKey: event.target.value, clearApiKey: false })} /><small>不会写入 SQLite、前端存储或日志</small>{selected?.hasApiKey && <label className="checkbox-label"><input type="checkbox" checked={Boolean(draft.clearApiKey)} onChange={(event) => setDraft({ ...draft, clearApiKey: event.target.checked, apiKey: '' })} />删除已保存的 API Key</label>}</div>}
-          {connection && <div className={`connection-result ${connection.ok ? 'success' : 'failure'}`}><span>{connection.ok ? <Check /> : <X />}</span><div><b>{connection.message}</b>{connection.models.length > 0 && <small>可用模型：{connection.models.slice(0, 8).join('、')}{connection.models.length > 8 ? ` 等 ${connection.models.length} 个` : ''}</small>}</div></div>}
-          <div className="settings-actions">
-            {selected && <button className="danger-button" onClick={() => void remove()}><Trash2 />删除</button>}
-            {selected && isLocalOllamaProfile(selected) && <button className="secondary-button" disabled={stoppingModel} onClick={() => void stopSelectedModel()}><Square />{stoppingModel ? '停止中...' : '停止驻留'}</button>}
-            <span />
-            <button className="secondary-button" disabled={testing} onClick={() => void test()}><PlugZap />{testing ? '测试中...' : '测试连接'}</button>
-            <button className="primary-button" disabled={saving} onClick={() => void save()}><Save />{saving ? '保存中...' : '保存并启用'}</button>
-          </div>
+              <div className="field-group"><label htmlFor="base-url">Base URL</label><input id="base-url" type="url" required spellCheck={false} value={draft.baseUrl} onChange={(event) => edit({ baseUrl: event.target.value })} /></div>
+              <div className="field-group"><label htmlFor="api-key">API Key</label><input id="api-key" type="password" autoComplete="off" placeholder={selected?.hasApiKey ? '已保存；留空保持不变' : '可选'} value={draft.apiKey ?? ''} onChange={(event) => edit({ apiKey: event.target.value, clearApiKey: false })} />{selected?.hasApiKey && <label className="checkbox-label"><input type="checkbox" checked={Boolean(draft.clearApiKey)} onChange={(event) => edit({ clearApiKey: event.target.checked, apiKey: '' })} />删除已保存的密钥</label>}</div>
+              <div className="settings-actions"><button type="button" className="icon-button connection-delete" title="删除连接" aria-label="删除连接" disabled={!selected} onClick={() => void remove()}><Trash2 /></button><span /><button type="submit" className="primary-button"><Save />{busy ? '保存中...' : '保存并获取模型'}</button></div>
+            </fieldset>
+            {selected && <div className="connection-catalog">
+              <header><h3>可用模型 <span>{selectedCatalog?.ok ? selectedCatalog.models.length : 0}</span></h3><button type="button" className="icon-button" title="刷新模型列表" aria-label="刷新模型列表" disabled={locked || dirty || scanning.includes(selected.id)} onClick={() => void scan(selected)}><RefreshCw className={scanning.includes(selected.id) ? 'spinning' : ''} /></button><button type="button" className="secondary-button" disabled={locked || dirty || !selectedCatalog?.ok || !selectedCatalog.models.length || scanning.includes(selected.id)} onClick={() => void smartAssign()}><Sparkles />智能分配</button></header>
+              {scanning.includes(selected.id) ? <p role="status">正在获取模型...</p> : !selectedCatalog?.ok ? <p className="assignment-warning" role="status">{selectedCatalog?.message ?? '尚未获取模型'}</p> : selectedCatalog.models.length === 0 ? <p>服务未返回模型</p> : <ul>{selectedCatalog.models.map((model) => <li key={model}><Bot /><span>{model}</span>{roles.filter((role) => profiles.some((profile) => profile.id === modelAssignments[role.id] && profile.connectionId === selected.id && profile.model === model)).map((role) => <small key={role.id}>{role.name}</small>)}</li>)}</ul>}
+            </div>}
+          </form>
         </div>
-      </div>}
+      </section>
+      <div className="model-runtime-preference"><label htmlFor="auto-stop-ollama-models">切换时自动停止旧的本机 Ollama 模型</label><label className="toggle-switch"><input id="auto-stop-ollama-models" type="checkbox" checked={autoStopOllamaModels} onChange={(event) => setAutoStopOllamaModels(event.target.checked)} /><span aria-hidden="true" /></label>{selected && isLocalOllamaProfile(selected) && <button className="secondary-button" disabled={locked || !profiles.some((profile) => profile.connectionId === selected.id)} onClick={() => void stopModels()}><Square />停止驻留</button>}</div>
     </div>
   </section>
 }

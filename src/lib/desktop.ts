@@ -3,7 +3,7 @@ import { listen } from '@tauri-apps/api/event'
 import { open } from '@tauri-apps/plugin-dialog'
 import type {
   ChatMessage, ChatRequest, ChatStreamEvent, ContextDocument, Conversation, ConversationSummary,
-  ChunkManifest, DocumentSnapshot, ModelConnectionResult, ModelProfile, ModelProfileInput, OllamaStopResult, SearchHit,
+  ChunkManifest, DocumentSnapshot, ModelConnection, ModelConnectionInput, ModelConnectionResult, ModelProfile, ModelProfileInput, OllamaStopResult, SearchHit,
   AnalysisJobManifest, CharacterGraphBenchmark, CharacterGraphStats, CharacterInput, CharacterMentionInput, CharacterNeighbor, CharacterRecord,
   LongTextWorkerOutput, StartLongTextWorkerInput, StartTaskJobInput, TaskJob, TaskJobStep, TaskWorkerEvent, UpdateTaskJobInput,
   ProjectMemoryCandidate, ProjectMemoryItem, ProjectMemoryStatus, RelationshipEvidenceInput, RelationshipInput,
@@ -16,6 +16,7 @@ import { createTaskExecutionDispatch, validateTaskExecutionInput } from './taskR
 import type { TaskExecutionDispatch, TaskExecutionInput } from './taskRuntime'
 
 const PROFILE_KEY = 'vinkey.demo.modelProfiles'
+const CONNECTION_KEY = 'vinkey.demo.modelConnections'
 const CONVERSATION_KEY = 'vinkey.demo.conversations'
 const PROJECTS_KEY = 'vinkey.demo.projects'
 const MEMORY_KEY = 'vinkey.demo.projectMemory'
@@ -671,13 +672,55 @@ function readDemoProfiles(): ModelProfile[] {
     if (stored.some((profile) => 'apiKey' in profile || 'clearApiKey' in profile)) {
       localStorage.setItem(PROFILE_KEY, JSON.stringify(value))
     }
-    return value.length > 0 ? value : [defaultDemoProfile()]
+    return localStorage.getItem(PROFILE_KEY) === null ? [defaultDemoProfile()] : value
   } catch { return [defaultDemoProfile()] }
 }
 
 export async function listModelProfiles(): Promise<ModelProfile[]> {
-  if (!isDesktop()) return readDemoProfiles()
+  if (!isDesktop()) {
+    const connections = readDemoConnections()
+    return readDemoProfiles().map((profile) => {
+      const connection = connections.find((item) => item.id === profile.connectionId)
+      return connection ? { ...profile, kind: connection.kind, baseUrl: connection.baseUrl, hasApiKey: connection.hasApiKey } : profile
+    })
+  }
   return invoke<ModelProfile[]>('list_model_profiles')
+}
+
+function readDemoConnections(): ModelConnection[] {
+  const stored = localStorage.getItem(CONNECTION_KEY)
+  if (stored !== null) return JSON.parse(stored) as ModelConnection[]
+  const profiles = readDemoProfiles()
+  const connections = profiles.map(({ id, name, kind, baseUrl, hasApiKey, updatedAt }) => ({ id, name, kind, baseUrl, hasApiKey, updatedAt }))
+  localStorage.setItem(CONNECTION_KEY, JSON.stringify(connections))
+  localStorage.setItem(PROFILE_KEY, JSON.stringify(profiles.map((profile) => ({ ...profile, connectionId: profile.id }))))
+  return connections
+}
+
+export async function listModelConnections(): Promise<ModelConnection[]> {
+  return isDesktop() ? invoke<ModelConnection[]>('list_model_connections') : readDemoConnections()
+}
+
+export async function saveModelConnection(input: ModelConnectionInput): Promise<ModelConnection> {
+  if (isDesktop()) return invoke<ModelConnection>('save_model_connection', { input })
+  const connections = readDemoConnections()
+  const existing = connections.find((item) => item.id === input.id)
+  const connection: ModelConnection = {
+    id: input.id, name: input.name.trim(), kind: input.kind, baseUrl: input.baseUrl.trim().replace(/\/+$/, ''),
+    hasApiKey: input.clearApiKey ? false : Boolean(input.apiKey?.trim()) || Boolean(existing?.hasApiKey), updatedAt: Date.now(),
+  }
+  localStorage.setItem(CONNECTION_KEY, JSON.stringify([connection, ...connections.filter((item) => item.id !== input.id)]))
+  return connection
+}
+
+export async function deleteModelConnection(id: string): Promise<void> {
+  if (isDesktop()) return invoke('delete_model_connection', { id })
+  localStorage.setItem(CONNECTION_KEY, JSON.stringify(readDemoConnections().filter((item) => item.id !== id)))
+  localStorage.setItem(PROFILE_KEY, JSON.stringify(readDemoProfiles().filter((item) => item.connectionId !== id)))
+}
+
+export async function discoverConnectionModels(input: ModelConnectionInput): Promise<ModelConnectionResult> {
+  return testModelConnection({ ...input, model: '', contextWindow: 32768 })
 }
 
 export async function saveModelProfile(input: ModelProfileInput): Promise<ModelProfile> {
@@ -685,6 +728,7 @@ export async function saveModelProfile(input: ModelProfileInput): Promise<ModelP
     const existing = readDemoProfiles().find((item) => item.id === input.id)
     const profile: ModelProfile = {
       id: input.id,
+      connectionId: input.connectionId,
       name: input.name,
       kind: input.kind,
       baseUrl: input.baseUrl,
@@ -711,7 +755,7 @@ export async function deleteModelProfile(id: string): Promise<void> {
 export async function testModelConnection(input: ModelProfileInput): Promise<ModelConnectionResult> {
   if (!isDesktop()) {
     await new Promise((resolve) => window.setTimeout(resolve, 350))
-    return { ok: true, message: '浏览器演示连接正常', models: input.kind === 'ollama' ? ['openbmb/minicpm4.1:latest', 'qwen3:8b', 'llama3.2:latest'] : [input.model || 'custom-model'] }
+    return { ok: true, message: '浏览器演示数据', models: input.kind === 'ollama' ? ['openbmb/minicpm4.1:latest', 'qwen3:8b', 'llama3.2:latest'] : ['gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano'] }
   }
   return invoke<ModelConnectionResult>('test_model_connection', { input })
 }

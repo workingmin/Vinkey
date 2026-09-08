@@ -274,6 +274,21 @@ pub fn init(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
            updated_at INTEGER NOT NULL
          );",
     )?;
+    connection.execute_batch(
+        "CREATE TABLE IF NOT EXISTS model_connections (
+           id TEXT PRIMARY KEY, name TEXT NOT NULL,
+           kind TEXT NOT NULL CHECK(kind IN ('ollama', 'openai-compatible')),
+           base_url TEXT NOT NULL, has_api_key INTEGER NOT NULL DEFAULT 0,
+           updated_at INTEGER NOT NULL
+         );
+         CREATE TABLE IF NOT EXISTS model_profile_connections (
+           profile_id TEXT PRIMARY KEY, connection_id TEXT NOT NULL
+         );
+         INSERT OR IGNORE INTO model_connections
+           SELECT id, name, kind, base_url, has_api_key, updated_at FROM model_profiles
+           WHERE id NOT IN (SELECT profile_id FROM model_profile_connections);
+         INSERT OR IGNORE INTO model_profile_connections SELECT id, id FROM model_profiles;",
+    )?;
     Ok(())
 }
 

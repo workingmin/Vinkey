@@ -6,6 +6,7 @@ import type {
   DiffProposal, EditorRevisionRequest, EditorSelection,
 } from './types'
 import { applyDiffProposalSet, fingerprintDocument } from './lib/diffProposal'
+import { readModelAssignments, reconcileModelAssignments, type ModelAssignments, type ModelGroupRole } from './lib/modelGroups'
 
 const MAX_CHAT_ACTIVITY_LOG = 80
 
@@ -26,6 +27,7 @@ interface AppState {
   completedChatMessages: Record<string, ChatMessage>
   modelProfiles: ModelProfile[]
   activeModelId: string | null
+  modelAssignments: ModelAssignments
   autoStopOllamaModels: boolean
   settingsOpen: boolean
   sidebarCollapsed: boolean
@@ -60,6 +62,7 @@ interface AppState {
   removeConversation: (id: string) => void
   setModelProfiles: (profiles: ModelProfile[]) => void
   setActiveModelId: (id: string | null) => void
+  setModelAssignment: (role: ModelGroupRole, id: string | null) => void
   setAutoStopOllamaModels: (enabled: boolean) => void
   setSidebarCollapsed: (collapsed: boolean) => void
   setSettingsOpen: (open: boolean) => void
@@ -119,6 +122,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   completedChatMessages: {},
   modelProfiles: [],
   activeModelId: localStorage.getItem('vinkey.activeModelId'),
+  modelAssignments: readModelAssignments(localStorage.getItem('vinkey.modelAssignments')),
   autoStopOllamaModels: localStorage.getItem('vinkey.autoStopOllamaModels') !== 'false',
   settingsOpen: false,
   sidebarCollapsed: localStorage.getItem('vinkey.sidebarCollapsed') === 'true',
@@ -287,10 +291,16 @@ export const useAppStore = create<AppState>((set, get) => ({
       contextDocuments: [],
     }
   }),
-  setModelProfiles: (modelProfiles) => set((state) => ({
-    modelProfiles,
-    activeModelId: modelProfiles.some((profile) => profile.id === state.activeModelId) ? state.activeModelId : modelProfiles[0]?.id ?? null,
-  })),
+  setModelProfiles: (modelProfiles) => set((state) => {
+    const modelAssignments = reconcileModelAssignments(state.modelAssignments, modelProfiles, state.activeModelId)
+    localStorage.setItem('vinkey.modelAssignments', JSON.stringify(modelAssignments))
+    return { modelProfiles, modelAssignments, activeModelId: modelProfiles.some((profile) => profile.id === state.activeModelId) ? state.activeModelId : modelProfiles[0]?.id ?? null }
+  }),
+  setModelAssignment: (role, id) => set((state) => {
+    const modelAssignments = { ...state.modelAssignments, [role]: id }
+    localStorage.setItem('vinkey.modelAssignments', JSON.stringify(modelAssignments))
+    return { modelAssignments }
+  }),
   setActiveModelId: (activeModelId) => { if (activeModelId) localStorage.setItem('vinkey.activeModelId', activeModelId); set({ activeModelId }) },
   setAutoStopOllamaModels: (autoStopOllamaModels) => {
     localStorage.setItem('vinkey.autoStopOllamaModels', String(autoStopOllamaModels))

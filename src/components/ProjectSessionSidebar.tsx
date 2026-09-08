@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, CirclePlus, FileText, Folder, FolderOpen, MessageSquareText, PanelLeftClose, PanelLeftOpen, RefreshCw, Search, Settings, Trash2, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, CirclePlus, FileText, Folder, FolderOpen, MessageSquareText, Moon, PanelLeftClose, PanelLeftOpen, RefreshCw, Search, Settings, Sun, Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '../store'
 import type { ConversationSummary, ProjectSummary } from '../types'
@@ -24,7 +24,7 @@ function readExpanded(): string[] {
 
 export function ProjectSessionSidebar({ onPageChange, onOpenWorkspace, onRefreshWorkspace, onOpenDocument, onSelectProject, onDeleteProject }: Props) {
   const { projects, workspace, conversations, conversationId, messages, chatRuns, settingsOpen, sidebarCollapsed, projectTransition,
-    setSidebarCollapsed, setSettingsOpen, setError, setConversation, newConversation, removeConversation } = useAppStore()
+    theme, setTheme, setSidebarCollapsed, setSettingsOpen, setError, setConversation, newConversation, removeConversation } = useAppStore()
   const [query, setQuery] = useState('')
   const [expanded, setExpanded] = useState<string[]>(readExpanded)
   const [sessions, setSessions] = useState<Record<string, ConversationSummary[]>>({})
@@ -129,6 +129,7 @@ export function ProjectSessionSidebar({ onPageChange, onOpenWorkspace, onRefresh
       <header className="session-sidebar-header" data-tauri-drag-region>
         <div className="session-brand-row" data-tauri-drag-region>
           <div className="session-brand" data-tauri-drag-region><span>V</span><div><strong>Vinkey</strong><small>本地创作工作台</small></div></div>
+          <button className="icon-button sidebar-theme-button" title={theme === 'dark' ? '切换浅色主题' : '切换深色主题'} aria-label={theme === 'dark' ? '切换浅色主题' : '切换深色主题'} onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? <Sun /> : <Moon />}</button>
           <button className="icon-button sidebar-collapse-button" title={sidebarCollapsed ? '展开会话栏' : '折叠会话栏'} aria-label={sidebarCollapsed ? '展开会话栏' : '折叠会话栏'} aria-expanded={!sidebarCollapsed} aria-controls="session-sidebar-body" onClick={() => setSidebarCollapsed(!sidebarCollapsed)}>{sidebarCollapsed ? <PanelLeftOpen /> : <PanelLeftClose />}</button>
         </div>
         <div className="session-header-actions">

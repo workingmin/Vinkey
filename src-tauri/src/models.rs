@@ -22,8 +22,132 @@ const MAX_WORKER_CHAT_BYTES: usize = 16 * 1024 * 1024;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ModelConnectionInput {
+    id: String,
+    name: String,
+    kind: String,
+    base_url: String,
+    api_key: Option<String>,
+    clear_api_key: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelConnection {
+    id: String,
+    name: String,
+    kind: String,
+    base_url: String,
+    has_api_key: bool,
+    updated_at: u64,
+}
+
+fn connection_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ModelConnection> {
+    Ok(ModelConnection {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        kind: row.get(2)?,
+        base_url: row.get(3)?,
+        has_api_key: row.get::<_, i64>(4)? != 0,
+        updated_at: row.get::<_, i64>(5)? as u64,
+    })
+}
+
+fn load_connection(db: &rusqlite::Connection, id: &str) -> Result<ModelConnection, String> {
+    db.query_row("SELECT id, name, kind, base_url, has_api_key, updated_at FROM model_connections WHERE id=?1", [id], connection_from_row)
+        .map_err(|error| format!("无法读取模型连接：{error}"))
+}
+
+fn hydrate_profile(db: &rusqlite::Connection, profile: &mut ModelProfile) -> Result<(), String> {
+    use rusqlite::OptionalExtension;
+    let id: Option<String> = db
+        .query_row(
+            "SELECT connection_id FROM model_profile_connections WHERE profile_id=?1",
+            [&profile.id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?;
+    if let Some(id) = id {
+        let connection = load_connection(db, &id)?;
+        profile.connection_id = Some(id);
+        profile.kind = connection.kind;
+        profile.base_url = connection.base_url;
+        profile.has_api_key = connection.has_api_key;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn list_model_connections(
+    state: State<'_, DatabaseState>,
+) -> Result<Vec<ModelConnection>, String> {
+    let db = database::open(&state)?;
+    let mut statement = db.prepare("SELECT id, name, kind, base_url, has_api_key, updated_at FROM model_connections ORDER BY updated_at DESC")
+        .map_err(|error| error.to_string())?;
+    let rows = statement
+        .query_map([], connection_from_row)
+        .map_err(|error| error.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn save_model_connection(
+    input: ModelConnectionInput,
+    state: State<'_, DatabaseState>,
+) -> Result<ModelConnection, String> {
+    validate_id(&input.id)?;
+    let base = normalize_base(&input.kind, &input.base_url)?;
+    if input.name.trim().is_empty() {
+        return Err("连接名称不能为空".into());
+    }
+    let db = database::open(&state)?;
+    let mut has_key = load_connection(&db, &input.id)
+        .map(|value| value.has_api_key)
+        .unwrap_or(false);
+    if input.clear_api_key.unwrap_or(false) {
+        delete_secret(&input.id)?;
+        has_key = false;
+    }
+    if let Some(key) = input
+        .api_key
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+    {
+        set_secret(&input.id, key.trim())?;
+        has_key = true;
+    }
+    db.execute("INSERT INTO model_connections(id, name, kind, base_url, has_api_key, updated_at) VALUES(?1, ?2, ?3, ?4, ?5, ?6)
+        ON CONFLICT(id) DO UPDATE SET name=excluded.name, kind=excluded.kind, base_url=excluded.base_url, has_api_key=excluded.has_api_key, updated_at=excluded.updated_at",
+        params![input.id, input.name.trim(), input.kind, base, has_key as i32, now_ms() as i64]).map_err(|error| error.to_string())?;
+    load_connection(&db, &input.id)
+}
+
+#[tauri::command]
+pub fn delete_model_connection(id: String, state: State<'_, DatabaseState>) -> Result<(), String> {
+    validate_id(&id)?;
+    let mut db = database::open(&state)?;
+    let transaction = db.transaction().map_err(|error| error.to_string())?;
+    transaction.execute("DELETE FROM model_profiles WHERE id IN (SELECT profile_id FROM model_profile_connections WHERE connection_id=?1)", [&id]).map_err(|error| error.to_string())?;
+    transaction
+        .execute(
+            "DELETE FROM model_profile_connections WHERE connection_id=?1",
+            [&id],
+        )
+        .map_err(|error| error.to_string())?;
+    transaction
+        .execute("DELETE FROM model_connections WHERE id=?1", [&id])
+        .map_err(|error| error.to_string())?;
+    delete_secret(&id)?;
+    transaction.commit().map_err(|error| error.to_string())
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ModelProfileInput {
     pub id: String,
+    pub connection_id: Option<String>,
     pub name: String,
     pub kind: String,
     pub base_url: String,
@@ -37,6 +161,8 @@ pub struct ModelProfileInput {
 #[serde(rename_all = "camelCase")]
 pub struct ModelProfile {
     id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    connection_id: Option<String>,
     name: String,
     kind: String,
     base_url: String,
@@ -136,6 +262,9 @@ fn normalize_base(kind: &str, raw: &str) -> Result<String, String> {
     if url.query().is_some() || url.fragment().is_some() {
         return Err("模型地址不能包含查询参数或片段".into());
     }
+    if !url.username().is_empty() || url.password().is_some() {
+        return Err("模型地址不能包含凭据，请使用 API Key".into());
+    }
     if kind == "ollama" && url.path().trim_end_matches('/') == "/v1" {
         url.set_path("");
     }
@@ -220,6 +349,7 @@ fn delete_secret(_id: &str) -> Result<(), String> {
 fn profile_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ModelProfile> {
     Ok(ModelProfile {
         id: row.get(0)?,
+        connection_id: None,
         name: row.get(1)?,
         kind: row.get(2)?,
         base_url: row.get(3)?,
@@ -231,10 +361,13 @@ fn profile_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ModelProfile> {
 }
 
 fn load_profile_at(id: &str, state: &DatabaseState) -> Result<ModelProfile, String> {
-    database::open_state(state)?.query_row(
+    let connection = database::open_state(state)?;
+    let mut profile = connection.query_row(
         "SELECT id, name, kind, base_url, model, context_window, has_api_key, updated_at FROM model_profiles WHERE id = ?1",
         [id], profile_from_row,
-    ).map_err(|_| "找不到模型配置".to_string())
+    ).map_err(|_| "找不到模型配置".to_string())?;
+    hydrate_profile(&connection, &mut profile)?;
+    Ok(profile)
 }
 
 fn load_profile(id: &str, state: &State<'_, DatabaseState>) -> Result<ModelProfile, String> {
@@ -276,8 +409,13 @@ pub fn list_model_profiles(state: State<'_, DatabaseState>) -> Result<Vec<ModelP
     let rows = statement
         .query_map([], profile_from_row)
         .map_err(|error| format!("无法读取模型配置：{error}"))?;
-    rows.collect::<Result<Vec<_>, _>>()
-        .map_err(|error| format!("无法读取模型配置：{error}"))
+    let mut profiles = rows
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("无法读取模型配置：{error}"))?;
+    for profile in &mut profiles {
+        hydrate_profile(&connection, profile)?;
+    }
+    Ok(profiles)
 }
 
 #[tauri::command]
@@ -295,6 +433,10 @@ pub fn save_model_profile(
         return Err("上下文窗口必须在 2048 到 2000000 之间".into());
     }
     let connection = database::open(&state)?;
+    if let Some(id) = &input.connection_id {
+        validate_id(id)?;
+        load_connection(&connection, id)?;
+    }
     let previous_has_key: bool = connection
         .query_row(
             "SELECT has_api_key FROM model_profiles WHERE id = ?1",
@@ -324,6 +466,15 @@ pub fn save_model_profile(
          model=excluded.model, context_window=excluded.context_window, has_api_key=excluded.has_api_key, updated_at=excluded.updated_at",
         params![input.id, input.name.trim(), input.kind, base_url, input.model.trim(), input.context_window, has_api_key as i32, updated_at as i64],
     ).map_err(|error| format!("无法保存模型配置：{error}"))?;
+    if let Some(id) = &input.connection_id {
+        connection
+            .execute(
+                "INSERT INTO model_profile_connections(profile_id, connection_id) VALUES(?1, ?2)
+             ON CONFLICT(profile_id) DO UPDATE SET connection_id=excluded.connection_id",
+                params![input.id, id],
+            )
+            .map_err(|error| error.to_string())?;
+    }
     let profile = load_profile(&input.id, &state)?;
     runtime.info(
         "model.profile_saved",
@@ -347,10 +498,19 @@ pub fn delete_model_profile(
     runtime: State<'_, RuntimeLogState>,
 ) -> Result<(), String> {
     validate_id(&id)?;
-    delete_secret(&id)?;
+    let profile = load_profile(&id, &state)?;
+    if profile.connection_id.is_none() {
+        delete_secret(&id)?;
+    }
     database::open(&state)?
         .execute("DELETE FROM model_profiles WHERE id = ?1", [&id])
         .map_err(|error| format!("无法删除模型配置：{error}"))?;
+    database::open(&state)?
+        .execute(
+            "DELETE FROM model_profile_connections WHERE profile_id = ?1",
+            [&id],
+        )
+        .map_err(|error| error.to_string())?;
     runtime.info(
         "model.profile_deleted",
         serde_json::json!({ "profileId": id })
@@ -406,8 +566,8 @@ async fn discover(profile: &ModelProfile, api_key: Option<&str>) -> Result<Vec<S
     };
     let mut models = values
         .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
+        .ok_or_else(|| "模型列表响应格式无效".to_string())?
+        .iter()
         .filter_map(|item| {
             item.get(if profile.kind == "ollama" {
                 "name"
@@ -426,9 +586,9 @@ async fn discover(profile: &ModelProfile, api_key: Option<&str>) -> Result<Vec<S
 #[tauri::command]
 pub async fn test_model_connection(
     input: ModelProfileInput,
-    state: State<'_, DatabaseState>,
     runtime: State<'_, RuntimeLogState>,
 ) -> Result<ConnectionResult, String> {
+    validate_id(&input.id)?;
     let started = Instant::now();
     runtime.info(
         "model.connection_test_started",
@@ -442,19 +602,18 @@ pub async fn test_model_connection(
         .unwrap_or_default(),
     );
     let base_url = normalize_base(&input.kind, &input.base_url)?;
-    let stored = input
-        .api_key
-        .clone()
-        .filter(|value| !value.trim().is_empty())
-        .or_else(|| {
-            if input.kind == "openai-compatible" {
-                get_secret(&input.id).ok()
-            } else {
-                None
-            }
-        });
+    let stored = if input.clear_api_key.unwrap_or(false) {
+        None
+    } else {
+        input
+            .api_key
+            .clone()
+            .filter(|value| !value.trim().is_empty())
+            .or_else(|| get_secret(input.connection_id.as_deref().unwrap_or(&input.id)).ok())
+    };
     let profile = ModelProfile {
         id: input.id,
+        connection_id: input.connection_id,
         name: input.name,
         kind: input.kind,
         base_url,
@@ -734,7 +893,9 @@ pub(crate) async fn complete_worker_chat(
     };
     enforce_source_policy(&request, &profile)?;
     let key = if profile.has_api_key {
-        Some(get_secret(&profile.id)?)
+        Some(get_secret(
+            profile.connection_id.as_deref().unwrap_or(&profile.id),
+        )?)
     } else {
         None
     };
@@ -773,7 +934,9 @@ pub async fn stream_chat(
         .unwrap_or_default(),
     );
     let key = if profile.has_api_key {
-        Some(get_secret(&profile.id)?)
+        Some(get_secret(
+            profile.connection_id.as_deref().unwrap_or(&profile.id),
+        )?)
     } else {
         None
     };
@@ -836,6 +999,45 @@ mod tests {
     use super::*;
 
     #[test]
+    fn migrates_profiles_and_resolves_shared_connection_changes() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("models.sqlite3");
+        database::init(&path).unwrap();
+        let db = rusqlite::Connection::open(&path).unwrap();
+        db.execute("INSERT INTO model_profiles VALUES('legacy', 'Existing', 'openai-compatible', 'https://old.example/v1', 'same-model', 8192, 1, 1)", []).unwrap();
+        database::init(&path).unwrap();
+        let state = DatabaseState(path.clone());
+        let migrated = load_profile_at("legacy", &state).unwrap();
+        assert_eq!(migrated.connection_id.as_deref(), Some("legacy"));
+        assert!(migrated.has_api_key);
+
+        db.execute("INSERT INTO model_profiles VALUES('second-model', 'Second', 'ollama', 'http://localhost:11434', 'other-model', 16384, 0, 2)", []).unwrap();
+        db.execute(
+            "INSERT INTO model_profile_connections VALUES('second-model', 'legacy')",
+            [],
+        )
+        .unwrap();
+        db.execute("UPDATE model_connections SET base_url='https://new.example/v1', has_api_key=0 WHERE id='legacy'", []).unwrap();
+        database::init(&path).unwrap();
+        let second = load_profile_at("second-model", &state).unwrap();
+        assert_eq!(second.connection_id.as_deref(), Some("legacy"));
+        assert_eq!(second.base_url, "https://new.example/v1");
+        assert_eq!(second.kind, "openai-compatible");
+        assert_eq!(second.model, "other-model");
+        assert!(!second.has_api_key);
+        assert_eq!(
+            load_profile_at("legacy", &state).unwrap().base_url,
+            second.base_url
+        );
+        let count: i64 = db
+            .query_row("SELECT COUNT(*) FROM model_connections", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
     fn normalizes_local_provider_addresses() {
         assert_eq!(
             normalize_base("ollama", "192.168.1.5:11434/v1/").unwrap(),
@@ -851,6 +1053,7 @@ mod tests {
     fn rejects_non_http_endpoints() {
         assert!(normalize_base("ollama", "file:///tmp/model").is_err());
         assert!(normalize_base("other", "http://localhost").is_err());
+        assert!(normalize_base("openai-compatible", "https://user:secret@example.com/v1").is_err());
     }
 
     #[test]
@@ -879,6 +1082,7 @@ mod tests {
         };
         let mut profile = ModelProfile {
             id: "profile-1".into(),
+            connection_id: None,
             name: "Local".into(),
             kind: "openai-compatible".into(),
             base_url: "http://127.0.0.1:1234/v1".into(),

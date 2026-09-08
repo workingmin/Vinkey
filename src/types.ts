@@ -295,6 +295,7 @@ export interface ConversationSummary {
 
 export interface ModelProfile {
   id: string
+  connectionId?: string
   name: string
   kind: ProviderKind
   baseUrl: string
@@ -302,6 +303,20 @@ export interface ModelProfile {
   contextWindow: number
   hasApiKey: boolean
   updatedAt: number
+}
+
+export interface ModelConnection {
+  id: string
+  name: string
+  kind: ProviderKind
+  baseUrl: string
+  hasApiKey: boolean
+  updatedAt: number
+}
+
+export interface ModelConnectionInput extends Omit<ModelConnection, 'hasApiKey' | 'updatedAt'> {
+  apiKey?: string
+  clearApiKey?: boolean
 }
 
 export interface ModelProfileInput extends Omit<ModelProfile, 'hasApiKey' | 'updatedAt'> {
