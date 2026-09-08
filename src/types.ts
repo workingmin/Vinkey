@@ -14,10 +14,13 @@ export interface WorkspaceEntry {
   children: WorkspaceEntry[]
   documentKind?: DocumentKind
 }
-export interface WorkspaceSnapshot {
+export interface ProjectSummary {
   id: string
   name: string
   pathLabel: string
+}
+
+export interface WorkspaceSnapshot extends ProjectSummary {
   entries: WorkspaceEntry[]
 }
 

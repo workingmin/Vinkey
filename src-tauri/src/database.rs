@@ -513,6 +513,143 @@ fn project_database_path(root: &Path) -> PathBuf {
     root.join(".vinkey").join("conversations.sqlite3")
 }
 
+pub(crate) fn managed_conversation_path(db: &DatabaseState, id: &str) -> PathBuf {
+    db.0.parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join("project-records")
+        .join(format!("{id}.sqlite3"))
+}
+
+pub(crate) fn open_managed_conversations(
+    db: &DatabaseState,
+    workspace: &crate::Workspace,
+    import: bool,
+) -> Result<Connection, String> {
+    let path = managed_conversation_path(db, &workspace.id);
+    fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
+    let mut connection = Connection::open(path).map_err(|e| e.to_string())?;
+    connection
+        .busy_timeout(std::time::Duration::from_secs(5))
+        .map_err(|e| e.to_string())?;
+    init_conversation_schema(&connection).map_err(|e| e.to_string())?;
+    connection.execute_batch("CREATE TABLE IF NOT EXISTS conversation_import (done INTEGER PRIMARY KEY CHECK(done = 1))").map_err(|e| e.to_string())?;
+    let transaction = connection
+        .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+        .map_err(|e| e.to_string())?;
+    let imported: bool = transaction
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM conversation_import)",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    if !imported {
+        if import {
+            let old = project_database_path(&workspace.root);
+            if old.is_file() {
+                import_conversation_records(&transaction, &old)?;
+            } else {
+                let marker =
+                    db.0.parent()
+                        .unwrap()
+                        .join(".legacy-conversations-migrated");
+                if !marker.exists() {
+                    import_conversation_records(&transaction, &db.0)?;
+                    fs::write(marker, b"migrated\n").map_err(|e| e.to_string())?;
+                }
+            }
+        }
+        transaction
+            .execute("INSERT INTO conversation_import VALUES (1)", [])
+            .map_err(|e| e.to_string())?;
+    }
+    transaction.commit().map_err(|e| e.to_string())?;
+    Ok(connection)
+}
+
+fn import_conversation_records(target: &Connection, source: &Path) -> Result<(), String> {
+    // Legacy project databases are read-only; deletion and future saves use application data exclusively.
+    let old = Connection::open_with_flags(source, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .map_err(|e| format!("无法读取旧会话：{e}"))?;
+    let mut conversations = old
+        .prepare("SELECT id, title, created_at, updated_at FROM conversations")
+        .map_err(|e| e.to_string())?;
+    let rows = conversations
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, i64>(2)?,
+                row.get::<_, i64>(3)?,
+            ))
+        })
+        .map_err(|e| e.to_string())?;
+    for row in rows {
+        let (id, title, created, updated) = row.map_err(|e| e.to_string())?;
+        target
+            .execute(
+                "INSERT OR IGNORE INTO conversations VALUES (?1, ?2, ?3, ?4)",
+                params![id, title, created, updated],
+            )
+            .map_err(|e| e.to_string())?;
+    }
+    let mut info = old
+        .prepare("PRAGMA table_info(messages)")
+        .map_err(|e| e.to_string())?;
+    let columns = info
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|e| e.to_string())?
+        .collect::<Result<HashSet<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    let optional = ["completed_at", "activity_log", "task_ref"].map(|column| {
+        if columns.contains(column) {
+            column
+        } else {
+            "NULL"
+        }
+    });
+    let mut statement = old
+        .prepare(&format!(
+            "SELECT id, conversation_id, role, content, created_at, {}, {}, {} FROM messages",
+            optional[0], optional[1], optional[2]
+        ))
+        .map_err(|e| e.to_string())?;
+    let rows = statement
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, i64>(4)?,
+                row.get::<_, Option<i64>>(5)?,
+                row.get::<_, Option<String>>(6)?,
+                row.get::<_, Option<String>>(7)?,
+            ))
+        })
+        .map_err(|e| e.to_string())?;
+    for row in rows {
+        let (id, conversation, role, content, created, completed, activity, task) =
+            row.map_err(|e| e.to_string())?;
+        target.execute("INSERT OR IGNORE INTO messages (id, conversation_id, role, content, created_at, completed_at, activity_log, task_ref) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)", params![id, conversation, role, content, created, completed, activity, task]).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+fn conversation_database(
+    state: &State<'_, crate::WorkspaceState>,
+    db: &DatabaseState,
+    workspace_id: Option<String>,
+    import: bool,
+) -> Result<Connection, String> {
+    let id = match workspace_id {
+        Some(id) => id,
+        None => crate::lock_workspace(state)?.id,
+    };
+    let workspace = crate::projects::resolve(db, &id)?;
+    open_managed_conversations(db, &workspace, import)
+}
+
 pub fn open_project(state: &State<'_, crate::WorkspaceState>) -> Result<Connection, String> {
     let workspace = crate::lock_workspace(state)?;
     let directory = workspace.root.join(".vinkey");
@@ -1011,10 +1148,11 @@ pub fn character_graph_path(
 
 #[tauri::command]
 pub fn list_conversations(
+    workspace_id: Option<String>,
     state: State<'_, crate::WorkspaceState>,
     legacy: State<'_, DatabaseState>,
 ) -> Result<Vec<ConversationSummary>, String> {
-    let connection = open_project_for_commands(&state, &legacy)?;
+    let connection = conversation_database(&state, &legacy, workspace_id, true)?;
     let mut statement = connection
         .prepare(
             "SELECT c.id, c.title, c.updated_at, COUNT(m.id)
@@ -1039,10 +1177,11 @@ pub fn list_conversations(
 #[tauri::command]
 pub fn load_conversation(
     id: String,
+    workspace_id: Option<String>,
     state: State<'_, crate::WorkspaceState>,
     legacy: State<'_, DatabaseState>,
 ) -> Result<StoredConversation, String> {
-    let connection = open_project_for_commands(&state, &legacy)?;
+    let connection = conversation_database(&state, &legacy, workspace_id, true)?;
     let (title, updated_at): (String, i64) = connection
         .query_row(
             "SELECT title, updated_at FROM conversations WHERE id = ?1",
@@ -1086,6 +1225,7 @@ pub fn save_conversation_message(
     conversation_id: String,
     title: String,
     message: StoredMessage,
+    workspace_id: Option<String>,
     state: State<'_, crate::WorkspaceState>,
     legacy: State<'_, DatabaseState>,
 ) -> Result<(), String> {
@@ -1101,7 +1241,7 @@ pub fn save_conversation_message(
         .map(serde_json::to_string)
         .transpose()
         .map_err(|error| format!("无法序列化消息任务引用：{error}"))?;
-    let mut connection = open_project_for_commands(&state, &legacy)?;
+    let mut connection = conversation_database(&state, &legacy, workspace_id, true)?;
     let transaction = connection
         .transaction()
         .map_err(|error| format!("无法保存会话：{error}"))?;
@@ -1129,10 +1269,13 @@ pub fn save_conversation_message(
 #[tauri::command]
 pub fn delete_conversation(
     id: String,
+    workspace_id: Option<String>,
+    app: tauri::AppHandle,
     state: State<'_, crate::WorkspaceState>,
     legacy: State<'_, DatabaseState>,
 ) -> Result<(), String> {
-    open_project_for_commands(&state, &legacy)?
+    crate::ensure_workspace_idle(&app)?;
+    conversation_database(&state, &legacy, workspace_id, false)?
         .execute("DELETE FROM conversations WHERE id = ?1", [id])
         .map_err(|error| format!("无法删除会话：{error}"))?;
     Ok(())

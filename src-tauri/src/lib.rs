@@ -16,6 +16,7 @@ mod database;
 mod job_service;
 mod long_text;
 mod models;
+mod projects;
 mod runtime_log;
 mod search;
 mod task_runtime;
@@ -580,18 +581,6 @@ fn workspace_preference_path(app: &AppHandle) -> Result<PathBuf, String> {
         .map_err(|error| error.to_string())
 }
 
-fn persist_workspace_preference(app: &AppHandle, workspace: &Workspace) -> Result<(), String> {
-    let path = workspace_preference_path(app)?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| format!("无法创建应用数据目录：{error}"))?;
-    }
-    let content = serde_json::to_vec_pretty(&WorkspacePreference {
-        root: workspace.root.to_string_lossy().into_owned(),
-    })
-    .map_err(|error| format!("无法保存工作区记录：{error}"))?;
-    fs::write(path, content).map_err(|error| format!("无法保存工作区记录：{error}"))
-}
-
 fn restore_workspace_preference(app: &AppHandle) -> Option<Workspace> {
     let path = workspace_preference_path(app).ok()?;
     let content = fs::read(path).ok()?;
@@ -660,6 +649,7 @@ fn authorize_workspace(
     state: State<'_, WorkspaceState>,
     runtime: State<'_, runtime_log::RuntimeLogState>,
 ) -> Result<WorkspaceSnapshot, String> {
+    ensure_workspace_idle(&app)?;
     let canonical = PathBuf::from(root)
         .canonicalize()
         .map_err(|error| format!("无法打开目录：{error}"))?;
@@ -668,7 +658,9 @@ fn authorize_workspace(
     }
     let workspace = workspace_from_root(canonical);
     let snapshot = workspace_snapshot(&workspace)?;
-    persist_workspace_preference(&app, &workspace)?;
+    let db = app.state::<database::DatabaseState>();
+    database::open_managed_conversations(&db, &workspace, true)?;
+    projects::register(&db, &workspace)?;
     runtime.set_workspace_root(workspace.root.clone());
     runtime.info(
         "workspace.authorized",
@@ -679,6 +671,15 @@ fn authorize_workspace(
     );
     *state.0.lock().map_err(|_| "工作区状态不可用".to_string())? = Some(workspace);
     Ok(snapshot)
+}
+
+fn ensure_workspace_idle(app: &AppHandle) -> Result<(), String> {
+    let chats = app.state::<models::ChatCancellation>();
+    if !chats.0.lock().map_err(|_| "会话状态不可用")?.is_empty()
+        || app.state::<worker_service::WorkerRuntimeState>().has_workers() {
+        return Err("请先停止正在运行的任务，再切换项目或删除记录".into());
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -1272,8 +1273,9 @@ pub fn run() {
             }
             let database_state = database::DatabaseState(data_dir.join("vinkey.sqlite3"));
             database::init(&database_state.0)?;
+            projects::init(&database_state, restore_workspace_preference(app.handle()))?;
             app.manage(database_state.clone());
-            if let Some(workspace) = restore_workspace_preference(app.handle()) {
+            if let Some(workspace) = projects::active(&database_state).filter(|w| w.root.is_dir()) {
                 runtime.set_workspace_root(workspace.root.clone());
                 runtime.info("workspace.restored", log_fields([
                     ("workspaceId", Value::String(workspace.id.clone())),
@@ -1301,6 +1303,9 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             authorize_workspace,
+            projects::list_projects,
+            projects::activate_project,
+            projects::delete_project,
             get_workspace,
             read_document,
             chunk_document,

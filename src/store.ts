@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type {
   ChatMessage, ContextDocument, Conversation, ConversationSummary, DocumentTab,
-  ModelProfile, ThemeMode, ViewMode, WorkspaceSnapshot,
+  ModelProfile, ThemeMode, ViewMode, WorkspaceSnapshot, ProjectSummary,
   ChatActivity, ChatRunStatus,
   DiffProposal, EditorRevisionRequest, EditorSelection,
 } from './types'
@@ -11,6 +11,9 @@ const MAX_CHAT_ACTIVITY_LOG = 80
 
 interface AppState {
   workspace: WorkspaceSnapshot | null
+  projects: ProjectSummary[]
+  projectTransition: boolean
+  pendingChatRequests: number
   tabs: DocumentTab[]
   activePath: string | null
   contextDocuments: ContextDocument[]
@@ -35,7 +38,9 @@ interface AppState {
   pendingEditorRevision: EditorRevisionRequest | null
   diffProposals: DiffProposal[]
   diffProposalBaselines: Record<string, string>
-  setWorkspace: (workspace: WorkspaceSnapshot) => void
+  setWorkspace: (workspace: WorkspaceSnapshot | null) => void
+  setProjects: (projects: ProjectSummary[]) => void
+  setProjectTransition: (busy: boolean) => void
   openTab: (tab: DocumentTab) => void
   closeTab: (path: string) => void
   updateContent: (path: string, content: string) => void
@@ -99,6 +104,9 @@ function mergeRunMessages(messages: ChatMessage[], run: ChatRun | undefined): Ch
 
 export const useAppStore = create<AppState>((set, get) => ({
   workspace: null,
+  projects: [],
+  projectTransition: false,
+  pendingChatRequests: 0,
   tabs: [],
   activePath: null,
   contextDocuments: [],
@@ -123,9 +131,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   pendingEditorRevision: null,
   diffProposals: [],
   diffProposalBaselines: {},
-  setWorkspace: (workspace) => set((state) => state.workspace?.id && state.workspace.id !== workspace.id
-    ? { workspace, editorSelection: null, pendingEditorRevision: null, diffProposals: [], diffProposalBaselines: {} }
+  setWorkspace: (workspace) => set((state) => state.workspace?.id !== workspace?.id
+    ? { workspace, tabs: [], activePath: null, contextDocuments: [], pendingNewFiles: [],
+        conversationId: null, conversationTitle: '新会话', messages: initialMessages, conversations: [],
+        completedChatMessages: {}, editorSelection: null, pendingEditorRevision: null, diffProposals: [], diffProposalBaselines: {} }
     : { workspace }),
+  setProjects: (projects) => set({ projects }),
+  setProjectTransition: (projectTransition) => set({ projectTransition }),
   openTab: (tab) => set((state) => ({
     tabs: state.tabs.some((item) => item.path === tab.path) ? state.tabs : [...state.tabs, tab],
     activePath: tab.path,
