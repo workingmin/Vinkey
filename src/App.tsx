@@ -335,15 +335,15 @@ function ProjectSessionSidebar({ onPageChange, onOpenWorkspace, onRefreshWorkspa
     <header className="session-sidebar-header" data-tauri-drag-region>
       <div className="session-brand-row" data-tauri-drag-region>
         <div className="session-brand" data-tauri-drag-region><span>V</span><div><strong>Vinkey</strong><small>本地创作工作台</small></div></div>
-        <div className="session-header-actions">
-          {workspace && <IconButton label="刷新项目" onClick={onRefreshWorkspace}><RefreshCw /></IconButton>}
-          <IconButton label={workspace ? '切换项目' : '打开项目'} onClick={onOpenWorkspace}><FolderOpen /></IconButton>
-          <button className="icon-button sidebar-collapse-button" title={sidebarCollapsed ? '展开会话栏' : '折叠会话栏'} aria-label={sidebarCollapsed ? '展开会话栏' : '折叠会话栏'} onClick={() => setSidebarCollapsed(!sidebarCollapsed)}>{sidebarCollapsed ? <PanelLeftOpen /> : <PanelLeftClose />}</button>
-        </div>
+        <button className="icon-button sidebar-collapse-button" title={sidebarCollapsed ? '展开会话栏' : '折叠会话栏'} aria-label={sidebarCollapsed ? '展开会话栏' : '折叠会话栏'} aria-expanded={!sidebarCollapsed} aria-controls="session-sidebar-body" onClick={() => setSidebarCollapsed(!sidebarCollapsed)}>{sidebarCollapsed ? <PanelLeftOpen /> : <PanelLeftClose />}</button>
+      </div>
+      <div className="session-header-actions">
+        <IconButton label={workspace ? '切换项目' : '打开项目'} onClick={onOpenWorkspace}><FolderOpen /></IconButton>
+        {workspace && <IconButton label="刷新项目" onClick={onRefreshWorkspace}><RefreshCw /></IconButton>}
       </div>
       <label className="sidebar-search"><Search /><input aria-label="搜索会话或文档" placeholder="搜索会话或文档" value={query} onChange={(event) => setQuery(event.target.value)} />{query && <button type="button" aria-label="清除搜索" onClick={() => setQuery('')}><X /></button>}</label>
     </header>
-    <div className="session-sidebar-body">
+    <div className="session-sidebar-body" id="session-sidebar-body">
       <div className="sidebar-section-label"><span>{hasQuery ? '搜索结果' : '项目'}</span><small>{hasQuery ? visibleResultCount : workspace ? 1 : 0}</small></div>
       <div className="sidebar-project-list">
         {!workspace ? <div className="sidebar-project-empty"><Folder /><strong>还没有打开项目</strong><span>选择一个本机目录作为创作项目</span><button onClick={onOpenWorkspace}><FolderOpen />打开项目</button></div> : <section className="sidebar-project">
@@ -399,7 +399,7 @@ function ProjectSessionSidebar({ onPageChange, onOpenWorkspace, onRefreshWorkspa
       </div>
     </div>
     <footer className="session-sidebar-footer">
-      <button className={settingsOpen ? 'active' : ''} onClick={() => setSettingsOpen(true)}><Settings /><span>模型与应用设置</span></button>
+      <button className={settingsOpen ? 'active' : ''} title="模型与应用设置" aria-label="模型与应用设置" onClick={() => setSettingsOpen(true)}><Settings /><span>模型与应用设置</span></button>
     </footer>
   </aside>
 }
