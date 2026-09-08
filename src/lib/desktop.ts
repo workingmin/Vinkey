@@ -7,7 +7,7 @@ import type {
   AnalysisJobManifest, CharacterGraphBenchmark, CharacterGraphStats, CharacterInput, CharacterMentionInput, CharacterNeighbor, CharacterRecord,
   LongTextWorkerOutput, StartLongTextWorkerInput, StartTaskJobInput, TaskJob, TaskJobStep, TaskWorkerEvent, UpdateTaskJobInput,
   ProjectMemoryCandidate, ProjectMemoryItem, ProjectMemoryStatus, RelationshipEvidenceInput, RelationshipInput,
-  ThemeMode, WorkspaceSnapshot,
+  ThemeMode, WorkspaceSnapshot, ProjectSummary,
 } from '../types'
 import { getDocumentKind } from './fileTypes'
 import { buildStructureOutputs } from './structureSegmentation'
@@ -17,9 +17,11 @@ import type { TaskExecutionDispatch, TaskExecutionInput } from './taskRuntime'
 
 const PROFILE_KEY = 'vinkey.demo.modelProfiles'
 const CONVERSATION_KEY = 'vinkey.demo.conversations'
+const PROJECTS_KEY = 'vinkey.demo.projects'
 const MEMORY_KEY = 'vinkey.demo.projectMemory'
 const demoCancellations = new Set<string>()
 const demoTaskJobs = new Map<string, TaskJob>()
+const demoProjectDocuments = new Map<string, Map<string, DocumentSnapshot>>()
 
 export interface RuntimeDiagnostics {
   path: string
@@ -146,20 +148,78 @@ export async function recordRuntimeEvent(event: string, message?: string): Promi
 }
 
 export async function chooseWorkspace(): Promise<WorkspaceSnapshot | null> {
-  if (!isDesktop()) return demoWorkspace()
+  if (!isDesktop()) {
+    const name = window.prompt('项目名称（浏览器演示）', '新项目')?.trim()
+    if (!name) return null
+    const catalog = readDemoProjects()
+    let project = catalog.projects.find((item) => item.name === name)
+    if (!project) {
+      project = { id: crypto.randomUUID(), name, pathLabel: `浏览器演示/${name}` }
+      catalog.projects.push(project)
+    }
+    catalog.activeId = project.id
+    localStorage.setItem(PROJECTS_KEY, JSON.stringify(catalog))
+    return { ...demoWorkspace(), ...project }
+  }
   const selected = await open({ directory: true, multiple: false, title: '选择 Vinkey 工作目录' })
   if (!selected) return null
   return invoke<WorkspaceSnapshot>('authorize_workspace', { root: selected })
 }
 
 export async function refreshWorkspace(): Promise<WorkspaceSnapshot> {
-  if (!isDesktop()) return demoWorkspace()
+  if (!isDesktop()) {
+    const catalog = readDemoProjects()
+    const project = catalog.projects.find((item) => item.id === catalog.activeId)
+    if (!project) throw new Error('请先选择工作目录')
+    return { ...demoWorkspace(), ...project }
+  }
   return invoke<WorkspaceSnapshot>('get_workspace')
+}
+
+function readDemoProjects(): { projects: ProjectSummary[]; activeId: string | null } {
+  const saved = localStorage.getItem(PROJECTS_KEY)
+  if (saved) return JSON.parse(saved)
+  const { entries: _entries, ...project } = demoWorkspace()
+  const catalog = { projects: [project], activeId: project.id }
+  localStorage.setItem(PROJECTS_KEY, JSON.stringify(catalog))
+  return catalog
+}
+
+export async function listProjects(): Promise<ProjectSummary[]> {
+  if (!isDesktop()) return readDemoProjects().projects
+  return invoke<ProjectSummary[]>('list_projects')
+}
+
+export async function activateProject(id: string): Promise<WorkspaceSnapshot> {
+  if (!isDesktop()) {
+    const catalog = readDemoProjects()
+    const project = catalog.projects.find((item) => item.id === id)
+    if (!project) throw new Error('项目记录不存在')
+    catalog.activeId = id
+    localStorage.setItem(PROJECTS_KEY, JSON.stringify(catalog))
+    return { ...demoWorkspace(), ...project }
+  }
+  return invoke<WorkspaceSnapshot>('activate_project', { id })
+}
+
+export async function deleteProject(id: string, confirmation: string): Promise<void> {
+  if (!isDesktop()) {
+    const catalog = readDemoProjects()
+    const project = catalog.projects.find((item) => item.id === id)
+    if (!project || confirmation !== project.name) throw new Error('项目名称不匹配')
+    const conversationKey = demoConversationKey(id)
+    catalog.projects = catalog.projects.filter((item) => item.id !== id)
+    if (catalog.activeId === id) catalog.activeId = null
+    localStorage.setItem(PROJECTS_KEY, JSON.stringify(catalog))
+    localStorage.removeItem(conversationKey)
+    return
+  }
+  await invoke('delete_project', { id, confirmation })
 }
 
 export async function readDocument(path: string): Promise<DocumentSnapshot> {
   if (!isDesktop()) {
-    const document = demoDocuments.get(path)
+    const document = currentDemoDocuments().get(path)
     if (!document) throw new Error(`找不到文档：${path}`)
     return { ...document }
   }
@@ -215,7 +275,7 @@ export async function startTaskJob(input: StartTaskJobInput): Promise<TaskJob> {
     const job: TaskJob = existing
       ? { ...existing, status: 'running', cancelRequested: false, error: null, updatedAt: now }
       : {
-          ...input, workspaceId: 'demo-workspace', status: 'running', cancelRequested: false,
+          ...input, workspaceId: currentDemoProjectId(), status: 'running', cancelRequested: false,
           steps: [], events: [], createdAt: now, updatedAt: now,
         }
     demoTaskJobs.set(input.taskId, job)
@@ -257,7 +317,7 @@ export async function getTaskJob(taskId: string): Promise<TaskJob> {
 }
 
 export async function listTaskJobs(): Promise<TaskJob[]> {
-  if (!isDesktop()) return [...demoTaskJobs.values()].sort((left, right) => right.updatedAt - left.updatedAt).map((job) => structuredClone(job))
+  if (!isDesktop()) return [...demoTaskJobs.values()].filter((job) => job.workspaceId === currentDemoProjectId()).sort((left, right) => right.updatedAt - left.updatedAt).map((job) => structuredClone(job))
   return invoke<TaskJob[]>('list_task_jobs')
 }
 
@@ -306,7 +366,7 @@ export async function prepareLongTextWorker(
       compatibilityKey: 'browser-demo',
       pipelineCompleted: false,
       jobId: input.jobId,
-      workspaceId: 'demo-workspace',
+      workspaceId: currentDemoProjectId(),
       sourceFingerprints: Object.fromEntries(input.documents.map((document) => [document.path, document.sourceFingerprint])),
       manifests,
       content: '',
@@ -376,14 +436,14 @@ export async function getLongTextWorkerOutput(jobId: string): Promise<LongTextWo
 
 export async function executeTask(input: TaskExecutionInput): Promise<TaskExecutionDispatch> {
   validateTaskExecutionInput(input)
-  if (!isDesktop()) return createTaskExecutionDispatch(input, demoWorkspace().id)
+  if (!isDesktop()) return createTaskExecutionDispatch(input, currentDemoProjectId())
   return invoke<TaskExecutionDispatch>('execute_task', { input })
 }
 
 export async function saveDocument(document: DocumentSnapshot): Promise<DocumentSnapshot> {
   if (!isDesktop()) {
     const saved = { ...document, modifiedMs: Date.now() }
-    demoDocuments.set(document.path, saved)
+    currentDemoDocuments().set(document.path, saved)
     return saved
   }
   return invoke<DocumentSnapshot>('save_document', {
@@ -397,7 +457,7 @@ export async function saveDocument(document: DocumentSnapshot): Promise<Document
 
 export async function readFileBytes(path: string): Promise<Uint8Array> {
   if (!isDesktop()) {
-    const document = demoDocuments.get(path)
+    const document = currentDemoDocuments().get(path)
     if (!document) throw new Error(`找不到文件：${path}`)
     return new TextEncoder().encode(document.content)
   }
@@ -407,13 +467,13 @@ export async function readFileBytes(path: string): Promise<Uint8Array> {
 
 export async function createDocument(path: string): Promise<DocumentSnapshot> {
   if (!isDesktop()) {
-    if (demoDocuments.has(path)) throw new Error('同名文件已存在')
+    if (currentDemoDocuments().has(path)) throw new Error('同名文件已存在')
     const name = path.split('/').at(-1) ?? path
     const document: DocumentSnapshot = {
       path, name, content: '', kind: getDocumentKind(path),
       modifiedMs: Date.now(), lineEnding: 'lf', hasBom: false,
     }
-    demoDocuments.set(path, document)
+    currentDemoDocuments().set(path, document)
     return document
   }
   return invoke<DocumentSnapshot>('create_document', { path })
@@ -443,14 +503,35 @@ export async function searchWorkspace(query: string): Promise<SearchHit[]> {
   if (!isDesktop()) {
     const normalized = query.trim().toLocaleLowerCase()
     if (!normalized) return []
-    return [...demoDocuments.values()].flatMap((document) => document.content.split('\n').flatMap((line, index) =>
+    return [...currentDemoDocuments().values()].flatMap((document) => document.content.split('\n').flatMap((line, index) =>
       line.toLocaleLowerCase().includes(normalized) ? [{ path: document.path, line: index + 1, snippet: line.slice(0, 180) }] : []))
   }
   return invoke<SearchHit[]>('search_workspace', { query, maxResults: 100 })
 }
 
+function currentDemoProjectId(): string {
+  const id = readDemoProjects().activeId
+  if (!id) throw new Error('请先选择工作目录')
+  return id
+}
+
+function currentDemoDocuments(): Map<string, DocumentSnapshot> {
+  const id = currentDemoProjectId()
+  let documents = demoProjectDocuments.get(id)
+  if (!documents) {
+    documents = new Map([...demoDocuments].map(([path, document]) => [path, { ...document }]))
+    demoProjectDocuments.set(id, documents)
+  }
+  return documents
+}
+
+function demoMemoryKey(): string {
+  const id = currentDemoProjectId()
+  return id === 'demo-workspace' ? MEMORY_KEY : `${MEMORY_KEY}.${id}`
+}
+
 function readDemoMemory(): ProjectMemoryItem[] {
-  try { return JSON.parse(localStorage.getItem(MEMORY_KEY) ?? '[]') as ProjectMemoryItem[] } catch { return [] }
+  try { return JSON.parse(localStorage.getItem(demoMemoryKey()) ?? '[]') as ProjectMemoryItem[] } catch { return [] }
 }
 
 export async function listProjectMemory(status: ProjectMemoryStatus | 'all' = 'confirmed'): Promise<ProjectMemoryItem[]> {
@@ -475,7 +556,7 @@ export async function proposeProjectMemory(candidates: ProjectMemoryCandidate[])
     const values = readDemoMemory()
     const proposed = candidates.map((candidate) => ({ ...candidate, confidence: candidate.confidence ?? 'medium', status: 'proposed' as const, createdAt: now, updatedAt: now }))
     const next = [...proposed, ...values.filter((item) => !candidates.some((candidate) => candidate.id === item.id))]
-    localStorage.setItem(MEMORY_KEY, JSON.stringify(next))
+    localStorage.setItem(demoMemoryKey(), JSON.stringify(next))
     return proposed
   }
   return invoke<ProjectMemoryItem[]>('propose_project_memory', { candidates })
@@ -485,7 +566,7 @@ export async function confirmProjectMemory(ids: string[]): Promise<ProjectMemory
   if (!isDesktop()) {
     const now = Date.now()
     const values = readDemoMemory().map((item) => ids.includes(item.id) && item.status === 'proposed' ? { ...item, status: 'confirmed' as const, updatedAt: now } : item)
-    localStorage.setItem(MEMORY_KEY, JSON.stringify(values))
+    localStorage.setItem(demoMemoryKey(), JSON.stringify(values))
     return values.filter((item) => ids.includes(item.id) && item.status === 'confirmed')
   }
   return invoke<ProjectMemoryItem[]>('confirm_project_memory', { ids })
@@ -495,7 +576,7 @@ export async function rejectProjectMemory(ids: string[]): Promise<ProjectMemoryI
   if (!isDesktop()) {
     const now = Date.now()
     const values = readDemoMemory().map((item) => ids.includes(item.id) && item.status === 'proposed' ? { ...item, status: 'rejected' as const, updatedAt: now } : item)
-    localStorage.setItem(MEMORY_KEY, JSON.stringify(values))
+    localStorage.setItem(demoMemoryKey(), JSON.stringify(values))
     return values.filter((item) => ids.includes(item.id) && item.status === 'rejected')
   }
   return invoke<ProjectMemoryItem[]>('reject_project_memory', { ids })
@@ -666,45 +747,51 @@ export async function cancelChat(requestId: string): Promise<void> {
   await invoke('cancel_chat', { requestId })
 }
 
-function readDemoConversations(): Conversation[] {
-  try { return JSON.parse(localStorage.getItem(CONVERSATION_KEY) ?? '[]') as Conversation[] } catch { return [] }
+function demoConversationKey(workspaceId?: string): string {
+  const id = workspaceId ?? readDemoProjects().activeId
+  if (!id || !readDemoProjects().projects.some((project) => project.id === id)) throw new Error('项目记录不存在')
+  return id === 'demo-workspace' ? CONVERSATION_KEY : `${CONVERSATION_KEY}.${id}`
 }
 
-export async function listConversations(): Promise<ConversationSummary[]> {
-  if (!isDesktop()) return readDemoConversations().map((conversation) => ({
+function readDemoConversations(workspaceId?: string): Conversation[] {
+  return JSON.parse(localStorage.getItem(demoConversationKey(workspaceId)) ?? '[]') as Conversation[]
+}
+
+export async function listConversations(workspaceId?: string): Promise<ConversationSummary[]> {
+  if (!isDesktop()) return readDemoConversations(workspaceId).map((conversation) => ({
     id: conversation.id, title: conversation.title, updatedAt: conversation.updatedAt, messageCount: conversation.messages.length,
   })).sort((left, right) => right.updatedAt - left.updatedAt)
-  return invoke<ConversationSummary[]>('list_conversations')
+  return invoke<ConversationSummary[]>('list_conversations', { workspaceId })
 }
 
-export async function loadConversation(id: string): Promise<Conversation> {
+export async function loadConversation(id: string, workspaceId?: string): Promise<Conversation> {
   if (!isDesktop()) {
-    const conversation = readDemoConversations().find((item) => item.id === id)
+    const conversation = readDemoConversations(workspaceId).find((item) => item.id === id)
     if (!conversation) throw new Error('找不到该会话')
     return conversation
   }
-  return invoke<Conversation>('load_conversation', { id })
+  return invoke<Conversation>('load_conversation', { id, workspaceId })
 }
 
-export async function saveConversationMessage(conversationId: string, title: string, message: ChatMessage): Promise<void> {
+export async function saveConversationMessage(conversationId: string, title: string, message: ChatMessage, workspaceId?: string): Promise<void> {
   if (!isDesktop()) {
-    const values = readDemoConversations()
+    const values = readDemoConversations(workspaceId)
     const existing = values.find((item) => item.id === conversationId)
     if (existing) {
       existing.title = title
       existing.updatedAt = message.completedAt ?? message.createdAt
       existing.messages = [...existing.messages.filter((item) => item.id !== message.id), message]
     } else values.push({ id: conversationId, title, updatedAt: message.completedAt ?? message.createdAt, messages: [message] })
-    localStorage.setItem(CONVERSATION_KEY, JSON.stringify(values))
+    localStorage.setItem(demoConversationKey(workspaceId), JSON.stringify(values))
     return
   }
-  await invoke('save_conversation_message', { conversationId, title, message })
+  await invoke('save_conversation_message', { conversationId, title, message, workspaceId })
 }
 
-export async function deleteConversation(id: string): Promise<void> {
+export async function deleteConversation(id: string, workspaceId?: string): Promise<void> {
   if (!isDesktop()) {
-    localStorage.setItem(CONVERSATION_KEY, JSON.stringify(readDemoConversations().filter((item) => item.id !== id)))
+    localStorage.setItem(demoConversationKey(workspaceId), JSON.stringify(readDemoConversations(workspaceId).filter((item) => item.id !== id)))
     return
   }
-  await invoke('delete_conversation', { id })
+  await invoke('delete_conversation', { id, workspaceId })
 }

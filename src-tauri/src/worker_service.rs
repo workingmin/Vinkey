@@ -191,6 +191,12 @@ pub struct WorkerRuntimeState {
     event_write: Arc<Mutex<()>>,
 }
 
+impl WorkerRuntimeState {
+    pub fn has_workers(&self) -> bool {
+        self.controls.lock().map(|controls| !controls.is_empty()).unwrap_or(true)
+    }
+}
+
 #[derive(Clone, Debug)]
 struct SummaryRecord {
     source_id: String,

@@ -162,6 +162,34 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 1px
 .icon-button:hover:not(:disabled), .icon-button.active { background: var(--bg-selected); color: var(--text); }
 .icon-button:disabled { opacity: .35; cursor: default; }
 
+.sidebar-project-row.selected { background: var(--bg-selected); }
+.sidebar-project-row .project-expand { width: 22px; flex-basis: 22px; opacity: 1; margin: 0; }
+.sidebar-project-row .sidebar-project-toggle { padding-left: 0; gap: 5px; }
+.sidebar-project-row .sidebar-project-toggle > svg { width: 15px; height: 15px; flex: 0 0 15px; color: var(--text-muted); }
+.project-row-actions { display: flex; flex: 0 0 48px; }
+.project-row-actions .icon-button { width: 24px; flex-basis: 24px; }
+.project-row-actions .icon-button svg { width: 14px; height: 14px; }
+.danger-icon:hover:not(:disabled) { color: #e45858; }
+.project-load-error { display: flex; align-items: start; gap: 6px; padding: 8px 0; font-size: 11px; color: #e45858; }
+.project-load-error span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.project-load-error button { border: 0; background: transparent; color: inherit; cursor: pointer; }
+.project-load-error svg { width: 14px; height: 14px; }
+.record-deletion-dialog { width: min(460px, calc(100% - 32px)); max-height: calc(100dvh - 32px); padding: 0; overflow: auto; border: 1px solid var(--border-strong); border-radius: 8px; color: var(--text); background: var(--bg-panel); box-shadow: 0 16px 64px #0005; }
+.record-deletion-dialog::backdrop { background: #0008; }
+.record-deletion-dialog header { display: flex; align-items: center; gap: 10px; padding: 16px 18px; border-bottom: 1px solid var(--border); }
+.record-deletion-dialog header > svg { width: 18px; height: 18px; color: #e45858; flex-shrink: 0; }
+.record-deletion-dialog h2 { flex: 1; margin: 0; font-size: 16px; line-height: 1.4; }
+.record-deletion-body { padding: 18px; font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
+.record-deletion-body p { margin: 8px 0 16px; color: var(--text-secondary); }
+.record-deletion-body .deletion-project-path { font-size: 11px; color: var(--text-muted); }
+.deletion-confirmation-label { display: block; }
+.deletion-confirmation-label input { display: block; width: 100%; margin-top: 8px; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--bg-input, var(--bg-panel)); color: var(--text); font-size: 13px; }
+.record-deletion-body .deletion-error { margin-bottom: 0; color: #e45858; }
+.record-deletion-dialog footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding: 14px 18px; border-top: 1px solid var(--border); }
+.record-deletion-dialog footer button { min-height: 34px; padding: 6px 12px; border: 1px solid var(--border-strong); border-radius: 5px; background: var(--bg-raised); color: var(--text); cursor: pointer; font-size: 12px; }
+.record-deletion-dialog footer .danger-button { color: #fff; background: #b32936; border-color: #b32936; }
+.record-deletion-dialog button:disabled { opacity: .45; cursor: default; }
+
 .file-browser-panel { min-width: 0; display: flex; flex-direction: column; background: var(--bg-panel); overflow: hidden; }
 .file-browser-header { height: 52px; flex: 0 0 52px; display: flex; align-items: center; border-bottom: 1px solid var(--border); }
 .file-browser-header { justify-content: space-between; gap: 6px; padding: 6px 8px 6px 12px; }

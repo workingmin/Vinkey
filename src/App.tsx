@@ -14,12 +14,14 @@ import { CodeEditor } from './components/CodeEditor'
 import { FilePreview, downloadBytes } from './components/FilePreview'
 import { SettingsPage } from './components/SettingsPage'
 import { TaskCenter } from './components/TaskCenter'
+import { ProjectSessionSidebar } from './components/ProjectSessionSidebar'
 import { WorkspaceTree, workspaceActions } from './components/WorkspaceTree'
 import {
-  cancelChat, cancelTaskJob, chooseWorkspace, createDirectory, createDocument, deleteConversation, executeTask, isDesktop, listConversations,
-  getWindowDiagnostics, getRuntimeDiagnostics, listModelProfiles, loadConversation, readDocument, readFileBytes, refreshWorkspace,
+  activateProject, deleteProject, listProjects,
+  cancelChat, cancelTaskJob, chooseWorkspace, createDirectory, createDocument, executeTask, isDesktop, listConversations,
+  getWindowDiagnostics, getRuntimeDiagnostics, listModelProfiles, readDocument, readFileBytes, refreshWorkspace,
   listAnalysisJobs, pauseTaskWorker, recordRuntimeEvent, resumeTaskWorker, writeStructureOutputs,
-  saveConversationMessage, saveDocument, searchWorkspace, streamChat, syncNativeWindowTheme,
+  saveConversationMessage, saveDocument, streamChat, syncNativeWindowTheme,
   confirmProjectMemory, listProjectMemory, proposeProjectMemory, rejectProjectMemory, searchProjectMemory,
   stopOllamaModel,
 } from './lib/desktop'
@@ -32,15 +34,13 @@ import { isContextRecoveryResponse } from './lib/contextRecovery'
 import { buildMemoryCandidates, buildProjectMemoryContext, selectRelevantMemory } from './lib/projectMemory'
 import { formatStructureResult, segmentDocument } from './lib/structureSegmentation'
 import { useAppStore } from './store'
-import type { AnalysisJobManifest, ChatActivity, ChatMessage, ChatRunStatus, DocumentSnapshot, ProjectMemoryItem, ViewMode, WorkspaceEntry } from './types'
+import type { AnalysisJobManifest, ChatActivity, ChatMessage, ChatRunStatus, DocumentSnapshot, ProjectMemoryItem, ProjectSummary, ViewMode, WorkspaceEntry } from './types'
 import { getDocumentKind, getLanguageName, isEditableDocument } from './lib/fileTypes'
 import { findNewTextFiles, flattenWorkspaceFiles } from './lib/tree'
 import { readWorkspaceDocuments } from './lib/workspaceAnalysis'
 import { buildSelectedDocumentsOverviewMessage, formatWorkspaceOverview } from './lib/workspaceOverview'
 import { buildFocusedWorkspaceMessage } from './lib/focusedAnalysis'
 import { isLoopbackModelEndpoint } from './lib/modelPrivacy'
-import { formatConversationAge } from './lib/conversationTime'
-import { observeNativeWindowControls } from './lib/nativeWindowControls'
 import {
   buildMultiFileRevisionContract, buildMultiFileRevisionTargets, buildSelectionRevisionContract,
   createDiffProposal, createMultiFileDiffProposals, fingerprintDocument,
@@ -243,175 +243,6 @@ const chatStatusMeta: Record<ChatRunStatus, { label: string; title: string }> = 
   stopping: { label: '停止中', title: 'stopping · 正在等待请求结束' },
 }
 
-function ProjectSessionSidebar({ onPageChange, onOpenWorkspace, onRefreshWorkspace, onOpenDocument }: {
-  onPageChange: (page: ContentPage) => void
-  onOpenWorkspace: () => void
-  onRefreshWorkspace: () => void
-  onOpenDocument: (path: string) => Promise<void>
-}) {
-  const workspace = useAppStore((state) => state.workspace)
-  const conversations = useAppStore((state) => state.conversations)
-  const conversationId = useAppStore((state) => state.conversationId)
-  const messages = useAppStore((state) => state.messages)
-  const newConversation = useAppStore((state) => state.newConversation)
-  const removeConversation = useAppStore((state) => state.removeConversation)
-  const setConversation = useAppStore((state) => state.setConversation)
-  const chatRuns = useAppStore((state) => state.chatRuns)
-  const settingsOpen = useAppStore((state) => state.settingsOpen)
-  const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed)
-  const setSidebarCollapsed = useAppStore((state) => state.setSidebarCollapsed)
-  const setSettingsOpen = useAppStore((state) => state.setSettingsOpen)
-  const setError = useAppStore((state) => state.setError)
-  const [query, setQuery] = useState('')
-  const [searchHits, setSearchHits] = useState<Awaited<ReturnType<typeof searchWorkspace>>>([])
-  const [searching, setSearching] = useState(false)
-  const [projectExpanded, setProjectExpanded] = useState(true)
-  const [currentTime, setCurrentTime] = useState(() => Date.now())
-  const [deletingConversationIds, setDeletingConversationIds] = useState<Set<string>>(() => new Set())
-  const sidebarRef = useRef<HTMLElement>(null)
-
-  useEffect(() => {
-    if (!isDesktop() || !isMacPlatform() || !sidebarRef.current) return
-    return observeNativeWindowControls(sidebarRef.current, (cause) => {
-      setError(`macOS 窗口按钮布局同步失败：${String(cause)}`)
-    })
-  }, [setError])
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setCurrentTime(Date.now()), 60_000)
-    return () => window.clearInterval(timer)
-  }, [])
-
-  useEffect(() => {
-    if (!workspace || !query.trim()) { setSearchHits([]); setSearching(false); return }
-    let active = true
-    setSearching(true)
-    const timer = window.setTimeout(() => void searchWorkspace(query).then((hits) => {
-      if (active) setSearchHits(hits)
-    }).catch((error) => setError(String(error))).finally(() => { if (active) setSearching(false) }), 220)
-    return () => { active = false; window.clearTimeout(timer) }
-  }, [query, setError, workspace])
-
-  const conversationMatches = useMemo(() => {
-    const value = query.trim().toLocaleLowerCase()
-    return value ? conversations.filter((conversation) => conversation.title.toLocaleLowerCase().includes(value)) : conversations
-  }, [conversations, query])
-
-  const selectConversation = async (id: string) => {
-    try {
-      setConversation(await loadConversation(id))
-      setSettingsOpen(false)
-      onPageChange('chat')
-    } catch (error) { setError(String(error)) }
-  }
-
-  const startConversation = () => {
-    newConversation()
-    setSettingsOpen(false)
-    onPageChange('chat')
-  }
-
-  const removeStoredConversation = async (id: string, title: string, messageCount: number) => {
-    if (chatRuns[id] || deletingConversationIds.has(id)) return
-    const detail = messageCount > 0 ? `其中的 ${messageCount} 条消息也会被删除。` : ''
-    if (!window.confirm(`删除会话“${title}”？${detail}此操作无法撤销。`)) return
-
-    setDeletingConversationIds((current) => new Set(current).add(id))
-    try {
-      await deleteConversation(id)
-      const wasActive = useAppStore.getState().conversationId === id
-      removeConversation(id)
-      if (wasActive) {
-        setSettingsOpen(false)
-        onPageChange('chat')
-      }
-    } catch (error) {
-      setError(`删除会话失败：${String(error)}`)
-    } finally {
-      setDeletingConversationIds((current) => {
-        const next = new Set(current)
-        next.delete(id)
-        return next
-      })
-    }
-  }
-
-  const hasQuery = Boolean(query.trim())
-  const conversationCount = conversations.length + (!conversationId ? 1 : 0)
-  const visibleResultCount = conversationMatches.length + searchHits.length
-
-  return <aside ref={sidebarRef} className={`session-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`} aria-label="项目与会话栏">
-    <header className="session-sidebar-header" data-tauri-drag-region>
-      <div className="session-brand-row" data-tauri-drag-region>
-        <div className="session-brand" data-tauri-drag-region><span>V</span><div><strong>Vinkey</strong><small>本地创作工作台</small></div></div>
-        <button className="icon-button sidebar-collapse-button" title={sidebarCollapsed ? '展开会话栏' : '折叠会话栏'} aria-label={sidebarCollapsed ? '展开会话栏' : '折叠会话栏'} aria-expanded={!sidebarCollapsed} aria-controls="session-sidebar-body" onClick={() => setSidebarCollapsed(!sidebarCollapsed)}>{sidebarCollapsed ? <PanelLeftOpen /> : <PanelLeftClose />}</button>
-      </div>
-      <div className="session-header-actions">
-        <IconButton label={workspace ? '切换项目' : '打开项目'} onClick={onOpenWorkspace}><FolderOpen /></IconButton>
-        {workspace && <IconButton label="刷新项目" onClick={onRefreshWorkspace}><RefreshCw /></IconButton>}
-      </div>
-      <label className="sidebar-search"><Search /><input aria-label="搜索会话或文档" placeholder="搜索会话或文档" value={query} onChange={(event) => setQuery(event.target.value)} />{query && <button type="button" aria-label="清除搜索" onClick={() => setQuery('')}><X /></button>}</label>
-    </header>
-    <div className="session-sidebar-body" id="session-sidebar-body">
-      <div className="sidebar-section-label"><span>{hasQuery ? '搜索结果' : '项目'}</span><small>{hasQuery ? visibleResultCount : workspace ? 1 : 0}</small></div>
-      <div className="sidebar-project-list">
-        {!workspace ? <div className="sidebar-project-empty"><Folder /><strong>还没有打开项目</strong><span>选择一个本机目录作为创作项目</span><button onClick={onOpenWorkspace}><FolderOpen />打开项目</button></div> : <section className="sidebar-project">
-          <div className="sidebar-project-row">
-            <button className="sidebar-project-toggle" aria-expanded={hasQuery || projectExpanded} onClick={() => setProjectExpanded(!projectExpanded)} title={workspace.pathLabel}>
-              {(hasQuery || projectExpanded) ? <ChevronDown /> : <ChevronRight />}
-              {(hasQuery || projectExpanded) ? <FolderOpen /> : <Folder />}
-              <span><b>{workspace.name}</b><small>{workspace.pathLabel}</small></span>
-            </button>
-            <IconButton label="在当前项目中新建会话" onClick={startConversation}><CirclePlus /></IconButton>
-          </div>
-          {(hasQuery || projectExpanded) && <div className="sidebar-project-content">
-            <div className="project-session-label"><span>{hasQuery ? '匹配会话' : '会话'}</span><small>{hasQuery ? conversationMatches.length : conversationCount}</small></div>
-            <div className="conversation-list">
-              {!hasQuery && <button className="project-new-session" onClick={startConversation}><CirclePlus />新建会话</button>}
-              {!hasQuery && !conversationId && <button className="conversation-item active" onClick={startConversation}><MessageSquareText /><span><b>新会话</b><small>{Math.max(0, messages.length - 1)} 条消息 · 尚未保存</small></span></button>}
-              {conversationMatches.map((conversation) => {
-                const isRunning = Boolean(chatRuns[conversation.id])
-                const isDeleting = deletingConversationIds.has(conversation.id)
-                const age = formatConversationAge(conversation.updatedAt, currentTime)
-                return <div key={conversation.id} className={`conversation-item ${conversationId === conversation.id ? 'active' : ''}`}>
-                  <button type="button" className="conversation-item-select" onClick={() => void selectConversation(conversation.id)}>
-                    <MessageSquareText />
-                    <span>
-                      <b title={conversation.title}>{conversation.title}</b>
-                      <small className="conversation-item-meta">{conversation.messageCount} 条消息</small>
-                    </span>
-                  </button>
-                  <div className="conversation-item-action">
-                    {age && <time className="conversation-item-age" dateTime={new Date(conversation.updatedAt).toISOString()} title={`最后使用：${new Date(conversation.updatedAt).toLocaleString()}`}>{age}</time>}
-                    <button
-                      type="button"
-                      className="conversation-item-delete"
-                      aria-label={`删除会话“${conversation.title}”`}
-                      title={isRunning ? '会话正在生成，暂时无法删除' : isDeleting ? '正在删除' : '删除会话'}
-                      disabled={isRunning || isDeleting}
-                      onClick={() => void removeStoredConversation(conversation.id, conversation.title, conversation.messageCount)}
-                    ><Trash2 /></button>
-                  </div>
-                </div>
-              })}
-              {hasQuery && conversationMatches.length === 0 && <div className="empty-small compact">没有匹配的会话</div>}
-              {!hasQuery && conversations.length === 0 && conversationId && <div className="empty-small compact">还没有其他会话</div>}
-            </div>
-            {hasQuery && <div className="sidebar-document-results">
-              <div className="project-session-label"><span>文档内容</span><small>{searchHits.length}</small></div>
-              {searchHits.map((hit) => <button className="document-search-item" key={`${hit.path}:${hit.line}:${hit.snippet}`} onClick={() => void onOpenDocument(hit.path)}><FileText /><span><b>{hit.path}</b><small>第 {hit.line} 行 · {hit.snippet}</small></span></button>)}
-              {searching && <div className="empty-small compact">正在搜索文档...</div>}
-              {!searching && searchHits.length === 0 && <div className="empty-small compact">没有匹配的文档</div>}
-            </div>}
-          </div>}
-        </section>}
-      </div>
-    </div>
-    <footer className="session-sidebar-footer">
-      <button className={settingsOpen ? 'active' : ''} title="模型与应用设置" aria-label="模型与应用设置" onClick={() => setSettingsOpen(true)}><Settings /><span>模型与应用设置</span></button>
-    </footer>
-  </aside>
-}
 
 function FileBrowserPanel({ onOpenDocument, onToggleContext, onOpenWorkspace, onRefreshWorkspace }: {
   onOpenDocument: (path: string) => Promise<void>
@@ -555,6 +386,7 @@ function ChatMessageItem({ message, activity, onCopyError }: {
 
 function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: string) => Promise<void>; onReviewDiff: () => void }) {
   const workspace = useAppStore((state) => state.workspace)
+  const projectTransition = useAppStore((state) => state.projectTransition)
   const messages = useAppStore((state) => state.messages)
   const contextDocuments = useAppStore((state) => state.contextDocuments)
   const chatRuns = useAppStore((state) => state.chatRuns)
@@ -674,6 +506,15 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
   }
 
   const send = async () => {
+    const state = useAppStore.getState()
+    if (state.projectTransition) return
+    if (!state.workspace) { setError('请先选择项目'); return }
+    useAppStore.setState((current) => ({ pendingChatRequests: current.pendingChatRequests + 1 }))
+    try { await sendMessage() }
+    finally { useAppStore.setState((current) => ({ pendingChatRequests: current.pendingChatRequests - 1 })) }
+  }
+
+  const sendMessage = async () => {
     const value = prompt.trim()
     if (!value || busy) return
     const editorRevision = pendingActionId === 'document-revision' ? pendingEditorRevision : null
@@ -736,9 +577,9 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
       })
       endChatRun(nextConversationId, false)
       try {
-        await saveConversationMessage(nextConversationId, nextTitle, userMessage)
-        await saveConversationMessage(nextConversationId, nextTitle, { ...assistantMessage, completedAt: Date.now() })
-        setConversations(await listConversations())
+        await saveConversationMessage(nextConversationId, nextTitle, userMessage, workspace?.id)
+        await saveConversationMessage(nextConversationId, nextTitle, { ...assistantMessage, completedAt: Date.now() }, workspace?.id)
+        setConversations(await listConversations(workspace?.id))
       } catch (error) { setError(String(error)) }
       return
     }
@@ -923,8 +764,8 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
     setActiveLongTaskId(useLongTextPipeline ? taskDispatch.jobId : null)
     setPauseRequested(false)
     try {
-      await saveConversationMessage(nextConversationId, nextTitle, userMessage)
-      setConversations(await listConversations())
+      await saveConversationMessage(nextConversationId, nextTitle, userMessage, workspace?.id)
+      setConversations(await listConversations(workspace?.id))
       setChatRunStatus(nextConversationId, 'thinking', null)
       if (taskDispatch.serviceId === 'structure-segmentation') {
         setChatRunStatus(nextConversationId, 'fetching', '正在读取文档结构…')
@@ -1065,8 +906,8 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
       const completed = useAppStore.getState().completedChatMessages[nextConversationId]
       if (completed?.content) {
         try {
-          await saveConversationMessage(nextConversationId, nextTitle, completed)
-          setConversations(await listConversations())
+          await saveConversationMessage(nextConversationId, nextTitle, completed, workspace?.id)
+          setConversations(await listConversations(workspace?.id))
         } catch (error) { setError(String(error)) }
       }
     }
@@ -1243,7 +1084,7 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
             : <button className="composer-model-selector missing" onClick={() => setSettingsOpen(true)}><Bot /><span>添加模型</span></button>}
           <span className={`composer-hint ${budget.exceedsLimit && !analysisStatus && !activeStatus ? 'over-limit' : ''}`} title={activeStatus?.title ?? `预计 ${budget.estimatedTokens} / ${budget.limit} tokens`}>{pauseRequested ? '暂停请求已提交' : analysisStatus ?? activeStatus?.label ?? `上下文 ${budget.usedPercent}% · Enter 发送`}</span>
           {longTaskActive && <button className="pause-button" aria-label={pauseRequested ? '继续长文本任务' : '暂停长文本任务'} title={pauseRequested ? '继续长文本任务' : '在当前步骤完成后暂停'} onClick={togglePause}>{pauseRequested ? <Play /> : <Pause />}</button>}
-          <button className="send-button" aria-label={activeChatRun?.status === 'stopping' ? '正在停止' : busy ? '停止生成' : '发送'} disabled={activeChatRun?.status === 'stopping' || (!prompt.trim() && !busy)} onClick={busy ? () => void stop() : () => void send()}>{busy ? <Square /> : <Send />}</button>
+          <button className="send-button" aria-label={activeChatRun?.status === 'stopping' ? '正在停止' : busy ? '停止生成' : '发送'} disabled={projectTransition || !workspace || activeChatRun?.status === 'stopping' || (!prompt.trim() && !busy)} onClick={busy ? () => void stop() : () => void send()}>{busy ? <Square /> : <Send />}</button>
         </div>
       </div>
     </div>
@@ -1396,6 +1237,13 @@ function ContentPanel({ page, onPageChange, showFileEditor, onOpenDocument, onOp
   </section>
 }
 
+function canLeaveProject(): boolean {
+  const state = useAppStore.getState()
+  if (state.pendingChatRequests || Object.keys(state.chatRuns).length) throw new Error('请先停止正在运行的任务，再切换项目')
+  if (state.tabs.some((tab) => tab.content !== tab.savedContent)) return window.confirm('当前项目有未保存的文档。放弃这些修改并切换项目？')
+  return true
+}
+
 export function App() {
   const workspace = useAppStore((state) => state.workspace)
   const activePath = useAppStore((state) => state.activePath)
@@ -1405,6 +1253,8 @@ export function App() {
   const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed)
   const theme = useAppStore((state) => state.theme)
   const setWorkspace = useAppStore((state) => state.setWorkspace)
+  const setProjects = useAppStore((state) => state.setProjects)
+  const setProjectTransition = useAppStore((state) => state.setProjectTransition)
   const openTab = useAppStore((state) => state.openTab)
   const closeTab = useAppStore((state) => state.closeTab)
   const toggleContext = useAppStore((state) => state.toggleContext)
@@ -1438,8 +1288,8 @@ export function App() {
         }
       }
     }
-    if (added.length > 0 || previous?.id !== next.id) setPendingNewFiles(added)
     setWorkspace(next)
+    if (added.length > 0 || previous?.id !== next.id) setPendingNewFiles(added)
   }, [setPendingNewFiles, setWorkspace])
 
   const changeContentPage = useCallback((page: ContentPage) => {
@@ -1456,15 +1306,53 @@ export function App() {
   }, [setError, theme])
 
   const openWorkspaceFromMenu = useCallback(async () => {
+    if (useAppStore.getState().projectTransition) return
+    setProjectTransition(true)
     try {
+      if (!canLeaveProject()) return
       const next = await chooseWorkspace()
       if (next) {
-        useAppStore.getState().newConversation()
-        setConversations([])
         applyWorkspaceSnapshot(next)
+        setProjects(await listProjects())
+        setFileEditorVisible(false)
       }
     } catch (cause) { setError(String(cause)) }
-  }, [applyWorkspaceSnapshot, setConversations, setError])
+    finally { setProjectTransition(false) }
+  }, [applyWorkspaceSnapshot, setProjects, setProjectTransition, setError])
+
+  const selectProject = useCallback(async (id: string) => {
+    const state = useAppStore.getState()
+    if (state.projectTransition) return false
+    if (state.workspace?.id === id) { setSettingsOpen(false); return true }
+    setProjectTransition(true)
+    try {
+      if (!canLeaveProject()) return false
+      applyWorkspaceSnapshot(await activateProject(id), false)
+      setProjects(await listProjects())
+      setFileEditorVisible(false)
+      setContentPage('chat')
+      setSettingsOpen(false)
+      return true
+    } catch (cause) { setError(String(cause)); return false }
+    finally { setProjectTransition(false) }
+  }, [applyWorkspaceSnapshot, setProjects, setProjectTransition, setSettingsOpen, setError])
+
+  const removeProject = useCallback(async (project: ProjectSummary, confirmation: string) => {
+    const state = useAppStore.getState()
+    if (state.projectTransition) throw new Error('项目切换中，请稍后重试')
+    if (state.pendingChatRequests || Object.keys(state.chatRuns).length) throw new Error('请先停止正在运行的任务，再删除项目')
+    if (state.workspace?.id === project.id && state.tabs.some((tab) => tab.content !== tab.savedContent)) throw new Error('当前项目有未保存文档，请先保存或关闭文档')
+    setProjectTransition(true)
+    try {
+      await deleteProject(project.id, confirmation)
+      if (useAppStore.getState().workspace?.id === project.id) {
+        setWorkspace(null)
+        setFileEditorVisible(false)
+        setContentPage('chat')
+      }
+      setProjects(useAppStore.getState().projects.filter((item) => item.id !== project.id))
+    } finally { setProjectTransition(false) }
+  }, [setWorkspace, setProjects, setProjectTransition])
 
   const newDocumentFromMenu = useCallback(async () => {
     if (!workspace) return openWorkspaceFromMenu()
@@ -1525,9 +1413,14 @@ export function App() {
   }, [error])
 
   const refreshWorkspaceFromMenu = useCallback(async () => {
-    if (!workspace) return openWorkspaceFromMenu()
-    try { applyWorkspaceSnapshot(await refreshWorkspace()) } catch (cause) { setError(`刷新工作区失败：${String(cause)}`) }
-  }, [applyWorkspaceSnapshot, openWorkspaceFromMenu, setError, workspace])
+    if (useAppStore.getState().projectTransition) return
+    setProjectTransition(true)
+    try {
+      setProjects(await listProjects())
+      if (useAppStore.getState().workspace) applyWorkspaceSnapshot(await refreshWorkspace())
+    } catch (cause) { setError(`刷新项目失败：${String(cause)}`) }
+    finally { setProjectTransition(false) }
+  }, [applyWorkspaceSnapshot, setProjects, setProjectTransition, setError])
 
   const closeDocumentFromMenu = useCallback(() => {
     const path = useAppStore.getState().activePath
@@ -1536,13 +1429,21 @@ export function App() {
   }, [closeTab])
 
   useEffect(() => {
-    if (!workspace) {
-      if (!isDesktop()) void chooseWorkspace().then((next) => next && applyWorkspaceSnapshot(next))
-      else void refreshWorkspace().then((next) => applyWorkspaceSnapshot(next)).catch((cause) => {
-        if (!String(cause).includes('请先选择工作目录')) setError(`恢复上次工作区失败：${String(cause)}`)
-      })
-    }
-  }, [applyWorkspaceSnapshot, setError, workspace])
+    let active = true
+    setProjectTransition(true)
+    void (async () => {
+      try {
+        const projects = await listProjects()
+        if (!active) return
+        setProjects(projects)
+        const next = await refreshWorkspace()
+        if (active) applyWorkspaceSnapshot(next)
+      } catch (cause) {
+        if (active && !String(cause).includes('请先选择工作目录')) setError(`恢复项目失败：${String(cause)}`)
+      } finally { if (active) setProjectTransition(false) }
+    })()
+    return () => { active = false }
+  }, [applyWorkspaceSnapshot, setProjects, setProjectTransition, setError])
 
   useEffect(() => {
     void listModelProfiles().then(setModelProfiles).catch((cause) => setError(String(cause)))
@@ -1553,14 +1454,20 @@ export function App() {
       setConversations([])
       return
     }
-    void listConversations().then(setConversations).catch((cause) => setError(String(cause)))
+    let active = true
+    void listConversations(workspace.id).then((values) => { if (active) setConversations(values) }).catch((cause) => { if (active) setError(String(cause)) })
+    return () => { active = false }
   }, [setConversations, setError, workspace])
 
   const openDocument = useCallback(async (path: string) => {
+    const state = useAppStore.getState()
+    if (state.projectTransition || !state.workspace) return
+    const workspaceId = state.workspace.id
     try {
       const existing = useAppStore.getState().tabs.find((tab) => tab.path === path)
       if (existing) { openTab(existing); setContentPage('file'); setFileEditorVisible(true); setSettingsOpen(false); return }
       const document = await readDocument(path)
+      if (useAppStore.getState().workspace?.id !== workspaceId || useAppStore.getState().projectTransition) return
       openTab({ ...document, savedContent: document.content })
       setContentPage('file')
       setFileEditorVisible(true)
@@ -1569,15 +1476,20 @@ export function App() {
   }, [openTab, setError, setSettingsOpen])
 
   const toggleDocumentContext = useCallback(async (path: string) => {
+    const state = useAppStore.getState()
+    if (state.projectTransition || !state.workspace) return
+    const workspaceId = state.workspace.id
     try {
       const existing = useAppStore.getState().contextDocuments.find((item) => item.path === path)
       if (existing) return toggleContext(existing)
       const document = await readDocument(path)
+      if (useAppStore.getState().workspace?.id !== workspaceId || useAppStore.getState().projectTransition) return
       toggleContext({ path, name: document.name, content: document.content, size: document.content.length, sizeBytes: document.sizeBytes, kind: document.kind })
     } catch (cause) { setError(String(cause)) }
   }, [setError, toggleContext])
 
   const saveActive = useCallback(async () => {
+    if (useAppStore.getState().projectTransition) return
     const document = useAppStore.getState().tabs.find((tab) => tab.path === useAppStore.getState().activePath)
     if (!document || document.content === document.savedContent) return
     try {
@@ -1618,8 +1530,8 @@ export function App() {
   return <div className="app-frame" data-theme={theme} data-platform={isMacPlatform() ? 'mac' : 'desktop'}>
     <TitleBar onPageChange={changeContentPage} onOpenWorkspace={() => void openWorkspaceFromMenu()} onNewDocument={() => void newDocumentFromMenu()} onRefreshWorkspace={() => void refreshWorkspaceFromMenu()} onCloseDocument={closeDocumentFromMenu} onSave={() => void saveActive()} onShowShortcuts={showShortcuts} onShowAbout={showAbout} onShowWindowDiagnostics={showWindowDiagnostics} onShowRuntimeDiagnostics={() => void showRuntimeDiagnostics()} />
     <div className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`} data-theme={theme}>
-      <ProjectSessionSidebar onPageChange={changeContentPage} onOpenWorkspace={() => void openWorkspaceFromMenu()} onRefreshWorkspace={() => void refreshWorkspaceFromMenu()} onOpenDocument={openDocument} />
-      {settingsOpen ? <SettingsPage /> : <ContentPanel page={contentPage} onPageChange={changeContentPage} showFileEditor={fileEditorVisible && hasActiveDocument} onOpenDocument={openDocument} onOpenWorkspace={() => void openWorkspaceFromMenu()} onRefreshWorkspace={refreshWorkspaceFromMenu} onSave={saveActive} onCloseEditor={() => setFileEditorVisible(false)} onToggleContext={toggleDocumentContext} onReviewDiff={() => { setContentPage('file'); setFileEditorVisible(true); setSettingsOpen(false) }} />}
+      <ProjectSessionSidebar onPageChange={changeContentPage} onOpenWorkspace={() => void openWorkspaceFromMenu()} onRefreshWorkspace={() => void refreshWorkspaceFromMenu()} onOpenDocument={openDocument} onSelectProject={selectProject} onDeleteProject={removeProject} />
+      {settingsOpen ? <SettingsPage /> : <ContentPanel key={workspace?.id ?? 'no-project'} page={contentPage} onPageChange={changeContentPage} showFileEditor={fileEditorVisible && hasActiveDocument} onOpenDocument={openDocument} onOpenWorkspace={() => void openWorkspaceFromMenu()} onRefreshWorkspace={refreshWorkspaceFromMenu} onSave={saveActive} onCloseEditor={() => setFileEditorVisible(false)} onToggleContext={toggleDocumentContext} onReviewDiff={() => { setContentPage('file'); setFileEditorVisible(true); setSettingsOpen(false) }} />}
       {error && <div className="error-banner" role="alert"><span>{error}</span><button aria-label="关闭错误提示" onClick={() => setError(null)}><X /></button></div>}
     </div>
     {runtimeDiagnosticsOpen && <div className="runtime-diagnostics-backdrop" role="presentation" onClick={() => setRuntimeDiagnosticsOpen(false)}>
