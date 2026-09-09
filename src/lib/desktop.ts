@@ -14,6 +14,12 @@ import { buildStructureOutputs } from './structureSegmentation'
 import type { StructureProposal } from './structureSegmentation'
 import { createTaskExecutionDispatch, validateTaskExecutionInput } from './taskRuntime'
 import type { TaskExecutionDispatch, TaskExecutionInput } from './taskRuntime'
+import type { LocalHardware } from './hardwareProfile'
+
+export async function getLocalHardware(): Promise<LocalHardware> {
+  if (!isDesktop()) return { platform: 'demo', architecture: 'demo', totalMemoryBytes: null, gpuMemoryBytes: null, unifiedMemory: false }
+  return invoke<LocalHardware>('get_local_hardware')
+}
 
 const PROFILE_KEY = 'vinkey.demo.modelProfiles'
 const CONNECTION_KEY = 'vinkey.demo.modelConnections'

@@ -13,6 +13,7 @@ use tauri::{AppHandle, Manager, State, WebviewWindow};
 
 mod character_graph;
 mod database;
+mod hardware;
 mod job_service;
 mod long_text;
 mod models;
@@ -25,6 +26,12 @@ mod window_controls;
 
 #[derive(Default)]
 pub(crate) struct WorkspaceState(Mutex<Option<Workspace>>);
+
+#[tauri::command]
+async fn get_local_hardware() -> Result<hardware::LocalHardware, String> {
+    tauri::async_runtime::spawn_blocking(hardware::detect)
+        .await.map_err(|error| format!("无法读取本机硬件：{error}"))
+}
 
 #[derive(Clone)]
 pub(crate) struct Workspace {
@@ -1335,6 +1342,7 @@ pub fn run() {
             record_runtime_event,
             search::search_workspace,
             models::list_model_profiles,
+            get_local_hardware,
             models::list_model_connections,
             models::save_model_connection,
             models::delete_model_connection,

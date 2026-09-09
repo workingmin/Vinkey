@@ -1,7 +1,9 @@
-import { ArrowLeft, Bot, Check, ChevronDown, CircleAlert, PlugZap, Plus, RefreshCw, Save, Sparkles, Square, Trash2, Zap } from 'lucide-react'
+import { ArrowLeft, Bot, Check, ChevronDown, CircleAlert, Cloud, PlugZap, Plus, RefreshCw, Save, Sparkles, Square, Trash2, Zap } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { deleteModelConnection, discoverConnectionModels, isDesktop, listModelConnections, listModelProfiles, saveModelConnection, saveModelProfile, stopOllamaModel } from '../lib/desktop'
+import { deleteModelConnection, discoverConnectionModels, getLocalHardware, isDesktop, listModelConnections, listModelProfiles, saveModelConnection, saveModelProfile, stopOllamaModel } from '../lib/desktop'
 import { isLocalOllamaProfile, recommendModel, type ModelGroupRole } from '../lib/modelGroups'
+import { hardwareSummary, hardwareTier, hardwareTierLabels, isLocalModelConnection, LOCAL_CONTEXT_WINDOW, LOCAL_HARDWARE_ADVICE, recommendLocalModel, type LocalHardware } from '../lib/hardwareProfile'
+import { formatServiceError } from '../lib/serviceError'
 import { useAppStore } from '../store'
 import type { ModelConnection, ModelConnectionInput, ModelConnectionResult, ModelProfile } from '../types'
 
@@ -26,9 +28,22 @@ export function SettingsPage() {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<{ error: boolean; text: string } | null>(null)
+  const [hardware, setHardware] = useState<LocalHardware | null>(null)
+  const [detectingHardware, setDetectingHardware] = useState(true)
   const alive = useRef(true)
   const selected = connections.find((connection) => connection.id === selectedId)
   const locked = busy || loading || pendingChatRequests > 0 || Object.keys(chatRuns).length > 0
+  const tier = hardwareTier(hardware)
+  const selectedIsLocal = isLocalModelConnection(selected)
+  const hasLocalAssignments = roles.some(({ id }) => isLocalModelConnection(profiles.find((profile) => profile.id === modelAssignments[id])))
+  const showHardware = selectedIsLocal || hasLocalAssignments
+
+  const detectHardware = async () => {
+    setDetectingHardware(true)
+    try { const value = await getLocalHardware(); if (alive.current) setHardware(value) }
+    catch { if (alive.current) setHardware(null) }
+    finally { if (alive.current) setDetectingHardware(false) }
+  }
 
   const scan = async (connection: ModelConnectionInput) => {
     setScanning((values) => [...values, connection.id])
@@ -44,6 +59,7 @@ export function SettingsPage() {
 
   useEffect(() => {
     alive.current = true
+    void detectHardware()
     let cancelled = false
     void (async () => {
       try {
@@ -77,6 +93,15 @@ export function SettingsPage() {
     setDraft(connection ?? emptyConnection())
     setDirty(false)
     setNotice(null)
+  }
+
+  const addRemoteConnection = () => {
+    if (locked || !discard()) return
+    setSelectedId(null)
+    setDraft({ id: crypto.randomUUID(), name: '远程 AI', kind: 'openai-compatible', baseUrl: '' })
+    setDirty(false)
+    setNotice(null)
+    window.setTimeout(() => document.getElementById('base-url')?.focus(), 0)
   }
 
   const save = async () => {
@@ -116,12 +141,14 @@ export function SettingsPage() {
     finally { setBusy(false) }
   }
 
-  const saveAssignment = async (role: ModelGroupRole, connection: ModelConnection, model: string) => {
+  const saveAssignment = async (role: ModelGroupRole, connection: ModelConnection, model: string, contextWindow?: number) => {
     const available = await listModelProfiles()
     const existing = available.find((profile) => profile.connectionId === connection.id && profile.model === model)
-    const profile = existing ?? await saveModelProfile({
+    const profile = existing
+      ? contextWindow && existing.contextWindow !== contextWindow ? await saveModelProfile({ ...existing, contextWindow }) : existing
+      : await saveModelProfile({
       id: crypto.randomUUID(), connectionId: connection.id, name: `${connection.name} · ${model}`,
-      kind: connection.kind, baseUrl: connection.baseUrl, model, contextWindow: connection.kind === 'ollama' ? 16384 : 32768,
+      kind: connection.kind, baseUrl: connection.baseUrl, model, contextWindow: contextWindow ?? (connection.kind === 'ollama' ? LOCAL_CONTEXT_WINDOW : 32768),
     })
     setModelProfiles(await listModelProfiles())
     setModelAssignment(role, profile.id)
@@ -143,16 +170,25 @@ export function SettingsPage() {
 
   const smartAssign = async () => {
     if (!selected || locked || dirty) return
+    if (selectedIsLocal && (detectingHardware || tier === 'unknown' || tier === 'insufficient')) {
+      setNotice({ error: true, text: tier === 'insufficient' ? LOCAL_HARDWARE_ADVICE : '硬件信息未确认，请重新检测或手动选择模型。' })
+      return
+    }
     const models = catalogs[selected.id]?.ok ? catalogs[selected.id].models : []
     setBusy(true)
     try {
-      for (const role of roles) {
-        const model = recommendModel(models, role.id)
-        if (!model) throw new Error('此连接没有可用于创作的模型')
-        await saveAssignment(role.id, selected, model)
+      const assignments = roles.map((role) => ({
+        role: role.id,
+        model: selectedIsLocal ? recommendLocalModel(models, role.id, tier) : recommendModel(models, role.id),
+      }))
+      if (assignments.some(({ model }) => !model)) throw new Error(selectedIsLocal
+        ? '此连接没有适合本机档位的已知模型。请安装 Q4 量化的 openbmb/minicpm4.1:latest 或 qwen3:8b，或手动选择模型。'
+        : '此连接没有可用于创作的模型')
+      for (const { role, model } of assignments) {
+        await saveAssignment(role, selected, model!, selectedIsLocal ? LOCAL_CONTEXT_WINDOW : undefined)
       }
       setNotice({ error: false, text: `已从“${selected.name}”分配两类功能模型` })
-    } catch (error) { setNotice({ error: true, text: String(error) }) }
+    } catch (error) { setNotice({ error: true, text: formatServiceError(error) }) }
     finally { setBusy(false) }
   }
 
@@ -186,7 +222,9 @@ export function SettingsPage() {
     {notice && <div role={notice.error ? 'alert' : 'status'} className={`settings-notice ${notice.error ? 'failure' : ''}`}>{notice.error ? <CircleAlert /> : <Check />}<span>{notice.text}</span></div>}
     <div className="model-settings-scroll">
       <section className="model-assignments" aria-labelledby="model-assignments-title">
-        <div className="settings-section-heading"><h2 id="model-assignments-title">功能模型</h2>{locked && !loading && <small>{busy ? '正在保存...' : '任务运行中'}</small>}</div>
+        <div className="settings-section-heading"><div className="model-tier-heading"><h2 id="model-assignments-title">功能模型</h2>{showHardware && <span className={`model-tier tier-${tier}`} title="依据硬件容量估算，单模型运行；不代表实际推理测试结果">{detectingHardware ? '检测硬件中' : hardwareTierLabels[tier]}</span>}</div>{locked && !loading && <small>{busy ? '正在保存...' : '任务运行中'}</small>}</div>
+        {showHardware && <div className="hardware-summary"><span>{hardwareSummary(hardware)}</span><button type="button" className="icon-button" aria-label="重新检测硬件" title="重新检测硬件" disabled={detectingHardware || locked} onClick={() => void detectHardware()}><RefreshCw /></button></div>}
+        {showHardware && !detectingHardware && (tier === 'insufficient' || tier === 'unknown') && <div className="hardware-advice" role={tier === 'insufficient' ? 'alert' : 'status'}><CircleAlert /><span>{tier === 'insufficient' ? LOCAL_HARDWARE_ADVICE : '无法确认本机内存或独立显存，暂不自动分配本地模型。可重新检测、手动配置或添加远程连接。'}</span><button type="button" className="secondary-button" disabled={locked} onClick={addRemoteConnection}><Cloud />添加远程连接</button></div>}
         <div className="model-assignment-grid">
           {roles.map(({ id, name, description, icon: Icon }) => {
             const profile = profiles.find((item) => item.id === modelAssignments[id])
@@ -231,7 +269,7 @@ export function SettingsPage() {
               <div className="settings-actions"><button type="button" className="icon-button connection-delete" title="删除连接" aria-label="删除连接" disabled={!selected} onClick={() => void remove()}><Trash2 /></button><span /><button type="submit" className="primary-button"><Save />{busy ? '保存中...' : '保存并获取模型'}</button></div>
             </fieldset>
             {selected && <div className="connection-catalog">
-              <header><h3>可用模型 <span>{selectedCatalog?.ok ? selectedCatalog.models.length : 0}</span></h3><button type="button" className="icon-button" title="刷新模型列表" aria-label="刷新模型列表" disabled={locked || dirty || scanning.includes(selected.id)} onClick={() => void scan(selected)}><RefreshCw className={scanning.includes(selected.id) ? 'spinning' : ''} /></button><button type="button" className="secondary-button" disabled={locked || dirty || !selectedCatalog?.ok || !selectedCatalog.models.length || scanning.includes(selected.id)} onClick={() => void smartAssign()}><Sparkles />智能分配</button></header>
+              <header><h3>可用模型 <span>{selectedCatalog?.ok ? selectedCatalog.models.length : 0}</span></h3><button type="button" className="icon-button" title="刷新模型列表" aria-label="刷新模型列表" disabled={locked || dirty || scanning.includes(selected.id)} onClick={() => void scan(selected)}><RefreshCw className={scanning.includes(selected.id) ? 'spinning' : ''} /></button><button type="button" className="secondary-button" disabled={locked || dirty || !selectedCatalog?.ok || !selectedCatalog.models.length || scanning.includes(selected.id) || (selectedIsLocal && (detectingHardware || tier === 'unknown' || tier === 'insufficient'))} onClick={() => void smartAssign()}><Sparkles />智能分配</button></header>
               {scanning.includes(selected.id) ? <p role="status">正在获取模型...</p> : !selectedCatalog?.ok ? <p className="assignment-warning" role="status">{selectedCatalog?.message ?? '尚未获取模型'}</p> : selectedCatalog.models.length === 0 ? <p>服务未返回模型</p> : <ul>{selectedCatalog.models.map((model) => <li key={model}><Bot /><span>{model}</span>{roles.filter((role) => profiles.some((profile) => profile.id === modelAssignments[role.id] && profile.connectionId === selected.id && profile.model === model)).map((role) => <small key={role.id}>{role.name}</small>)}</li>)}</ul>}
             </div>}
           </form>

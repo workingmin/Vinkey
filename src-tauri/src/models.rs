@@ -791,7 +791,8 @@ async fn run_stream_with(
     let (url, body) = if profile.kind == "ollama" {
         (
             format!("{}/api/chat", profile.base_url),
-            json!({"model": profile.model, "messages": messages, "stream": true}),
+            json!({"model": profile.model, "messages": messages, "stream": true,
+                "options": {"num_ctx": profile.context_window}}),
         )
     } else {
         (
