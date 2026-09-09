@@ -931,7 +931,7 @@ pub(crate) async fn complete_worker_chat(
         None
     };
     let mut content = String::new();
-    run_stream_with(&request, &profile, key.as_deref(), cancel, |chunk| {
+    run_stream_with(&request, &profile, key.as_deref(), cancel, None, |chunk| {
         append_worker_chunk(&mut content, chunk)
     })
     .await?;
