@@ -239,7 +239,7 @@ function summaryPrompt(instruction: string, records: SummaryRecord[], final: boo
 export async function analyzeLongText(
   documents: ContextDocument[],
   instruction: string,
-  profile: Pick<ModelProfile, 'id' | 'contextWindow'>,
+  profile: Pick<ModelProfile, 'id' | 'kind' | 'contextWindow'>,
   requestId: string,
   onProgress?: (progress: AnalysisProgress) => void,
   workspaceId = 'selected-documents',
@@ -250,7 +250,10 @@ export async function analyzeLongText(
 ): Promise<LongTextAnalysisResult> {
   if (documents.length === 0) throw new Error('没有可分析的文档')
   const jobId = resumeJobId ?? requestId
-  const maxTokens = chunkBudget(profile.contextWindow)
+  // Some local runtimes ignore num_ctx and keep their 4K default. Keep the
+  // first request below that observed hard limit until runtime probing exists.
+  const effectiveContextWindow = profile.kind === 'ollama' ? Math.min(profile.contextWindow, 4096) : profile.contextWindow
+  const maxTokens = chunkBudget(effectiveContextWindow)
   const indexMessage = buildDocumentIndexMessage(documents)
   const startedAt = Date.now()
   const cards = buildDocumentMetadataCards(documents)
@@ -289,7 +292,7 @@ export async function analyzeLongText(
       instruction,
       instructionHash,
       profileId: profile.id,
-      contextWindow: profile.contextWindow,
+      contextWindow: effectiveContextWindow,
       sourcePolicy: 'local-chunks',
       maxTokens,
       overlapTokens,
@@ -345,8 +348,8 @@ export async function analyzeLongText(
       const cached = resumeJobId
         ? await guardedCall('read_analysis_artifact', { jobId, name: `summary-${String(index + 1).padStart(5, '0')}.md` }, () => readAnalysisArtifact(jobId, `summary-${String(index + 1).padStart(5, '0')}.md`), toolCallGuard)
         : null
-      const text = cached ?? await collectResponse(requestId, profile.id, [{ role: 'user', content: chunkPrompt(instruction, chunk, indexMessage, profile.contextWindow) }], toolCallGuard)
-      if (text) summaries.push({ sourceId: chunk.sourceId, chunkId: chunk.id, heading: chunk.heading, text: clipToTokens(text, summaryClipLimit(profile.contextWindow, indexMessage)), evidence: verifyEvidenceReferences(parseEvidenceReferences(text), documents) })
+      const text = cached ?? await collectResponse(requestId, profile.id, [{ role: 'user', content: chunkPrompt(instruction, chunk, indexMessage, effectiveContextWindow) }], toolCallGuard)
+      if (text) summaries.push({ sourceId: chunk.sourceId, chunkId: chunk.id, heading: chunk.heading, text: clipToTokens(text, summaryClipLimit(effectiveContextWindow, indexMessage)), evidence: verifyEvidenceReferences(parseEvidenceReferences(text), documents) })
       if (cached === null) {
         const name = `summary-${String(index + 1).padStart(5, '0')}.md`
         await guardedCall('write_analysis_artifact', { jobId, name, content: text }, () => writeAnalysisArtifact(jobId, name, text), toolCallGuard)
@@ -361,8 +364,8 @@ export async function analyzeLongText(
 
     let level = 0
     let current = summaries
-    while (batchSummaries(current, profile.contextWindow, indexMessage).length > 1) {
-      const batches = batchSummaries(current, profile.contextWindow, indexMessage)
+    while (batchSummaries(current, effectiveContextWindow, indexMessage).length > 1) {
+      const batches = batchSummaries(current, effectiveContextWindow, indexMessage)
       const next: SummaryRecord[] = []
       const reduceStepId = `reduce-${level + 1}`
       await updateTaskJob({
@@ -374,8 +377,8 @@ export async function analyzeLongText(
         await waitWhilePaused(requestId, jobId)
         assertNotCancelled(requestId)
         onProgress?.({ stage: 'reduce', completed: index, total: batches.length, message: `正在处理第 ${index + 1}/${batches.length} 批阶段汇总…` })
-        const text = await collectResponse(requestId, profile.id, [{ role: 'user', content: summaryPrompt(instruction, batch, false, indexMessage, profile.contextWindow) }], toolCallGuard)
-        if (text) next.push({ sourceId: 'summary', chunkId: `level-${level}-${index}`, heading: null, text: clipToTokens(text, summaryClipLimit(profile.contextWindow, indexMessage)), evidence: batch.flatMap((record) => record.evidence ?? []) })
+        const text = await collectResponse(requestId, profile.id, [{ role: 'user', content: summaryPrompt(instruction, batch, false, indexMessage, effectiveContextWindow) }], toolCallGuard)
+        if (text) next.push({ sourceId: 'summary', chunkId: `level-${level}-${index}`, heading: null, text: clipToTokens(text, summaryClipLimit(effectiveContextWindow, indexMessage)), evidence: batch.flatMap((record) => record.evidence ?? []) })
         const name = `reduce-${level + 1}-${String(index + 1).padStart(4, '0')}.md`
         await guardedCall('write_analysis_artifact', { jobId, name, content: text }, () => writeAnalysisArtifact(jobId, name, text), toolCallGuard)
         onProgress?.({ stage: 'reduce', completed: index + 1, total: batches.length, message: `已完成第 ${index + 1}/${batches.length} 批阶段汇总` })
@@ -396,7 +399,7 @@ export async function analyzeLongText(
       eventType: 'step.started', eventFields: { summaryCount: current.length },
     })
     onProgress?.({ stage: 'synthesis', completed: 0, total: 1, message: `正在综合 ${formatCount(current.length)} 条阶段摘要，完成最终任务…` })
-    const content = await collectResponse(requestId, profile.id, [{ role: 'user', content: summaryPrompt(instruction, current, true, indexMessage, profile.contextWindow) }], toolCallGuard)
+    const content = await collectResponse(requestId, profile.id, [{ role: 'user', content: summaryPrompt(instruction, current, true, indexMessage, effectiveContextWindow) }], toolCallGuard)
     const finalEvidence = verifyEvidenceReferences(parseEvidenceReferences(content), documents)
     const evidence = [...finalEvidence, ...current.flatMap((record) => record.evidence ?? [])]
       .filter((item, index, values) => values.findIndex((other) => other.sourceId === item.sourceId && other.lineStart === item.lineStart && other.lineEnd === item.lineEnd && other.quote === item.quote) === index)
