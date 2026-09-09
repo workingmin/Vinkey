@@ -41,6 +41,20 @@ import { readWorkspaceDocuments } from './lib/workspaceAnalysis'
 import { buildSelectedDocumentsOverviewMessage, formatWorkspaceOverview } from './lib/workspaceOverview'
 import { buildFocusedWorkspaceMessage } from './lib/focusedAnalysis'
 import { isLoopbackModelEndpoint } from './lib/modelPrivacy'
+
+function formatError(error: unknown): string {
+  if (error instanceof Error) return error.message
+  if (typeof error === 'string') return error
+  if (error && typeof error === 'object') {
+    try {
+      const value = JSON.stringify(error)
+      if (value && value !== '{}') return value
+    } catch {
+      // Fall through to String for unusual non-serializable error objects.
+    }
+  }
+  return String(error)
+}
 import {
   buildMultiFileRevisionContract, buildMultiFileRevisionTargets, buildSelectionRevisionContract,
   createDiffProposal, createMultiFileDiffProposals, fingerprintDocument,
@@ -553,7 +567,7 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
       taskPlan = taskDispatch.plan
     } catch (error) {
       setAnalysisStatus(null)
-      setError(`任务策略校验失败：${String(error)}`)
+      setError(`任务策略校验失败：${formatError(error)}`)
       return
     }
     if (taskDispatch.executionPhase === 'clarification-required') {
@@ -707,7 +721,7 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
       taskPlan = taskDispatch.plan
     } catch (error) {
       setAnalysisStatus(null)
-      setError(`任务策略校验失败：${String(error)}`)
+      setError(`任务策略校验失败：${formatError(error)}`)
       return
     }
     const toolGateway = createToolGateway(taskPlan)
@@ -904,7 +918,7 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
         }
       }
     } catch (error) {
-      const message = String(error)
+      const message = formatError(error)
       if (resumeJobId && /找不到可恢复|已经完成|属于其他工作区|指令已变化|源文档已变化/u.test(message)) {
         setResumeJobId(null)
         setRecoverableJob(null)
@@ -986,7 +1000,7 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
       setResumeJobId(recoverableJob.jobId)
       setPrompt(recoverableJob.instruction)
       setRecoverableJob(null)
-    } catch (error) { setError(`准备恢复任务失败：${String(error)}`) }
+    } catch (error) { setError(`准备恢复任务失败：${formatError(error)}`) }
   }
 
   const prepareAnalysis = async (paths: string[], instruction: string) => {
@@ -1001,7 +1015,7 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
       setMention(null)
       clearPendingNewFiles()
       window.setTimeout(() => promptRef.current?.focus(), 0)
-    } catch (error) { setError(`准备文档分析失败：${String(error)}`) }
+    } catch (error) { setError(`准备文档分析失败：${formatError(error)}`) }
   }
 
   return <main className="chat-panel">
