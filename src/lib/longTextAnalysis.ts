@@ -1,4 +1,4 @@
-import { prepareLongTextWorker, readAnalysisArtifact, streamChat, updateTaskJob, writeAnalysisArtifact } from './desktop'
+import { prepareLongTextWorker, probeModelContext, readAnalysisArtifact, streamChat, updateTaskJob, writeAnalysisArtifact } from './desktop'
 import { estimateTokens } from './context'
 import { buildDocumentIndexMessage, buildDocumentMetadataCards } from './documentMetadata'
 import { parseEvidenceReferences, verifyEvidenceReferences } from './workspaceAnalysis'
@@ -250,9 +250,9 @@ export async function analyzeLongText(
 ): Promise<LongTextAnalysisResult> {
   if (documents.length === 0) throw new Error('没有可分析的文档')
   const jobId = resumeJobId ?? requestId
-  // Some local runtimes ignore num_ctx and keep their 4K default. Keep the
-  // first request below that observed hard limit until runtime probing exists.
-  const effectiveContextWindow = profile.kind === 'ollama' ? Math.min(profile.contextWindow, 4096) : profile.contextWindow
+  const effectiveContextWindow = profile.kind === 'ollama'
+    ? await probeModelContext(profile.id, profile.contextWindow)
+    : profile.contextWindow
   const maxTokens = chunkBudget(effectiveContextWindow)
   const indexMessage = buildDocumentIndexMessage(documents)
   const startedAt = Date.now()
