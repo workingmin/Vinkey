@@ -7,11 +7,48 @@ import * as desktop from '../lib/desktop'
 
 beforeEach(() => {
   localStorage.clear()
+  vi.spyOn(desktop, 'getLocalHardware').mockResolvedValue({ platform: 'macos', architecture: 'aarch64', totalMemoryBytes: 16 * 1024 ** 3, gpuMemoryBytes: null, unifiedMemory: true })
   useAppStore.setState({ modelProfiles: [], modelAssignments: {}, activeModelId: null, pendingChatRequests: 0, chatRuns: {} })
 })
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 
 describe('model settings workflow', () => {
+  it('shows the local tier and applies its model choices to existing profiles', async () => {
+    vi.spyOn(desktop, 'getLocalHardware').mockResolvedValue({ platform: 'macos', architecture: 'aarch64', totalMemoryBytes: 32 * 1024 ** 3, gpuMemoryBytes: null, unifiedMemory: true })
+    vi.spyOn(desktop, 'discoverConnectionModels').mockResolvedValue({ ok: true, message: '', models: ['qwen3:8b', 'qwen3:14b', 'qwen3:32b'] })
+    const [connection] = await desktop.listModelConnections()
+    await desktop.saveModelProfile({ id: 'large', connectionId: connection.id, name: '14B', kind: 'ollama', baseUrl: connection.baseUrl, model: 'qwen3:14b', contextWindow: 4096 })
+    render(<SettingsPage />)
+    await screen.findByText('标准配置')
+    const smart = await screen.findByRole('button', { name: '智能分配' })
+    await waitFor(() => expect((smart as HTMLButtonElement).disabled).toBe(false))
+    fireEvent.click(smart)
+    await screen.findByText('已从“Ollama · 浏览器演示”分配两类功能模型')
+    const state = useAppStore.getState()
+    expect(state.modelProfiles.find((profile) => profile.id === state.modelAssignments.general)).toMatchObject({ model: 'qwen3:14b', contextWindow: 16384 })
+  })
+
+  it('warns below minimum and opens a remote connection without saving it', async () => {
+    vi.spyOn(desktop, 'getLocalHardware').mockResolvedValue({ platform: 'macos', architecture: 'aarch64', totalMemoryBytes: 8 * 1024 ** 3, gpuMemoryBytes: null, unifiedMemory: true })
+    render(<SettingsPage />)
+    await screen.findByText('低于最低配置')
+    expect((screen.getByRole('button', { name: '智能分配' }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: '添加远程连接' }))
+    expect((screen.getByLabelText('接口类型') as HTMLSelectElement).value).toBe('openai-compatible')
+    expect((screen.getByLabelText('Base URL') as HTMLInputElement).value).toBe('')
+    expect(await desktop.listModelConnections()).toHaveLength(1)
+  })
+
+  it('does not apply the local hardware gate to a remote Ollama connection', async () => {
+    vi.spyOn(desktop, 'getLocalHardware').mockRejectedValue(new Error('probe failed'))
+    await desktop.saveModelConnection({ id: 'remote', name: '远程推理', kind: 'ollama', baseUrl: 'http://192.168.1.8:11434' })
+    render(<SettingsPage />)
+    await screen.findByText('硬件未确认')
+    const smart = await screen.findByRole('button', { name: '智能分配' })
+    await waitFor(() => expect((smart as HTMLButtonElement).disabled).toBe(false))
+    fireEvent.click(smart)
+    await screen.findByText('已从“远程推理”分配两类功能模型')
+  })
   it('discovers models, assigns both roles, and shows their source', async () => {
     render(<SettingsPage />)
     const smart = await screen.findByRole('button', { name: '智能分配' })
