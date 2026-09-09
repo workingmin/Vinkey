@@ -583,6 +583,49 @@ async fn discover(profile: &ModelProfile, api_key: Option<&str>) -> Result<Vec<S
     Ok(models)
 }
 
+fn context_limit_from_error(message: &str) -> Option<u32> {
+    fn find(value: &Value) -> Option<u32> {
+        if let Some(value) = value.get("n_ctx").and_then(Value::as_u64) {
+            return u32::try_from(value).ok();
+        }
+        match value {
+            Value::Object(values) => values.values().find_map(find),
+            Value::Array(values) => values.iter().find_map(find),
+            Value::String(value) => serde_json::from_str::<Value>(value).ok().and_then(|value| find(&value)),
+            _ => None,
+        }
+    }
+    serde_json::from_str::<Value>(message).ok().and_then(|value| find(&value))
+        .or_else(|| message.find('{').and_then(|index| serde_json::from_str::<Value>(&message[index..]).ok()).and_then(|value| find(&value)))
+}
+
+#[tauri::command]
+pub async fn probe_model_context(
+    profile_id: String,
+    requested_context: u32,
+    state: State<'_, DatabaseState>,
+    runtime: State<'_, RuntimeLogState>,
+) -> Result<u32, String> {
+    validate_id(&profile_id)?;
+    let profile = load_profile(&profile_id, &state)?;
+    if profile.kind != "ollama" { return Ok(requested_context); }
+    let key = if profile.has_api_key { Some(get_secret(profile.connection_id.as_deref().unwrap_or(&profile.id))?) } else { None };
+    let mut request = client()?.post(format!("{}/api/chat", profile.base_url)).json(&json!({
+        "model": profile.model, "messages": [{"role": "user", "content": "Reply with OK."}],
+        "stream": false, "options": {"num_ctx": requested_context}
+    }));
+    if let Some(value) = key.filter(|value| !value.is_empty()) { request = request.bearer_auth(value); }
+    runtime.info("model.context_probe_started", json!({"profileId": profile.id, "model": profile.model, "requestedContext": requested_context}).as_object().cloned().unwrap_or_default());
+    let response = request.send().await.map_err(|error| format!("模型上下文探测请求失败：{error}"))?;
+    match response_or_error(response).await {
+        Ok(_) => { runtime.info("model.context_probe_completed", json!({"profileId": profile.id, "effectiveContext": requested_context}).as_object().cloned().unwrap_or_default()); Ok(requested_context) }
+        Err(message) => match context_limit_from_error(&message) {
+            Some(effective) => { let effective = effective.max(2048).min(requested_context); runtime.info("model.context_probe_completed", json!({"profileId": profile.id, "requestedContext": requested_context, "effectiveContext": effective, "degraded": true}).as_object().cloned().unwrap_or_default()); Ok(effective) }
+            None => { runtime.error("model.context_probe_failed", &message); Err(message) }
+        }
+    }
+}
+
 #[tauri::command]
 pub async fn test_model_connection(
     input: ModelProfileInput,
@@ -1029,6 +1072,12 @@ pub fn cancel_chat(request_id: String, state: State<'_, ChatCancellation>) -> Re
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn extracts_nested_runtime_context_limit() {
+        let message = r#"模型服务返回 HTTP 400：{"error":"{\"error\":{\"n_ctx\":4096}}"}"#;
+        assert_eq!(context_limit_from_error(message), Some(4096));
+    }
 
     #[test]
     fn migrates_profiles_and_resolves_shared_connection_changes() {

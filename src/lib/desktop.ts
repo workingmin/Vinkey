@@ -21,6 +21,11 @@ export async function getLocalHardware(): Promise<LocalHardware> {
   return invoke<LocalHardware>('get_local_hardware')
 }
 
+export async function probeModelContext(profileId: string, requestedContext: number): Promise<number> {
+  if (!isDesktop()) return requestedContext
+  return invoke<number>('probe_model_context', { profileId, requestedContext })
+}
+
 const PROFILE_KEY = 'vinkey.demo.modelProfiles'
 const CONNECTION_KEY = 'vinkey.demo.modelConnections'
 const CONVERSATION_KEY = 'vinkey.demo.conversations'
