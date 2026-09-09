@@ -524,7 +524,7 @@ pub fn delete_model_profile(
 fn client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(5))
-        .timeout(Duration::from_secs(60))
+        .timeout(Duration::from_secs(CHAT_TIMEOUT_SECS))
         .build()
         .map_err(|error| format!("无法创建模型连接：{error}"))
 }
@@ -777,6 +777,7 @@ async fn run_stream_with(
     profile: &ModelProfile,
     key: Option<&str>,
     cancel: &AtomicBool,
+    runtime: Option<&RuntimeLogState>,
     mut on_chunk: impl FnMut(&str) -> Result<(), String>,
 ) -> Result<(), String> {
     if cancel.load(Ordering::Relaxed) {
@@ -798,9 +799,15 @@ async fn run_stream_with(
             json!({"model": profile.model, "messages": messages, "stream": true}),
         )
     };
-    let mut builder = chat_client()?.post(url).json(&body);
+    let mut builder = chat_client()?.post(url.clone()).json(&body);
     if let Some(value) = key.filter(|value| !value.is_empty()) {
         builder = builder.bearer_auth(value);
+    }
+    if let Some(runtime) = runtime {
+        runtime.info("chat.request_sent", serde_json::json!({
+            "requestId": request.request_id.clone(), "url": url,
+            "timeoutSecs": CHAT_TIMEOUT_SECS, "messageCount": request.messages.len(),
+        }).as_object().cloned().unwrap_or_default());
     }
     let response = response_or_error(builder.send().await.map_err(|error| {
         if error.is_timeout() {
@@ -813,13 +820,24 @@ async fn run_stream_with(
         }
     })?)
     .await?;
+    if let Some(runtime) = runtime {
+        runtime.info("chat.response_started", serde_json::json!({
+            "requestId": request.request_id.clone(), "status": response.status().as_u16(),
+            "contentType": response.headers().get(reqwest::header::CONTENT_TYPE).and_then(|v| v.to_str().ok()),
+        }).as_object().cloned().unwrap_or_default());
+    }
     let mut stream = response.bytes_stream();
     let mut buffer = Vec::<u8>::new();
+    let mut received_bytes = 0usize;
+    let mut received_chunks = 0usize;
+    let mut first_byte_ms = None;
+    let mut first_content_ms = None;
+    let started = Instant::now();
     while let Some(chunk) = stream.next().await {
         if cancel.load(Ordering::Relaxed) {
             return Err("请求已停止".into());
         }
-        buffer.extend_from_slice(&chunk.map_err(|error| {
+        let chunk = chunk.map_err(|error| {
             if error.is_timeout() {
                 format!(
                     "模型响应超时：{} 秒内未完成响应，请检查模型推理速度或缩短上下文",
@@ -832,10 +850,15 @@ async fn run_stream_with(
             } else {
                 format!("读取模型响应失败：{error}")
             }
-        })?);
+        })?;
+        received_bytes += chunk.len();
+        received_chunks += 1;
+        first_byte_ms.get_or_insert(started.elapsed().as_millis());
+        buffer.extend_from_slice(&chunk);
         while let Some(position) = buffer.iter().position(|byte| *byte == b'\n') {
             let line = buffer.drain(..=position).collect::<Vec<_>>();
             if let Some(content) = stream_line_content(&line, &profile.kind)? {
+                first_content_ms.get_or_insert(started.elapsed().as_millis());
                 on_chunk(&content)?;
             }
         }
@@ -844,6 +867,13 @@ async fn run_stream_with(
         if let Some(content) = stream_line_content(&buffer, &profile.kind)? {
             on_chunk(&content)?;
         }
+    }
+    if let Some(runtime) = runtime {
+        runtime.info("chat.response_completed", serde_json::json!({
+            "requestId": request.request_id.clone(), "durationMs": started.elapsed().as_millis(),
+            "receivedBytes": received_bytes, "receivedChunks": received_chunks,
+            "firstByteMs": first_byte_ms, "firstContentMs": first_content_ms,
+        }).as_object().cloned().unwrap_or_default());
     }
     Ok(())
 }
@@ -854,8 +884,9 @@ async fn run_stream(
     key: Option<String>,
     channel: Channel<ChatStreamEvent>,
     cancel: Arc<AtomicBool>,
+    runtime: &RuntimeLogState,
 ) -> Result<(), String> {
-    run_stream_with(&request, &profile, key.as_deref(), &cancel, |content| {
+    run_stream_with(&request, &profile, key.as_deref(), &cancel, Some(runtime), |content| {
         let _ = channel.send(ChatStreamEvent::Chunk {
             content: content.to_string(),
         });
@@ -946,7 +977,7 @@ pub async fn stream_chat(
         .lock()
         .map_err(|_| "取消状态不可用".to_string())?
         .insert(request.request_id.clone(), cancel.clone());
-    let result = run_stream(request.clone(), profile, key, on_event.clone(), cancel).await;
+    let result = run_stream(request.clone(), profile, key, on_event.clone(), cancel, &runtime).await;
     if let Ok(mut values) = cancellations.0.lock() {
         values.remove(&request.request_id);
     }
