@@ -2,16 +2,17 @@ import { prepareLongTextWorker, probeModelContext, readAnalysisArtifact, streamC
 import { estimateTokens } from './context'
 import { buildDocumentIndexMessage, buildDocumentMetadataCards } from './documentMetadata'
 import { parseEvidenceReferences, verifyEvidenceReferences } from './workspaceAnalysis'
-import type { AnalysisJobManifest, ChatStreamEvent, ContextDocument, EvidenceReference, ModelProfile, TextChunk, WorkspaceDocumentRef } from '../types'
+import type { AnalysisJobManifest, ChatStreamEvent, ContextDocument, EvidenceReference, ModelProfile, TaskWorkerEvent, TextChunk, WorkspaceDocumentRef } from '../types'
 import type { TaskExecutionDispatch } from './taskRuntime'
 
-export type AnalysisStage = 'chunking' | 'map' | 'reduce' | 'synthesis' | 'evidence' | 'lifecycle'
+export type AnalysisStage = TaskWorkerEvent['stage']
 
 export interface AnalysisProgress {
   stage: AnalysisStage
   completed: number
   total: number
   message: string
+  event?: TaskWorkerEvent
 }
 
 export interface LongTextAnalysisResult {
@@ -20,6 +21,10 @@ export interface LongTextAnalysisResult {
   chunkCount: number
   summaryCount: number
   evidence: EvidenceReference[]
+  modelInvocationCount: number
+  mapCacheHits: number
+  stageCacheHits: number
+  jobCheckpointHits: number
 }
 
 export interface SummaryRecord {
@@ -312,6 +317,7 @@ export async function analyzeLongText(
       completed: event.completed,
       total: event.total,
       message: event.message,
+      event,
     }), workerDispatch.authorizationTicket)
     if (prepared.pipelineCompleted) {
       return {
@@ -320,6 +326,10 @@ export async function analyzeLongText(
         chunkCount: prepared.chunkCount,
         summaryCount: prepared.summaryCount,
         evidence: prepared.evidence,
+        modelInvocationCount: prepared.modelInvocationCount,
+        mapCacheHits: prepared.mapCacheHits,
+        stageCacheHits: prepared.stageCacheHits,
+        jobCheckpointHits: prepared.jobCheckpointHits,
       }
     }
     if (!resumeJobId) {
@@ -336,6 +346,7 @@ export async function analyzeLongText(
 
     const chunks = manifests.flatMap((manifest) => manifest.chunks)
     const summaries: SummaryRecord[] = []
+    let modelInvocationCount = 0
     await updateTaskJob({
       taskId: jobId, stepId: 'map', stepKind: 'map', stepStatus: 'running',
       eventType: 'step.started', eventFields: { chunkCount: chunks.length },
@@ -348,7 +359,10 @@ export async function analyzeLongText(
       const cached = resumeJobId
         ? await guardedCall('read_analysis_artifact', { jobId, name: `summary-${String(index + 1).padStart(5, '0')}.md` }, () => readAnalysisArtifact(jobId, `summary-${String(index + 1).padStart(5, '0')}.md`), toolCallGuard)
         : null
-      const text = cached ?? await collectResponse(requestId, profile.id, [{ role: 'user', content: chunkPrompt(instruction, chunk, indexMessage, effectiveContextWindow) }], toolCallGuard)
+      const text = cached ?? await (async () => {
+        modelInvocationCount += 1
+        return collectResponse(requestId, profile.id, [{ role: 'user', content: chunkPrompt(instruction, chunk, indexMessage, effectiveContextWindow) }], toolCallGuard)
+      })()
       if (text) summaries.push({ sourceId: chunk.sourceId, chunkId: chunk.id, heading: chunk.heading, text: clipToTokens(text, summaryClipLimit(effectiveContextWindow, indexMessage)), evidence: verifyEvidenceReferences(parseEvidenceReferences(text), documents) })
       if (cached === null) {
         const name = `summary-${String(index + 1).padStart(5, '0')}.md`
@@ -377,6 +391,7 @@ export async function analyzeLongText(
         await waitWhilePaused(requestId, jobId)
         assertNotCancelled(requestId)
         onProgress?.({ stage: 'reduce', completed: index, total: batches.length, message: `正在处理第 ${index + 1}/${batches.length} 批阶段汇总…` })
+        modelInvocationCount += 1
         const text = await collectResponse(requestId, profile.id, [{ role: 'user', content: summaryPrompt(instruction, batch, false, indexMessage, effectiveContextWindow) }], toolCallGuard)
         if (text) next.push({ sourceId: 'summary', chunkId: `level-${level}-${index}`, heading: null, text: clipToTokens(text, summaryClipLimit(effectiveContextWindow, indexMessage)), evidence: batch.flatMap((record) => record.evidence ?? []) })
         const name = `reduce-${level + 1}-${String(index + 1).padStart(4, '0')}.md`
@@ -399,6 +414,7 @@ export async function analyzeLongText(
       eventType: 'step.started', eventFields: { summaryCount: current.length },
     })
     onProgress?.({ stage: 'synthesis', completed: 0, total: 1, message: `正在综合 ${formatCount(current.length)} 条阶段摘要，完成最终任务…` })
+    modelInvocationCount += 1
     const content = await collectResponse(requestId, profile.id, [{ role: 'user', content: summaryPrompt(instruction, current, true, indexMessage, effectiveContextWindow) }], toolCallGuard)
     const finalEvidence = verifyEvidenceReferences(parseEvidenceReferences(content), documents)
     const evidence = [...finalEvidence, ...current.flatMap((record) => record.evidence ?? [])]
@@ -420,7 +436,10 @@ export async function analyzeLongText(
       eventType: 'task.completed', eventFields: { chunkCount: chunks.length, evidenceCount: evidence.length },
     })
     onProgress?.({ stage: 'synthesis', completed: 1, total: 1, message: '长文本任务完成' })
-    return { content, jobId, chunkCount: chunks.length, summaryCount: summaries.length, evidence }
+    return {
+      content, jobId, chunkCount: chunks.length, summaryCount: summaries.length, evidence,
+      modelInvocationCount, mapCacheHits: 0, stageCacheHits: 0, jobCheckpointHits: 0,
+    }
   } catch (error) {
     const message = String(error)
     const failed: AnalysisJobManifest = {

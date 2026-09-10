@@ -2,10 +2,11 @@ import { create } from 'zustand'
 import type {
   ChatMessage, ContextDocument, Conversation, ConversationSummary, DocumentTab,
   ModelProfile, ThemeMode, ViewMode, WorkspaceSnapshot, ProjectSummary,
-  ChatActivity, ChatRunStatus,
+  ChatActivity, ChatRunStatus, TaskWorkerEvent,
   DiffProposal, EditorRevisionRequest, EditorSelection,
 } from './types'
 import { applyDiffProposalSet, fingerprintDocument } from './lib/diffProposal'
+import { mergeWorkerActivity } from './lib/chatActivity'
 import { readModelAssignments, reconcileModelAssignments, type ModelAssignments, type ModelGroupRole } from './lib/modelGroups'
 
 const MAX_CHAT_ACTIVITY_LOG = 80
@@ -53,6 +54,7 @@ interface AppState {
   clearPendingNewFiles: () => void
   beginChatRun: (run: ChatRun) => void
   setChatRunStatus: (conversationId: string, status: ChatRunStatus, message?: string | null) => void
+  recordWorkerEvent: (conversationId: string, event: TaskWorkerEvent) => void
   appendChatRunChunk: (conversationId: string, chunk: string) => void
   resetChatRunResponse: (conversationId: string) => void
   endChatRun: (conversationId: string, discardAssistant: boolean) => void
@@ -205,6 +207,16 @@ export const useAppStore = create<AppState>((set, get) => ({
         ? mergeRunMessages(state.messages, nextRun)
         : state.messages,
     }
+  }),
+  recordWorkerEvent: (conversationId, event) => set((state) => {
+    const run = state.chatRuns[conversationId]
+    if (!run) return state
+    const activityLog = mergeWorkerActivity(run.activityLog, event)
+    if (activityLog === run.activityLog) return state
+    const nextRun = { ...run, activityLog, status: 'tool_calling' as const,
+      statusMessage: event.message, assistantMessage: { ...run.assistantMessage, activityLog } }
+    return { chatRuns: { ...state.chatRuns, [conversationId]: nextRun },
+      messages: state.conversationId === conversationId ? mergeRunMessages(state.messages, nextRun) : state.messages }
   }),
   appendChatRunChunk: (conversationId, chunk) => set((state) => {
     const run = state.chatRuns[conversationId]

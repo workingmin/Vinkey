@@ -15,20 +15,22 @@ use std::{
 };
 use tauri::{AppHandle, Emitter};
 
-const WORKER_VERSION: &str = "long-text-worker-5";
-const PROMPT_VERSION: &str = "long-text-prompts-1";
-const OUTPUT_SCHEMA_VERSION: &str = "long-text-output-2";
+const WORKER_VERSION: &str = "long-text-worker-6";
+const PROMPT_VERSION: &str = "long-text-prompts-2";
+const OUTPUT_SCHEMA_VERSION: &str = "long-text-output-3";
 const INPUT_NAME: &str = "worker-input.json";
 const OUTPUT_NAME: &str = "worker-output.json";
 const EVENTS_NAME: &str = "worker-events.json";
 const CHECKPOINTS_NAME: &str = "worker-checkpoints.json";
-const CHECKPOINT_SCHEMA_VERSION: &str = "long-text-checkpoints-1";
-const MAP_CACHE_DIR: &str = "_map-cache";
-const MAP_CACHE_SCHEMA_VERSION: &str = "long-text-map-cache-1";
+const CHECKPOINT_SCHEMA_VERSION: &str = "long-text-checkpoints-2";
+const MAP_CACHE_DIR: &str = "_stage-cache";
+const MAP_CACHE_SCHEMA_VERSION: &str = "long-text-map-cache-2";
 const MAX_MAP_CACHE_ENTRIES: usize = 1_024;
 const MAX_WORKER_EVENTS: usize = 1_000;
 const MAX_MODEL_ATTEMPTS: u32 = 3;
 const MIN_CHUNK_TOKENS: usize = 128;
+const VALIDATOR_VERSION: &str = "evidence-gate-2";
+const NO_EVIDENCE: &str = "未找到与任务相关的证据。";
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -110,6 +112,7 @@ pub struct LongTextWorkerOutput {
     pub summary_count: usize,
     pub model_invocation_count: usize,
     pub map_cache_hits: usize,
+    pub stage_cache_hits: usize,
     pub job_checkpoint_hits: usize,
     pub duration_ms: u64,
     pub completed_at: u64,
@@ -126,6 +129,10 @@ pub struct TaskWorkerEvent {
     pub completed: usize,
     pub total: usize,
     pub message: String,
+    #[serde(default)]
+    pub artifact: Option<String>,
+    #[serde(default)]
+    pub cache_source: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -193,7 +200,10 @@ pub struct WorkerRuntimeState {
 
 impl WorkerRuntimeState {
     pub fn has_workers(&self) -> bool {
-        self.controls.lock().map(|controls| !controls.is_empty()).unwrap_or(true)
+        self.controls
+            .lock()
+            .map(|controls| !controls.is_empty())
+            .unwrap_or(true)
     }
 }
 
@@ -206,6 +216,7 @@ struct SummaryRecord {
     evidence: Vec<EvidenceReference>,
     artifact: String,
     content_hash: String,
+    volume: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -225,6 +236,8 @@ struct WorkerCheckpoint {
     dependencies: Vec<CheckpointDependency>,
     content_hash: String,
     created_at: u64,
+    #[serde(default)]
+    cache_key: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -249,6 +262,8 @@ struct MapCacheEntry {
     content_hash: String,
     content: String,
     created_at: u64,
+    validation_status: String,
+    validator_version: String,
 }
 
 fn now_ms() -> u64 {
@@ -544,6 +559,8 @@ fn worker_event(
         completed,
         total,
         message: message.into(),
+        artifact: None,
+        cache_source: None,
     }
 }
 
@@ -569,6 +586,38 @@ fn read_output_at(jobs_root: &Path, job_id: &str) -> Result<Option<LongTextWorke
         serde_json::from_slice(&bytes).map_err(|error| format!("Worker 输出损坏：{error}"))?;
     if output.job_id != job_id {
         return Err("Worker 输出 Job ID 不匹配".into());
+    }
+    let snapshot = read_snapshot(jobs_root, job_id)?;
+    let manifest = load_checkpoint_manifest(jobs_root, &snapshot);
+    if output.compatibility_key != snapshot.compatibility_key
+        || output.worker_version != WORKER_VERSION
+        || output.prompt_version != PROMPT_VERSION
+        || output.output_schema_version != OUTPUT_SCHEMA_VERSION
+    {
+        return Err("Worker 输出版本或输入不匹配".into());
+    }
+    let final_entry = manifest
+        .entries
+        .iter()
+        .find(|entry| entry.artifact == "analysis.md")
+        .ok_or("Worker 输出缺少综合检查点")?;
+    if long_text::source_fingerprint(&output.content) != final_entry.content_hash {
+        return Err("Worker 输出与综合检查点不一致".into());
+    }
+    for entry in &manifest.entries {
+        if !is_model_checkpoint_artifact(&entry.artifact)
+            || checkpoint_revoked(jobs_root, entry)
+            || read_cached_text(&artifact_path(jobs_root, job_id, &entry.artifact))
+                .is_none_or(|text| long_text::source_fingerprint(&text) != entry.content_hash)
+            || entry.dependencies.iter().any(|dependency| {
+                !manifest.entries.iter().any(|parent| {
+                    parent.artifact == dependency.artifact
+                        && parent.content_hash == dependency.content_hash
+                })
+            })
+        {
+            return Err("Worker 输出依赖已变化或作废".into());
+        }
     }
     Ok(Some(output))
 }
@@ -636,6 +685,10 @@ fn map_cache_identity(
         "chunkAlgorithmVersion": long_text::CHUNK_ALGORITHM_VERSION,
         "model": snapshot.model,
         "promptHash": prompt_hash,
+        "serviceId": snapshot.input.dispatch.service_id,
+        "policyVersion": snapshot.input.dispatch.policy_version,
+        "dispatchVersion": snapshot.input.dispatch.dispatch_version,
+        "validatorVersion": VALIDATOR_VERSION,
     }))
     .map_err(|error| format!("无法生成 Map 缓存键：{error}"))?;
     Ok((long_text::source_fingerprint(&identity), prompt_hash))
@@ -651,6 +704,7 @@ fn read_map_cache(
     jobs_root: &Path,
     snapshot: &LongTextWorkerSnapshot,
     prompt: &str,
+    documents: &HashMap<String, String>,
 ) -> Result<Option<String>, String> {
     let (cache_key, prompt_hash) = map_cache_identity(snapshot, prompt)?;
     let path = map_cache_path(jobs_root, &cache_key);
@@ -674,6 +728,10 @@ fn read_map_cache(
                 && entry.prompt_hash == prompt_hash
                 && !entry.content.trim().is_empty()
                 && long_text::source_fingerprint(&entry.content) == entry.content_hash
+                && entry.validation_status == "accepted"
+                && entry.validator_version == VALIDATOR_VERSION
+                && !revoked_result(jobs_root, &cache_key, &entry.content_hash, entry.created_at)
+                && validate_stage_output("cache", &entry.content, documents).is_ok()
         })
         .map(|entry| entry.content);
     if valid.is_none() {
@@ -715,6 +773,45 @@ fn prune_map_cache(jobs_root: &Path) -> Result<(), String> {
     Ok(())
 }
 
+fn revoked_result(jobs_root: &Path, key: &str, hash: &str, created: u64) -> bool {
+    if !valid_fingerprint(key) || !valid_fingerprint(hash) {
+        return true;
+    }
+    let path = jobs_root
+        .join("_revoked")
+        .join(format!("{key}-{hash}.json"));
+    if !path.exists() {
+        return false;
+    }
+    fs::read(path)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
+        .and_then(|value| value["createdAt"].as_u64())
+        .is_none_or(|time| created <= time)
+}
+
+fn checkpoint_revoked(jobs_root: &Path, entry: &WorkerCheckpoint) -> bool {
+    let Some(key) = &entry.cache_key else {
+        return false;
+    };
+    revoked_result(jobs_root, key, &entry.content_hash, entry.created_at)
+}
+
+fn revoke_result(jobs_root: &Path, key: &str, hash: &str) -> Result<(), String> {
+    if !valid_fingerprint(key) || !valid_fingerprint(hash) {
+        return Err("缓存作废标识无效".into());
+    }
+    write_json(
+        &jobs_root
+            .join("_revoked")
+            .join(format!("{key}-{hash}.json")),
+        &json!({"cacheKey": key, "contentHash": hash, "status": "rejected", "createdAt": now_ms()}),
+        "缓存作废记录",
+    )?;
+    remove_if_exists(&map_cache_path(jobs_root, key))?;
+    Ok(())
+}
+
 fn persist_map_cache(
     jobs_root: &Path,
     snapshot: &LongTextWorkerSnapshot,
@@ -733,6 +830,8 @@ fn persist_map_cache(
         content_hash: long_text::source_fingerprint(content),
         content: content.into(),
         created_at: now_ms(),
+        validation_status: "accepted".into(),
+        validator_version: VALIDATOR_VERSION.into(),
     };
     write_json(&map_cache_path(jobs_root, &cache_key), &entry, " Map 缓存")?;
     prune_map_cache(jobs_root)
@@ -767,6 +866,16 @@ fn load_checkpoint_manifest(
 }
 
 fn is_model_checkpoint_artifact(name: &str) -> bool {
+    if name.contains('/') || name.contains('\\') || name.contains("..") {
+        return false;
+    }
+    if ["chapter-", "volume-", "summary-"]
+        .iter()
+        .any(|prefix| name.starts_with(prefix))
+        && name.ends_with(".md")
+    {
+        return true;
+    }
     if name == "analysis.md" {
         return true;
     }
@@ -799,12 +908,14 @@ fn prune_checkpoint_manifest(
     manifest: &mut WorkerCheckpointManifest,
 ) -> Result<(), String> {
     manifest.entries.retain(|entry| {
-        read_cached_text(&artifact_path(
-            jobs_root,
-            &snapshot.input.job_id,
-            &entry.artifact,
-        ))
-        .is_some_and(|content| long_text::source_fingerprint(&content) == entry.content_hash)
+        is_model_checkpoint_artifact(&entry.artifact)
+            && !checkpoint_revoked(jobs_root, entry)
+            && read_cached_text(&artifact_path(
+                jobs_root,
+                &snapshot.input.job_id,
+                &entry.artifact,
+            ))
+            .is_some_and(|content| long_text::source_fingerprint(&content) == entry.content_hash)
     });
     loop {
         let hashes = manifest
@@ -862,6 +973,7 @@ fn checkpoint_text(
     source_id: Option<&str>,
     source_fingerprint: Option<&str>,
     dependencies: &[CheckpointDependency],
+    documents: &HashMap<String, String>,
 ) -> Option<String> {
     let entry = manifest.entries.iter().find(|entry| {
         entry.artifact == artifact
@@ -870,8 +982,13 @@ fn checkpoint_text(
             && entry.source_fingerprint.as_deref() == source_fingerprint
             && entry.dependencies == dependencies
     })?;
+    if checkpoint_revoked(jobs_root, entry) {
+        return None;
+    }
     let content = read_cached_text(&artifact_path(jobs_root, &snapshot.input.job_id, artifact))?;
-    (long_text::source_fingerprint(&content) == entry.content_hash).then_some(content)
+    (long_text::source_fingerprint(&content) == entry.content_hash
+        && validate_stage_output(stage, &content, documents).is_ok())
+    .then_some(content)
 }
 
 fn persist_text_checkpoint(
@@ -899,6 +1016,7 @@ fn persist_text_checkpoint(
         dependencies,
         content_hash: content_hash.clone(),
         created_at: now_ms(),
+        cache_key: None,
     });
     manifest.updated_at = now_ms();
     write_json(
@@ -912,7 +1030,7 @@ fn persist_text_checkpoint(
 fn checkpoint_matches_step(entry: &WorkerCheckpoint, step_id: &str) -> bool {
     match step_id {
         "chunking" | "map" => entry.stage == "map",
-        "synthesis" => entry.stage == "synthesis",
+        "synthesis" | "chapter" | "volume" => entry.stage == step_id,
         "evidence" => false,
         _ => step_id
             .strip_prefix("reduce-")
@@ -936,11 +1054,13 @@ fn invalidate_checkpoint_step(
     snapshot: &LongTextWorkerSnapshot,
     step_id: &str,
 ) -> Result<Vec<String>, String> {
-    if !matches!(step_id, "chunking" | "map" | "synthesis" | "evidence")
-        && step_id
-            .strip_prefix("reduce-")
-            .and_then(|level| level.parse::<usize>().ok())
-            .is_none_or(|level| level == 0)
+    if !matches!(
+        step_id,
+        "chunking" | "map" | "chapter" | "volume" | "synthesis" | "evidence"
+    ) && step_id
+        .strip_prefix("reduce-")
+        .and_then(|level| level.parse::<usize>().ok())
+        .is_none_or(|level| level == 0)
     {
         return Err("Worker 重试步骤 ID 无效".into());
     }
@@ -968,6 +1088,15 @@ fn invalidate_checkpoint_step(
         }
     }
     let mut removed_artifacts = removed.iter().cloned().collect::<Vec<_>>();
+    for entry in manifest
+        .entries
+        .iter()
+        .filter(|entry| removed.contains(&entry.artifact))
+    {
+        if let Some(key) = &entry.cache_key {
+            revoke_result(jobs_root, key, &entry.content_hash)?;
+        }
+    }
     for artifact in &removed_artifacts {
         remove_if_exists(&artifact_path(jobs_root, &snapshot.input.job_id, artifact))?;
     }
@@ -1155,6 +1284,35 @@ fn chunk_prompt(input: &StartLongTextWorkerInput, chunk: &long_text::TextChunk) 
     )
 }
 
+fn summary_material(record: &SummaryRecord) -> String {
+    let citations = record
+        .evidence
+        .iter()
+        .filter(|item| item.verified)
+        .take(2)
+        .map(|item| {
+            format!(
+                "[source: {}{} lines={}-{} quote=\"{}\"]",
+                item.source_id,
+                item.chunk_id
+                    .as_ref()
+                    .map(|id| format!(" chunk={id}"))
+                    .unwrap_or_default(),
+                item.line_start,
+                item.line_end,
+                item.quote
+                    .as_deref()
+                    .unwrap_or("")
+                    .chars()
+                    .take(80)
+                    .collect::<String>()
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!("{}\n{}", record.text, citations)
+}
+
 fn summary_prompt(
     input: &StartLongTextWorkerInput,
     records: &[SummaryRecord],
@@ -1172,7 +1330,7 @@ fn summary_prompt(
                     .as_deref()
                     .map(|value| format!(" · {value}"))
                     .unwrap_or_default(),
-                record.text
+                summary_material(record)
             )
         })
         .collect::<Vec<_>>()
@@ -1206,7 +1364,7 @@ fn batch_summaries(
         MIN_CHUNK_TOKENS.max(batch_budget(input.context_window).saturating_sub(index_tokens));
     let (mut batches, mut current, mut used) = (Vec::new(), Vec::new(), 0usize);
     for record in records {
-        let cost = long_text::estimate_tokens(&record.text) + 32;
+        let cost = long_text::estimate_tokens(&summary_material(record)) + 32;
         if !current.is_empty() && used + cost > limit {
             batches.push(current);
             current = Vec::new();
@@ -1226,7 +1384,7 @@ fn batch_summaries(
 
 fn parse_evidence(value: &str) -> Vec<EvidenceReference> {
     let Ok(pattern) = Regex::new(
-        r#"\[source:\s*([^\]\s]+)(?:\s+chunk=([^\]\s]+))?\s+lines=(\d+)-(\d+)(?:\s+quote=\"([^\"]*)\")?\]"#,
+        r#"\[source:\s*([^\]\n]+?)(?:\s+chunk=([^\]\s]+))?\s+lines=(\d+)-(\d+)(?:\s+quote=\"([^\"]*)\")?\]"#,
     ) else {
         return Vec::new();
     };
@@ -1280,6 +1438,9 @@ fn verify_evidence(
                     reference.verification_error = Some("引用原文与来源行不一致".into());
                     return reference;
                 }
+            } else {
+                reference.verification_error = Some("来源引用缺少非空原文短引".into());
+                return reference;
             }
             reference.verified = true;
             reference.verification_error = None;
@@ -1303,6 +1464,67 @@ fn deduplicate_evidence(references: Vec<EvidenceReference>) -> Vec<EvidenceRefer
         .collect()
 }
 
+fn validate_stage_output(
+    stage: &str,
+    content: &str,
+    documents: &HashMap<String, String>,
+) -> Result<Vec<EvidenceReference>, String> {
+    if content.trim().is_empty() {
+        return Err(format!("模型输出为空：{stage}"));
+    }
+    if content.trim() == NO_EVIDENCE {
+        return Ok(Vec::new());
+    }
+    let evidence = verify_evidence(parse_evidence(content), documents);
+    if content.matches("[source:").count() != evidence.len()
+        || content.matches("```").count() % 2 != 0
+    {
+        return Err(format!("模型输出结构不完整：{stage}"));
+    }
+    if evidence.is_empty() {
+        return Err(format!("模型输出缺少可验证来源引用：{stage}"));
+    }
+    if evidence.iter().any(|reference| !reference.verified) {
+        return Err(format!("模型输出包含未通过校验的来源引用：{stage}"));
+    }
+    Ok(evidence)
+}
+
+fn validate_cached_output(
+    workspace: &Workspace,
+    snapshot: &LongTextWorkerSnapshot,
+    output: &LongTextWorkerOutput,
+) -> Result<(), String> {
+    if output.content.trim().is_empty() {
+        return Err("Worker 完整输出为空".into());
+    }
+    let expected_fingerprints = snapshot
+        .input
+        .documents
+        .iter()
+        .map(|document| (document.path.clone(), document.source_fingerprint.clone()))
+        .collect::<HashMap<_, _>>();
+    if output.source_fingerprints != expected_fingerprints {
+        return Err("Worker 完整输出的源文档指纹不匹配".into());
+    }
+    let mut documents = HashMap::new();
+    for source in &snapshot.input.documents {
+        let document = read_document_at(workspace, &source.path)?;
+        if long_text::source_fingerprint(&document.content) != source.source_fingerprint {
+            return Err(format!("Worker 完整输出的源文档已变化：{}", source.path));
+        }
+        documents.insert(source.path.clone(), document.content);
+    }
+    validate_stage_output("synthesis", &output.content, &documents)?;
+    if verify_evidence(output.evidence.clone(), &documents)
+        .iter()
+        .any(|reference| !reference.verified)
+    {
+        return Err("Worker 完整输出包含未通过校验的证据".into());
+    }
+    Ok(())
+}
+
 async fn model_text(
     jobs_root: &Path,
     runtime: &WorkerRuntimeState,
@@ -1312,14 +1534,18 @@ async fn model_text(
     database: &database::DatabaseState,
     control: &WorkerControl,
     prompt: String,
+    stage: &str,
+    documents: &HashMap<String, String>,
+    attempts: &mut usize,
 ) -> Result<String, String> {
     for attempt in 1..=MAX_MODEL_ATTEMPTS {
         wait_for_control(control).await?;
+        *attempts += 1;
         let result = models::complete_worker_chat(
             &input.profile_id,
             vec![models::RequestMessage {
                 role: "user".into(),
-                content: prompt.clone(),
+                content: format!("{}\n\n输出合同：每条事实保留来源路径、行号和非空原文短引。不要返回残缺标记或未闭合代码块。没有相关证据时，只返回：{}", prompt, NO_EVIDENCE),
             }],
             database,
             &snapshot.model,
@@ -1327,11 +1553,18 @@ async fn model_text(
         )
         .await
         .and_then(|content| {
-            if content.is_empty() {
-                Err("模型没有返回可用内容".into())
-            } else {
-                Ok(content)
+            if let Err(reason) = validate_stage_output(stage, &content, documents) {
+                let name = format!("quarantine-{}.json", uuid::Uuid::new_v4());
+                write_json(&artifact_path(jobs_root, &input.job_id, &name),
+                    &json!({"status": "quarantined", "stage": stage, "reason": reason,
+                        "validatorVersion": VALIDATOR_VERSION, "content": content, "createdAt": now_ms()}), "隔离结果")?;
+                let mut event = worker_event(&input.job_id, stage, "running", control.completed.load(Ordering::Relaxed), control.total.load(Ordering::Relaxed), "返回结果未通过来源校验，已隔离，正在重试");
+                event.artifact = Some(name);
+                event.cache_source = Some("quarantined".into());
+                publish(jobs_root, runtime, app, event)?;
+                return Err(reason);
             }
+            Ok(content)
         });
         match result {
             Ok(content) => return Ok(content),
@@ -1384,6 +1617,10 @@ fn retryable_model_error(message: &str) -> bool {
         "读取模型响应失败",
         "模型流响应格式无效",
         "模型没有返回可用内容",
+        "模型输出为空",
+        "模型输出结构不完整",
+        "模型输出缺少可验证来源引用",
+        "模型输出包含未通过校验的来源引用",
         "HTTP 408",
         "HTTP 429",
         "HTTP 500",
@@ -1393,6 +1630,244 @@ fn retryable_model_error(message: &str) -> bool {
     ]
     .iter()
     .any(|value| message.contains(value))
+}
+
+#[derive(Default)]
+struct PipelineCounts {
+    requests: usize,
+    shared: usize,
+    map_shared: usize,
+    checkpoints: usize,
+}
+
+struct StageRunner<'a> {
+    jobs_root: &'a Path,
+    snapshot: &'a LongTextWorkerSnapshot,
+    runtime: &'a WorkerRuntimeState,
+    app: &'a AppHandle,
+    database: &'a database::DatabaseState,
+    control: &'a WorkerControl,
+    checkpoints: &'a mut WorkerCheckpointManifest,
+    counts: &'a mut PipelineCounts,
+}
+
+impl StageRunner<'_> {
+    async fn execute(
+        &mut self,
+        stage: &str,
+        name: &str,
+        prompt: String,
+        dependencies: Vec<CheckpointDependency>,
+        scope: &HashMap<String, String>,
+    ) -> Result<(String, String), String> {
+        wait_for_control(self.control).await?;
+        let identity = serde_json::to_string(&json!({
+            "stage": stage, "prompt": prompt,
+            "children": dependencies.iter().map(|item| &item.content_hash).collect::<Vec<_>>(),
+        }))
+        .map_err(|error| error.to_string())?;
+        let (key, _) = map_cache_identity(self.snapshot, &identity)?;
+        let matches_key = self
+            .checkpoints
+            .entries
+            .iter()
+            .any(|entry| entry.artifact == name && entry.cache_key.as_ref() == Some(&key));
+        let checkpoint = if matches_key {
+            checkpoint_text(
+                self.jobs_root,
+                self.snapshot,
+                self.checkpoints,
+                name,
+                stage,
+                None,
+                None,
+                &dependencies,
+                scope,
+            )
+        } else {
+            None
+        };
+        let (text, origin) = if let Some(text) = checkpoint {
+            self.counts.checkpoints += 1;
+            (text, "checkpoint")
+        } else if let Some(text) = read_map_cache(self.jobs_root, self.snapshot, &identity, scope)?
+        {
+            self.counts.shared += 1;
+            if stage == "map" {
+                self.counts.map_shared += 1;
+            }
+            (text, "shared")
+        } else {
+            let text = model_text(
+                self.jobs_root,
+                self.runtime,
+                self.app,
+                &self.snapshot.input,
+                self.snapshot,
+                self.database,
+                self.control,
+                prompt,
+                stage,
+                scope,
+                &mut self.counts.requests,
+            )
+            .await?;
+            persist_map_cache(self.jobs_root, self.snapshot, &identity, &text)?;
+            (text, "model")
+        };
+        let hash = persist_text_checkpoint(
+            self.jobs_root,
+            self.snapshot,
+            self.checkpoints,
+            name,
+            stage,
+            None,
+            None,
+            dependencies,
+            &text,
+        )?;
+        if let Some(entry) = self
+            .checkpoints
+            .entries
+            .iter_mut()
+            .find(|entry| entry.artifact == name)
+        {
+            entry.cache_key = Some(key);
+        }
+        write_json(
+            &artifact_path(
+                self.jobs_root,
+                &self.snapshot.input.job_id,
+                CHECKPOINTS_NAME,
+            ),
+            self.checkpoints,
+            "检查点清单",
+        )?;
+        let progress = self.control.snapshot();
+        let mut event = worker_event(
+            &self.snapshot.input.job_id,
+            stage,
+            "running",
+            progress.completed + 1,
+            progress.total,
+            if text.trim() == NO_EVIDENCE {
+                "未找到相关证据，已保存覆盖记录"
+            } else {
+                "来源引用校验通过，已保存产物"
+            },
+        );
+        event.artifact = Some(name.into());
+        event.cache_source = Some(origin.into());
+        publish(self.jobs_root, self.runtime, self.app, event)?;
+        Ok((text, hash))
+    }
+
+    async fn summarize(
+        &mut self,
+        stage: &str,
+        label: &str,
+        records: Vec<SummaryRecord>,
+        documents: &HashMap<String, String>,
+    ) -> Result<SummaryRecord, String> {
+        let first = records.first().ok_or("汇总节点为空")?.clone();
+        let scope = scope_for_records(&records, documents);
+        let mut input = self.snapshot.input.clone();
+        input.document_index = None;
+        let mut current = records;
+        let mut round = 0;
+        loop {
+            let batches = batch_summaries(&current, &input);
+            let mut next = Vec::new();
+            for (index, batch) in batches.iter().enumerate() {
+                let identity =
+                    long_text::source_fingerprint(&format!("{stage}:{label}:{round}:{index}"));
+                let name = format!("{stage}-{}.md", &identity[..24]);
+                let deps = batch
+                    .iter()
+                    .map(|item| CheckpointDependency {
+                        artifact: item.artifact.clone(),
+                        content_hash: item.content_hash.clone(),
+                    })
+                    .collect();
+                let prompt = format!(
+                    "汇总层级：{stage}；范围：{label}\n{}",
+                    summary_prompt(&input, batch, false)
+                );
+                let (text, hash) = self.execute(stage, &name, prompt, deps, &scope).await?;
+                next.push(SummaryRecord {
+                    source_id: first.source_id.clone(),
+                    chunk_id: label.into(),
+                    heading: first.heading.clone(),
+                    volume: first.volume.clone(),
+                    evidence: verify_evidence(parse_evidence(&text), &scope),
+                    text: clip_to_tokens(&text, summary_clip_limit(&input)),
+                    artifact: name,
+                    content_hash: hash,
+                });
+            }
+            if next.len() == 1 {
+                return Ok(next.remove(0));
+            }
+            current = next;
+            round += 1;
+        }
+    }
+}
+
+// Preserve original line numbers while limiting validation to the material the stage actually saw.
+fn scope_for_records(
+    records: &[SummaryRecord],
+    documents: &HashMap<String, String>,
+) -> HashMap<String, String> {
+    let mut scope = HashMap::new();
+    for record in records {
+        for reference in &record.evidence {
+            if !reference.verified {
+                continue;
+            }
+            if let Some(document) = documents.get(&reference.source_id) {
+                let lines = document.split('\n').collect::<Vec<_>>();
+                let target = scope
+                    .entry(reference.source_id.clone())
+                    .or_insert_with(|| vec![String::new(); lines.len()]);
+                for index in
+                    reference.line_start.saturating_sub(1)..reference.line_end.min(lines.len())
+                {
+                    target[index] = lines[index].into();
+                }
+            }
+        }
+    }
+    scope
+        .into_iter()
+        .map(|(path, lines)| (path, lines.join("\n")))
+        .collect()
+}
+
+fn chunk_scope(chunk: &long_text::TextChunk) -> HashMap<String, String> {
+    HashMap::from([(
+        chunk.source_id.clone(),
+        format!(
+            "{}{}",
+            "\n".repeat(chunk.line_start.saturating_sub(1)),
+            chunk.text
+        ),
+    )])
+}
+
+fn volume_at(document: &str, line: usize, path: &str) -> String {
+    let mut volume = Path::new(path)
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .map(|parent| parent.to_string_lossy().to_string())
+        .unwrap_or_else(|| "全书".into());
+    for text in document.lines().take(line) {
+        let text = text.trim().trim_start_matches('#').trim();
+        if text.starts_with('第') && text.contains('卷') && text.chars().count() <= 100 {
+            volume = text.into();
+        }
+    }
+    volume
 }
 
 fn update_step(
@@ -1432,10 +1907,7 @@ async fn run_pipeline_worker(
 ) -> Result<(), String> {
     let input = &snapshot.input;
     let pipeline_started_at = now_ms();
-    let mut model_invocation_count = 0usize;
-    let mut map_cache_hits = 0usize;
-    let mut job_checkpoint_hits = 0usize;
-    if let Some(output) = read_output_at(&jobs_root, &input.job_id)? {
+    if let Some(output) = read_output_at(&jobs_root, &input.job_id).unwrap_or(None) {
         if output.worker_version != WORKER_VERSION
             || output.prompt_version != PROMPT_VERSION
             || output.output_schema_version != OUTPUT_SCHEMA_VERSION
@@ -1445,36 +1917,42 @@ async fn run_pipeline_worker(
         {
             return Err("Worker 缓存与当前输入或模型不兼容".into());
         }
-        job_service::update(
-            &jobs_root,
-            job_service::UpdateTaskJobInput {
-                task_id: input.job_id.clone(),
-                status: Some("completed".into()),
-                step_id: None,
-                step_kind: None,
-                step_status: None,
-                checkpoint: None,
-                error: None,
-                event_type: Some("worker.cache_recovered".into()),
-                event_fields: event_fields(
-                    json!({ "compatibilityKey": snapshot.compatibility_key }),
+        if validate_cached_output(&workspace, &snapshot, &output).is_err() {
+            remove_if_exists(&artifact_path(&jobs_root, &input.job_id, OUTPUT_NAME))?;
+            remove_if_exists(&artifact_path(&jobs_root, &input.job_id, "job.json"))?;
+            remove_if_exists(&artifact_path(&jobs_root, &input.job_id, "evidence.json"))?;
+        } else {
+            job_service::update(
+                &jobs_root,
+                job_service::UpdateTaskJobInput {
+                    task_id: input.job_id.clone(),
+                    status: Some("completed".into()),
+                    step_id: None,
+                    step_kind: None,
+                    step_status: None,
+                    checkpoint: None,
+                    error: None,
+                    event_type: Some("worker.cache_recovered".into()),
+                    event_fields: event_fields(
+                        json!({ "compatibilityKey": snapshot.compatibility_key }),
+                    ),
+                },
+            )?;
+            publish(
+                &jobs_root,
+                &runtime,
+                &app,
+                worker_event(
+                    &input.job_id,
+                    "lifecycle",
+                    "completed",
+                    output.chunk_count,
+                    output.chunk_count,
+                    "已复用完整 Rust Worker 输出",
                 ),
-            },
-        )?;
-        publish(
-            &jobs_root,
-            &runtime,
-            &app,
-            worker_event(
-                &input.job_id,
-                "lifecycle",
-                "completed",
-                output.chunk_count,
-                output.chunk_count,
-                "已复用完整 Rust Worker 输出",
-            ),
-        )?;
-        return Ok(());
+            )?;
+            return Ok(());
+        }
     }
 
     let mut checkpoint_manifest = load_checkpoint_manifest(&jobs_root, &snapshot);
@@ -1518,14 +1996,19 @@ async fn run_pipeline_worker(
     let mut documents = HashMap::new();
     for (index, source) in input.documents.iter().enumerate() {
         wait_for_control(&control).await?;
+        let manifest_name = format!("manifest-{:03}.json", index + 1);
         let (generated, document_content) =
             load_and_chunk_document(&workspace, source, input.max_tokens, input.overlap_tokens)?;
-        let manifest = read_cached_manifest(&jobs_root, input, index, source).unwrap_or(generated);
+        let manifest = read_cached_manifest(&jobs_root, input, index, source)
+            .filter(|cached| {
+                serde_json::to_value(cached).ok() == serde_json::to_value(&generated).ok()
+            })
+            .unwrap_or(generated);
         write_json(
             &artifact_path(
                 &jobs_root,
                 &input.job_id,
-                &format!("manifest-{:03}.json", index + 1),
+                &manifest_name,
             ),
             &manifest,
             " Worker 分块",
@@ -1533,19 +2016,16 @@ async fn run_pipeline_worker(
         documents.insert(source.path.clone(), document_content);
         manifests.push(manifest);
         control.set_completed(index + 1);
-        publish(
-            &jobs_root,
-            &runtime,
-            &app,
-            worker_event(
-                &input.job_id,
-                "chunking",
-                "running",
-                index + 1,
-                input.documents.len(),
-                format!("Rust Worker 已校验并完成分块：{}", source.path),
-            ),
-        )?;
+        let mut event = worker_event(
+            &input.job_id,
+            "chunking",
+            "running",
+            index + 1,
+            input.documents.len(),
+            format!("Rust Worker 已校验并完成分块：{}", source.path),
+        );
+        event.artifact = Some(manifest_name);
+        publish(&jobs_root, &runtime, &app, event)?;
     }
     let chunks = manifests
         .iter()
@@ -1600,131 +2080,95 @@ async fn run_pipeline_worker(
             format!("Rust Map Worker 正在分析 {} 个分块", chunks.len()),
         ),
     )?;
+    let mut counts = PipelineCounts::default();
+    let mut runner = StageRunner {
+        jobs_root: &jobs_root,
+        snapshot: &snapshot,
+        runtime: &runtime,
+        app: &app,
+        database: &database,
+        control: &control,
+        checkpoints: &mut checkpoint_manifest,
+        counts: &mut counts,
+    };
     let mut summaries = Vec::with_capacity(chunks.len());
+    let mut local_input = input.clone();
+    local_input.document_index = None;
     for (index, chunk) in chunks.iter().enumerate() {
-        wait_for_control(&control).await?;
-        let name = format!("summary-{:05}.md", index + 1);
-        let source_fingerprint = input
-            .documents
-            .iter()
-            .find(|document| document.path == chunk.source_id)
-            .map(|document| document.source_fingerprint.as_str())
-            .ok_or_else(|| format!("Map 分块缺少来源指纹：{}", chunk.source_id))?;
-        let dependencies = Vec::new();
-        let prompt = chunk_prompt(input, chunk);
-        let (text, content_hash) = match checkpoint_text(
-            &jobs_root,
-            &snapshot,
-            &checkpoint_manifest,
-            &name,
-            "map",
-            Some(&chunk.source_id),
-            Some(source_fingerprint),
-            &dependencies,
-        ) {
-            Some(value) => {
-                job_checkpoint_hits += 1;
-                let hash = long_text::source_fingerprint(&value);
-                (value, hash)
-            }
-            None => {
-                let cached = read_map_cache(&jobs_root, &snapshot, &prompt)?;
-                let value = if let Some(value) = cached {
-                    map_cache_hits += 1;
-                    value
-                } else {
-                    model_invocation_count += 1;
-                    let value = model_text(
-                        &jobs_root,
-                        &runtime,
-                        &app,
-                        input,
-                        &snapshot,
-                        &database,
-                        &control,
-                        prompt.clone(),
-                    )
-                    .await?;
-                    let _ = persist_map_cache(&jobs_root, &snapshot, &prompt, &value);
-                    value
-                };
-                let hash = persist_text_checkpoint(
-                    &jobs_root,
-                    &snapshot,
-                    &mut checkpoint_manifest,
-                    &name,
-                    "map",
-                    Some(&chunk.source_id),
-                    Some(source_fingerprint),
-                    dependencies,
-                    &value,
-                )?;
-                (value, hash)
-            }
-        };
+        let node = long_text::source_fingerprint(&chunk.id);
+        let name = format!("summary-{}.md", &node[..24]);
+        let scope = chunk_scope(chunk);
+        let (text, content_hash) = runner
+            .execute(
+                "map",
+                &name,
+                chunk_prompt(&local_input, chunk),
+                Vec::new(),
+                &scope,
+            )
+            .await?;
         summaries.push(SummaryRecord {
             source_id: chunk.source_id.clone(),
             chunk_id: chunk.id.clone(),
             heading: chunk.heading.clone(),
-            evidence: verify_evidence(parse_evidence(&text), &documents),
-            text: clip_to_tokens(&text, summary_clip_limit(input)),
+            volume: volume_at(
+                &documents[&chunk.source_id],
+                chunk.line_start,
+                &chunk.source_id,
+            ),
+            evidence: verify_evidence(parse_evidence(&text), &scope),
+            text: clip_to_tokens(&text, summary_clip_limit(&local_input)),
             artifact: name,
             content_hash,
         });
         control.set_completed(index + 1);
-        publish(
-            &jobs_root,
-            &runtime,
-            &app,
-            worker_event(
-                &input.job_id,
-                "map",
-                "running",
-                index + 1,
-                chunks.len(),
-                format!(
-                    "Rust Map Worker 已完成 {}/{}：{}",
-                    index + 1,
-                    chunks.len(),
-                    chunk.source_id
-                ),
-            ),
-        )?;
     }
     if summaries.is_empty() {
-        return Err("模型没有返回可汇总的分块结果".into());
+        return Err("没有可分析的正文分块".into());
     }
+    let map_summary_count = summaries.len();
     update_step(
         &jobs_root,
         &input.job_id,
         "map",
         None,
         "completed",
-        Some(format!("summaries:{}", summaries.len())),
+        Some(CHECKPOINTS_NAME.into()),
         "step.completed",
-        json!({ "summaryCount": summaries.len() }),
+        json!({"summaryCount": summaries.len()}),
     )?;
 
-    let map_summary_count = summaries.len();
+    // Nodes have stable source/heading identities. A change only invalidates dependent ancestors.
     let mut current = summaries;
-    let mut level = 0usize;
-    loop {
-        let batches = batch_summaries(&current, input);
-        if batches.len() <= 1 {
-            break;
+    for stage in ["chapter", "volume"] {
+        let mut groups: Vec<(String, Vec<SummaryRecord>)> = Vec::new();
+        for record in current {
+            let label = if stage == "chapter" {
+                format!(
+                    "{} / {} / {}",
+                    record.source_id,
+                    record.volume,
+                    record.heading.as_deref().unwrap_or("正文")
+                )
+            } else {
+                record.volume.clone()
+            };
+            if let Some((_, records)) = groups.iter_mut().find(|(key, _)| key == &label) {
+                records.push(record);
+            } else {
+                groups.push((label, vec![record]));
+            }
         }
-        level += 1;
-        let step_id = format!("reduce-{level}");
-        control.set_phase("reduce", Some(step_id.clone()), 0, batches.len());
+        control.set_phase(stage, Some(stage.into()), 0, groups.len());
         update_step(
             &jobs_root,
             &input.job_id,
-            &step_id,
+            stage,
             Some("reduce"),
             "running",
             None,
             "step.started",
-            json!({ "batchCount": batches.len(), "level": level }),
+            json!({"nodeCount": groups.len()}),
         )?;
         publish(
             &jobs_root,
@@ -1732,114 +2176,76 @@ async fn run_pipeline_worker(
             &app,
             worker_event(
                 &input.job_id,
-                "reduce",
+                stage,
                 "running",
                 0,
-                batches.len(),
-                format!(
-                    "Rust Reduce Worker 正在汇总第 {level} 层，共 {} 批",
-                    batches.len()
-                ),
+                groups.len(),
+                if stage == "chapter" {
+                    "正在汇总章节"
+                } else {
+                    "正在汇总卷级内容"
+                },
             ),
         )?;
-        let mut next = Vec::with_capacity(batches.len());
-        for (index, batch) in batches.iter().enumerate() {
-            wait_for_control(&control).await?;
-            let name = format!("reduce-{level}-{:04}.md", index + 1);
-            let dependencies = batch
-                .iter()
-                .map(|record| CheckpointDependency {
-                    artifact: record.artifact.clone(),
-                    content_hash: record.content_hash.clone(),
-                })
-                .collect::<Vec<_>>();
-            let (text, content_hash) = match checkpoint_text(
-                &jobs_root,
-                &snapshot,
-                &checkpoint_manifest,
-                &name,
-                "reduce",
-                None,
-                None,
-                &dependencies,
-            ) {
-                Some(value) => {
-                    job_checkpoint_hits += 1;
-                    let hash = long_text::source_fingerprint(&value);
-                    (value, hash)
-                }
-                None => {
-                    model_invocation_count += 1;
-                    let value = model_text(
-                        &jobs_root,
-                        &runtime,
-                        &app,
-                        input,
-                        &snapshot,
-                        &database,
-                        &control,
-                        summary_prompt(input, batch, false),
-                    )
-                    .await?;
-                    let hash = persist_text_checkpoint(
-                        &jobs_root,
-                        &snapshot,
-                        &mut checkpoint_manifest,
-                        &name,
-                        "reduce",
-                        None,
-                        None,
-                        dependencies,
-                        &value,
-                    )?;
-                    (value, hash)
-                }
-            };
-            next.push(SummaryRecord {
-                source_id: "summary".into(),
-                chunk_id: format!("level-{}-{index}", level - 1),
-                heading: None,
-                text: clip_to_tokens(&text, summary_clip_limit(input)),
-                evidence: batch
-                    .iter()
-                    .flat_map(|record| record.evidence.clone())
-                    .collect(),
-                artifact: name,
-                content_hash,
-            });
+        current = Vec::new();
+        for (index, (label, records)) in groups.into_iter().enumerate() {
+            current.push(runner.summarize(stage, &label, records, &documents).await?);
             control.set_completed(index + 1);
-            publish(
-                &jobs_root,
-                &runtime,
-                &app,
-                worker_event(
-                    &input.job_id,
-                    "reduce",
-                    "running",
-                    index + 1,
-                    batches.len(),
-                    format!(
-                        "Rust Reduce Worker 已完成第 {}/{} 批",
-                        index + 1,
-                        batches.len()
-                    ),
-                ),
-            )?;
         }
         update_step(
             &jobs_root,
             &input.job_id,
-            &step_id,
+            stage,
             None,
             "completed",
-            Some(format!("summaries:{}", next.len())),
+            Some(CHECKPOINTS_NAME.into()),
             "step.completed",
-            json!({ "summaryCount": next.len(), "level": level }),
+            json!({"nodeCount": current.len()}),
         )?;
-        current = next;
     }
 
-    wait_for_control(&control).await?;
+    let mut level = 0;
+    while batch_summaries(&current, &local_input).len() > 1 {
+        level += 1;
+        let step = format!("reduce-{level}");
+        let batches = batch_summaries(&current, &local_input);
+        control.set_phase("reduce", Some(step.clone()), 0, batches.len());
+        update_step(
+            &jobs_root,
+            &input.job_id,
+            &step,
+            Some("reduce"),
+            "running",
+            None,
+            "step.started",
+            json!({}),
+        )?;
+        let mut next = Vec::new();
+        for (index, batch) in batches.into_iter().enumerate() {
+            next.push(
+                runner
+                    .summarize(
+                        &step,
+                        &format!("全书阶段 {level} / {index}"),
+                        batch,
+                        &documents,
+                    )
+                    .await?,
+            );
+            control.set_completed(index + 1);
+        }
+        current = next;
+        update_step(
+            &jobs_root,
+            &input.job_id,
+            &step,
+            None,
+            "completed",
+            Some(CHECKPOINTS_NAME.into()),
+            "step.completed",
+            json!({}),
+        )?;
+    }
     control.set_phase("synthesis", Some("synthesis".into()), 0, 1);
     update_step(
         &jobs_root,
@@ -1849,7 +2255,7 @@ async fn run_pipeline_worker(
         "running",
         None,
         "step.started",
-        json!({ "summaryCount": current.len() }),
+        json!({}),
     )?;
     publish(
         &jobs_root,
@@ -1861,60 +2267,30 @@ async fn run_pipeline_worker(
             "running",
             0,
             1,
-            format!(
-                "Rust Synthesis Worker 正在综合 {} 条阶段摘要",
-                current.len()
-            ),
+            "正在完成全书综合",
         ),
     )?;
-    let synthesis_dependencies = current
+    let dependencies = current
         .iter()
         .map(|record| CheckpointDependency {
             artifact: record.artifact.clone(),
             content_hash: record.content_hash.clone(),
         })
-        .collect::<Vec<_>>();
-    let content = match checkpoint_text(
-        &jobs_root,
-        &snapshot,
-        &checkpoint_manifest,
-        "analysis.md",
-        "synthesis",
-        None,
-        None,
-        &synthesis_dependencies,
-    ) {
-        Some(value) => {
-            job_checkpoint_hits += 1;
-            value
-        }
-        None => {
-            model_invocation_count += 1;
-            let value = model_text(
-                &jobs_root,
-                &runtime,
-                &app,
-                input,
-                &snapshot,
-                &database,
-                &control,
-                summary_prompt(input, &current, true),
-            )
-            .await?;
-            persist_text_checkpoint(
-                &jobs_root,
-                &snapshot,
-                &mut checkpoint_manifest,
-                "analysis.md",
-                "synthesis",
-                None,
-                None,
-                synthesis_dependencies,
-                &value,
-            )?;
-            value
-        }
-    };
+        .collect();
+    let scope = scope_for_records(&current, &documents);
+    let (content, _) = runner
+        .execute(
+            "synthesis",
+            "analysis.md",
+            summary_prompt(input, &current, true),
+            dependencies,
+            &scope,
+        )
+        .await?;
+    let model_invocation_count = counts.requests;
+    let map_cache_hits = counts.map_shared;
+    let job_checkpoint_hits = counts.checkpoints;
+    let stage_cache_hits = counts.shared;
     control.set_completed(1);
     update_step(
         &jobs_root,
@@ -1962,19 +2338,16 @@ async fn run_pipeline_worker(
         }),
     )?;
     control.set_completed(1);
-    publish(
-        &jobs_root,
-        &runtime,
-        &app,
-        worker_event(
-            &input.job_id,
-            "evidence",
-            "completed",
-            1,
-            1,
-            format!("Rust Evidence Worker 已校验 {} 条来源引用", evidence.len()),
-        ),
-    )?;
+    let mut evidence_event = worker_event(
+        &input.job_id,
+        "evidence",
+        "completed",
+        1,
+        1,
+        format!("Rust Evidence Worker 已校验 {} 条来源引用", evidence.len()),
+    );
+    evidence_event.artifact = Some("evidence.json".into());
+    publish(&jobs_root, &runtime, &app, evidence_event)?;
 
     let completed_at = now_ms();
     let duration_ms = completed_at.saturating_sub(pipeline_started_at);
@@ -1993,6 +2366,7 @@ async fn run_pipeline_worker(
             "sourceFingerprints": source_fingerprints, "chunkCount": chunks.len(),
             "summaryCount": map_summary_count, "evidenceCount": evidence.iter().filter(|item| item.verified).count(),
             "modelInvocationCount": model_invocation_count, "mapCacheHits": map_cache_hits,
+            "stageCacheHits": stage_cache_hits,
             "jobCheckpointHits": job_checkpoint_hits, "durationMs": duration_ms, "error": null
         }),
         "分析任务结果",
@@ -2013,6 +2387,7 @@ async fn run_pipeline_worker(
         summary_count: map_summary_count,
         model_invocation_count,
         map_cache_hits,
+        stage_cache_hits,
         job_checkpoint_hits,
         duration_ms,
         completed_at,
@@ -2037,6 +2412,7 @@ async fn run_pipeline_worker(
                 "chunkCount": chunks.len(), "summaryCount": map_summary_count,
                 "evidenceCount": output.evidence.len(), "compatibilityKey": snapshot.compatibility_key,
                 "modelInvocationCount": model_invocation_count, "mapCacheHits": map_cache_hits,
+                "stageCacheHits": stage_cache_hits,
                 "jobCheckpointHits": job_checkpoint_hits, "durationMs": duration_ms
             })),
         },
@@ -2566,13 +2942,13 @@ mod tests {
             persist_snapshot(directory.path(), &workspace, &second_input, &model()).unwrap();
         let prompt = "Map prompt with exact source content";
 
-        persist_map_cache(directory.path(), &first, prompt, "cached summary").unwrap();
+        persist_map_cache(directory.path(), &first, prompt, NO_EVIDENCE).unwrap();
 
         assert_eq!(
-            read_map_cache(directory.path(), &second, prompt)
+            read_map_cache(directory.path(), &second, prompt, &HashMap::new())
                 .unwrap()
                 .as_deref(),
-            Some("cached summary")
+            Some(NO_EVIDENCE)
         );
     }
 
@@ -2587,19 +2963,25 @@ mod tests {
         let snapshot = persist_snapshot(directory.path(), &workspace, &input(), &model()).unwrap();
         persist_map_cache(directory.path(), &snapshot, "original prompt", "summary").unwrap();
 
-        assert!(
-            read_map_cache(directory.path(), &snapshot, "changed prompt")
-                .unwrap()
-                .is_none()
-        );
+        assert!(read_map_cache(
+            directory.path(),
+            &snapshot,
+            "changed prompt",
+            &HashMap::new()
+        )
+        .unwrap()
+        .is_none());
 
         let mut changed_model = snapshot.clone();
         changed_model.model.model = "another-model".into();
-        assert!(
-            read_map_cache(directory.path(), &changed_model, "original prompt")
-                .unwrap()
-                .is_none()
-        );
+        assert!(read_map_cache(
+            directory.path(),
+            &changed_model,
+            "original prompt",
+            &HashMap::new()
+        )
+        .unwrap()
+        .is_none());
     }
 
     #[test]
@@ -2617,9 +2999,11 @@ mod tests {
         let path = map_cache_path(directory.path(), &cache_key);
         fs::write(&path, b"not-json").unwrap();
 
-        assert!(read_map_cache(directory.path(), &snapshot, prompt)
-            .unwrap()
-            .is_none());
+        assert!(
+            read_map_cache(directory.path(), &snapshot, prompt, &HashMap::new())
+                .unwrap()
+                .is_none()
+        );
         assert!(!path.exists());
     }
 
@@ -2680,7 +3064,7 @@ mod tests {
             Some("other.md"),
             Some("source-2"),
             Vec::new(),
-            "second",
+            "second\n[source: other.md lines=1-1 quote=\"second\"]",
         )
         .unwrap();
         persist_text_checkpoint(
@@ -2722,6 +3106,7 @@ mod tests {
         );
         assert!(!artifact_path(directory.path(), "job-1", "summary-00001.md").exists());
         assert!(!artifact_path(directory.path(), "job-1", "reduce-1-0001.md").exists());
+        let documents = HashMap::from([(String::from("other.md"), String::from("second"))]);
         assert_eq!(
             checkpoint_text(
                 directory.path(),
@@ -2732,9 +3117,10 @@ mod tests {
                 Some("other.md"),
                 Some("source-2"),
                 &[],
+                &documents,
             )
             .as_deref(),
-            Some("second")
+            Some("second\n[source: other.md lines=1-1 quote=\"second\"]")
         );
     }
 
@@ -2897,6 +3283,7 @@ mod tests {
                 source_id: "chapter.md".into(),
                 chunk_id: format!("chunk-{index}"),
                 heading: None,
+                volume: "全书".into(),
                 text: clip_to_tokens(&"摘要".repeat(2_000), summary_clip_limit(&worker_input)),
                 evidence: Vec::new(),
                 artifact: format!("summary-{index:05}.md"),
@@ -2936,6 +3323,8 @@ mod tests {
         let seeded = (1..=MAX_WORKER_EVENTS)
             .map(|sequence| TaskWorkerEvent {
                 sequence: sequence as u64,
+                artifact: None,
+                cache_source: None,
                 timestamp: sequence as u64,
                 job_id: "job-1".into(),
                 stage: "map".into(),

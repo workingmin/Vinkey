@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-pub const CHUNK_ALGORITHM_VERSION: &str = "chunk-v1";
+pub const CHUNK_ALGORITHM_VERSION: &str = "chunk-v2";
 
 pub fn source_fingerprint(text: &str) -> String {
     let digest = Sha256::digest(text.as_bytes());
@@ -118,14 +118,15 @@ fn heading_text(line: &str) -> Option<String> {
     let trimmed = line.trim();
     if trimmed.starts_with('#')
         && trimmed
-            .chars()
-            .nth(1)
-            .map(|value| value.is_whitespace())
-            .unwrap_or(false)
+            .trim_start_matches('#')
+            .starts_with(char::is_whitespace)
     {
         return Some(trimmed.trim_start_matches('#').trim().to_string());
     }
-    if trimmed.starts_with('第') && trimmed.contains('章') {
+    if trimmed.starts_with('第')
+        && (trimmed.contains('章') || trimmed.contains('卷'))
+        && trimmed.chars().count() <= 100
+    {
         return Some(trimmed.to_string());
     }
     None
@@ -279,6 +280,9 @@ pub fn chunk_text(
     while start < units.len() {
         let mut end = start;
         while end < units.len() {
+            if end > start && units[end].heading != units[start].heading {
+                break;
+            }
             let candidate = Span {
                 start: units[start].span.start,
                 end: units[end].span.end,
@@ -298,8 +302,18 @@ pub fn chunk_text(
         };
         let chunk_text = text[span.start..span.end].to_string();
         let actual_tokens = estimate_tokens(&chunk_text);
+        let identity = source_fingerprint(&format!(
+            "{}\n{}",
+            units[start].heading.as_deref().unwrap_or(""),
+            chunk_text
+        ));
+        let prefix = format!("{}:chunk-{}", source_id, &identity[..16]);
+        let occurrence = chunks
+            .iter()
+            .filter(|chunk: &&TextChunk| chunk.id.starts_with(&prefix))
+            .count();
         chunks.push(TextChunk {
-            id: format!("{}:chunk-{}", source_id, chunks.len()),
+            id: format!("{prefix}-{occurrence}"),
             source_id: source_id.clone(),
             text: chunk_text,
             start_char: text[..span.start].chars().count(),
@@ -320,7 +334,11 @@ pub fn chunk_text(
 
         let mut next_start = end;
         let mut overlap = 0;
-        while next_start > start && overlap < overlap_tokens {
+        while next_start > start
+            && overlap < overlap_tokens
+            && end < units.len()
+            && units[next_start - 1].heading == units[end].heading
+        {
             next_start -= 1;
             overlap += units[next_start].tokens;
         }
@@ -382,9 +400,14 @@ mod tests {
             .skip(1)
             .all(|chunk| chunk.overlap_from_previous));
         for pair in manifest.chunks.windows(2) {
-            assert!(
-                pair[1].start_char < pair[0].end_char || pair[1].start_char == pair[0].end_char
-            );
+            if pair[1].start_char > pair[0].end_char {
+                let gap = "第一段内容。\n\n第二段内容。\n\n第三段内容。"
+                    .chars()
+                    .skip(pair[0].end_char)
+                    .take(pair[1].start_char - pair[0].end_char)
+                    .collect::<String>();
+                assert!(gap.trim().is_empty());
+            }
         }
     }
 

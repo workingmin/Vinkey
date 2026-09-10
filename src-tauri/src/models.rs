@@ -591,12 +591,21 @@ fn context_limit_from_error(message: &str) -> Option<u32> {
         match value {
             Value::Object(values) => values.values().find_map(find),
             Value::Array(values) => values.iter().find_map(find),
-            Value::String(value) => serde_json::from_str::<Value>(value).ok().and_then(|value| find(&value)),
+            Value::String(value) => serde_json::from_str::<Value>(value)
+                .ok()
+                .and_then(|value| find(&value)),
             _ => None,
         }
     }
-    serde_json::from_str::<Value>(message).ok().and_then(|value| find(&value))
-        .or_else(|| message.find('{').and_then(|index| serde_json::from_str::<Value>(&message[index..]).ok()).and_then(|value| find(&value)))
+    serde_json::from_str::<Value>(message)
+        .ok()
+        .and_then(|value| find(&value))
+        .or_else(|| {
+            message
+                .find('{')
+                .and_then(|index| serde_json::from_str::<Value>(&message[index..]).ok())
+                .and_then(|value| find(&value))
+        })
 }
 
 #[tauri::command]
@@ -608,21 +617,52 @@ pub async fn probe_model_context(
 ) -> Result<u32, String> {
     validate_id(&profile_id)?;
     let profile = load_profile(&profile_id, &state)?;
-    if profile.kind != "ollama" { return Ok(requested_context); }
-    let key = if profile.has_api_key { Some(get_secret(profile.connection_id.as_deref().unwrap_or(&profile.id))?) } else { None };
-    let mut request = client()?.post(format!("{}/api/chat", profile.base_url)).json(&json!({
-        "model": profile.model, "messages": [{"role": "user", "content": "Reply with OK."}],
-        "stream": false, "options": {"num_ctx": requested_context}
-    }));
-    if let Some(value) = key.filter(|value| !value.is_empty()) { request = request.bearer_auth(value); }
+    if profile.kind != "ollama" {
+        return Ok(requested_context);
+    }
+    let key = if profile.has_api_key {
+        Some(get_secret(
+            profile.connection_id.as_deref().unwrap_or(&profile.id),
+        )?)
+    } else {
+        None
+    };
+    let mut request = client()?
+        .post(format!("{}/api/chat", profile.base_url))
+        .json(&json!({
+            "model": profile.model, "messages": [{"role": "user", "content": "Reply with OK."}],
+            "stream": false, "options": {"num_ctx": requested_context}
+        }));
+    if let Some(value) = key.filter(|value| !value.is_empty()) {
+        request = request.bearer_auth(value);
+    }
     runtime.info("model.context_probe_started", json!({"profileId": profile.id, "model": profile.model, "requestedContext": requested_context}).as_object().cloned().unwrap_or_default());
-    let response = request.send().await.map_err(|error| format!("模型上下文探测请求失败：{error}"))?;
+    let response = request
+        .send()
+        .await
+        .map_err(|error| format!("模型上下文探测请求失败：{error}"))?;
     match response_or_error(response).await {
-        Ok(_) => { runtime.info("model.context_probe_completed", json!({"profileId": profile.id, "effectiveContext": requested_context}).as_object().cloned().unwrap_or_default()); Ok(requested_context) }
-        Err(message) => match context_limit_from_error(&message) {
-            Some(effective) => { let effective = effective.max(2048).min(requested_context); runtime.info("model.context_probe_completed", json!({"profileId": profile.id, "requestedContext": requested_context, "effectiveContext": effective, "degraded": true}).as_object().cloned().unwrap_or_default()); Ok(effective) }
-            None => { runtime.error("model.context_probe_failed", &message); Err(message) }
+        Ok(_) => {
+            runtime.info(
+                "model.context_probe_completed",
+                json!({"profileId": profile.id, "effectiveContext": requested_context})
+                    .as_object()
+                    .cloned()
+                    .unwrap_or_default(),
+            );
+            Ok(requested_context)
         }
+        Err(message) => match context_limit_from_error(&message) {
+            Some(effective) => {
+                let effective = effective.max(2048).min(requested_context);
+                runtime.info("model.context_probe_completed", json!({"profileId": profile.id, "requestedContext": requested_context, "effectiveContext": effective, "degraded": true}).as_object().cloned().unwrap_or_default());
+                Ok(effective)
+            }
+            None => {
+                runtime.error("model.context_probe_failed", &message);
+                Err(message)
+            }
+        },
     }
 }
 
@@ -848,10 +888,16 @@ async fn run_stream_with(
         builder = builder.bearer_auth(value);
     }
     if let Some(runtime) = runtime {
-        runtime.info("chat.request_sent", serde_json::json!({
-            "requestId": request.request_id.clone(), "url": url,
-            "timeoutSecs": CHAT_TIMEOUT_SECS, "messageCount": request.messages.len(),
-        }).as_object().cloned().unwrap_or_default());
+        runtime.info(
+            "chat.request_sent",
+            serde_json::json!({
+                "requestId": request.request_id.clone(), "url": url,
+                "timeoutSecs": CHAT_TIMEOUT_SECS, "messageCount": request.messages.len(),
+            })
+            .as_object()
+            .cloned()
+            .unwrap_or_default(),
+        );
     }
     let response = response_or_error(builder.send().await.map_err(|error| {
         if error.is_timeout() {
@@ -930,12 +976,19 @@ async fn run_stream(
     cancel: Arc<AtomicBool>,
     runtime: &RuntimeLogState,
 ) -> Result<(), String> {
-    run_stream_with(&request, &profile, key.as_deref(), &cancel, Some(runtime), |content| {
-        let _ = channel.send(ChatStreamEvent::Chunk {
-            content: content.to_string(),
-        });
-        Ok(())
-    })
+    run_stream_with(
+        &request,
+        &profile,
+        key.as_deref(),
+        &cancel,
+        Some(runtime),
+        |content| {
+            let _ = channel.send(ChatStreamEvent::Chunk {
+                content: content.to_string(),
+            });
+            Ok(())
+        },
+    )
     .await?;
     let _ = channel.send(ChatStreamEvent::Done);
     Ok(())
@@ -1021,7 +1074,15 @@ pub async fn stream_chat(
         .lock()
         .map_err(|_| "取消状态不可用".to_string())?
         .insert(request.request_id.clone(), cancel.clone());
-    let result = run_stream(request.clone(), profile, key, on_event.clone(), cancel, &runtime).await;
+    let result = run_stream(
+        request.clone(),
+        profile,
+        key,
+        on_event.clone(),
+        cancel,
+        &runtime,
+    )
+    .await;
     if let Ok(mut values) = cancellations.0.lock() {
         values.remove(&request.request_id);
     }

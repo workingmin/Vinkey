@@ -199,6 +199,7 @@ export interface LongTextWorkerOutput {
   summaryCount: number
   modelInvocationCount: number
   mapCacheHits: number
+  stageCacheHits: number
   jobCheckpointHits: number
   durationMs: number
   completedAt: number
@@ -208,11 +209,13 @@ export interface TaskWorkerEvent {
   sequence: number
   timestamp: number
   jobId: string
-  stage: 'chunking' | 'map' | 'reduce' | 'synthesis' | 'evidence' | 'lifecycle'
+  stage: 'chunking' | 'map' | 'chapter' | 'volume' | 'reduce' | 'synthesis' | 'evidence' | 'lifecycle' | `reduce-${number}`
   status: 'running' | 'paused' | 'completed' | 'failed' | 'cancelled'
   completed: number
   total: number
   message: string
+  artifact?: string | null
+  cacheSource?: 'model' | 'shared' | 'checkpoint' | 'quarantined' | null
 }
 
 export interface AnalysisJobManifest {
@@ -478,6 +481,10 @@ export interface ChatActivity {
   message: string | null
   timestamp: number
   completedAt?: number
+  worker?: TaskWorkerEvent
+  artifacts?: string[]
+  cacheHits?: number
+  modelRequests?: number
 }
 
 export type ChatStreamEvent =

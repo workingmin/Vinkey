@@ -21,8 +21,8 @@ mod projects;
 mod runtime_log;
 mod search;
 mod task_runtime;
-mod worker_service;
 mod window_controls;
+mod worker_service;
 
 #[derive(Default)]
 pub(crate) struct WorkspaceState(Mutex<Option<Workspace>>);
@@ -30,7 +30,8 @@ pub(crate) struct WorkspaceState(Mutex<Option<Workspace>>);
 #[tauri::command]
 async fn get_local_hardware() -> Result<hardware::LocalHardware, String> {
     tauri::async_runtime::spawn_blocking(hardware::detect)
-        .await.map_err(|error| format!("无法读取本机硬件：{error}"))
+        .await
+        .map_err(|error| format!("无法读取本机硬件：{error}"))
 }
 
 #[derive(Clone)]
@@ -683,7 +684,10 @@ fn authorize_workspace(
 fn ensure_workspace_idle(app: &AppHandle) -> Result<(), String> {
     let chats = app.state::<models::ChatCancellation>();
     if !chats.0.lock().map_err(|_| "会话状态不可用")?.is_empty()
-        || app.state::<worker_service::WorkerRuntimeState>().has_workers() {
+        || app
+            .state::<worker_service::WorkerRuntimeState>()
+            .has_workers()
+    {
         return Err("请先停止正在运行的任务，再切换项目或删除记录".into());
     }
     Ok(())

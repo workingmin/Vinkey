@@ -29,9 +29,11 @@ describe('long text worker protocol', () => {
       excludedDocuments: [],
     }, (event) => events.push(event))
 
-    expect(output.workerVersion).toBe('long-text-worker-5')
-    expect(output.outputSchemaVersion).toBe('long-text-output-2')
+    expect(output.workerVersion).toBe('long-text-worker-6')
+    expect(output.promptVersion).toBe('long-text-prompts-2')
+    expect(output.outputSchemaVersion).toBe('long-text-output-3')
     expect(output.mapCacheHits).toBe(0)
+    expect(output.stageCacheHits).toBe(0)
     expect(output.pipelineCompleted).toBe(false)
     expect(output.manifests).toHaveLength(1)
     expect(output.manifests[0].sourceId).toBe('章节/第一章.md')

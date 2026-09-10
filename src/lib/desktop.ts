@@ -372,9 +372,9 @@ export async function prepareLongTextWorker(
       eventType: 'worker.completed',
     })
     const output: LongTextWorkerOutput = {
-      workerVersion: 'long-text-worker-5',
-      promptVersion: 'long-text-prompts-1',
-      outputSchemaVersion: 'long-text-output-2',
+      workerVersion: 'long-text-worker-6',
+      promptVersion: 'long-text-prompts-2',
+      outputSchemaVersion: 'long-text-output-3',
       compatibilityKey: 'browser-demo',
       pipelineCompleted: false,
       jobId: input.jobId,
@@ -387,6 +387,7 @@ export async function prepareLongTextWorker(
       summaryCount: 0,
       modelInvocationCount: 0,
       mapCacheHits: 0,
+      stageCacheHits: 0,
       jobCheckpointHits: 0,
       durationMs: 0,
       completedAt: Date.now(),

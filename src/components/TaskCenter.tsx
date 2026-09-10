@@ -12,6 +12,8 @@ const statusLabels: Record<TaskJob['status'], string> = {
 function stepLabel(stepId: string): string {
   if (stepId === 'chunking') return '文档分块'
   if (stepId === 'map') return '逐块分析'
+  if (stepId === 'chapter') return '章节汇总'
+  if (stepId === 'volume') return '卷级汇总'
   if (stepId === 'synthesis') return '最终综合'
   if (stepId === 'evidence') return '证据校验'
   if (stepId.startsWith('reduce-')) return `第 ${stepId.slice(7)} 层归并`
@@ -103,7 +105,8 @@ export function TaskCenter() {
             {job.failure && <div className="task-failure"><AlertCircle /><span><strong>{job.failure.code}</strong><small>{job.failure.message}</small></span><b>{job.failure.retryable ? '可重试' : '需重新发起'}</b></div>}
             <ol className="task-steps">{job.steps.map((step) => <li key={step.id} className={`status-${step.status}`}><i /><span><strong>{stepLabel(step.id)}</strong><small>第 {step.attempt} 次 · {step.checkpoint ?? '无检查点'}</small></span></li>)}</ol>
             {output && <div className="task-output">
-              <div><span>模型调用 {output.modelInvocationCount}</span><span>跨任务命中 {output.mapCacheHits}</span><span>任务内命中 {output.jobCheckpointHits}</span><span>耗时 {(output.durationMs / 1000).toFixed(1)} 秒</span></div>
+              <div><span>模型调用 {output.modelInvocationCount}</span><span>跨任务命中 {output.stageCacheHits}</span><span>任务内命中 {output.jobCheckpointHits}</span><span>耗时 {(output.durationMs / 1000).toFixed(1)} 秒</span></div>
+              <small>中间产物：.vinkey/analysis/jobs/{job.taskId}/</small>
               <pre>{output.content}</pre>
             </div>}
           </div>}

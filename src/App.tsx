@@ -1,5 +1,5 @@
 import {
-  Bot, Check, ChevronDown, ChevronRight, CirclePlus, Download, Eye, FileText, Folder, FolderOpen,
+  Bot, Check, ChevronDown, CirclePlus, Download, Eye, FileText, Folder, FolderOpen,
   MessageSquareText, PanelLeftClose, PanelLeftOpen, PanelRightClose,
   Save, Search, Send, Settings, Square, X, Minus, Maximize2, Minimize2, Pause, Play,
   RotateCcw, RotateCw, Copy, Scissors, Clipboard, Moon, Sun, Keyboard, ListChecks, RefreshCw,
@@ -14,6 +14,8 @@ import { CodeEditor } from './components/CodeEditor'
 import { FilePreview, downloadBytes } from './components/FilePreview'
 import { SettingsPage } from './components/SettingsPage'
 import { TaskCenter } from './components/TaskCenter'
+import { MessageActivity } from './components/MessageActivity'
+import { MarkdownContent } from './components/MarkdownContent'
 import { ProjectSessionSidebar } from './components/ProjectSessionSidebar'
 import { WorkspaceTree, workspaceActions } from './components/WorkspaceTree'
 import {
@@ -257,6 +259,25 @@ const chatStatusMeta: Record<ChatRunStatus, { label: string; title: string }> = 
   stopping: { label: '停止中', title: 'stopping · 正在等待请求结束' },
 }
 
+function formatLongTextPipelineReceipt(result: {
+  jobId: string
+  chunkCount: number
+  summaryCount: number
+  modelInvocationCount: number
+  mapCacheHits: number
+  stageCacheHits: number
+  jobCheckpointHits: number
+}): string {
+  return [
+    '',
+    '---',
+    '**处理记录**',
+    `长文本流水线已完成：${result.chunkCount} 个分块，${result.summaryCount} 条局部摘要。`,
+    isDesktop() ? '分块、摘要、汇总及证据产物已保存，可在处理记录中查看。' : '浏览器演示产物保存在内存中。',
+    `已复用 ${result.stageCacheHits} 个跨任务结果和 ${result.jobCheckpointHits} 个任务检查点；本次模型请求 ${result.modelInvocationCount} 次。`,
+  ].join('\n')
+}
+
 
 function FileBrowserPanel({ onOpenDocument, onToggleContext, onOpenWorkspace, onRefreshWorkspace }: {
   onOpenDocument: (path: string) => Promise<void>
@@ -307,7 +328,6 @@ function ChatMessageItem({ message, activity, onCopyError }: {
   onCopyError: (message: string) => void
 }) {
   const [copied, setCopied] = useState(false)
-  const [activityExpanded, setActivityExpanded] = useState(false)
   const [clock, setClock] = useState(() => Date.now())
   const copyTimer = useRef<number | null>(null)
 
@@ -315,9 +335,6 @@ function ChatMessageItem({ message, activity, onCopyError }: {
     if (copyTimer.current) window.clearTimeout(copyTimer.current)
   }, [])
 
-  useEffect(() => {
-    if (!activity) setActivityExpanded(false)
-  }, [activity])
 
   useEffect(() => {
     if (!activity) return
@@ -338,55 +355,19 @@ function ChatMessageItem({ message, activity, onCopyError }: {
 
   const isAssistant = message.role === 'assistant'
   const activityLog = activity?.activityLog ?? message.activityLog ?? []
-  const currentActivity = activity
-    ? activityLog.at(-1)
-    : undefined
-  const history = activity
-    ? activityLog.slice(0, -1)
-    : activityLog
   const displayTimestamp = activity ? clock : (message.completedAt ?? message.createdAt)
   const timestamp = new Date(displayTimestamp)
   const formattedTime = timestamp.toLocaleString('zh-CN', {
     month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
   })
-  const formatActivityTime = (value: number) => new Date(value).toLocaleTimeString('zh-CN', {
-    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
-  })
-  const formatActivityDuration = (item: ChatActivity) => {
-    const end = item.completedAt ?? (activity ? clock : item.timestamp)
-    const seconds = Math.max(0, Math.round((end - item.timestamp) / 1000))
-    return `${seconds} 秒`
-  }
 
   return <article className={`message ${message.role}`}>
     {isAssistant && <div className="avatar" aria-hidden="true"><Bot /></div>}
     <div className="message-stack">
       {isAssistant && <div className="message-author">Vinkey</div>}
-      {isAssistant && activity && <div className={`message-activity status-${activity.status}`} role="status" aria-live="polite"><i aria-hidden="true" /><span>{activity.statusMessage ?? chatStatusMeta[activity.status].label}</span></div>}
-      {isAssistant && activityLog.length > 0 && <div className="message-activity-history">
-        <button
-          type="button"
-          className="message-activity-toggle"
-          aria-expanded={activityExpanded}
-          aria-controls={`activity-log-${message.id}`}
-          onClick={() => setActivityExpanded((expanded) => !expanded)}
-        >
-          {activityExpanded ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}
-          <span>{activityExpanded ? '收起处理过程' : `查看处理过程 · ${activityLog.length} 步`}</span>
-        </button>
-        {activityExpanded && <ol id={`activity-log-${message.id}`} className="message-activity-log">
-          {history.map((item, index) => <li key={`${item.timestamp}-${index}`} className={`status-${item.status}`}>
-            <span className="message-activity-log-dot" aria-hidden="true" />
-            <span>{item.message ?? chatStatusMeta[item.status].label}<small>{formatActivityTime(item.completedAt ?? item.timestamp)} · {formatActivityDuration(item)}</small></span>
-          </li>)}
-          {activity && currentActivity && <li className={`status-${currentActivity.status} current`}>
-            <span className="message-activity-log-dot" aria-hidden="true" />
-            <span>{currentActivity.message ?? chatStatusMeta[currentActivity.status].label}<small>{currentActivity.completedAt ? `${formatActivityTime(currentActivity.completedAt)} · ${formatActivityDuration(currentActivity)}` : `进行中 · ${formatActivityDuration(currentActivity)}`}</small></span>
-          </li>}
-        </ol>}
-      </div>}
+      {isAssistant && <MessageActivity items={activityLog} active={Boolean(activity)} />}
       <div className="message-bubble">
-        {message.content ? <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw, rehypeSanitize]}>{message.content}</ReactMarkdown>
+        {message.content ? <MarkdownContent content={message.content} />
           : activity ? <div className="typing" aria-label={activity.statusMessage ?? chatStatusMeta[activity.status].label}><i /><i /><i /></div> : null}
       </div>
       <div className="message-actions">
@@ -411,6 +392,7 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
   const autoStopOllamaModels = useAppStore((state) => state.autoStopOllamaModels)
   const beginChatRun = useAppStore((state) => state.beginChatRun)
   const setChatRunStatus = useAppStore((state) => state.setChatRunStatus)
+  const recordWorkerEvent = useAppStore((state) => state.recordWorkerEvent)
   const appendChatRunChunk = useAppStore((state) => state.appendChatRunChunk)
   const resetChatRunResponse = useAppStore((state) => state.resetChatRunResponse)
   const endChatRun = useAppStore((state) => state.endChatRun)
@@ -816,7 +798,8 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
         setAnalysisStatus('正在准备长文本分析…')
         const result = await analyzeLongText(requestContextDocuments, value, selectedModel, nextRequestId, (progress) => {
           const message = `${progress.message} · ${progress.completed}/${progress.total}`
-          setChatRunStatus(nextConversationId, progress.stage === 'chunking' ? 'fetching' : 'tool_calling', message)
+          if (progress.event) recordWorkerEvent(nextConversationId, progress.event)
+          else setChatRunStatus(nextConversationId, progress.stage === 'chunking' ? 'fetching' : 'tool_calling', message)
           setAnalysisStatus(message)
         }, workspace?.id ?? 'workspace', excludedWorkspaceDocuments, taskDispatch.jobId === nextRequestId ? undefined : taskDispatch.jobId ?? undefined, (toolName, input, output) => {
           if (output) toolGateway.assertResult(toolName, output.value)
@@ -830,7 +813,7 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
         const evidenceNote = result.evidence.length > 0
           ? `\n\n> 证据校验：发现 ${result.evidence.length} 条来源引用，其中 ${result.evidence.filter((item) => item.verified).length} 条已通过行号和原文校验。`
           : '\n\n> 证据校验：最终回答没有生成可解析的来源引用。'
-        appendChatRunChunk(nextConversationId, `${result.content}${excludedNote}${evidenceNote}`)
+        appendChatRunChunk(nextConversationId, `${result.content}\n${formatLongTextPipelineReceipt(result)}${excludedNote}${evidenceNote}`)
         const candidates = taskPlan.intent === 'continuity-review' || taskPlan.intent === 'document-revision'
           ? []
           : buildMemoryCandidates(result.content, requestContextDocuments.map((document) => document.path), value)
@@ -924,6 +907,7 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
         setRecoverableJob(null)
       }
       if (!message.includes('请求已停止')) setError(message)
+      appendChatRunChunk(nextConversationId, `\n\n> ${message.includes('请求已停止') ? '任务已停止，已完成的产物仍保留。' : `任务未完成：${message}`}`)
     } finally {
       setAnalysisStatus(null)
       setLongTaskActive(false)

@@ -177,13 +177,32 @@ Local machine
 │  └─ <cache-key>.json
 └─ analysis/
    └─ jobs/
+      ├─ _stage-cache/
+      │  └─ <input-fingerprint>.json
+      ├─ _revoked/
+      │  └─ <cache-key>-<content-hash>.json
       └─ <job-id>/
+         ├─ worker-input.json
+         ├─ worker-checkpoints.json
+         ├─ worker-events.json
          ├─ manifest-001.json
          ├─ summary-00001.md
-         └─ analysis.md
+         ├─ chapter-<fingerprint>.md
+         ├─ volume-<fingerprint>.md
+         ├─ reduce-<level>-<fingerprint>.md
+         ├─ analysis.md
+         ├─ evidence.json
+         ├─ worker-output.json
+         └─ quarantine-<uuid>.json
 ```
 
-`chunks/` 只保存确定性本地分块结果，使用 SHA-256 生成原文指纹和缓存键；缓存键由源文档相对路径、原文指纹、分块算法版本、`maxTokens` 和 `overlapTokens` 计算。读取缓存时必须再次校验这些字段、块边界和 token 估算；任一不匹配都丢弃旧缓存并重新生成。分析任务产物按 `job-id` 隔离，便于诊断和后续恢复。用户可见的章节拆分文件仍写入源文档同级的 `<源文件名>-章节拆分/`，不放入 `.vinkey`。
+`chunks/` 只保存确定性本地分块结果，使用 SHA-256 生成原文指纹和缓存键；缓存键由源文档相对路径、原文指纹、分块算法版本、`maxTokens` 和 `overlapTokens` 计算。读取缓存时必须再次校验这些字段、块边界和 token 估算；任一不匹配都丢弃旧缓存并重新生成。
+
+`analysis/jobs/_stage-cache/` 保存 Map、章节、卷级、全书阶段归并和综合结果。缓存身份由实际输入内容、子节点内容哈希、Prompt、工序版本、输出结构版本、分块算法版本、模型完整配置、工序服务、调度策略和结果校验器版本共同生成；因此正文、模型、服务或调度发生变化都会自然失效。命中缓存时仍会重新校验内容哈希和来源引用，不能通过校验的缓存会被删除。用户手动重跑某一步时，该步骤及依赖它的下游结果会写入 `_revoked/` 作废记录，避免已知错误再次进入流水线。
+
+每个分析任务按 `job-id` 保存局部分析、章节汇总、卷级汇总、全书归并、最终综合和证据清单，并通过检查点清单记录依赖内容哈希。模型返回只有在非空、引用结构完整、引用行号和原文逐项吻合后才会进入检查点或共享缓存；失败返回保存在 `quarantine-<uuid>.json` 中用于诊断，并最多重试三次，不参与后续汇总和缓存复用。完整结果恢复还会核对输入快照、实时文档指纹、所有依赖哈希和最终内容哈希。
+
+用户可见的章节拆分文件仍写入源文档同级的 `<源文件名>-章节拆分/`，不放入 `.vinkey`。分析任务的消息流只展示当前工序和可折叠的处理记录，并提供中间产物清单及只读预览，避免按每个流式片段堆叠大量状态行。
 
 ### 运行日志与跨平台诊断
 
