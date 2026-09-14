@@ -341,11 +341,6 @@ export interface ModelAdmissionResult {
   contextWindow: number
 }
 
-export interface OllamaStopResult {
-  stopped: boolean
-  message: string
-}
-
 export interface SearchHit {
   path: string
   line: number

@@ -82,4 +82,4 @@ npm run package:mac -- --open
 - [Agent 与 Skill 建设计划](docs/AGENT_SKILL_PLAN.md)
 - [AI 业务链路架构与改造方案](docs/AI_BUSINESS_CHAINS.md)
 - [轻量级联网搜索设计](docs/LIGHTWEIGHT_WEB_RESEARCH.md)
-- [Ollama 中文创作模型组与最低配置测试基线](docs/OLLAMA_MODEL_GROUPS.md)
+- [单模型准入与硬件基线](docs/MODEL_ADMISSION.md)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { hardwareTier, isLocalModelConnection, recommendLocalModel, type LocalHardware } from './hardwareProfile'
+import { hardwareTier, isLocalModelConnection, type LocalHardware } from './hardwareProfile'
 
 const GiB = 1024 ** 3
 const hardware = (ram: number, vram: number | null = null, unifiedMemory = false): LocalHardware => ({
@@ -32,16 +32,5 @@ describe('local hardware assignment', () => {
     expect(isLocalModelConnection({ baseUrl: 'http://[::1]:1234/v1' })).toBe(true)
     expect(isLocalModelConnection({ baseUrl: 'http://192.168.1.8:11434' })).toBe(false)
     expect(isLocalModelConnection({ baseUrl: 'https://api.example.com/v1' })).toBe(false)
-  })
-  it('selects only discovered models that fit the tier and falls back safely', () => {
-    const models = ['qwen3:32b', 'qwen3:14b', 'qwen3:8b', 'openbmb/minicpm4.1:latest']
-    expect(recommendLocalModel(models, 'general', 'minimum')).toBe('qwen3:8b')
-    expect(recommendLocalModel(models, 'general', 'standard')).toBe('qwen3:14b')
-    expect(recommendLocalModel(models, 'general', 'recommended')).toBe('qwen3:32b')
-    expect(recommendLocalModel(models, 'efficient', 'recommended')).toBe('openbmb/minicpm4.1:latest')
-    expect(recommendLocalModel(['qwen3:8b'], 'general', 'recommended')).toBe('qwen3:8b')
-    expect(recommendLocalModel(['qwen3:32b', 'qwen3:8b-fp16', 'custom'], 'general', 'minimum')).toBeNull()
-    expect(recommendLocalModel(models, 'general', 'insufficient')).toBeNull()
-    expect(recommendLocalModel(models, 'general', 'unknown')).toBeNull()
   })
 })

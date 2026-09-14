@@ -1,5 +1,4 @@
 import { isLoopbackModelEndpoint } from './modelPrivacy'
-import { isSameOllamaModel, type ModelGroupRole } from './modelGroups'
 
 export interface LocalHardware {
   platform: string
@@ -38,16 +37,5 @@ export function hardwareSummary(hardware: LocalHardware | null): string {
     : `内存 ${amount(hardware.totalMemoryBytes)} · 独立显存 ${amount(hardware.gpuMemoryBytes)}`
 }
 
-// Only these known Q4 model tags participate in automatic local assignment.
-// Unknown/custom quantizations remain available for manual selection.
-export function recommendLocalModel(models: string[], role: ModelGroupRole, tier: HardwareTier): string | null {
-  if (tier === 'unknown' || tier === 'insufficient') return null
-  const general = tier === 'recommended' ? ['qwen3:32b', 'qwen3:14b', 'qwen3:8b']
-    : tier === 'standard' ? ['qwen3:14b', 'qwen3:8b'] : ['qwen3:8b']
-  const candidates = role === 'efficient' ? ['openbmb/minicpm4.1:latest', 'qwen3:8b']
-    : [...general, 'openbmb/minicpm4.1:latest']
-  return candidates.map((candidate) => models.find((model) => isSameOllamaModel(model, candidate))).find(Boolean) ?? null
-}
-
 export const LOCAL_CONTEXT_WINDOW = 16_384
-export const LOCAL_HARDWARE_ADVICE = '本机低于本地模型组最低要求。建议连接局域网推理服务或商用 AI（OpenAI 兼容接口）。'
+export const LOCAL_HARDWARE_ADVICE = '本机低于本地模型最低要求。建议连接局域网推理服务或商用 AI（OpenAI 兼容接口）。'
