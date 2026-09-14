@@ -27,6 +27,7 @@ export function SettingsPage() {
   const [admissionScanning, setAdmissionScanning] = useState<string[]>([])
   const [draft, setDraft] = useState<ModelConnectionInput>(emptyConnection)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [catalogExpandedId, setCatalogExpandedId] = useState<string | null>(null)
   const [dirty, setDirty] = useState(false)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -106,8 +107,7 @@ export function SettingsPage() {
         setModelProfiles(available)
         if (values[0]) { setSelectedId(values[0].id); setDraft(values[0]) }
         setLoading(false)
-        const results = await Promise.all(values.map(scan))
-        results.forEach((result, index) => { if (result.ok) void probeConnection(values[index], result.models) })
+        await Promise.all(values.map(scan))
       } catch (error) {
         if (!cancelled) { setNotice({ error: true, text: String(error) }); setLoading(false) }
       }
@@ -128,6 +128,7 @@ export function SettingsPage() {
     if (!discard()) return
     setSelectedId(connection?.id ?? null)
     setDraft(connection ?? emptyConnection())
+    setCatalogExpandedId(null)
     setDirty(false)
     setNotice(null)
   }
@@ -167,18 +168,20 @@ export function SettingsPage() {
     finally { setBusy(false) }
   }
 
-  const remove = async () => {
-    if (!selected || locked || !window.confirm(`删除连接“${selected.name}”？该连接的凭据及模型配置将删除。`)) return
+  const remove = async (target: ModelConnection | undefined = selected) => {
+    if (!target || locked || !window.confirm(`删除连接“${target.name}”？该连接的凭据及模型配置将删除。`)) return
     setBusy(true)
     try {
-      await deleteModelConnection(selected.id)
-      const values = connections.filter((value) => value.id !== selected.id)
+      await deleteModelConnection(target.id)
+      const values = connections.filter((value) => value.id !== target.id)
       setConnections(values)
-      setCatalogs((previous) => Object.fromEntries(Object.entries(previous).filter(([id]) => id !== selected.id)))
-      setAdmissions((previous) => Object.fromEntries(Object.entries(previous).filter(([key]) => !key.startsWith(`${selected.id}::`))))
+      setCatalogs((previous) => Object.fromEntries(Object.entries(previous).filter(([id]) => id !== target.id)))
+      setAdmissions((previous) => Object.fromEntries(Object.entries(previous).filter(([key]) => !key.startsWith(`${target.id}::`))))
       setModelProfiles(await listModelProfiles())
-      setSelectedId(values[0]?.id ?? null)
-      setDraft(values[0] ?? emptyConnection())
+      const nextSelected = target.id === selectedId ? values[0] : connections.find((value) => value.id === selectedId)
+      setSelectedId(nextSelected?.id ?? null)
+      setDraft(nextSelected ?? emptyConnection())
+      if (target.id === selectedId) setCatalogExpandedId(null)
       setDirty(false)
       setNotice({ error: false, text: '连接已删除' })
     } catch (error) { setNotice({ error: true, text: String(error) }) }
@@ -257,9 +260,38 @@ export function SettingsPage() {
         </section>
         <section className="model-connections" aria-labelledby="model-connections-title">
           <div className="settings-section-heading"><div><span className="section-kicker">PROVIDERS</span><h2 id="model-connections-title">模型连接</h2></div><button className="secondary-button" disabled={locked} onClick={() => chooseConnection()}><Plus />新增连接</button></div>
-          <div className="connection-workspace"><aside className="connection-list" aria-label="连接列表">{loading ? <p>正在读取连接...</p> : connections.length === 0 ? <p>暂无连接</p> : connections.map((connection) => { const catalog = catalogs[connection.id]; const passed = catalog?.ok ? catalog.models.filter((model) => admissions[admissionKey(connection.id, model)]?.ok).length : 0; return <button key={connection.id} disabled={busy} className={connection.id === selectedId ? 'active' : ''} onClick={() => chooseConnection(connection)}><PlugZap /><span><b>{connection.name}</b><small>{connection.baseUrl}</small><small>{scanning.includes(connection.id) ? '正在获取模型…' : admissionScanning.includes(connection.id) ? '正在进行准入探测…' : catalog?.ok ? `${passed}/${catalog.models.length} 个模型准入通过` : '连接不可用'}</small></span><span className={`connection-dot ${catalog?.ok ? passed > 0 ? 'online' : 'warning' : ''}`} /></button> })}</aside>
-            <form className="connection-form" onSubmit={(event) => { event.preventDefault(); void save() }}><fieldset disabled={locked || Boolean(selectedId && scanning.includes(selectedId))}><div className="connection-form-heading"><div><span className="section-kicker">CONNECTION</span><h3>{selected ? '连接详情' : '新增连接'}</h3></div>{dirty && <small>未保存</small>}</div><div className="field-grid"><div className="field-group"><label htmlFor="connection-name">连接名称</label><input id="connection-name" required value={draft.name} onChange={(event) => edit({ name: event.target.value })} /></div><div className="field-group"><label htmlFor="connection-kind">接口类型</label><select id="connection-kind" value={draft.kind} onChange={(event) => { const kind = event.target.value as ModelConnectionInput['kind']; edit({ kind, baseUrl: kind === 'ollama' ? 'http://localhost:11434' : 'https://api.openai.com/v1' }) }}><option value="ollama">Ollama</option><option value="openai-compatible">OpenAI 兼容</option></select></div></div><div className="field-group"><label htmlFor="base-url">Base URL</label><input id="base-url" type="url" required spellCheck={false} value={draft.baseUrl} onChange={(event) => edit({ baseUrl: event.target.value })} /></div><div className="field-group"><label htmlFor="api-key">API Key</label><input id="api-key" type="password" autoComplete="off" placeholder={selected?.hasApiKey ? '已保存；留空保持不变' : '可选'} value={draft.apiKey ?? ''} onChange={(event) => edit({ apiKey: event.target.value, clearApiKey: false })} />{selected?.hasApiKey && <label className="checkbox-label"><input type="checkbox" checked={Boolean(draft.clearApiKey)} onChange={(event) => edit({ clearApiKey: event.target.checked, apiKey: '' })} />删除已保存的密钥</label>}</div><div className="settings-actions"><button type="button" className="icon-button connection-delete" title="删除连接" aria-label="删除连接" disabled={!selected} onClick={() => void remove()}><Trash2 /></button><span /><button type="submit" className="primary-button"><Save />{busy ? '保存中...' : '保存并运行准入探测'}</button></div></fieldset>
-              {selected && <div className="connection-catalog"><header><div><span className="section-kicker">MODEL CATALOG</span><h3>模型准入 <span>{selectedCatalog?.ok ? selectedCatalog.models.length : 0}</span></h3></div><button type="button" className="icon-button" title="刷新模型列表" aria-label="刷新模型列表" disabled={locked || dirty || scanning.includes(selected.id)} onClick={() => void scan(selected)}><RefreshCw className={scanning.includes(selected.id) ? 'spinning' : ''} /></button><button type="button" className="secondary-button" disabled={locked || dirty || !selectedCatalog?.ok || !selectedCatalog.models.length || admissionScanning.includes(selected.id)} onClick={() => void probeConnection(selected, selectedCatalog!.models)}><ShieldCheck />重新探测</button></header>{scanning.includes(selected.id) ? <p role="status">正在获取模型列表…</p> : !selectedCatalog?.ok ? <p className="assignment-warning" role="status">{selectedCatalog?.message ?? '尚未获取模型'}</p> : selectedCatalog.models.length === 0 ? <p>服务未返回模型</p> : <ul>{selectedAdmissions.map(({ model, state }) => <li key={model}><Bot /><span><strong>{model}</strong><small>{state?.message ?? '尚未探测结构化输出能力'}</small></span><span className={`admission-status ${state?.ok ? 'passed' : state ? 'failed' : 'idle'}`}>{state?.ok ? <><BadgeCheck />通过</> : state ? <><CircleAlert />未通过</> : '待探测'}</span></li>)}</ul>}</div>}
+          <div className="connection-workspace">
+            <aside className="connection-list" aria-label="连接列表">
+              {loading ? <p>正在读取连接...</p> : connections.length === 0 ? <p>暂无连接</p> : connections.map((connection) => {
+                const catalog = catalogs[connection.id]
+                const passed = catalog?.ok ? catalog.models.filter((model) => admissions[admissionKey(connection.id, model)]?.ok).length : 0
+                return <div className={`connection-list-item ${connection.id === selectedId ? 'active' : ''}`} key={connection.id}>
+                  <button type="button" className="connection-select" disabled={locked} onClick={() => chooseConnection(connection)}>
+                    <PlugZap />
+                    <span><b>{connection.name}</b><small>{connection.baseUrl}</small><small>{scanning.includes(connection.id) ? '正在获取模型…' : admissionScanning.includes(connection.id) ? '正在进行准入探测…' : catalog?.ok ? `${passed}/${catalog.models.length} 个模型准入通过` : '连接不可用'}</small></span>
+                    <span className={`connection-dot ${catalog?.ok ? passed > 0 ? 'online' : 'warning' : ''}`} />
+                  </button>
+                  <button type="button" className="icon-button connection-list-delete" title={`删除连接“${connection.name}”`} aria-label="删除连接" disabled={locked} onClick={() => void remove(connection)}><Trash2 /></button>
+                </div>
+              })}
+            </aside>
+            <form className="connection-form" onSubmit={(event) => { event.preventDefault(); void save() }}>
+              <fieldset disabled={locked || Boolean(selectedId && scanning.includes(selectedId))}>
+                <div className="connection-form-heading"><div><span className="section-kicker">CONNECTION</span><h3>{selected ? '连接详情' : '新增连接'}</h3></div>{dirty && <small>未保存</small>}</div>
+                <div className="field-grid"><div className="field-group"><label htmlFor="connection-name">连接名称</label><input id="connection-name" required value={draft.name} onChange={(event) => edit({ name: event.target.value })} /></div><div className="field-group"><label htmlFor="connection-kind">接口类型</label><select id="connection-kind" value={draft.kind} onChange={(event) => { const kind = event.target.value as ModelConnectionInput['kind']; edit({ kind, baseUrl: kind === 'ollama' ? 'http://localhost:11434' : 'https://api.openai.com/v1' }) }}><option value="ollama">Ollama</option><option value="openai-compatible">OpenAI 兼容</option></select></div></div>
+                <div className="field-group"><label htmlFor="base-url">Base URL</label><input id="base-url" type="url" required spellCheck={false} value={draft.baseUrl} onChange={(event) => edit({ baseUrl: event.target.value })} /></div>
+                <div className="field-group"><label htmlFor="api-key">API Key</label><input id="api-key" type="password" autoComplete="off" placeholder={selected?.hasApiKey ? '已保存；留空保持不变' : '可选'} value={draft.apiKey ?? ''} onChange={(event) => edit({ apiKey: event.target.value, clearApiKey: false })} />{selected?.hasApiKey && <label className="checkbox-label"><input type="checkbox" checked={Boolean(draft.clearApiKey)} onChange={(event) => edit({ clearApiKey: event.target.checked, apiKey: '' })} />删除已保存的密钥</label>}</div>
+                <div className="settings-actions"><span /><button type="submit" className="primary-button"><Save />{busy ? '保存中...' : '保存并运行准入探测'}</button></div>
+              </fieldset>
+              {selected && <div className="connection-catalog">
+                <header><div><span className="section-kicker">MODEL CATALOG</span><h3>模型准入 <span>{selectedCatalog?.ok ? selectedCatalog.models.length : 0}</span></h3></div>
+                  <button type="button" className="secondary-button catalog-toggle" aria-expanded={catalogExpandedId === selected.id} onClick={() => setCatalogExpandedId((value) => value === selected.id ? null : selected.id)}><ChevronDown />{catalogExpandedId === selected.id ? '收起模型列表' : '查看模型列表'}</button>
+                </header>
+                {catalogExpandedId === selected.id && <div className="connection-catalog-body">
+                  <div className="connection-catalog-actions"><button type="button" className="icon-button" title="刷新模型列表" aria-label="刷新模型列表" disabled={locked || dirty || scanning.includes(selected.id)} onClick={() => void scan(selected)}><RefreshCw className={scanning.includes(selected.id) ? 'spinning' : ''} /></button><button type="button" className="secondary-button" disabled={locked || dirty || !selectedCatalog?.ok || !selectedCatalog.models.length || admissionScanning.includes(selected.id)} onClick={() => void probeConnection(selected, selectedCatalog!.models)}><ShieldCheck />重新探测</button></div>
+                  {scanning.includes(selected.id) ? <p role="status">正在获取模型列表…</p> : !selectedCatalog?.ok ? <p className="assignment-warning" role="status">{selectedCatalog?.message ?? '尚未获取模型'}</p> : selectedCatalog.models.length === 0 ? <p>服务未返回模型</p> : <ul>{selectedAdmissions.map(({ model, state }) => <li key={model}><Bot /><span><strong>{model}</strong><small>{state?.message ?? '尚未探测结构化输出能力'}</small></span><span className={`admission-status ${state?.ok ? 'passed' : state ? 'failed' : 'idle'}`}>{state?.ok ? <><BadgeCheck />通过</> : state ? <><CircleAlert />未通过</> : '待探测'}</span></li>)}</ul>}
+                </div>}
+              </div>}
             </form>
           </div>
         </section>
