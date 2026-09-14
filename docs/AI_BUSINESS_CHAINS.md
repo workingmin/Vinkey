@@ -341,7 +341,7 @@ Agent architecture references / internal prototypes
 - [x] 增加任务中心步骤选择/确认重跑、Worker 持久化结构化错误，以及不绑定 Job ID 的精确 Map Prompt 内容寻址缓存。
 - [ ] 补齐操作系统级常驻执行、其余 Service 的统一结构化错误和更广泛的源文档增量计划。当前模型编排不依赖 WebView 页面状态，但应用进程退出会停止推理；下次启动从兼容检查点恢复。跨 Job 缓存仅复用相同版本、模型和实际 Prompt 的 Map 结果，不复用 Reduce/Synthesis，也不恢复源指纹已变化的原 Job。
 
-验收：关闭窗口后可恢复；已完成 Map 不重复调用；模型切换不会复用不兼容缓存。
+验收：关闭窗口后可恢复；已完成 Map 不重复调用；活动模型配置变化后不会复用不兼容缓存。
 
 ### 阶段 3：两个 Agent 试点
 

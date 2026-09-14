@@ -2,7 +2,7 @@
 
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useAppStore, type ChatRun } from './store'
-import type { ChatMessage, Conversation, DiffProposal, DocumentTab } from './types'
+import type { ChatMessage, Conversation, DiffProposal, DocumentTab, ModelProfile } from './types'
 import { fingerprintDocument } from './lib/diffProposal'
 
 const message = (id: string, role: ChatMessage['role'], content: string, createdAt: number): ChatMessage => ({
@@ -24,15 +24,39 @@ const run = (conversationId: string): ChatRun => ({
   assistantMessage: message(`assistant-${conversationId}`, 'assistant', '', 3),
 })
 
-describe('local model preferences', () => {
-  it('persists whether model switching should stop the previous Ollama model', () => {
-    useAppStore.getState().setAutoStopOllamaModels(false)
-    expect(useAppStore.getState().autoStopOllamaModels).toBe(false)
-    expect(localStorage.getItem('vinkey.autoStopOllamaModels')).toBe('false')
+const modelProfile = (id: string): ModelProfile => ({
+  id,
+  connectionId: 'connection',
+  name: id,
+  kind: 'ollama',
+  baseUrl: 'http://localhost:11434',
+  model: `${id}:latest`,
+  contextWindow: 16_384,
+  hasApiKey: false,
+  updatedAt: 1,
+})
 
-    useAppStore.getState().setAutoStopOllamaModels(true)
-    expect(useAppStore.getState().autoStopOllamaModels).toBe(true)
-    expect(localStorage.getItem('vinkey.autoStopOllamaModels')).toBe('true')
+describe('single active model', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    useAppStore.setState({ modelProfiles: [], activeModelId: null })
+  })
+
+  it('persists one selection and reconciles it when profiles change', () => {
+    const first = modelProfile('first')
+    const second = modelProfile('second')
+
+    useAppStore.getState().setModelProfiles([first, second])
+    expect(useAppStore.getState().activeModelId).toBe('first')
+    expect(localStorage.getItem('vinkey.activeModelId')).toBe('first')
+
+    useAppStore.getState().setActiveModelId('second')
+    useAppStore.getState().setModelProfiles([first])
+    expect(useAppStore.getState().activeModelId).toBe('first')
+
+    useAppStore.getState().setModelProfiles([])
+    expect(useAppStore.getState().activeModelId).toBeNull()
+    expect(localStorage.getItem('vinkey.activeModelId')).toBeNull()
   })
 })
 

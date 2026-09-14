@@ -1355,7 +1355,6 @@ pub fn run() {
             models::test_model_connection,
             models::probe_model_admission,
             models::probe_model_context,
-            models::stop_ollama_model,
             models::stream_chat,
             models::cancel_chat,
             database::list_conversations,

@@ -1,7 +1,6 @@
-import { ArrowLeft, BadgeCheck, Bot, Check, ChevronDown, CircleAlert, Cloud, Cpu, PlugZap, Plus, RefreshCw, Save, ShieldCheck, Square, Trash2 } from 'lucide-react'
+import { ArrowLeft, BadgeCheck, Bot, Check, ChevronDown, CircleAlert, Cloud, Cpu, PlugZap, Plus, RefreshCw, Save, ShieldCheck, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { deleteModelConnection, discoverConnectionModels, getLocalHardware, isDesktop, listModelConnections, listModelProfiles, probeModelAdmission, saveModelConnection, saveModelProfile, stopOllamaModel } from '../lib/desktop'
-import { isLocalOllamaProfile } from '../lib/modelGroups'
+import { deleteModelConnection, discoverConnectionModels, getLocalHardware, isDesktop, listModelConnections, listModelProfiles, probeModelAdmission, saveModelConnection, saveModelProfile } from '../lib/desktop'
 import { hardwareSummary, hardwareTier, hardwareTierLabels, LOCAL_CONTEXT_WINDOW, LOCAL_HARDWARE_ADVICE, type LocalHardware } from '../lib/hardwareProfile'
 import { formatServiceError } from '../lib/serviceError'
 import { useAppStore } from '../store'
@@ -90,8 +89,8 @@ function removePersistedProbe(connectionId: string): void {
 }
 
 export function SettingsPage() {
-  const { modelProfiles: profiles, modelAssignments, activeModelId, autoStopOllamaModels, pendingChatRequests, chatRuns,
-    setModelProfiles, setModelAssignment, setActiveModelId, setAutoStopOllamaModels, setSettingsOpen } = useAppStore()
+  const { modelProfiles: profiles, activeModelId, pendingChatRequests, chatRuns,
+    setModelProfiles, setActiveModelId, setSettingsOpen } = useAppStore()
   const [connections, setConnections] = useState<ModelConnection[]>([])
   const [catalogs, setCatalogs] = useState<Record<string, ModelConnectionResult>>({})
   const [admissions, setAdmissions] = useState<Record<string, AdmissionState>>({})
@@ -111,9 +110,7 @@ export function SettingsPage() {
   const locked = busy || loading || pendingChatRequests > 0 || Object.keys(chatRuns).length > 0
   const formLocked = locked || Boolean(selectedId && scanning.includes(selectedId))
   const tier = hardwareTier(hardware)
-  const activeProfile = profiles.find((profile) => profile.id === activeModelId)
-    ?? profiles.find((profile) => profile.id === modelAssignments.general)
-    ?? profiles[0]
+  const activeProfile = profiles.find((profile) => profile.id === activeModelId) ?? profiles[0]
   const activeConnection = connections.find((connection) => connection.id === activeProfile?.connectionId)
   const selectedCatalog = selectedId ? catalogs[selectedId] : undefined
   const selectedAdmissions = selectedId && selectedCatalog?.ok
@@ -301,8 +298,6 @@ export function SettingsPage() {
         contextWindow: connection.kind === 'ollama' ? LOCAL_CONTEXT_WINDOW : 32768,
       })
       setModelProfiles(await listModelProfiles())
-      setModelAssignment('efficient', profile.id)
-      setModelAssignment('general', profile.id)
       setActiveModelId(profile.id)
       setNotice({ error: false, text: `已启用 ${model}，Skill 将根据任务类型调整处理方式` })
     } catch (error) { setNotice({ error: true, text: formatServiceError(error) }) }
@@ -315,17 +310,6 @@ export function SettingsPage() {
     setBusy(true)
     try { await saveModelProfile({ ...profile, contextWindow: value }); setModelProfiles(await listModelProfiles()) }
     catch (error) { setNotice({ error: true, text: String(error) }) }
-    finally { setBusy(false) }
-  }
-
-  const stopModels = async () => {
-    if (!selected) return
-    setBusy(true)
-    try {
-      const local = profiles.filter((profile) => profile.connectionId === selected.id && isLocalOllamaProfile(profile))
-      for (const profile of local) await stopOllamaModel(profile.id)
-      setNotice({ error: false, text: '已停止此连接中配置的本机模型' })
-    } catch (error) { setNotice({ error: true, text: String(error) }) }
     finally { setBusy(false) }
   }
 
@@ -393,7 +377,7 @@ export function SettingsPage() {
           </div>
         </section>
       </main>
-      <aside className="settings-sidebar"><section className="settings-side-panel" aria-labelledby="hardware-title"><div className="settings-section-heading"><div><span className="section-kicker">DEVICE</span><h2 id="hardware-title">运行环境</h2></div><button type="button" className="icon-button" aria-label="重新检测硬件" title="重新检测硬件" disabled={detectingHardware || locked} onClick={() => void detectHardware()}><RefreshCw className={detectingHardware ? 'spinning' : ''} /></button></div><div className="hardware-tier-large"><Cpu /><div><strong>{detectingHardware ? '检测中…' : hardwareTierLabels[tier]}</strong><span>{hardwareSummary(hardware)}</span></div></div>{!detectingHardware && (tier === 'insufficient' || tier === 'unknown') && <div className="hardware-advice" role={tier === 'insufficient' ? 'alert' : 'status'}><CircleAlert /><span>{tier === 'insufficient' ? LOCAL_HARDWARE_ADVICE : '无法确认本机内存或独立显存。'}</span><button type="button" className="secondary-button" disabled={locked} onClick={addRemoteConnection}><Cloud />添加远程连接</button></div>}</section><section className="settings-side-panel runtime-panel" aria-labelledby="runtime-title"><div className="settings-section-heading"><div><span className="section-kicker">RUNTIME</span><h2 id="runtime-title">运行策略</h2></div></div><div className="runtime-policy-row"><div><strong>单模型运行</strong><span>Skill 根据场景调整提示词与流程</span></div><span className="policy-check"><Check /></span></div><div className="runtime-policy-row"><div><strong>自动释放旧模型</strong><span>切换连接时降低内存压力</span></div><label className="toggle-switch"><input id="auto-stop-ollama-models" type="checkbox" checked={autoStopOllamaModels} onChange={(event) => setAutoStopOllamaModels(event.target.checked)} /><span aria-hidden="true" /></label></div>{selected && isLocalOllamaProfile(selected) && <button className="secondary-button runtime-stop" disabled={locked || !profiles.some((profile) => profile.connectionId === selected.id)} onClick={() => void stopModels()}><Square />停止驻留模型</button>}</section><section className="settings-side-panel admission-policy"><ShieldCheck /><div><strong>准入标准</strong><p>连接可用、上下文达标，并能返回严格 JSON Schema 结构化结果。</p></div></section></aside>
+      <aside className="settings-sidebar"><section className="settings-side-panel" aria-labelledby="hardware-title"><div className="settings-section-heading"><div><span className="section-kicker">DEVICE</span><h2 id="hardware-title">运行环境</h2></div><button type="button" className="icon-button" aria-label="重新检测硬件" title="重新检测硬件" disabled={detectingHardware || locked} onClick={() => void detectHardware()}><RefreshCw className={detectingHardware ? 'spinning' : ''} /></button></div><div className="hardware-tier-large"><Cpu /><div><strong>{detectingHardware ? '检测中…' : hardwareTierLabels[tier]}</strong><span>{hardwareSummary(hardware)}</span></div></div>{!detectingHardware && (tier === 'insufficient' || tier === 'unknown') && <div className="hardware-advice" role={tier === 'insufficient' ? 'alert' : 'status'}><CircleAlert /><span>{tier === 'insufficient' ? LOCAL_HARDWARE_ADVICE : '无法确认本机内存或独立显存。'}</span><button type="button" className="secondary-button" disabled={locked} onClick={addRemoteConnection}><Cloud />添加远程连接</button></div>}</section><section className="settings-side-panel admission-policy"><ShieldCheck /><div><strong>准入标准</strong><p>连接可用、上下文达标，并能返回严格 JSON Schema 结构化结果。</p></div></section></aside>
     </div></div>
   </section>
 }

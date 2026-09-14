@@ -3,7 +3,7 @@ import { listen } from '@tauri-apps/api/event'
 import { open } from '@tauri-apps/plugin-dialog'
 import type {
   ChatMessage, ChatRequest, ChatStreamEvent, ContextDocument, Conversation, ConversationSummary,
-  ChunkManifest, DocumentSnapshot, ModelAdmissionResult, ModelConnection, ModelConnectionInput, ModelConnectionResult, ModelProfile, ModelProfileInput, OllamaStopResult, SearchHit,
+  ChunkManifest, DocumentSnapshot, ModelAdmissionResult, ModelConnection, ModelConnectionInput, ModelConnectionResult, ModelProfile, ModelProfileInput, SearchHit,
   AnalysisJobManifest, CharacterGraphBenchmark, CharacterGraphStats, CharacterInput, CharacterMentionInput, CharacterNeighbor, CharacterRecord,
   LongTextWorkerOutput, StartLongTextWorkerInput, StartTaskJobInput, TaskJob, TaskJobStep, TaskWorkerEvent, UpdateTaskJobInput,
   ProjectMemoryCandidate, ProjectMemoryItem, ProjectMemoryStatus, RelationshipEvidenceInput, RelationshipInput,
@@ -778,11 +778,6 @@ export async function probeModelAdmission(input: ModelProfileInput): Promise<Mod
     return { ok: true, message: '演示探测通过：支持严格 JSON 输出', model: input.model, structuredOutput: true, contextWindow: input.contextWindow }
   }
   return invoke<ModelAdmissionResult>('probe_model_admission', { input })
-}
-
-export async function stopOllamaModel(profileId: string): Promise<OllamaStopResult> {
-  if (!isDesktop()) return { stopped: true, message: '浏览器演示已释放模型' }
-  return invoke<OllamaStopResult>('stop_ollama_model', { profileId })
 }
 
 export async function streamChat(request: ChatRequest, onEvent: (event: ChatStreamEvent) => void): Promise<void> {

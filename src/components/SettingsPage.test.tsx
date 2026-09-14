@@ -8,7 +8,7 @@ import * as desktop from '../lib/desktop'
 beforeEach(() => {
   localStorage.clear()
   vi.spyOn(desktop, 'getLocalHardware').mockResolvedValue({ platform: 'macos', architecture: 'aarch64', totalMemoryBytes: 16 * 1024 ** 3, gpuMemoryBytes: null, unifiedMemory: true })
-  useAppStore.setState({ modelProfiles: [], modelAssignments: {}, activeModelId: null, pendingChatRequests: 0, chatRuns: {} })
+  useAppStore.setState({ modelProfiles: [], activeModelId: null, pendingChatRequests: 0, chatRuns: {} })
 })
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 
@@ -46,7 +46,7 @@ describe('model settings workflow', () => {
     expect(await screen.findByRole('button', { name: '重新探测' })).toBeTruthy()
   })
 
-  it('discovers models and assigns one model to both internal runtime roles', async () => {
+  it('discovers models and selects one active model', async () => {
     render(<SettingsPage />)
     const saveButton = await screen.findByRole('button', { name: '保存并运行准入探测' })
     await waitFor(() => expect((screen.getByRole('button', { name: '保存并运行准入探测' }) as HTMLButtonElement).disabled).toBe(false))
@@ -57,8 +57,7 @@ describe('model settings workflow', () => {
     fireEvent.change(activeModel, { target: { value: JSON.stringify(['demo-ollama', 'qwen3:8b']) } })
     await waitFor(() => expect(screen.getByText(/已启用 qwen3:8b/)).toBeTruthy())
     const state = useAppStore.getState()
-    expect(state.modelAssignments.efficient).toBe(state.modelAssignments.general)
-    expect(state.modelProfiles.find((profile) => profile.id === state.modelAssignments.general)?.model).toBe('qwen3:8b')
+    expect(state.modelProfiles.find((profile) => profile.id === state.activeModelId)?.model).toBe('qwen3:8b')
   })
 
   it('keeps same-name models from different connections distinct and removes deleted assignments', async () => {
@@ -75,14 +74,14 @@ describe('model settings workflow', () => {
     const secondActiveModel = screen.getByLabelText('活动模型') as HTMLSelectElement
     await waitFor(() => expect(secondActiveModel.disabled).toBe(false))
     fireEvent.change(secondActiveModel, { target: { value: JSON.stringify([second.id, 'qwen3:8b']) } })
-    await waitFor(() => expect(useAppStore.getState().modelProfiles.find((profile) => profile.id === useAppStore.getState().modelAssignments.general)?.connectionId).toBe('second'))
+    await waitFor(() => expect(useAppStore.getState().modelProfiles.find((profile) => profile.id === useAppStore.getState().activeModelId)?.connectionId).toBe('second'))
     expect((await desktop.listModelProfiles()).some((profile) => profile.connectionId === initial[0].id)).toBe(true)
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     const deleteSecond = screen.getByTitle('删除连接“局域网”')
     await waitFor(() => expect((deleteSecond as HTMLButtonElement).disabled).toBe(false))
     fireEvent.click(deleteSecond)
     await screen.findByText('连接已删除')
-    const remainingProfile = useAppStore.getState().modelProfiles.find((profile) => profile.id === useAppStore.getState().modelAssignments.general)
+    const remainingProfile = useAppStore.getState().modelProfiles.find((profile) => profile.id === useAppStore.getState().activeModelId)
     expect(remainingProfile?.connectionId).not.toBe('second')
     expect((await desktop.listModelConnections()).map((connection) => connection.id)).not.toContain('second')
   })
