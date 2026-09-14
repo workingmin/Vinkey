@@ -19,7 +19,7 @@ describe('model settings workflow', () => {
     const [connection] = await desktop.listModelConnections()
     await desktop.saveModelProfile({ id: 'large', connectionId: connection.id, name: '14B', kind: 'ollama', baseUrl: connection.baseUrl, model: 'qwen3:14b', contextWindow: 4096 })
     render(<SettingsPage />)
-    await screen.findByText('标准配置')
+    expect((await screen.findAllByText('标准配置')).length).toBeGreaterThan(0)
     expect(await screen.findByRole('option', { name: 'qwen3:14b · Ollama · 浏览器演示' })).toBeTruthy()
     expect(screen.getByLabelText('活动模型')).toBeTruthy()
   })
@@ -27,7 +27,7 @@ describe('model settings workflow', () => {
   it('warns below minimum and opens a remote connection without saving it', async () => {
     vi.spyOn(desktop, 'getLocalHardware').mockResolvedValue({ platform: 'macos', architecture: 'aarch64', totalMemoryBytes: 8 * 1024 ** 3, gpuMemoryBytes: null, unifiedMemory: true })
     render(<SettingsPage />)
-    await screen.findByText('低于最低配置')
+    expect((await screen.findAllByText('低于最低配置')).length).toBeGreaterThan(0)
     fireEvent.click(screen.getByRole('button', { name: '添加远程连接' }))
     expect((screen.getByLabelText('接口类型') as HTMLSelectElement).value).toBe('openai-compatible')
     expect((screen.getByLabelText('Base URL') as HTMLInputElement).value).toBe('')
@@ -38,7 +38,7 @@ describe('model settings workflow', () => {
     vi.spyOn(desktop, 'getLocalHardware').mockRejectedValue(new Error('probe failed'))
     await desktop.saveModelConnection({ id: 'remote', name: '远程推理', kind: 'ollama', baseUrl: 'http://192.168.1.8:11434' })
     render(<SettingsPage />)
-    await screen.findByText('硬件未确认')
+    expect((await screen.findAllByText('硬件未确认')).length).toBeGreaterThan(0)
     expect(await screen.findByRole('button', { name: '重新探测' })).toBeTruthy()
   })
 
