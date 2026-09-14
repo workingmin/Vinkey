@@ -529,12 +529,16 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 1px
 .model-connections { padding-top: 24px; margin-top: 24px; border-top: 1px solid var(--border); }
 .connection-workspace { display: grid; grid-template-columns: 230px minmax(0, 1fr); }
 .connection-list { min-width: 0; padding-right: 18px; border-right: 1px solid var(--border); }
-.connection-list > button { width: 100%; display: flex; align-items: flex-start; gap: 8px; padding: 12px 10px; margin-bottom: 5px; border: 0; border-radius: 5px; color: var(--text-secondary); background: transparent; text-align: left; cursor: pointer; }
-.connection-list > button.active, .connection-list > button:hover { background: var(--bg-selected); color: var(--text); }
-.connection-list > button > svg { width: 15px; height: 15px; flex: 0 0 15px; margin-top: 1px; }
-.connection-list > button > span:nth-child(2) { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 5px; }
+.connection-list-item { width: 100%; display: flex; align-items: stretch; gap: 3px; margin-bottom: 5px; border-radius: 5px; color: var(--text-secondary); background: transparent; }
+.connection-list-item.active, .connection-list-item:hover { background: var(--bg-selected); color: var(--text); }
+.connection-select { min-width: 0; flex: 1; display: flex; align-items: flex-start; gap: 8px; padding: 12px 7px 12px 10px; border: 0; border-radius: 5px; color: inherit; background: transparent; text-align: left; cursor: pointer; }
+.connection-select > svg { width: 15px; height: 15px; flex: 0 0 15px; margin-top: 1px; }
+.connection-select > span:nth-child(2) { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 5px; }
 .connection-list b { font-size: 11px; font-weight: 550; overflow-wrap: anywhere; }
 .connection-list small { font-size: 10px; line-height: 1.5; overflow-wrap: anywhere; color: var(--text-muted); }
+.connection-list-delete { width: 28px; height: 28px; align-self: center; margin-right: 5px; color: var(--danger); opacity: 0; }
+.connection-list-item:hover .connection-list-delete, .connection-list-item:focus-within .connection-list-delete, .connection-list-item.active .connection-list-delete { opacity: 1; }
+.connection-list-delete svg { width: 14px; height: 14px; }
 .connection-dot { margin-top: 5px; width: 6px; height: 6px; border-radius: 50%; flex: 0 0 6px; background: var(--text-muted); }
 .connection-dot.online { background: #55b88a; }
 .connection-form { min-width: 0; padding-left: 24px; }
@@ -638,6 +642,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 1px
 .connection-catalog { margin-top: 18px; }
 .connection-catalog > header { align-items: flex-end; }
 .connection-catalog h3 { margin: 3px 0 0; font-size: 12px; }
+.catalog-toggle { flex: 0 0 auto; }
+.catalog-toggle svg { transition: transform .15s ease; }
+.catalog-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+.connection-catalog-body { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.connection-catalog-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .connection-catalog li { min-height: 42px; }
 .connection-catalog li > span:nth-child(2) { display: flex; flex-direction: column; gap: 2px; }
 .connection-catalog li > span:nth-child(2) strong { overflow-wrap: anywhere; font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
