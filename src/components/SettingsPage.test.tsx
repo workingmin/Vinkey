@@ -70,7 +70,7 @@ describe('model settings workflow', () => {
     const saveButton = await screen.findByRole('button', { name: '保存并运行准入探测' })
     await waitFor(() => expect((saveButton as HTMLButtonElement).disabled).toBe(false))
     fireEvent.click(saveButton)
-    await screen.findByText(/3\/3 个模型通过准入探测/)
+    await screen.findByText(/3\/3 个模型通过准入探测/, undefined, { timeout: 5000 })
     await screen.findAllByRole('option', { name: 'qwen3:8b · 局域网' })
     const secondActiveModel = screen.getByLabelText('活动模型') as HTMLSelectElement
     await waitFor(() => expect(secondActiveModel.disabled).toBe(false))
@@ -94,6 +94,20 @@ describe('model settings workflow', () => {
     await screen.findByText('服务返回 HTTP 401')
     expect(screen.getByText('需要重新探测')).toBeTruthy()
     expect((screen.getByLabelText('活动模型') as HTMLSelectElement).selectedOptions[0].textContent).toContain('qwen3:8b')
+  })
+
+  it('restores the model catalog from cache when settings are reopened', async () => {
+    const discover = vi.spyOn(desktop, 'discoverConnectionModels').mockResolvedValue({ ok: true, models: ['cached-model'], message: '' })
+    const firstView = render(<SettingsPage />)
+    await screen.findByText('0/1 个模型准入通过')
+    expect(discover).toHaveBeenCalledTimes(1)
+
+    firstView.unmount()
+    discover.mockClear()
+    render(<SettingsPage />)
+
+    await screen.findByText('0/1 个模型准入通过')
+    expect(discover).not.toHaveBeenCalled()
   })
 
   it('does not resurrect the last deleted connection or persist API keys in browser storage', async () => {

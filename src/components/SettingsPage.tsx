@@ -8,6 +8,36 @@ import { useAppStore } from '../store'
 import type { ModelAdmissionResult, ModelConnection, ModelConnectionInput, ModelConnectionResult, ModelProfile } from '../types'
 
 type AdmissionState = ModelAdmissionResult & { testedAt?: number }
+type PersistedProbe = {
+  kind: ModelConnection['kind']
+  baseUrl: string
+  catalog: ModelConnectionResult
+  admissions: Record<string, AdmissionState>
+}
+
+const PROBE_CACHE_KEY = 'vinkey.modelProbeCache'
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function isConnectionResult(value: unknown): value is ModelConnectionResult {
+  return isRecord(value)
+    && typeof value.ok === 'boolean'
+    && typeof value.message === 'string'
+    && Array.isArray(value.models)
+    && value.models.every((model) => typeof model === 'string')
+}
+
+function isAdmissionState(value: unknown): value is AdmissionState {
+  return isRecord(value)
+    && typeof value.ok === 'boolean'
+    && typeof value.message === 'string'
+    && typeof value.model === 'string'
+    && typeof value.structuredOutput === 'boolean'
+    && typeof value.contextWindow === 'number'
+    && (value.testedAt === undefined || typeof value.testedAt === 'number')
+}
 
 function emptyConnection(): ModelConnectionInput {
   return { id: crypto.randomUUID(), name: '本地 Ollama', kind: 'ollama', baseUrl: 'http://localhost:11434' }
@@ -15,6 +45,48 @@ function emptyConnection(): ModelConnectionInput {
 
 function admissionKey(connectionId: string, model: string): string {
   return `${connectionId}::${model}`
+}
+
+function readProbeCache(): Record<string, PersistedProbe> {
+  if (typeof localStorage === 'undefined') return {}
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(PROBE_CACHE_KEY) ?? '{}')
+    if (!isRecord(parsed)) return {}
+    return Object.fromEntries(Object.entries(parsed).flatMap(([id, value]) => {
+      if (!isRecord(value)
+        || (value.kind !== 'ollama' && value.kind !== 'openai-compatible')
+        || typeof value.baseUrl !== 'string'
+        || !isConnectionResult(value.catalog)
+        || !isRecord(value.admissions)) return []
+      const admissions = Object.fromEntries(Object.entries(value.admissions).filter((entry): entry is [string, AdmissionState] => isAdmissionState(entry[1])))
+      return [[id, { kind: value.kind, baseUrl: value.baseUrl, catalog: value.catalog, admissions }]]
+    }))
+  }
+  catch { return {} }
+}
+
+function writeProbeCache(cache: Record<string, PersistedProbe>): void {
+  if (typeof localStorage === 'undefined') return
+  try { localStorage.setItem(PROBE_CACHE_KEY, JSON.stringify(cache)) } catch { /* optional cache; in-memory state remains authoritative */ }
+}
+
+function persistProbe(connection: ModelConnectionInput | ModelConnection, patch: Partial<PersistedProbe>): void {
+  const cache = readProbeCache()
+  const previous = cache[connection.id]
+  cache[connection.id] = {
+    kind: connection.kind,
+    baseUrl: connection.baseUrl,
+    catalog: patch.catalog ?? previous?.catalog ?? { ok: false, message: '尚未获取模型', models: [] },
+    admissions: patch.admissions ?? previous?.admissions ?? {},
+  }
+  writeProbeCache(cache)
+}
+
+function removePersistedProbe(connectionId: string): void {
+  const cache = readProbeCache()
+  if (!(connectionId in cache)) return
+  delete cache[connectionId]
+  writeProbeCache(cache)
 }
 
 export function SettingsPage() {
@@ -65,6 +137,7 @@ export function SettingsPage() {
       setAdmissions((values) => Object.fromEntries(Object.entries(values).filter(([key]) => !key.startsWith(`${connection.id}::`))))
       setScanning((values) => values.filter((id) => id !== connection.id))
     }
+    persistProbe(connection, { catalog: result, admissions: {} })
     return result
   }
 
@@ -77,11 +150,16 @@ export function SettingsPage() {
         kind: connection.kind, baseUrl: connection.baseUrl, model,
         contextWindow: connection.kind === 'ollama' ? LOCAL_CONTEXT_WINDOW : 32768,
       })
-      if (alive.current) setAdmissions((values) => ({ ...values, [key]: { ...result, testedAt: Date.now() } }))
+      const admission = { ...result, testedAt: Date.now() }
+      if (alive.current) setAdmissions((values) => ({ ...values, [key]: admission }))
+      const cached = readProbeCache()[connection.id]
+      persistProbe(connection, { admissions: { ...(cached?.admissions ?? {}), [model]: admission } })
       return result
     } catch (error) {
       const result: AdmissionState = { ok: false, message: formatServiceError(error), model, structuredOutput: false, contextWindow: connection.kind === 'ollama' ? LOCAL_CONTEXT_WINDOW : 32768, testedAt: Date.now() }
       if (alive.current) setAdmissions((values) => ({ ...values, [key]: result }))
+      const cached = readProbeCache()[connection.id]
+      persistProbe(connection, { admissions: { ...(cached?.admissions ?? {}), [model]: result } })
       return result
     }
   }
@@ -107,7 +185,22 @@ export function SettingsPage() {
         setConnections(values)
         setModelProfiles(available)
         if (values[0]) { setSelectedId(values[0].id); setDraft(values[0]) }
-        await Promise.all(values.map(scan))
+        const cache = readProbeCache()
+        const restoredCatalogs: Record<string, ModelConnectionResult> = {}
+        const restoredAdmissions: Record<string, AdmissionState> = {}
+        const pendingScans: ModelConnection[] = []
+        for (const connection of values) {
+          const cached = cache[connection.id]
+          if (!cached || cached.kind !== connection.kind || cached.baseUrl !== connection.baseUrl) {
+            pendingScans.push(connection)
+            continue
+          }
+          restoredCatalogs[connection.id] = cached.catalog
+          for (const [model, admission] of Object.entries(cached.admissions ?? {})) restoredAdmissions[admissionKey(connection.id, model)] = admission
+        }
+        setCatalogs(restoredCatalogs)
+        setAdmissions(restoredAdmissions)
+        await Promise.all(pendingScans.map(scan))
         if (!cancelled) setLoading(false)
       } catch (error) {
         if (!cancelled) { setNotice({ error: true, text: String(error) }); setLoading(false) }
@@ -170,10 +263,11 @@ export function SettingsPage() {
   }
 
   const remove = async (target: ModelConnection | undefined = selected) => {
-    if (!target || locked || !window.confirm(`删除连接“${target.name}”？该连接的凭据及模型配置将删除。`)) return
+    if (!target || locked || scanning.includes(target.id) || admissionScanning.includes(target.id) || !window.confirm(`删除连接“${target.name}”？该连接的凭据及模型配置将删除。`)) return
     setBusy(true)
     try {
       await deleteModelConnection(target.id)
+      removePersistedProbe(target.id)
       const values = connections.filter((value) => value.id !== target.id)
       setConnections(values)
       setCatalogs((previous) => Object.fromEntries(Object.entries(previous).filter(([id]) => id !== target.id)))
@@ -270,9 +364,9 @@ export function SettingsPage() {
                   <button type="button" className="connection-select" disabled={locked} onClick={() => chooseConnection(connection)}>
                     <PlugZap />
                     <span><b>{connection.name}</b><small>{connection.baseUrl}</small><small>{scanning.includes(connection.id) ? '正在获取模型…' : admissionScanning.includes(connection.id) ? '正在进行准入探测…' : catalog?.ok ? `${passed}/${catalog.models.length} 个模型准入通过` : '连接不可用'}</small></span>
-                    <span className={`connection-dot ${catalog?.ok ? passed > 0 ? 'online' : 'warning' : ''}`} />
                   </button>
-                  <button type="button" className="icon-button connection-list-delete" title={`删除连接“${connection.name}”`} aria-label="删除连接" disabled={locked} onClick={() => void remove(connection)}><Trash2 /></button>
+                  <span className={`connection-dot ${catalog?.ok ? passed > 0 ? 'online' : 'warning' : ''}`} title={catalog?.ok ? passed > 0 ? '有模型通过准入探测' : '尚无模型通过准入探测' : '连接不可用'} aria-label={catalog?.ok ? passed > 0 ? '有模型通过准入探测' : '尚无模型通过准入探测' : '连接不可用'} />
+                  <button type="button" className="icon-button connection-list-delete" title={`删除连接“${connection.name}”`} aria-label="删除连接" disabled={locked || scanning.includes(connection.id) || admissionScanning.includes(connection.id)} onClick={() => void remove(connection)}><Trash2 /></button>
                 </div>
               })}
             </aside>
