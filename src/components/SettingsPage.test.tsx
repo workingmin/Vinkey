@@ -49,8 +49,8 @@ describe('model settings workflow', () => {
   it('discovers models and assigns one model to both internal runtime roles', async () => {
     render(<SettingsPage />)
     const saveButton = await screen.findByRole('button', { name: '保存并运行准入探测' })
-    await waitFor(() => expect((saveButton as HTMLButtonElement).disabled).toBe(false))
-    fireEvent.click(saveButton)
+    await waitFor(() => expect((screen.getByRole('button', { name: '保存并运行准入探测' }) as HTMLButtonElement).disabled).toBe(false))
+    fireEvent.click(screen.getByRole('button', { name: '保存并运行准入探测' }))
     await screen.findByRole('option', { name: 'qwen3:8b · Ollama · 浏览器演示' })
     const activeModel = screen.getByLabelText('活动模型') as HTMLSelectElement
     await waitFor(() => expect(activeModel.disabled).toBe(false))
