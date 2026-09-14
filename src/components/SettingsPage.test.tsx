@@ -81,6 +81,7 @@ describe('model settings workflow', () => {
   it('retains configured models after a discovery failure and asks for a new admission probe', async () => {
     vi.spyOn(desktop, 'discoverConnectionModels').mockResolvedValue({ ok: false, models: [], message: '服务返回 HTTP 401' })
     render(<SettingsPage />)
+    fireEvent.click(await screen.findByRole('button', { name: '查看模型列表' }))
     await screen.findByText('服务返回 HTTP 401')
     expect(screen.getByText('需要重新探测')).toBeTruthy()
     expect((screen.getByLabelText('活动模型') as HTMLSelectElement).selectedOptions[0].textContent).toContain('qwen3:8b')
