@@ -37,6 +37,7 @@ export function SettingsPage() {
   const alive = useRef(true)
   const selected = connections.find((connection) => connection.id === selectedId)
   const locked = busy || loading || pendingChatRequests > 0 || Object.keys(chatRuns).length > 0
+  const formLocked = locked || Boolean(selectedId && scanning.includes(selectedId))
   const tier = hardwareTier(hardware)
   const activeProfile = profiles.find((profile) => profile.id === activeModelId)
     ?? profiles.find((profile) => profile.id === modelAssignments.general)
@@ -106,8 +107,8 @@ export function SettingsPage() {
         setConnections(values)
         setModelProfiles(available)
         if (values[0]) { setSelectedId(values[0].id); setDraft(values[0]) }
-        setLoading(false)
         await Promise.all(values.map(scan))
+        if (!cancelled) setLoading(false)
       } catch (error) {
         if (!cancelled) { setNotice({ error: true, text: String(error) }); setLoading(false) }
       }
@@ -276,12 +277,12 @@ export function SettingsPage() {
               })}
             </aside>
             <form className="connection-form" onSubmit={(event) => { event.preventDefault(); void save() }}>
-              <fieldset disabled={locked || Boolean(selectedId && scanning.includes(selectedId))}>
+              <fieldset disabled={formLocked}>
                 <div className="connection-form-heading"><div><span className="section-kicker">CONNECTION</span><h3>{selected ? '连接详情' : '新增连接'}</h3></div>{dirty && <small>未保存</small>}</div>
                 <div className="field-grid"><div className="field-group"><label htmlFor="connection-name">连接名称</label><input id="connection-name" required value={draft.name} onChange={(event) => edit({ name: event.target.value })} /></div><div className="field-group"><label htmlFor="connection-kind">接口类型</label><select id="connection-kind" value={draft.kind} onChange={(event) => { const kind = event.target.value as ModelConnectionInput['kind']; edit({ kind, baseUrl: kind === 'ollama' ? 'http://localhost:11434' : 'https://api.openai.com/v1' }) }}><option value="ollama">Ollama</option><option value="openai-compatible">OpenAI 兼容</option></select></div></div>
                 <div className="field-group"><label htmlFor="base-url">Base URL</label><input id="base-url" type="url" required spellCheck={false} value={draft.baseUrl} onChange={(event) => edit({ baseUrl: event.target.value })} /></div>
                 <div className="field-group"><label htmlFor="api-key">API Key</label><input id="api-key" type="password" autoComplete="off" placeholder={selected?.hasApiKey ? '已保存；留空保持不变' : '可选'} value={draft.apiKey ?? ''} onChange={(event) => edit({ apiKey: event.target.value, clearApiKey: false })} />{selected?.hasApiKey && <label className="checkbox-label"><input type="checkbox" checked={Boolean(draft.clearApiKey)} onChange={(event) => edit({ clearApiKey: event.target.checked, apiKey: '' })} />删除已保存的密钥</label>}</div>
-                <div className="settings-actions"><span /><button type="submit" className="primary-button"><Save />{busy ? '保存中...' : '保存并运行准入探测'}</button></div>
+                <div className="settings-actions"><span /><button type="submit" className="primary-button" disabled={formLocked}><Save />{busy ? '保存中...' : '保存并运行准入探测'}</button></div>
               </fieldset>
               {selected && <div className="connection-catalog">
                 <header><div><span className="section-kicker">MODEL CATALOG</span><h3>模型准入 <span>{selectedCatalog?.ok ? selectedCatalog.models.length : 0}</span></h3></div>
