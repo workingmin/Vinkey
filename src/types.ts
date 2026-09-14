@@ -333,6 +333,14 @@ export interface ModelConnectionResult {
   models: string[]
 }
 
+export interface ModelAdmissionResult {
+  ok: boolean
+  message: string
+  model: string
+  structuredOutput: boolean
+  contextWindow: number
+}
+
 export interface OllamaStopResult {
   stopped: boolean
   message: string
