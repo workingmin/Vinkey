@@ -282,17 +282,17 @@ export function SettingsPage() {
                 <div className="field-grid"><div className="field-group"><label htmlFor="connection-name">连接名称</label><input id="connection-name" required value={draft.name} onChange={(event) => edit({ name: event.target.value })} /></div><div className="field-group"><label htmlFor="connection-kind">接口类型</label><select id="connection-kind" value={draft.kind} onChange={(event) => { const kind = event.target.value as ModelConnectionInput['kind']; edit({ kind, baseUrl: kind === 'ollama' ? 'http://localhost:11434' : 'https://api.openai.com/v1' }) }}><option value="ollama">Ollama</option><option value="openai-compatible">OpenAI 兼容</option></select></div></div>
                 <div className="field-group"><label htmlFor="base-url">Base URL</label><input id="base-url" type="url" required spellCheck={false} value={draft.baseUrl} onChange={(event) => edit({ baseUrl: event.target.value })} /></div>
                 <div className="field-group"><label htmlFor="api-key">API Key</label><input id="api-key" type="password" autoComplete="off" placeholder={selected?.hasApiKey ? '已保存；留空保持不变' : '可选'} value={draft.apiKey ?? ''} onChange={(event) => edit({ apiKey: event.target.value, clearApiKey: false })} />{selected?.hasApiKey && <label className="checkbox-label"><input type="checkbox" checked={Boolean(draft.clearApiKey)} onChange={(event) => edit({ clearApiKey: event.target.checked, apiKey: '' })} />删除已保存的密钥</label>}</div>
-                <div className="settings-actions"><span /><button type="submit" className="primary-button" disabled={formLocked}><Save />{busy ? '保存中...' : '保存并运行准入探测'}</button></div>
               </fieldset>
-              {selected && <div className="connection-catalog">
-                <header><div><span className="section-kicker">MODEL CATALOG</span><h3>模型准入 <span>{selectedCatalog?.ok ? selectedCatalog.models.length : 0}</span></h3></div>
+              {selected ? <div className="connection-catalog">
+                <header><div className="connection-catalog-title"><span className="section-kicker">MODEL CATALOG</span><h3>模型准入 <span>{selectedCatalog?.ok ? selectedCatalog.models.length : 0}</span></h3></div>
                   <button type="button" className="secondary-button catalog-toggle" aria-expanded={catalogExpandedId === selected.id} onClick={() => setCatalogExpandedId((value) => value === selected.id ? null : selected.id)}><ChevronDown />{catalogExpandedId === selected.id ? '收起模型列表' : '查看模型列表'}</button>
+                  <button type="submit" className="primary-button catalog-save" disabled={formLocked}><Save />{busy ? '保存中...' : '保存并运行准入探测'}</button>
                 </header>
                 {catalogExpandedId === selected.id && <div className="connection-catalog-body">
                   <div className="connection-catalog-actions"><button type="button" className="icon-button" title="刷新模型列表" aria-label="刷新模型列表" disabled={locked || dirty || scanning.includes(selected.id)} onClick={() => void scan(selected)}><RefreshCw className={scanning.includes(selected.id) ? 'spinning' : ''} /></button><button type="button" className="secondary-button" disabled={locked || dirty || !selectedCatalog?.ok || !selectedCatalog.models.length || admissionScanning.includes(selected.id)} onClick={() => void probeConnection(selected, selectedCatalog!.models)}><ShieldCheck />重新探测</button></div>
                   {scanning.includes(selected.id) ? <p role="status">正在获取模型列表…</p> : !selectedCatalog?.ok ? <p className="assignment-warning" role="status">{selectedCatalog?.message ?? '尚未获取模型'}</p> : selectedCatalog.models.length === 0 ? <p>服务未返回模型</p> : <ul>{selectedAdmissions.map(({ model, state }) => <li key={model}><Bot /><span><strong>{model}</strong><small>{state?.message ?? '尚未探测结构化输出能力'}</small></span><span className={`admission-status ${state?.ok ? 'passed' : state ? 'failed' : 'idle'}`}>{state?.ok ? <><BadgeCheck />通过</> : state ? <><CircleAlert />未通过</> : '待探测'}</span></li>)}</ul>}
                 </div>}
-              </div>}
+              </div> : <div className="settings-actions"><span /><button type="submit" className="primary-button" disabled={formLocked}><Save />{busy ? '保存中...' : '保存并运行准入探测'}</button></div>}
             </form>
           </div>
         </section>

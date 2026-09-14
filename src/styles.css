@@ -578,8 +578,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 1px
   .connection-form .field-grid { grid-template-columns: minmax(0, 1fr); gap: 0; }
   .model-runtime-preference { flex-wrap: wrap; }
   .model-runtime-preference > label:first-child { flex-basis: 70%; }
-  .connection-catalog > header { flex-wrap: wrap; }
-  .connection-catalog h3 { flex-basis: 50%; }
+  .connection-catalog > header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+  .connection-catalog-title { grid-column: 1 / -1; }
+  .catalog-toggle { grid-column: 1; justify-self: start; }
+  .catalog-save { grid-column: 2; justify-self: end; }
 }
 @media (max-width: 700px) {
   .app-frame:has(.settings-page), .app-shell:has(.settings-page) { min-width: 0; }
@@ -640,9 +642,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 1px
 .connection-list { padding-right: 16px; }
 .connection-form { padding-left: 20px; }
 .connection-catalog { margin-top: 18px; }
-.connection-catalog > header { align-items: flex-end; }
+.connection-catalog > header { align-items: center; gap: 10px; }
+.connection-catalog-title { min-width: 0; flex: 1 1 auto; }
 .connection-catalog h3 { margin: 3px 0 0; font-size: 12px; }
-.catalog-toggle { flex: 0 0 auto; }
+.connection-catalog-title h3 { overflow-wrap: anywhere; }
+.catalog-toggle, .catalog-save { flex: 0 0 auto; white-space: nowrap; }
+.catalog-toggle { padding-inline: 9px; }
+.catalog-save { padding-inline: 10px; }
 .catalog-toggle svg { transition: transform .15s ease; }
 .catalog-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
 .connection-catalog-body { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
