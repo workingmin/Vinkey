@@ -365,8 +365,10 @@ export function SettingsPage() {
                     <PlugZap />
                     <span><b>{connection.name}</b><small>{connection.baseUrl}</small><small>{scanning.includes(connection.id) ? '正在获取模型…' : admissionScanning.includes(connection.id) ? '正在进行准入探测…' : catalog?.ok ? `${passed}/${catalog.models.length} 个模型准入通过` : '连接不可用'}</small></span>
                   </button>
-                  <span className={`connection-dot ${catalog?.ok ? passed > 0 ? 'online' : 'warning' : ''}`} title={catalog?.ok ? passed > 0 ? '有模型通过准入探测' : '尚无模型通过准入探测' : '连接不可用'} aria-label={catalog?.ok ? passed > 0 ? '有模型通过准入探测' : '尚无模型通过准入探测' : '连接不可用'} />
-                  <button type="button" className="icon-button connection-list-delete" title={`删除连接“${connection.name}”`} aria-label="删除连接" disabled={locked || scanning.includes(connection.id) || admissionScanning.includes(connection.id)} onClick={() => void remove(connection)}><Trash2 /></button>
+                  <div className="connection-item-actions">
+                    <span className={`connection-dot ${catalog?.ok ? passed > 0 ? 'online' : 'warning' : ''}`} title={catalog?.ok ? passed > 0 ? '有模型通过准入探测' : '尚无模型通过准入探测' : '连接不可用'} aria-label={catalog?.ok ? passed > 0 ? '有模型通过准入探测' : '尚无模型通过准入探测' : '连接不可用'} />
+                    <button type="button" className="icon-button connection-list-delete" title={`删除连接“${connection.name}”`} aria-label="删除连接" disabled={locked || scanning.includes(connection.id) || admissionScanning.includes(connection.id)} onClick={() => void remove(connection)}><Trash2 /></button>
+                  </div>
                 </div>
               })}
             </aside>
