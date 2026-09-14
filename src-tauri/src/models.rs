@@ -767,8 +767,39 @@ pub async fn probe_model_admission(
     if input.model.trim().is_empty() {
         return Err("模型名称不能为空".into());
     }
-    let started = Instant::now();
     let base_url = normalize_base(&input.kind, &input.base_url)?;
+    let should_cleanup = input.kind == "ollama" && is_loopback_base(&base_url);
+    let result = probe_model_admission_request(&input, &runtime, &base_url).await;
+    if !should_cleanup {
+        return result;
+    }
+
+    let cleanup = cleanup_local_ollama_probe(&base_url, &input.model, &input).await;
+    if let Err(message) = cleanup {
+        runtime.error("model.admission_probe_cleanup_failed", &message);
+        return result.map(|mut value| {
+            value.ok = false;
+            value.structured_output = false;
+            value.message = format!("{}；清理驻留模型失败：{}", value.message, message);
+            value
+        });
+    }
+    runtime.info(
+        "model.admission_probe_cleanup_completed",
+        json!({"model": input.model, "provider": input.kind})
+            .as_object()
+            .cloned()
+            .unwrap_or_default(),
+    );
+    result
+}
+
+async fn probe_model_admission_request(
+    input: &ModelProfileInput,
+    runtime: &RuntimeLogState,
+    base_url: &str,
+) -> Result<ModelAdmissionResult, String> {
+    let started = Instant::now();
     let api_key = input
         .api_key
         .clone()
@@ -830,7 +861,7 @@ pub async fn probe_model_admission(
             return Ok(ModelAdmissionResult {
                 ok: false,
                 message,
-                model: input.model,
+                model: input.model.clone(),
                 structured_output: false,
                 context_window: input.context_window,
             });
@@ -843,7 +874,7 @@ pub async fn probe_model_admission(
             return Ok(ModelAdmissionResult {
                 ok: false,
                 message,
-                model: input.model,
+                model: input.model.clone(),
                 structured_output: false,
                 context_window: input.context_window,
             });
@@ -874,7 +905,7 @@ pub async fn probe_model_admission(
         } else {
             "模型返回内容未通过严格 JSON Schema 校验".into()
         },
-        model: input.model,
+        model: input.model.clone(),
         structured_output: parsed.is_some(),
         context_window: input.context_window,
     };
@@ -890,6 +921,29 @@ pub async fn probe_model_admission(
         runtime.error("model.admission_probe_failed", &result.message);
     }
     Ok(result)
+}
+
+async fn cleanup_local_ollama_probe(
+    base_url: &str,
+    model: &str,
+    input: &ModelProfileInput,
+) -> Result<(), String> {
+    let api_key = input
+        .api_key
+        .clone()
+        .filter(|value| !value.trim().is_empty())
+        .or_else(|| get_secret(input.connection_id.as_deref().unwrap_or(&input.id)).ok());
+    let mut request = admission_client()?
+        .post(format!("{base_url}/api/generate"))
+        .json(&json!({"model": model, "keep_alive": 0}));
+    if let Some(key) = api_key.as_deref().filter(|value| !value.is_empty()) {
+        request = request.bearer_auth(key);
+    }
+    let response = request
+        .send()
+        .await
+        .map_err(|error| format!("清理本机 Ollama 驻留模型失败：{error}"))?;
+    response_or_error(response).await.map(|_| ())
 }
 
 async fn unload_local_ollama(profile: &ModelProfile) -> Result<OllamaStopResult, String> {
