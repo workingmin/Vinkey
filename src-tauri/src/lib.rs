@@ -1353,6 +1353,7 @@ pub fn run() {
             models::save_model_profile,
             models::delete_model_profile,
             models::test_model_connection,
+            models::probe_model_admission,
             models::probe_model_context,
             models::stop_ollama_model,
             models::stream_chat,

@@ -18,6 +18,7 @@ use tauri::{ipc::Channel, State};
 
 const KEYRING_SERVICE: &str = "com.vinkey.desktop";
 const CHAT_TIMEOUT_SECS: u64 = 300;
+const ADMISSION_TIMEOUT_SECS: u64 = 30;
 const MAX_WORKER_CHAT_BYTES: usize = 16 * 1024 * 1024;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -178,6 +179,16 @@ pub struct ConnectionResult {
     ok: bool,
     message: String,
     models: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelAdmissionResult {
+    ok: bool,
+    message: String,
+    model: String,
+    structured_output: bool,
+    context_window: u32,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -537,6 +548,14 @@ fn chat_client() -> Result<reqwest::Client, String> {
         .map_err(|error| format!("无法创建模型连接：{error}"))
 }
 
+fn admission_client() -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(5))
+        .timeout(Duration::from_secs(ADMISSION_TIMEOUT_SECS))
+        .build()
+        .map_err(|error| format!("无法创建模型准入探测连接：{error}"))
+}
+
 async fn discover(profile: &ModelProfile, api_key: Option<&str>) -> Result<Vec<String>, String> {
     let url = if profile.kind == "ollama" {
         format!("{}/api/tags", profile.base_url)
@@ -737,6 +756,140 @@ pub async fn test_model_connection(
             })
         }
     }
+}
+
+#[tauri::command]
+pub async fn probe_model_admission(
+    input: ModelProfileInput,
+    runtime: State<'_, RuntimeLogState>,
+) -> Result<ModelAdmissionResult, String> {
+    validate_id(&input.id)?;
+    if input.model.trim().is_empty() {
+        return Err("模型名称不能为空".into());
+    }
+    let started = Instant::now();
+    let base_url = normalize_base(&input.kind, &input.base_url)?;
+    let api_key = input
+        .api_key
+        .clone()
+        .filter(|value| !value.trim().is_empty())
+        .or_else(|| get_secret(input.connection_id.as_deref().unwrap_or(&input.id)).ok());
+    let schema = json!({
+        "type": "object",
+        "properties": {
+            "status": { "type": "string", "enum": ["ready"] },
+            "structured": { "type": "boolean", "const": true }
+        },
+        "required": ["status", "structured"],
+        "additionalProperties": false
+    });
+    let request_body = if input.kind == "ollama" {
+        json!({
+            "model": input.model,
+            "messages": [{"role": "user", "content": "Return the admission probe result."}],
+            "stream": false,
+            "think": false,
+            "format": schema,
+            "options": {"num_ctx": input.context_window}
+        })
+    } else {
+        json!({
+            "model": input.model,
+            "messages": [{"role": "user", "content": "Return the admission probe result."}],
+            "stream": false,
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {"name": "model_admission", "strict": true, "schema": schema}
+            }
+        })
+    };
+    runtime.info(
+        "model.admission_probe_started",
+        json!({"profileId": input.id, "provider": input.kind, "model": input.model, "contextWindow": input.context_window})
+            .as_object()
+            .cloned()
+            .unwrap_or_default(),
+    );
+    let mut request = admission_client()?.post(if input.kind == "ollama" {
+        format!("{base_url}/api/chat")
+    } else {
+        format!("{base_url}/chat/completions")
+    });
+    if let Some(key) = api_key.filter(|value| !value.is_empty()) {
+        request = request.bearer_auth(key);
+    }
+    let response = match request.json(&request_body).send().await {
+        Ok(response) => response,
+        Err(error) => {
+            let message = if error.is_timeout() {
+                format!("模型准入探测超时：{} 秒", ADMISSION_TIMEOUT_SECS)
+            } else {
+                format!("模型准入探测失败：{error}")
+            };
+            runtime.error("model.admission_probe_failed", &message);
+            return Ok(ModelAdmissionResult {
+                ok: false,
+                message,
+                model: input.model,
+                structured_output: false,
+                context_window: input.context_window,
+            });
+        }
+    };
+    let response = match response_or_error(response).await {
+        Ok(response) => response,
+        Err(message) => {
+            runtime.error("model.admission_probe_failed", &message);
+            return Ok(ModelAdmissionResult {
+                ok: false,
+                message,
+                model: input.model,
+                structured_output: false,
+                context_window: input.context_window,
+            });
+        }
+    };
+    let payload = response
+        .json::<Value>()
+        .await
+        .map_err(|_| "模型准入探测响应格式无效".to_string())?;
+    let content = if input.kind == "ollama" {
+        payload.pointer("/message/content").and_then(Value::as_str)
+    } else {
+        payload
+            .pointer("/choices/0/message/content")
+            .and_then(Value::as_str)
+    };
+    let parsed = content
+        .and_then(|value| serde_json::from_str::<Value>(value.trim()).ok())
+        .filter(|value| value.get("status").and_then(Value::as_str) == Some("ready"))
+        .filter(|value| value.get("structured").and_then(Value::as_bool) == Some(true));
+    let result = ModelAdmissionResult {
+        ok: parsed.is_some(),
+        message: if parsed.is_some() {
+            format!(
+                "准入探测通过，支持严格 JSON Schema 输出（{} ms）",
+                started.elapsed().as_millis()
+            )
+        } else {
+            "模型返回内容未通过严格 JSON Schema 校验".into()
+        },
+        model: input.model,
+        structured_output: parsed.is_some(),
+        context_window: input.context_window,
+    };
+    if result.ok {
+        runtime.info(
+            "model.admission_probe_completed",
+            json!({"model": result.model, "durationMs": started.elapsed().as_millis()})
+                .as_object()
+                .cloned()
+                .unwrap_or_default(),
+        );
+    } else {
+        runtime.error("model.admission_probe_failed", &result.message);
+    }
+    Ok(result)
 }
 
 async fn unload_local_ollama(profile: &ModelProfile) -> Result<OllamaStopResult, String> {

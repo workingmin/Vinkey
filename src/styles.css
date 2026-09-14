@@ -586,6 +586,71 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 1px
   .app-shell:has(.settings-page) { grid-template-columns: 52px minmax(0, 1fr); }
   .model-settings-scroll { padding: 18px 14px 24px; }
 }
+.settings-eyebrow, .section-kicker { display: block; color: var(--text-muted); font: 9px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .08em; }
+.settings-toolbar h1 { margin-top: 3px; }
+.settings-layout { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 20px; align-items: start; }
+.settings-main, .settings-sidebar { min-width: 0; }
+.settings-main { display: flex; flex-direction: column; gap: 20px; }
+.settings-sidebar { display: flex; flex-direction: column; gap: 12px; position: sticky; top: 0; }
+.active-model-panel, .settings-side-panel { border: 1px solid var(--border); border-radius: 7px; background: var(--bg-panel); padding: 18px; }
+.active-model-panel { background: color-mix(in srgb, var(--accent) 7%, var(--bg-panel)); }
+.active-model-panel .settings-section-heading, .settings-side-panel .settings-section-heading { margin-bottom: 8px; }
+.active-model-panel h2, .settings-side-panel h2 { margin: 3px 0 0; font-size: 14px; }
+.section-description { max-width: 680px; margin: 0 0 16px; color: var(--text-secondary); font-size: 11px; line-height: 1.6; }
+.active-model-row { display: flex; align-items: center; gap: 12px; }
+.active-model-icon { width: 38px; height: 38px; display: grid; place-items: center; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border)); border-radius: 8px; background: color-mix(in srgb, var(--accent) 14%, var(--bg-raised)); color: var(--accent); flex: 0 0 auto; }
+.active-model-icon svg { width: 19px; height: 19px; }
+.active-model-row .assignment-select { min-width: 0; flex: 1; }
+.active-model-row .assignment-select select { height: 42px; background: var(--bg-raised); font-size: 12px; }
+.admission-badge { display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; color: var(--text-muted); font-size: 10px; white-space: nowrap; }
+.admission-badge svg { width: 15px; height: 15px; }
+.admission-badge.passed { color: #63c595; }
+.admission-badge.pending { color: var(--warning); }
+.active-model-meta { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 14px; color: var(--text-muted); font-size: 10px; }
+.active-model-meta span { display: inline-flex; align-items: center; gap: 5px; }
+.active-model-meta svg { width: 12px; height: 12px; }
+.settings-side-panel { background: var(--bg-raised); }
+.hardware-tier-large { display: flex; align-items: center; gap: 10px; padding: 10px 0 4px; }
+.hardware-tier-large > svg { width: 20px; height: 20px; color: var(--accent); }
+.hardware-tier-large > div { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.hardware-tier-large strong { font-size: 12px; }
+.hardware-tier-large span { color: var(--text-muted); font-size: 10px; overflow-wrap: anywhere; }
+.settings-side-panel .hardware-advice { padding: 12px 0 0; font-size: 10px; }
+.settings-side-panel .hardware-advice > svg { width: 14px; height: 14px; }
+.settings-side-panel .hardware-advice > span { flex-basis: 120px; }
+.runtime-panel .settings-section-heading { margin-bottom: 2px; }
+.runtime-policy-row { display: flex; align-items: center; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.runtime-policy-row > div { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.runtime-policy-row strong { font-size: 11px; font-weight: 600; }
+.runtime-policy-row span:not(.policy-check) { color: var(--text-muted); font-size: 9px; line-height: 1.4; }
+.policy-check { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; color: #63c595; background: color-mix(in srgb, #63c595 14%, transparent); }
+.policy-check svg { width: 12px; height: 12px; }
+.runtime-stop { width: 100%; justify-content: center; margin-top: 12px; }
+.admission-policy { display: flex; align-items: flex-start; gap: 9px; color: var(--text-secondary); }
+.admission-policy > svg { width: 17px; height: 17px; flex: 0 0 auto; color: var(--accent); }
+.admission-policy strong { font-size: 11px; }
+.admission-policy p { margin: 5px 0 0; color: var(--text-muted); font-size: 10px; line-height: 1.55; }
+.model-connections { margin-top: 0; padding-top: 0; border-top: 0; }
+.model-connections > .settings-section-heading { margin-bottom: 10px; }
+.connection-workspace { border: 1px solid var(--border); border-radius: 7px; background: var(--bg-panel); padding: 16px; }
+.connection-list { padding-right: 16px; }
+.connection-form { padding-left: 20px; }
+.connection-catalog { margin-top: 18px; }
+.connection-catalog > header { align-items: flex-end; }
+.connection-catalog h3 { margin: 3px 0 0; font-size: 12px; }
+.connection-catalog li { min-height: 42px; }
+.connection-catalog li > span:nth-child(2) { display: flex; flex-direction: column; gap: 2px; }
+.connection-catalog li > span:nth-child(2) strong { overflow-wrap: anywhere; font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.connection-catalog li > span:nth-child(2) small { color: var(--text-muted); font-size: 9px; line-height: 1.4; overflow-wrap: anywhere; }
+.admission-status { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; font-size: 9px; white-space: nowrap; }
+.admission-status svg { width: 13px; height: 13px; }
+.admission-status.passed { color: #63c595; }
+.admission-status.failed { color: var(--warning); }
+.admission-status.idle { color: var(--text-muted); }
+.connection-dot.warning { background: var(--warning); }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+@container (max-width: 900px) { .settings-layout { grid-template-columns: minmax(0, 1fr); } .settings-sidebar { position: static; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); } .admission-policy { grid-column: 1 / -1; } }
+@media (max-width: 700px) { .settings-sidebar { display: flex; } .active-model-row { align-items: stretch; flex-wrap: wrap; } .active-model-row .assignment-select { flex-basis: calc(100% - 50px); } .admission-badge { margin-left: 50px; } }
 .toggle-switch { position: relative; width: 30px; height: 18px; flex: 0 0 30px; cursor: pointer; }
 .toggle-switch input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .toggle-switch > span { position: absolute; inset: 0; border: 1px solid var(--border-strong); border-radius: 9px; background: var(--bg-raised); transition: background .15s, border-color .15s; }
