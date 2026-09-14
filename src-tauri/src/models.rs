@@ -536,7 +536,7 @@ fn admission_client() -> Result<reqwest::Client, String> {
         .connect_timeout(Duration::from_secs(5))
         .timeout(Duration::from_secs(ADMISSION_TIMEOUT_SECS))
         .build()
-        .map_err(|error| format!("无法创建模型准入探测连接：{error}"))
+        .map_err(|error| format!("无法创建格式能力探测连接：{error}"))
 }
 
 async fn discover(profile: &ModelProfile, api_key: Option<&str>) -> Result<Vec<String>, String> {
@@ -836,9 +836,9 @@ async fn probe_model_admission_request(
         Ok(response) => response,
         Err(error) => {
             let message = if error.is_timeout() {
-                format!("模型准入探测超时：{} 秒", ADMISSION_TIMEOUT_SECS)
+                format!("格式能力探测超时：{} 秒", ADMISSION_TIMEOUT_SECS)
             } else {
-                format!("模型准入探测失败：{error}")
+                format!("格式能力探测失败：{error}")
             };
             runtime.error("model.admission_probe_failed", &message);
             return Ok(ModelAdmissionResult {
@@ -866,7 +866,7 @@ async fn probe_model_admission_request(
     let payload = response
         .json::<Value>()
         .await
-        .map_err(|_| "模型准入探测响应格式无效".to_string())?;
+        .map_err(|_| "格式能力探测响应无效".to_string())?;
     let content = if input.kind == "ollama" {
         payload.pointer("/message/content").and_then(Value::as_str)
     } else {
@@ -882,11 +882,11 @@ async fn probe_model_admission_request(
         ok: parsed.is_some(),
         message: if parsed.is_some() {
             format!(
-                "准入探测通过，支持严格 JSON Schema 输出（{} ms）",
+                "格式准入通过：返回内容符合 JSON Schema（{} ms）",
                 started.elapsed().as_millis()
             )
         } else {
-            "模型返回内容未通过严格 JSON Schema 校验".into()
+            "格式准入未通过：返回内容不符合 JSON Schema".into()
         },
         model: input.model.clone(),
         structured_output: parsed.is_some(),

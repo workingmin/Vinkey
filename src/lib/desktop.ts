@@ -775,7 +775,7 @@ export async function testModelConnection(input: ModelProfileInput): Promise<Mod
 export async function probeModelAdmission(input: ModelProfileInput): Promise<ModelAdmissionResult> {
   if (!isDesktop()) {
     await new Promise((resolve) => window.setTimeout(resolve, 180))
-    return { ok: true, message: '演示探测通过：支持严格 JSON 输出', model: input.model, structuredOutput: true, contextWindow: input.contextWindow }
+    return { ok: true, message: '演示格式准入通过：返回内容符合 JSON Schema', model: input.model, structuredOutput: true, contextWindow: input.contextWindow }
   }
   return invoke<ModelAdmissionResult>('probe_model_admission', { input })
 }

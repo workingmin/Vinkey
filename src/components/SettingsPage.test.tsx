@@ -20,9 +20,9 @@ describe('model settings workflow', () => {
     await desktop.saveModelProfile({ id: 'large', connectionId: connection.id, name: '14B', kind: 'ollama', baseUrl: connection.baseUrl, model: 'qwen3:14b', contextWindow: 4096 })
     render(<SettingsPage />)
     expect((await screen.findAllByText('标准配置')).length).toBeGreaterThan(0)
-    fireEvent.click(await screen.findByRole('button', { name: '查看模型列表' }))
+    fireEvent.click(await screen.findByRole('button', { name: '查看探测结果' }))
     expect(await screen.findByText('qwen3:14b')).toBeTruthy()
-    expect(screen.getByLabelText('活动模型')).toBeTruthy()
+    expect(screen.getByLabelText('当前功能模型')).toBeTruthy()
   })
 
   it('warns below minimum and opens a remote connection without saving it', async () => {
@@ -32,7 +32,7 @@ describe('model settings workflow', () => {
     const remoteButton = screen.getByRole('button', { name: '添加远程连接' })
     await waitFor(() => expect((remoteButton as HTMLButtonElement).disabled).toBe(false))
     fireEvent.click(remoteButton)
-    await waitFor(() => expect((screen.getByLabelText('接口类型') as HTMLSelectElement).value).toBe('openai-compatible'))
+    await waitFor(() => expect((screen.getByLabelText('接口协议') as HTMLSelectElement).value).toBe('openai-compatible'))
     expect((screen.getByLabelText('Base URL') as HTMLInputElement).value).toBe('')
     expect(await desktop.listModelConnections()).toHaveLength(1)
   })
@@ -42,17 +42,17 @@ describe('model settings workflow', () => {
     await desktop.saveModelConnection({ id: 'remote', name: '远程推理', kind: 'ollama', baseUrl: 'http://192.168.1.8:11434' })
     render(<SettingsPage />)
     expect((await screen.findAllByText('硬件未确认')).length).toBeGreaterThan(0)
-    fireEvent.click(await screen.findByRole('button', { name: '查看模型列表' }))
-    expect(await screen.findByRole('button', { name: '重新探测' })).toBeTruthy()
+    fireEvent.click(await screen.findByRole('button', { name: '查看探测结果' }))
+    expect(await screen.findByRole('button', { name: '重新探测全部模型' })).toBeTruthy()
   })
 
   it('discovers models and selects one active model', async () => {
     render(<SettingsPage />)
-    const saveButton = await screen.findByRole('button', { name: '保存并运行准入探测' })
-    await waitFor(() => expect((screen.getByRole('button', { name: '保存并运行准入探测' }) as HTMLButtonElement).disabled).toBe(false))
-    fireEvent.click(screen.getByRole('button', { name: '保存并运行准入探测' }))
+    const saveButton = await screen.findByRole('button', { name: '保存并探测全部模型' })
+    await waitFor(() => expect((screen.getByRole('button', { name: '保存并探测全部模型' }) as HTMLButtonElement).disabled).toBe(false))
+    fireEvent.click(screen.getByRole('button', { name: '保存并探测全部模型' }))
     await screen.findByRole('option', { name: 'qwen3:8b · Ollama · 浏览器演示' })
-    const activeModel = screen.getByLabelText('活动模型') as HTMLSelectElement
+    const activeModel = screen.getByLabelText('当前功能模型') as HTMLSelectElement
     await waitFor(() => expect(activeModel.disabled).toBe(false))
     fireEvent.change(activeModel, { target: { value: JSON.stringify(['demo-ollama', 'qwen3:8b']) } })
     await waitFor(() => expect(screen.getByText(/已启用 qwen3:8b/)).toBeTruthy())
@@ -60,18 +60,18 @@ describe('model settings workflow', () => {
     expect(state.modelProfiles.find((profile) => profile.id === state.activeModelId)?.model).toBe('qwen3:8b')
   })
 
-  it('keeps same-name models from different connections distinct and removes deleted assignments', async () => {
+  it('keeps same-name models from different connections distinct and reconciles a deleted active model', async () => {
     const initial = await desktop.listModelConnections()
     const second = await desktop.saveModelConnection({ id: 'second', name: '局域网', kind: 'ollama', baseUrl: 'http://192.168.1.8:11434' })
     render(<SettingsPage />)
     fireEvent.click(await screen.findByRole('button', { name: /局域网.*192\.168/ }))
     await waitFor(() => expect((screen.getByLabelText('Base URL') as HTMLInputElement).value).toBe('http://192.168.1.8:11434'))
-    const saveButton = await screen.findByRole('button', { name: '保存并运行准入探测' })
+    const saveButton = await screen.findByRole('button', { name: '保存并探测全部模型' })
     await waitFor(() => expect((saveButton as HTMLButtonElement).disabled).toBe(false))
     fireEvent.click(saveButton)
-    await screen.findByText(/3\/3 个模型通过准入探测/, undefined, { timeout: 5000 })
+    await screen.findByText(/3\/3 个模型通过格式准入/, undefined, { timeout: 5000 })
     await screen.findAllByRole('option', { name: 'qwen3:8b · 局域网' })
-    const secondActiveModel = screen.getByLabelText('活动模型') as HTMLSelectElement
+    const secondActiveModel = screen.getByLabelText('当前功能模型') as HTMLSelectElement
     await waitFor(() => expect(secondActiveModel.disabled).toBe(false))
     fireEvent.change(secondActiveModel, { target: { value: JSON.stringify([second.id, 'qwen3:8b']) } })
     await waitFor(() => expect(useAppStore.getState().modelProfiles.find((profile) => profile.id === useAppStore.getState().activeModelId)?.connectionId).toBe('second'))
@@ -89,23 +89,23 @@ describe('model settings workflow', () => {
   it('retains configured models after a discovery failure and asks for a new admission probe', async () => {
     vi.spyOn(desktop, 'discoverConnectionModels').mockResolvedValue({ ok: false, models: [], message: '服务返回 HTTP 401' })
     render(<SettingsPage />)
-    fireEvent.click(await screen.findByRole('button', { name: '查看模型列表' }))
+    fireEvent.click(await screen.findByRole('button', { name: '查看探测结果' }))
     await screen.findByText('服务返回 HTTP 401')
     expect(screen.getByText('需要重新探测')).toBeTruthy()
-    expect((screen.getByLabelText('活动模型') as HTMLSelectElement).selectedOptions[0].textContent).toContain('qwen3:8b')
+    expect((screen.getByLabelText('当前功能模型') as HTMLSelectElement).selectedOptions[0].textContent).toContain('qwen3:8b')
   })
 
   it('restores the model catalog from cache when settings are reopened', async () => {
     const discover = vi.spyOn(desktop, 'discoverConnectionModels').mockResolvedValue({ ok: true, models: ['cached-model'], message: '' })
     const firstView = render(<SettingsPage />)
-    await screen.findByText('0/1 个模型准入通过')
+    await screen.findByText('0/1 个模型格式准入通过')
     expect(discover).toHaveBeenCalledTimes(1)
 
     firstView.unmount()
     discover.mockClear()
     render(<SettingsPage />)
 
-    await screen.findByText('0/1 个模型准入通过')
+    await screen.findByText('0/1 个模型格式准入通过')
     expect(discover).not.toHaveBeenCalled()
   })
 
