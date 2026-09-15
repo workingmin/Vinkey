@@ -2,7 +2,7 @@
 
 - 盘点日期：2026-09-15
 - 对比基线：2026-09-02 盘点；重点核对 2026-09-03 至 `a5e882b` 的实现提交
-- 依据：`src/App.tsx`、`src/components/*`、`src/store.ts`、`src/styles.css`、`src/lib/desktop.ts`
+- 依据：`src/App.tsx`、`src/components/*`、`src/store.ts`、`src/styles.css`、`src/lib/desktop.ts`、[UI_ENTRY_POINTS.md](./UI_ENTRY_POINTS.md)
 - 目的：为 UI 精细化调整提供可追踪的现状基线
 
 ## 0. 统计结论
@@ -77,6 +77,8 @@
 | 运行日志面板 | `src/App.tsx` | 运行事件、平台/版本元数据、复制和刷新 |
 
 ## 3. 当前可见交互清单
+
+跨页面业务功能入口、前置条件和跳转目标统一见 [UI_ENTRY_POINTS.md](./UI_ENTRY_POINTS.md)；本节只保留当前实现的可见交互事实。
 
 ### 导航与窗口
 
