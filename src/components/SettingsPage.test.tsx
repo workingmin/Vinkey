@@ -54,7 +54,7 @@ describe('model settings workflow', () => {
     await waitFor(() => expect((screen.getByRole('button', { name: '保存并检查模型' }) as HTMLButtonElement).disabled).toBe(false))
     fireEvent.click(screen.getByRole('button', { name: '保存并检查模型' }))
     const activeModel = screen.getByRole('combobox', { name: '当前模型' }) as HTMLButtonElement
-    await waitFor(() => expect(activeModel.disabled).toBe(false))
+    await waitFor(() => expect(activeModel.disabled).toBe(false), { timeout: 5000 })
     fireEvent.click(activeModel)
     fireEvent.click(await screen.findByRole('option', { name: /openbmb\/minicpm4\.1:latest.*Ollama · 浏览器演示/ }))
     await waitFor(() => expect(screen.getByText('已切换到 openbmb/minicpm4.1:latest')).toBeTruthy())

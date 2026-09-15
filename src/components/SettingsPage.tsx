@@ -532,9 +532,10 @@ export function SettingsPage() {
                 return <div className={`connection-list-item ${connection.id === selectedId ? 'active' : ''}`} key={connection.id}>
                   <button type="button" className="connection-select" disabled={locked} onClick={() => chooseConnection(connection)}>
                     <PlugZap />
-                    <span className="connection-copy"><span className="connection-name"><b>{connection.name}</b><span className={`connection-dot ${catalog?.ok ? passed > 0 ? 'online' : 'warning' : ''}`} title={catalog?.ok ? passed > 0 ? '有可用模型' : '尚无可用模型' : '无法连接'} aria-label={catalog?.ok ? passed > 0 ? '有可用模型' : '尚无可用模型' : '无法连接'} /></span><small>{connection.baseUrl}</small><small>{scanning.includes(connection.id) ? '正在获取模型列表…' : admissionScanning.includes(connection.id) ? '正在检查模型…' : catalog?.ok ? `${passed}/${catalog.models.length} 个模型可用` : '无法连接'}</small></span>
+                    <span className="connection-copy"><b>{connection.name}</b><small>{connection.baseUrl}</small><small>{scanning.includes(connection.id) ? '正在获取模型列表…' : admissionScanning.includes(connection.id) ? '正在检查模型…' : catalog?.ok ? `${passed}/${catalog.models.length} 个模型可用` : '无法连接'}</small></span>
                   </button>
                   <div className="connection-item-actions">
+                    <span className={`connection-dot ${catalog?.ok ? passed > 0 ? 'online' : 'warning' : ''}`} title={catalog?.ok ? passed > 0 ? '有可用模型' : '尚无可用模型' : '无法连接'} aria-label={catalog?.ok ? passed > 0 ? '有可用模型' : '尚无可用模型' : '无法连接'} />
                     <button type="button" className="icon-button connection-list-delete" title={`删除服务“${connection.name}”`} aria-label="删除服务" disabled={locked || scanning.includes(connection.id) || admissionScanning.includes(connection.id)} onClick={() => void remove(connection)}><Trash2 /></button>
                   </div>
                 </div>
