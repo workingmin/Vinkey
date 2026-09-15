@@ -26,17 +26,61 @@
 - 无工作区时仍可进入页面，但显示“未打开项目”空态，不请求任务列表。
 - 设置页打开时任务中心不可见；任务执行期间设置页会锁定模型和连接修改。
 
-## 布局
+## 页面预览（Markdown 预览）
 
-```text
-内容区顶栏：会话/任务标题             对话 | 文件 | 任务
-任务工具栏：运行 N    完成 N    失败 N                         刷新
-任务列表：
-  展开 任务名称 / taskId       状态       更新时间       操作
-  展开后：失败原因（如有）
-           步骤与检查点
-           完成任务的运行指标和只读产物
-```
+以下 HTML 直接表达任务中心的区域层级、列关系和典型任务状态，可在 Markdown Preview 中预览；它只用于设计验收，不承载交互逻辑。
+
+<table border="1" cellpadding="8" cellspacing="0" width="100%">
+  <tr>
+    <td colspan="4" bgcolor="#F1F3F5"><strong>会话/任务标题</strong>　工作区 · 模型　　　　　　　　　<strong>对话</strong>　|　<strong>文件</strong>　|　<strong>任务</strong></td>
+  </tr>
+  <tr>
+    <td colspan="3" bgcolor="#F8F9FA"><strong>运行</strong>　3　　<strong>完成</strong>　12　　<strong>失败</strong>　1</td>
+    <td width="16%" bgcolor="#F8F9FA" align="right"><strong>刷新</strong></td>
+  </tr>
+  <tr bgcolor="#F1F3F5">
+    <td width="42%"><strong>任务</strong></td>
+    <td width="16%"><strong>状态</strong></td>
+    <td width="18%"><strong>更新时间</strong></td>
+    <td><strong>操作</strong></td>
+  </tr>
+  <tr>
+    <td>▾ 长文本分析<br><small>job-7f3a · 项目概览</small></td>
+    <td><strong>运行中</strong></td>
+    <td>刚刚</td>
+    <td>暂停</td>
+  </tr>
+  <tr>
+    <td colspan="4" bgcolor="#FFFFFF">
+      <strong>步骤与检查点</strong>　文档分块 ✓　逐块分析 <strong>进行中</strong>　章节汇总 …<br>
+      <small>当前步骤：逐块分析　·　已完成 4/12　·　检查点 cp-04</small>
+    </td>
+  </tr>
+  <tr>
+    <td>▸ 章节结构分析<br><small>job-6a21 · 失败</small></td>
+    <td><strong>失败</strong></td>
+    <td>5 分钟前</td>
+    <td>重跑所选步骤</td>
+  </tr>
+  <tr>
+    <td colspan="4" bgcolor="#FFF8E8">
+      <strong>错误 E-TASK-RETRY</strong>　章节汇总失败，支持从“章节汇总”重新执行<br>
+      <small>步骤选择器：章节汇总　　重跑所选步骤</small>
+    </td>
+  </tr>
+  <tr>
+    <td>▸ 全项目分析<br><small>job-4c90 · 已完成</small></td>
+    <td><strong>已完成</strong></td>
+    <td>昨天 18:42</td>
+    <td>查看结果</td>
+  </tr>
+  <tr>
+    <td colspan="4" bgcolor="#F4F5F6">
+      <strong>分析产物（只读）</strong>　产物目录：analysis/2026-09-15　·　耗时 08:32　·　模型调用 12 次　·　缓存命中 8 次<br>
+      <small>结果正文在固定区域滚动，不直接写回源文档</small>
+    </td>
+  </tr>
+</table>
 
 ### 工具栏
 
