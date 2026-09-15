@@ -599,7 +599,7 @@ fn context_limit_from_error(message: &str) -> Option<u32> {
             _ => None,
         }
     }
-    serde_json::from_str::<Value>(message)
+    let parsed = serde_json::from_str::<Value>(message)
         .ok()
         .and_then(|value| find(&value))
         .or_else(|| {
@@ -607,7 +607,70 @@ fn context_limit_from_error(message: &str) -> Option<u32> {
                 .find('{')
                 .and_then(|index| serde_json::from_str::<Value>(&message[index..]).ok())
                 .and_then(|value| find(&value))
+        });
+    parsed.or_else(|| {
+        let lower = message.to_ascii_lowercase();
+        [
+            "maximum context length",
+            "context length",
+            "context window",
+            "num_ctx",
+        ]
+        .iter()
+        .find_map(|marker| {
+            let start = lower.find(marker)? + marker.len();
+            let digits: String = lower[start..]
+                .chars()
+                .skip_while(|value| !value.is_ascii_digit())
+                .take_while(|value| value.is_ascii_digit())
+                .collect();
+            (!digits.is_empty()).then(|| digits.parse().ok()).flatten()
         })
+    })
+}
+
+fn is_context_limit_error(message: &str) -> bool {
+    let lower = message.to_ascii_lowercase();
+    [
+        "context length",
+        "context window",
+        "num_ctx",
+        "n_ctx",
+        "maximum context",
+    ]
+    .iter()
+    .any(|marker| lower.contains(marker))
+}
+
+fn context_limit_from_model_info(value: &Value) -> Option<u32> {
+    match value {
+        Value::Object(values) => values.iter().find_map(|(key, value)| {
+            if key == "context_length" || key.ends_with(".context_length") {
+                value.as_u64().and_then(|value| u32::try_from(value).ok())
+            } else {
+                context_limit_from_model_info(value)
+            }
+        }),
+        Value::Array(values) => values.iter().find_map(context_limit_from_model_info),
+        _ => None,
+    }
+}
+
+async fn ollama_model_context_limit(
+    base_url: &str,
+    model: &str,
+    api_key: Option<&str>,
+) -> Option<u32> {
+    let mut request = admission_client()
+        .ok()?
+        .post(format!("{base_url}/api/show"))
+        .json(&json!({"model": model}));
+    if let Some(key) = api_key.filter(|value| !value.is_empty()) {
+        request = request.bearer_auth(key);
+    }
+    let response = response_or_error(request.send().await.ok()?).await.ok()?;
+    let payload = response.json::<Value>().await.ok()?;
+    context_limit_from_model_info(&payload)
 }
 
 #[tauri::command]
@@ -797,26 +860,14 @@ async fn probe_model_admission_request(
         "required": ["status", "structured"],
         "additionalProperties": false
     });
-    let request_body = if input.kind == "ollama" {
-        json!({
-            "model": input.model,
-            "messages": [{"role": "user", "content": "Return the admission probe result."}],
-            "stream": false,
-            "think": false,
-            "format": schema,
-            "options": {"num_ctx": input.context_window}
-        })
-    } else {
-        json!({
-            "model": input.model,
-            "messages": [{"role": "user", "content": "Return the admission probe result."}],
-            "stream": false,
-            "response_format": {
-                "type": "json_schema",
-                "json_schema": {"name": "model_admission", "strict": true, "schema": schema}
-            }
-        })
-    };
+    let mut context_window = input.context_window;
+    if input.kind == "ollama" {
+        if let Some(model_limit) =
+            ollama_model_context_limit(base_url, &input.model, api_key.as_deref()).await
+        {
+            context_window = context_window.min(model_limit.max(2_048));
+        }
+    }
     runtime.info(
         "model.admission_probe_started",
         json!({"profileId": input.id, "provider": input.kind, "model": input.model, "contextWindow": input.context_window})
@@ -824,86 +875,133 @@ async fn probe_model_admission_request(
             .cloned()
             .unwrap_or_default(),
     );
-    let mut request = admission_client()?.post(if input.kind == "ollama" {
-        format!("{base_url}/api/chat")
-    } else {
-        format!("{base_url}/chat/completions")
-    });
-    if let Some(key) = api_key.filter(|value| !value.is_empty()) {
-        request = request.bearer_auth(key);
-    }
-    let response = match request.json(&request_body).send().await {
-        Ok(response) => response,
-        Err(error) => {
-            let message = if error.is_timeout() {
-                format!("格式能力探测超时：{} 秒", ADMISSION_TIMEOUT_SECS)
-            } else {
-                format!("格式能力探测失败：{error}")
-            };
-            runtime.error("model.admission_probe_failed", &message);
-            return Ok(ModelAdmissionResult {
-                ok: false,
-                message,
-                model: input.model.clone(),
-                structured_output: false,
-                context_window: input.context_window,
-            });
-        }
-    };
-    let response = match response_or_error(response).await {
-        Ok(response) => response,
-        Err(message) => {
-            runtime.error("model.admission_probe_failed", &message);
-            return Ok(ModelAdmissionResult {
-                ok: false,
-                message,
-                model: input.model.clone(),
-                structured_output: false,
-                context_window: input.context_window,
-            });
-        }
-    };
-    let payload = response
-        .json::<Value>()
-        .await
-        .map_err(|_| "格式能力探测响应无效".to_string())?;
-    let content = if input.kind == "ollama" {
-        payload.pointer("/message/content").and_then(Value::as_str)
-    } else {
-        payload
-            .pointer("/choices/0/message/content")
-            .and_then(Value::as_str)
-    };
-    let parsed = content
-        .and_then(|value| serde_json::from_str::<Value>(value.trim()).ok())
-        .filter(|value| value.get("status").and_then(Value::as_str) == Some("ready"))
-        .filter(|value| value.get("structured").and_then(Value::as_bool) == Some(true));
-    let result = ModelAdmissionResult {
-        ok: parsed.is_some(),
-        message: if parsed.is_some() {
-            format!(
-                "格式准入通过：返回内容符合 JSON Schema（{} ms）",
-                started.elapsed().as_millis()
-            )
+    for _ in 0..4 {
+        let request_body = if input.kind == "ollama" {
+            json!({
+                "model": input.model,
+                "messages": [{"role": "user", "content": "Return the admission probe result."}],
+                "stream": false,
+                "think": false,
+                "format": schema.clone(),
+                "options": {"num_ctx": context_window}
+            })
         } else {
-            "格式准入未通过：返回内容不符合 JSON Schema".into()
-        },
-        model: input.model.clone(),
-        structured_output: parsed.is_some(),
-        context_window: input.context_window,
-    };
-    if result.ok {
-        runtime.info(
-            "model.admission_probe_completed",
-            json!({"model": result.model, "durationMs": started.elapsed().as_millis()})
-                .as_object()
-                .cloned()
-                .unwrap_or_default(),
-        );
-    } else {
-        runtime.error("model.admission_probe_failed", &result.message);
+            json!({
+                "model": input.model,
+                "messages": [{"role": "user", "content": "Return the admission probe result."}],
+                "stream": false,
+                "response_format": {
+                    "type": "json_schema",
+                    "json_schema": {"name": "model_admission", "strict": true, "schema": schema.clone()}
+                }
+            })
+        };
+        let mut request = admission_client()?.post(if input.kind == "ollama" {
+            format!("{base_url}/api/chat")
+        } else {
+            format!("{base_url}/chat/completions")
+        });
+        if let Some(key) = api_key.as_deref().filter(|value| !value.is_empty()) {
+            request = request.bearer_auth(key);
+        }
+        let response = match request.json(&request_body).send().await {
+            Ok(response) => response,
+            Err(error) => {
+                let message = if error.is_timeout() {
+                    format!("模型检查超时：{} 秒", ADMISSION_TIMEOUT_SECS)
+                } else {
+                    format!("模型检查失败：{error}")
+                };
+                runtime.error("model.admission_probe_failed", &message);
+                return Ok(ModelAdmissionResult {
+                    ok: false,
+                    message,
+                    model: input.model.clone(),
+                    structured_output: false,
+                    context_window,
+                });
+            }
+        };
+        let response = match response_or_error(response).await {
+            Ok(response) => response,
+            Err(message)
+                if input.kind == "ollama"
+                    && is_context_limit_error(&message)
+                    && context_window > 2_048 =>
+            {
+                let parsed = context_limit_from_error(&message).unwrap_or(0);
+                let next = if parsed >= context_window {
+                    context_window / 2
+                } else {
+                    parsed
+                }
+                .max(2_048);
+                context_window = next;
+                continue;
+            }
+            Err(message) => {
+                runtime.error("model.admission_probe_failed", &message);
+                return Ok(ModelAdmissionResult {
+                    ok: false,
+                    message,
+                    model: input.model.clone(),
+                    structured_output: false,
+                    context_window,
+                });
+            }
+        };
+        let payload = response
+            .json::<Value>()
+            .await
+            .map_err(|_| "模型检查响应无效".to_string())?;
+        let content = if input.kind == "ollama" {
+            payload.pointer("/message/content").and_then(Value::as_str)
+        } else {
+            payload
+                .pointer("/choices/0/message/content")
+                .and_then(Value::as_str)
+        };
+        let parsed = content
+            .and_then(|value| serde_json::from_str::<Value>(value.trim()).ok())
+            .filter(|value| value.get("status").and_then(Value::as_str) == Some("ready"))
+            .filter(|value| value.get("structured").and_then(Value::as_bool) == Some(true));
+        let result = ModelAdmissionResult {
+            ok: parsed.is_some(),
+            message: if parsed.is_some() {
+                format!(
+                    "模型检查通过，已自动设置约 {} tokens 上下文（{} ms）",
+                    context_window,
+                    started.elapsed().as_millis()
+                )
+            } else {
+                "模型检查未通过：模型没有返回可用结果".into()
+            },
+            model: input.model.clone(),
+            structured_output: parsed.is_some(),
+            context_window,
+        };
+        if result.ok {
+            runtime.info(
+                "model.admission_probe_completed",
+                json!({"model": result.model, "durationMs": started.elapsed().as_millis(), "contextWindow": result.context_window})
+                    .as_object()
+                    .cloned()
+                    .unwrap_or_default(),
+            );
+        } else {
+            runtime.error("model.admission_probe_failed", &result.message);
+        }
+        return Ok(result);
     }
-    Ok(result)
+    let message = "模型检查失败：未能找到可用的上下文长度".to_string();
+    runtime.error("model.admission_probe_failed", &message);
+    Ok(ModelAdmissionResult {
+        ok: false,
+        message,
+        model: input.model.clone(),
+        structured_output: false,
+        context_window,
+    })
 }
 
 async fn cleanup_local_ollama_probe(
@@ -1255,6 +1353,20 @@ mod tests {
     fn extracts_nested_runtime_context_limit() {
         let message = r#"模型服务返回 HTTP 400：{"error":"{\"error\":{\"n_ctx\":4096}}"}"#;
         assert_eq!(context_limit_from_error(message), Some(4096));
+    }
+
+    #[test]
+    fn extracts_plain_text_context_limit() {
+        let message = "maximum context length is 8192 tokens";
+        assert_eq!(context_limit_from_error(message), Some(8192));
+        assert!(is_context_limit_error(message));
+    }
+
+    #[test]
+    fn extracts_ollama_model_context_limit() {
+        let payload =
+            json!({"model_info": {"general.architecture": "qwen2", "qwen2.context_length": 32768}});
+        assert_eq!(context_limit_from_model_info(&payload), Some(32768));
     }
 
     #[test]

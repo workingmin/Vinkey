@@ -1,12 +1,13 @@
 import { ArrowLeft, BadgeCheck, Bot, Check, ChevronDown, CircleAlert, Cloud, Cpu, PlugZap, Plus, RefreshCw, Save, ShieldCheck, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { deleteModelConnection, discoverConnectionModels, getLocalHardware, isDesktop, listModelConnections, listModelProfiles, probeModelAdmission, saveModelConnection, saveModelProfile } from '../lib/desktop'
+import { deleteModelConnection, discoverConnectionModels, getLocalHardware, listModelConnections, listModelProfiles, probeModelAdmission, saveModelConnection, saveModelProfile } from '../lib/desktop'
 import { hardwareSummary, hardwareTier, hardwareTierLabels, LOCAL_CONTEXT_WINDOW, LOCAL_HARDWARE_ADVICE, type LocalHardware } from '../lib/hardwareProfile'
 import { formatServiceError } from '../lib/serviceError'
 import { useAppStore } from '../store'
-import type { ModelAdmissionResult, ModelConnection, ModelConnectionInput, ModelConnectionResult, ModelProfile } from '../types'
+import type { ModelAdmissionResult, ModelConnection, ModelConnectionInput, ModelConnectionResult } from '../types'
 
 type AdmissionState = ModelAdmissionResult & { testedAt?: number }
+const REMOTE_CONTEXT_WINDOW = 8_192
 type PersistedProbe = {
   kind: ModelConnection['kind']
   baseUrl: string
@@ -75,7 +76,7 @@ function persistProbe(connection: ModelConnectionInput | ModelConnection, patch:
   cache[connection.id] = {
     kind: connection.kind,
     baseUrl: connection.baseUrl,
-    catalog: patch.catalog ?? previous?.catalog ?? { ok: false, message: '尚未获取模型', models: [] },
+    catalog: patch.catalog ?? previous?.catalog ?? { ok: false, message: '尚未获取模型列表', models: [] },
     admissions: patch.admissions ?? previous?.admissions ?? {},
   }
   writeProbeCache(cache)
@@ -140,12 +141,12 @@ export function SettingsPage() {
 
   const probeModel = async (connection: ModelConnection, model: string) => {
     const key = admissionKey(connection.id, model)
-    setAdmissions((values) => ({ ...values, [key]: { ok: false, message: '正在探测结构化输出…', model, structuredOutput: false, contextWindow: connection.kind === 'ollama' ? LOCAL_CONTEXT_WINDOW : 32768 } }))
+    setAdmissions((values) => ({ ...values, [key]: { ok: false, message: '正在检查模型…', model, structuredOutput: false, contextWindow: connection.kind === 'ollama' ? LOCAL_CONTEXT_WINDOW : REMOTE_CONTEXT_WINDOW } }))
     try {
       const result = await probeModelAdmission({
         id: crypto.randomUUID(), connectionId: connection.id, name: `${connection.name} · ${model}`,
         kind: connection.kind, baseUrl: connection.baseUrl, model,
-        contextWindow: connection.kind === 'ollama' ? LOCAL_CONTEXT_WINDOW : 32768,
+        contextWindow: connection.kind === 'ollama' ? LOCAL_CONTEXT_WINDOW : REMOTE_CONTEXT_WINDOW,
       })
       const admission = { ...result, testedAt: Date.now() }
       if (alive.current) setAdmissions((values) => ({ ...values, [key]: admission }))
@@ -153,7 +154,7 @@ export function SettingsPage() {
       persistProbe(connection, { admissions: { ...(cached?.admissions ?? {}), [model]: admission } })
       return result
     } catch (error) {
-      const result: AdmissionState = { ok: false, message: formatServiceError(error), model, structuredOutput: false, contextWindow: connection.kind === 'ollama' ? LOCAL_CONTEXT_WINDOW : 32768, testedAt: Date.now() }
+      const result: AdmissionState = { ok: false, message: formatServiceError(error), model, structuredOutput: false, contextWindow: connection.kind === 'ollama' ? LOCAL_CONTEXT_WINDOW : REMOTE_CONTEXT_WINDOW, testedAt: Date.now() }
       if (alive.current) setAdmissions((values) => ({ ...values, [key]: result }))
       const cached = readProbeCache()[connection.id]
       persistProbe(connection, { admissions: { ...(cached?.admissions ?? {}), [model]: result } })
@@ -165,9 +166,21 @@ export function SettingsPage() {
     if (models.length === 0 || admissionScanning.includes(connection.id)) return []
     setAdmissionScanning((values) => [...values, connection.id])
     const results: ModelAdmissionResult[] = []
-    for (const model of models) results.push(await probeModel(connection, model))
-    if (alive.current) setAdmissionScanning((values) => values.filter((id) => id !== connection.id))
-    return results
+    try {
+      for (const model of models) results.push(await probeModel(connection, model))
+      const profiles = await listModelProfiles()
+      for (const result of results) {
+        if (!result.ok) continue
+        const profile = profiles.find((item) => item.connectionId === connection.id && item.model === result.model)
+        if (profile && profile.contextWindow !== result.contextWindow) {
+          await saveModelProfile({ ...profile, contextWindow: result.contextWindow })
+        }
+      }
+      if (alive.current) setModelProfiles(await listModelProfiles())
+      return results
+    } finally {
+      if (alive.current) setAdmissionScanning((values) => values.filter((id) => id !== connection.id))
+    }
   }
 
   useEffect(() => {
@@ -240,7 +253,7 @@ export function SettingsPage() {
     try {
       const url = new URL(draft.baseUrl.trim())
       if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) throw new Error('请输入不含凭据、查询参数或片段的 HTTP / HTTPS 服务地址')
-      if (!draft.name.trim()) throw new Error('连接名称不能为空')
+      if (!draft.name.trim()) throw new Error('服务名称不能为空')
       const saved = await saveModelConnection(draft)
       setConnections((values) => [saved, ...values.filter((value) => value.id !== saved.id)])
       setSelectedId(saved.id)
@@ -251,16 +264,16 @@ export function SettingsPage() {
       if (result.ok) {
         const admissionResults = await probeConnection(saved, result.models)
         const passed = admissionResults.filter((admission) => admission.ok).length
-        setNotice({ error: false, text: `连接已保存，${passed}/${result.models.length} 个模型通过格式准入` })
+        setNotice({ error: false, text: `服务已保存，${passed}/${result.models.length} 个模型可用` })
       } else {
-        setNotice({ error: true, text: `连接已保存；获取模型目录失败：${result.message}` })
+        setNotice({ error: true, text: `服务已保存；获取模型列表失败：${result.message}` })
       }
     } catch (error) { setNotice({ error: true, text: String(error) }) }
     finally { setBusy(false) }
   }
 
   const remove = async (target: ModelConnection | undefined = selected) => {
-    if (!target || locked || scanning.includes(target.id) || admissionScanning.includes(target.id) || !window.confirm(`删除连接“${target.name}”？该连接的凭据及模型配置将删除。`)) return
+    if (!target || locked || scanning.includes(target.id) || admissionScanning.includes(target.id) || !window.confirm(`删除服务“${target.name}”？该服务的凭据及模型配置将删除。`)) return
     setBusy(true)
     try {
       await deleteModelConnection(target.id)
@@ -275,7 +288,7 @@ export function SettingsPage() {
       setDraft(nextSelected ?? emptyConnection())
       if (target.id === selectedId) setCatalogExpandedId(null)
       setDirty(false)
-      setNotice({ error: false, text: '连接已删除' })
+      setNotice({ error: false, text: '服务已删除' })
     } catch (error) { setNotice({ error: true, text: String(error) }) }
     finally { setBusy(false) }
   }
@@ -289,27 +302,22 @@ export function SettingsPage() {
       const connection = connections.find((item) => item.id === connectionId)
       if (!connection) throw new Error('连接已不存在')
       const admission = admissions[admissionKey(connectionId, model)]
-      if (!admission?.ok) throw new Error('该模型尚未通过格式能力准入')
+      if (!admission?.ok) throw new Error('该模型尚未完成检查')
       const available = await listModelProfiles()
       const existing = available.find((profile) => profile.connectionId === connection.id && profile.model === model)
-      const profile = existing ?? await saveModelProfile({
-        id: crypto.randomUUID(), connectionId: connection.id, name: `${connection.name} · ${model}`,
-        kind: connection.kind, baseUrl: connection.baseUrl, model,
-        contextWindow: connection.kind === 'ollama' ? LOCAL_CONTEXT_WINDOW : 32768,
-      })
+      const profile = existing
+        ? existing.contextWindow === admission.contextWindow
+          ? existing
+          : await saveModelProfile({ ...existing, contextWindow: admission.contextWindow })
+        : await saveModelProfile({
+          id: crypto.randomUUID(), connectionId: connection.id, name: `${connection.name} · ${model}`,
+          kind: connection.kind, baseUrl: connection.baseUrl, model,
+          contextWindow: admission.contextWindow,
+        })
       setModelProfiles(await listModelProfiles())
       setActiveModelId(profile.id)
-      setNotice({ error: false, text: `已启用 ${model}，Skill 将根据任务类型调整处理方式` })
+      setNotice({ error: false, text: `已将 ${model} 设为默认模型` })
     } catch (error) { setNotice({ error: true, text: formatServiceError(error) }) }
-    finally { setBusy(false) }
-  }
-
-  const updateContext = async (profile: ModelProfile, value: number) => {
-    if (locked || value === profile.contextWindow) return
-    if (!Number.isInteger(value) || value < 2048 || value > 2000000) { setNotice({ error: true, text: '上下文窗口必须在 2048 到 2000000 之间' }); return }
-    setBusy(true)
-    try { await saveModelProfile({ ...profile, contextWindow: value }); setModelProfiles(await listModelProfiles()) }
-    catch (error) { setNotice({ error: true, text: String(error) }) }
     finally { setBusy(false) }
   }
 
@@ -324,60 +332,59 @@ export function SettingsPage() {
   const activeValue = activeProfile && activeConnection ? JSON.stringify([activeConnection.id, activeProfile.model]) : ''
   const activeAdmission = activeProfile && activeConnection ? admissions[admissionKey(activeConnection.id, activeProfile.model)] : undefined
 
-  return <section className="settings-page" aria-label="模型与连接设置">
-    <header className="settings-toolbar"><div><span className="settings-eyebrow">MODEL SETTINGS</span><h1>模型与连接</h1><p>{isDesktop() ? '配置唯一功能模型并验证结构化输出能力' : '浏览器演示 · 使用模拟连接与探测结果'}</p></div><button className="icon-button" title="返回工作区" aria-label="返回工作区" disabled={busy} onClick={close}><ArrowLeft /></button></header>
+  return <section className="settings-page" aria-label="模型设置">
+    <header className="settings-toolbar"><div><h1>模型设置</h1><p>选择默认模型并管理模型服务</p></div><button className="icon-button" title="返回工作区" aria-label="返回工作区" disabled={busy} onClick={close}><ArrowLeft /></button></header>
     {notice && <div role={notice.error ? 'alert' : 'status'} className={`settings-notice ${notice.error ? 'failure' : ''}`}>{notice.error ? <CircleAlert /> : <Check />}<span>{notice.text}</span></div>}
     <div className="model-settings-scroll"><div className="settings-layout">
       <main className="settings-main">
         <section className="active-model-panel" aria-labelledby="active-model-title">
-          <div className="settings-section-heading"><div><span className="section-kicker">CURRENT MODEL</span><h2 id="active-model-title">当前模型</h2></div></div>
-          <p className="section-description">所有任务共用一个模型，Skill 根据场景调整提示词、上下文与处理流程。</p>
-          <div className="active-model-row"><div className="active-model-icon"><Bot /></div><label className="assignment-select"><span className="sr-only">当前功能模型</span><select aria-label="当前功能模型" value={activeValue} disabled={locked} onChange={(event) => void selectModel(event.target.value)}><option value="">尚未启用模型</option>{activeProfile && !activeAdmission?.ok && <option value={activeValue}>{activeProfile.model}（结构化输出待验证）</option>}{availableModels.map(({ connection, model }) => <option key={`${connection.id}:${model}`} value={JSON.stringify([connection.id, model])}>{model} · {connection.name}</option>)}</select><ChevronDown /></label><div className={`admission-badge ${activeAdmission?.ok ? 'passed' : activeProfile ? 'pending' : ''}`}><span>{activeAdmission?.ok ? <BadgeCheck /> : <ShieldCheck />}</span>{activeAdmission?.ok ? '格式准入通过' : activeProfile ? '需要重新探测' : '等待选择'}</div></div>
-          <div className="active-model-meta"><span><PlugZap />{activeConnection?.name ?? '未选择连接'}</span><span><Cpu />{activeProfile ? `${activeProfile.contextWindow.toLocaleString()} tokens` : '上下文窗口待配置'}</span><span><ShieldCheck />{activeAdmission?.ok ? '结构化输出已验证' : '结构化输出待验证'}</span></div>
-          {activeProfile && activeAdmission && !activeAdmission.ok && <p className="assignment-warning"><CircleAlert />当前模型未通过结构化输出准入，格式化任务可能失败。</p>}
-          {activeProfile && <details className="assignment-advanced"><summary>运行参数</summary><label>上下文窗口<input key={`${activeProfile.id}:${activeProfile.contextWindow}`} aria-label="当前模型上下文窗口" type="number" min={2048} max={2000000} step={1024} defaultValue={activeProfile.contextWindow} disabled={locked} onBlur={(event) => void updateContext(activeProfile, Number(event.target.value))} />tokens</label></details>}
+          <div className="settings-section-heading"><div><h2 id="active-model-title">默认模型</h2></div></div>
+          <p className="section-description">对话、续写、改稿等功能将使用这个模型。</p>
+          <div className="active-model-row"><div className="active-model-icon"><Bot /></div><label className="assignment-select"><span className="sr-only">默认模型</span><select aria-label="默认模型" value={activeValue} disabled={locked} onChange={(event) => void selectModel(event.target.value)}><option value="">请选择模型</option>{activeProfile && !activeAdmission?.ok && <option value={activeValue}>{activeProfile.model}（需要检查）</option>}{availableModels.map(({ connection, model }) => <option key={`${connection.id}:${model}`} value={JSON.stringify([connection.id, model])}>{model} · {connection.name}</option>)}</select><ChevronDown /></label><div className={`admission-badge ${activeAdmission?.ok ? 'passed' : activeProfile ? 'pending' : ''}`}><span>{activeAdmission?.ok ? <BadgeCheck /> : <ShieldCheck />}</span>{activeAdmission?.ok ? '可用' : activeProfile ? '需要检查' : '未选择'}</div></div>
+          <div className="active-model-meta"><span><PlugZap />{activeConnection?.name ?? '未选择服务'}</span>{activeAdmission?.ok && <span><Cpu />上下文已自动配置</span>}</div>
+          {activeProfile && activeAdmission && !activeAdmission.ok && <p className="assignment-warning"><CircleAlert />模型检查未通过，部分功能可能无法正常使用。</p>}
         </section>
         <section className="model-connections" aria-labelledby="model-connections-title">
-          <div className="settings-section-heading"><div><span className="section-kicker">PROVIDERS</span><h2 id="model-connections-title">模型连接</h2></div><button className="secondary-button" disabled={locked} onClick={() => chooseConnection()}><Plus />新增连接</button></div>
+          <div className="settings-section-heading"><div><h2 id="model-connections-title">模型服务</h2></div><button className="secondary-button" disabled={locked} onClick={() => chooseConnection()}><Plus />添加服务</button></div>
           <div className="connection-workspace">
-            <aside className="connection-list" aria-label="连接列表">
-              {loading ? <p>正在读取连接...</p> : connections.length === 0 ? <p>暂无连接</p> : connections.map((connection) => {
+            <aside className="connection-list" aria-label="模型服务列表">
+              {loading ? <p>正在读取服务...</p> : connections.length === 0 ? <p>暂无服务</p> : connections.map((connection) => {
                 const catalog = catalogs[connection.id]
                 const passed = catalog?.ok ? catalog.models.filter((model) => admissions[admissionKey(connection.id, model)]?.ok).length : 0
                 return <div className={`connection-list-item ${connection.id === selectedId ? 'active' : ''}`} key={connection.id}>
                   <button type="button" className="connection-select" disabled={locked} onClick={() => chooseConnection(connection)}>
                     <PlugZap />
-                    <span><b>{connection.name}</b><small>{connection.baseUrl}</small><small>{scanning.includes(connection.id) ? '正在获取模型目录…' : admissionScanning.includes(connection.id) ? '正在探测格式能力…' : catalog?.ok ? `${passed}/${catalog.models.length} 个模型格式准入通过` : '连接不可用'}</small></span>
+                    <span><b>{connection.name}</b><small>{connection.baseUrl}</small><small>{scanning.includes(connection.id) ? '正在获取模型列表…' : admissionScanning.includes(connection.id) ? '正在检查模型…' : catalog?.ok ? `${passed}/${catalog.models.length} 个模型可用` : '无法连接'}</small></span>
                   </button>
                   <div className="connection-item-actions">
-                    <span className={`connection-dot ${catalog?.ok ? passed > 0 ? 'online' : 'warning' : ''}`} title={catalog?.ok ? passed > 0 ? '有模型通过格式准入' : '尚无模型通过格式准入' : '连接不可用'} aria-label={catalog?.ok ? passed > 0 ? '有模型通过格式准入' : '尚无模型通过格式准入' : '连接不可用'} />
-                    <button type="button" className="icon-button connection-list-delete" title={`删除连接“${connection.name}”`} aria-label="删除连接" disabled={locked || scanning.includes(connection.id) || admissionScanning.includes(connection.id)} onClick={() => void remove(connection)}><Trash2 /></button>
+                    <span className={`connection-dot ${catalog?.ok ? passed > 0 ? 'online' : 'warning' : ''}`} title={catalog?.ok ? passed > 0 ? '有可用模型' : '尚无可用模型' : '无法连接'} aria-label={catalog?.ok ? passed > 0 ? '有可用模型' : '尚无可用模型' : '无法连接'} />
+                    <button type="button" className="icon-button connection-list-delete" title={`删除服务“${connection.name}”`} aria-label="删除服务" disabled={locked || scanning.includes(connection.id) || admissionScanning.includes(connection.id)} onClick={() => void remove(connection)}><Trash2 /></button>
                   </div>
                 </div>
               })}
             </aside>
             <form className="connection-form" onSubmit={(event) => { event.preventDefault(); void save() }}>
               <fieldset disabled={formLocked}>
-                <div className="connection-form-heading"><div><span className="section-kicker">CONNECTION</span><h3>{selected ? '连接详情' : '新增连接'}</h3></div>{dirty && <small>未保存</small>}</div>
-                <div className="field-grid"><div className="field-group"><label htmlFor="connection-name">连接名称</label><input id="connection-name" required value={draft.name} onChange={(event) => edit({ name: event.target.value })} /></div><div className="field-group"><label htmlFor="connection-kind">接口协议</label><select id="connection-kind" value={draft.kind} onChange={(event) => { const kind = event.target.value as ModelConnectionInput['kind']; edit({ kind, baseUrl: kind === 'ollama' ? 'http://localhost:11434' : 'https://api.openai.com/v1' }) }}><option value="ollama">Ollama</option><option value="openai-compatible">OpenAI 兼容</option></select></div></div>
-                <div className="field-group"><label htmlFor="base-url">Base URL</label><input id="base-url" type="url" required spellCheck={false} value={draft.baseUrl} onChange={(event) => edit({ baseUrl: event.target.value })} /></div>
-                <div className="field-group"><label htmlFor="api-key">API Key</label><input id="api-key" type="password" autoComplete="off" placeholder={selected?.hasApiKey ? '已保存；留空保持不变' : '按服务要求填写'} value={draft.apiKey ?? ''} onChange={(event) => edit({ apiKey: event.target.value, clearApiKey: false })} />{selected?.hasApiKey && <label className="checkbox-label"><input type="checkbox" checked={Boolean(draft.clearApiKey)} onChange={(event) => edit({ clearApiKey: event.target.checked, apiKey: '' })} />删除已保存的密钥</label>}</div>
+                <div className="connection-form-heading"><div><h3>{selected ? '服务设置' : '添加服务'}</h3></div>{dirty && <small>未保存</small>}</div>
+                <div className="field-grid"><div className="field-group"><label htmlFor="connection-name">名称</label><input id="connection-name" required value={draft.name} onChange={(event) => edit({ name: event.target.value })} /></div><div className="field-group"><label htmlFor="connection-kind">服务类型</label><select id="connection-kind" value={draft.kind} onChange={(event) => { const kind = event.target.value as ModelConnectionInput['kind']; edit({ kind, baseUrl: kind === 'ollama' ? 'http://localhost:11434' : 'https://api.openai.com/v1' }) }}><option value="ollama">Ollama</option><option value="openai-compatible">OpenAI 兼容服务</option></select></div></div>
+                <div className="field-group"><label htmlFor="base-url">服务地址</label><input id="base-url" type="url" required spellCheck={false} value={draft.baseUrl} onChange={(event) => edit({ baseUrl: event.target.value })} /></div>
+                <div className="field-group"><label htmlFor="api-key">API 密钥</label><input id="api-key" type="password" autoComplete="off" placeholder={selected?.hasApiKey ? '已保存，留空不会更改' : '没有密钥可留空'} value={draft.apiKey ?? ''} onChange={(event) => edit({ apiKey: event.target.value, clearApiKey: false })} />{selected?.hasApiKey && <label className="checkbox-label"><input type="checkbox" checked={Boolean(draft.clearApiKey)} onChange={(event) => edit({ clearApiKey: event.target.checked, apiKey: '' })} />删除已保存的密钥</label>}</div>
               </fieldset>
               {selected ? <div className="connection-catalog">
-                <header><div className="connection-catalog-title"><span className="section-kicker">MODEL ADMISSION</span><h3>格式能力准入 <span>{selectedCatalog?.ok ? selectedCatalog.models.length : 0}</span></h3></div>
-                  <button type="button" className="secondary-button catalog-toggle" aria-expanded={catalogExpandedId === selected.id} onClick={() => setCatalogExpandedId((value) => value === selected.id ? null : selected.id)}><ChevronDown />{catalogExpandedId === selected.id ? '收起探测结果' : '查看探测结果'}</button>
-                  <button type="submit" className="primary-button catalog-save" disabled={formLocked}><Save />{busy ? '保存中...' : '保存并探测全部模型'}</button>
+                <header><div className="connection-catalog-title"><h3>模型列表 <span>{selectedCatalog?.ok ? selectedCatalog.models.length : 0}</span></h3></div>
+                  <button type="button" className="secondary-button catalog-toggle" aria-expanded={catalogExpandedId === selected.id} onClick={() => setCatalogExpandedId((value) => value === selected.id ? null : selected.id)}><ChevronDown />{catalogExpandedId === selected.id ? '收起模型列表' : '查看模型列表'}</button>
+                  <button type="submit" className="primary-button catalog-save" disabled={formLocked}><Save />{busy ? '保存中...' : '保存并检查模型'}</button>
                 </header>
                 {catalogExpandedId === selected.id && <div className="connection-catalog-body">
-                  <div className="connection-catalog-actions"><button type="button" className="icon-button" title="刷新模型目录并清除旧探测结果" aria-label="刷新模型目录" disabled={locked || dirty || scanning.includes(selected.id)} onClick={() => void scan(selected)}><RefreshCw className={scanning.includes(selected.id) ? 'spinning' : ''} /></button><button type="button" className="secondary-button" disabled={locked || dirty || !selectedCatalog?.ok || !selectedCatalog.models.length || admissionScanning.includes(selected.id)} onClick={() => void probeConnection(selected, selectedCatalog!.models)}><ShieldCheck />重新探测全部模型</button></div>
-                  {scanning.includes(selected.id) ? <p role="status">正在获取模型目录…</p> : !selectedCatalog?.ok ? <p className="assignment-warning" role="status">{selectedCatalog?.message ?? '尚未获取模型目录'}</p> : selectedCatalog.models.length === 0 ? <p>服务未返回模型</p> : <ul>{selectedAdmissions.map(({ model, state }) => <li key={model}><Bot /><span><strong>{model}</strong><small>{state?.message ?? '尚未探测结构化输出能力'}</small></span><span className={`admission-status ${state?.ok ? 'passed' : state ? 'failed' : 'idle'}`}>{state?.ok ? <><BadgeCheck />通过</> : state ? <><CircleAlert />未通过</> : '待探测'}</span></li>)}</ul>}
+                  <div className="connection-catalog-actions"><button type="button" className="icon-button" title="刷新模型列表" aria-label="刷新模型列表" disabled={locked || dirty || scanning.includes(selected.id)} onClick={() => void scan(selected)}><RefreshCw className={scanning.includes(selected.id) ? 'spinning' : ''} /></button><button type="button" className="secondary-button" disabled={locked || dirty || !selectedCatalog?.ok || !selectedCatalog.models.length || admissionScanning.includes(selected.id)} onClick={() => void probeConnection(selected, selectedCatalog!.models).catch((error) => setNotice({ error: true, text: formatServiceError(error) }))}><ShieldCheck />检查全部模型</button></div>
+                  {scanning.includes(selected.id) ? <p role="status">正在获取模型列表…</p> : !selectedCatalog?.ok ? <p className="assignment-warning" role="status">{selectedCatalog?.message ?? '尚未获取模型列表'}</p> : selectedCatalog.models.length === 0 ? <p>没有找到模型</p> : <ul>{selectedAdmissions.map(({ model, state }) => <li key={model}><Bot /><span><strong>{model}</strong><small>{state?.message ?? '尚未检查'}</small></span><span className={`admission-status ${state?.ok ? 'passed' : state ? 'failed' : 'idle'}`}>{state?.ok ? <><BadgeCheck />可用</> : state ? <><CircleAlert />不可用</> : '待检查'}</span></li>)}</ul>}
                 </div>}
-              </div> : <div className="settings-actions"><span /><button type="submit" className="primary-button" disabled={formLocked}><Save />{busy ? '保存中...' : '保存并探测全部模型'}</button></div>}
+              </div> : <div className="settings-actions"><span /><button type="submit" className="primary-button" disabled={formLocked}><Save />{busy ? '保存中...' : '保存并检查模型'}</button></div>}
             </form>
           </div>
         </section>
       </main>
-      <aside className="settings-sidebar"><section className="settings-side-panel" aria-labelledby="hardware-title"><div className="settings-section-heading"><div><span className="section-kicker">DEVICE</span><h2 id="hardware-title">本机环境</h2></div><button type="button" className="icon-button" aria-label="重新检测硬件" title="重新检测硬件" disabled={detectingHardware || locked} onClick={() => void detectHardware()}><RefreshCw className={detectingHardware ? 'spinning' : ''} /></button></div><div className="hardware-tier-large"><Cpu /><div><strong>{detectingHardware ? '检测中…' : hardwareTierLabels[tier]}</strong><span>{hardwareSummary(hardware)}</span></div></div>{!detectingHardware && (tier === 'insufficient' || tier === 'unknown') && <div className="hardware-advice" role={tier === 'insufficient' ? 'alert' : 'status'}><CircleAlert /><span>{tier === 'insufficient' ? LOCAL_HARDWARE_ADVICE : '无法确认本机内存或独立显存。'}</span><button type="button" className="secondary-button" disabled={locked} onClick={addRemoteConnection}><Cloud />添加远程连接</button></div>}</section><section className="settings-side-panel admission-policy"><ShieldCheck /><div><strong>格式准入</strong><p>连接可用，并能按接口协议返回通过 Schema 校验的 JSON。</p></div></section></aside>
+      <aside className="settings-sidebar"><section className="settings-side-panel" aria-labelledby="hardware-title"><div className="settings-section-heading"><div><h2 id="hardware-title">本机配置</h2></div><button type="button" className="icon-button" aria-label="重新检测本机配置" title="重新检测本机配置" disabled={detectingHardware || locked} onClick={() => void detectHardware()}><RefreshCw className={detectingHardware ? 'spinning' : ''} /></button></div><div className="hardware-tier-large"><Cpu /><div><strong>{detectingHardware ? '检测中…' : hardwareTierLabels[tier]}</strong><span>{hardwareSummary(hardware)}</span></div></div>{!detectingHardware && (tier === 'insufficient' || tier === 'unknown') && <div className="hardware-advice" role={tier === 'insufficient' ? 'alert' : 'status'}><CircleAlert /><span>{tier === 'insufficient' ? LOCAL_HARDWARE_ADVICE : '无法确认本机内存或独立显存。'}</span><button type="button" className="secondary-button" disabled={locked} onClick={addRemoteConnection}><Cloud />添加远程服务</button></div>}</section></aside>
     </div></div>
   </section>
 }
