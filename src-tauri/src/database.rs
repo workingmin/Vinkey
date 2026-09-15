@@ -279,15 +279,62 @@ pub fn init(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
            id TEXT PRIMARY KEY, name TEXT NOT NULL,
            kind TEXT NOT NULL CHECK(kind IN ('ollama', 'openai-compatible')),
            base_url TEXT NOT NULL, has_api_key INTEGER NOT NULL DEFAULT 0,
+           credential_fingerprint TEXT NOT NULL DEFAULT 'none',
            updated_at INTEGER NOT NULL
          );
          CREATE TABLE IF NOT EXISTS model_profile_connections (
            profile_id TEXT PRIMARY KEY, connection_id TEXT NOT NULL
          );
          INSERT OR IGNORE INTO model_connections
+           (id, name, kind, base_url, has_api_key, updated_at)
            SELECT id, name, kind, base_url, has_api_key, updated_at FROM model_profiles
            WHERE id NOT IN (SELECT profile_id FROM model_profile_connections);
          INSERT OR IGNORE INTO model_profile_connections SELECT id, id FROM model_profiles;",
+    )?;
+    let _ = connection.execute(
+        "ALTER TABLE model_connections ADD COLUMN credential_fingerprint TEXT NOT NULL DEFAULT 'none'",
+        [],
+    );
+    connection.execute(
+        "UPDATE model_connections
+         SET credential_fingerprint = CASE
+           WHEN has_api_key = 0 THEN 'none'
+           ELSE 'legacy:' || id
+         END
+         WHERE credential_fingerprint = ''
+            OR (has_api_key = 1 AND credential_fingerprint = 'none')",
+        [],
+    )?;
+    connection.execute(
+        "UPDATE model_profile_connections
+         SET connection_id = (
+           SELECT keeper.id
+           FROM model_connections current
+           JOIN model_connections keeper
+             ON keeper.base_url = current.base_url
+            AND keeper.credential_fingerprint = current.credential_fingerprint
+           WHERE current.id = model_profile_connections.connection_id
+           ORDER BY keeper.updated_at DESC, keeper.id ASC
+           LIMIT 1
+         )",
+        [],
+    )?;
+    connection.execute(
+        "DELETE FROM model_connections
+         WHERE id <> (
+           SELECT keeper.id
+           FROM model_connections keeper
+           WHERE keeper.base_url = model_connections.base_url
+             AND keeper.credential_fingerprint = model_connections.credential_fingerprint
+           ORDER BY keeper.updated_at DESC, keeper.id ASC
+           LIMIT 1
+         )",
+        [],
+    )?;
+    connection.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS model_connections_identity
+         ON model_connections(base_url, credential_fingerprint)",
+        [],
     )?;
     Ok(())
 }
@@ -1534,5 +1581,33 @@ mod tests {
             )
             .expect("task_ref column");
         assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn enforces_unique_connection_identity() {
+        let directory = tempfile::tempdir().expect("temp directory");
+        let path = directory.path().join("connections.sqlite3");
+        init(&path).expect("database schema");
+        let connection = Connection::open(path).expect("database connection");
+        connection
+            .execute(
+                "INSERT INTO model_connections(id, name, kind, base_url, has_api_key, credential_fingerprint, updated_at)
+                 VALUES('a', 'A', 'ollama', 'http://localhost:11434', 0, 'none', 1)",
+                [],
+            )
+            .expect("first connection");
+        let duplicate = connection.execute(
+            "INSERT INTO model_connections(id, name, kind, base_url, has_api_key, credential_fingerprint, updated_at)
+             VALUES('b', 'B', 'ollama', 'http://localhost:11434', 0, 'none', 2)",
+            [],
+        );
+        assert!(duplicate.is_err());
+        connection
+            .execute(
+                "INSERT INTO model_connections(id, name, kind, base_url, has_api_key, credential_fingerprint, updated_at)
+                 VALUES('c', 'C', 'ollama', 'http://localhost:11434', 1, 'sha256:other', 3)",
+                [],
+            )
+            .expect("different credential identity");
     }
 }

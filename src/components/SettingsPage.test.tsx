@@ -135,4 +135,20 @@ describe('model settings workflow', () => {
     expect(await desktop.listModelConnections()).toEqual([])
     expect(await desktop.listModelProfiles()).toEqual([])
   })
+
+  it('deduplicates connections by normalized address and empty credential', async () => {
+    const [connection] = await desktop.listModelConnections()
+    await expect(desktop.saveModelConnection({
+      id: 'duplicate-empty', name: '重复连接', kind: connection.kind,
+      baseUrl: 'http://localhost:11434/',
+    })).rejects.toThrow('相同服务地址和 API 密钥的连接已存在')
+    expect(await desktop.listModelConnections()).toHaveLength(1)
+  })
+
+  it('allows the same address when credentials differ and rejects the same credential', async () => {
+    await desktop.saveModelConnection({ id: 'key-a', name: '密钥 A', kind: 'ollama', baseUrl: 'http://localhost:11434', apiKey: 'secret-a' })
+    await desktop.saveModelConnection({ id: 'key-b', name: '密钥 B', kind: 'ollama', baseUrl: 'http://localhost:11434', apiKey: 'secret-b' })
+    await expect(desktop.saveModelConnection({ id: 'key-c', name: '密钥 A 副本', kind: 'ollama', baseUrl: 'http://localhost:11434/', apiKey: 'secret-a' })).rejects.toThrow('相同服务地址和 API 密钥的连接已存在')
+    expect((await desktop.listModelConnections()).map((item) => item.id)).toEqual(expect.arrayContaining(['key-a', 'key-b']))
+  })
 })

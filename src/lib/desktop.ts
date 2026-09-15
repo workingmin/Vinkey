@@ -31,9 +31,12 @@ const CONNECTION_KEY = 'vinkey.demo.modelConnections'
 const CONVERSATION_KEY = 'vinkey.demo.conversations'
 const PROJECTS_KEY = 'vinkey.demo.projects'
 const MEMORY_KEY = 'vinkey.demo.projectMemory'
+const FINGERPRINT_KEY = 'vinkey.demo.connectionFingerprints'
 const demoCancellations = new Set<string>()
 const demoTaskJobs = new Map<string, TaskJob>()
 const demoProjectDocuments = new Map<string, Map<string, DocumentSnapshot>>()
+const demoCredentialKeys = new Map<string, string>()
+const demoCredentialFingerprints = new Map<string, string>()
 
 export interface RuntimeDiagnostics {
   path: string
@@ -700,13 +703,74 @@ export async function listModelProfiles(): Promise<ModelProfile[]> {
 }
 
 function readDemoConnections(): ModelConnection[] {
+  try {
+    const storedFingerprints = JSON.parse(localStorage.getItem(FINGERPRINT_KEY) ?? '{}') as Record<string, string>
+    demoCredentialFingerprints.clear()
+    for (const [id, fingerprint] of Object.entries(storedFingerprints)) if (typeof fingerprint === 'string') demoCredentialFingerprints.set(id, fingerprint)
+  } catch { demoCredentialFingerprints.clear() }
   const stored = localStorage.getItem(CONNECTION_KEY)
-  if (stored !== null) return JSON.parse(stored) as ModelConnection[]
+  if (stored !== null) {
+    const parsed = JSON.parse(stored) as ModelConnection[]
+    const seen = new Set<string>()
+    const replacements = new Map<string, string>()
+    const normalized = parsed
+      .map((item) => ({ ...item, baseUrl: normalizeDemoBase(item.kind, item.baseUrl) }))
+      .filter((item) => {
+        const identity = demoConnectionIdentity(item)
+        if (identity.startsWith('unknown:')) return true
+        if (seen.has(identity)) {
+          const keeper = parsed.find((candidate) => demoConnectionIdentity(candidate) === identity)
+          if (keeper) replacements.set(item.id, keeper.id)
+          return false
+        }
+        seen.add(identity)
+        return true
+      })
+    if (JSON.stringify(normalized) !== JSON.stringify(parsed)) {
+      localStorage.setItem(CONNECTION_KEY, JSON.stringify(normalized))
+      const ids = new Set(normalized.map((item) => item.id))
+      localStorage.setItem(PROFILE_KEY, JSON.stringify(readDemoProfiles()
+        .filter((profile) => !profile.connectionId || ids.has(profile.connectionId) || replacements.has(profile.connectionId))
+        .map((profile) => profile.connectionId && replacements.has(profile.connectionId)
+          ? { ...profile, connectionId: replacements.get(profile.connectionId) }
+          : profile)))
+    }
+    return normalized
+  }
   const profiles = readDemoProfiles()
   const connections = profiles.map(({ id, name, kind, baseUrl, hasApiKey, updatedAt }) => ({ id, name, kind, baseUrl, hasApiKey, updatedAt }))
   localStorage.setItem(CONNECTION_KEY, JSON.stringify(connections))
   localStorage.setItem(PROFILE_KEY, JSON.stringify(profiles.map((profile) => ({ ...profile, connectionId: profile.id }))))
   return connections
+}
+
+function normalizeDemoBase(kind: ModelConnectionInput['kind'], raw: string): string {
+  let value = raw.trim().replace(/\/+$/, '')
+  if (!value.includes('://')) value = `http://${value}`
+  try {
+    const url = new URL(value)
+    if (kind === 'ollama' && url.pathname.replace(/\/+$/, '') === '/v1') url.pathname = ''
+    if (kind === 'openai-compatible' && (!url.pathname || url.pathname === '/')) url.pathname = '/v1'
+    return url.toString().replace(/\/+$/, '')
+  } catch {
+    return value
+  }
+}
+
+function demoCredentialFingerprint(apiKey?: string): string {
+  return apiKey?.trim() ? `key:${apiKey.trim()}` : 'none'
+}
+
+async function secureDemoCredentialFingerprint(apiKey: string): Promise<string> {
+  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(apiKey.trim()))
+  return `sha256:${Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, '0')).join('')}`
+}
+
+function demoConnectionIdentity(connection: Pick<ModelConnection, 'id' | 'kind' | 'baseUrl' | 'hasApiKey'> & { apiKey?: string }): string {
+  const apiKey = connection.apiKey ?? demoCredentialKeys.get(connection.id)
+  const fingerprint = demoCredentialFingerprints.get(connection.id)
+  if (connection.hasApiKey && !apiKey && !fingerprint) return `unknown:${connection.id}`
+  return `${normalizeDemoBase(connection.kind, connection.baseUrl)}\u0000${fingerprint ?? demoCredentialFingerprint(apiKey)}`
 }
 
 export async function listModelConnections(): Promise<ModelConnection[]> {
@@ -717,10 +781,19 @@ export async function saveModelConnection(input: ModelConnectionInput): Promise<
   if (isDesktop()) return invoke<ModelConnection>('save_model_connection', { input })
   const connections = readDemoConnections()
   const existing = connections.find((item) => item.id === input.id)
+  const effectiveApiKey = input.clearApiKey ? undefined : input.apiKey?.trim() || demoCredentialKeys.get(input.id)
+  const fingerprint = effectiveApiKey ? await secureDemoCredentialFingerprint(effectiveApiKey) : 'none'
   const connection: ModelConnection = {
-    id: input.id, name: input.name.trim(), kind: input.kind, baseUrl: input.baseUrl.trim().replace(/\/+$/, ''),
+    id: input.id, name: input.name.trim(), kind: input.kind, baseUrl: normalizeDemoBase(input.kind, input.baseUrl),
     hasApiKey: input.clearApiKey ? false : Boolean(input.apiKey?.trim()) || Boolean(existing?.hasApiKey), updatedAt: Date.now(),
   }
+  const duplicate = connections.find((item) => item.id !== input.id && demoConnectionIdentity(item) === `${connection.baseUrl}\u0000${fingerprint}`)
+  if (duplicate) throw new Error(`相同服务地址和 API 密钥的连接已存在：${duplicate.name}`)
+  if (input.clearApiKey) demoCredentialKeys.delete(input.id)
+  else if (input.apiKey?.trim()) demoCredentialKeys.set(input.id, input.apiKey.trim())
+  if (input.clearApiKey || !effectiveApiKey) demoCredentialFingerprints.delete(input.id)
+  else demoCredentialFingerprints.set(input.id, fingerprint)
+  localStorage.setItem(FINGERPRINT_KEY, JSON.stringify(Object.fromEntries(demoCredentialFingerprints)))
   localStorage.setItem(CONNECTION_KEY, JSON.stringify([connection, ...connections.filter((item) => item.id !== input.id)]))
   return connection
 }
@@ -729,6 +802,9 @@ export async function deleteModelConnection(id: string): Promise<void> {
   if (isDesktop()) return invoke('delete_model_connection', { id })
   localStorage.setItem(CONNECTION_KEY, JSON.stringify(readDemoConnections().filter((item) => item.id !== id)))
   localStorage.setItem(PROFILE_KEY, JSON.stringify(readDemoProfiles().filter((item) => item.connectionId !== id)))
+  demoCredentialKeys.delete(id)
+  demoCredentialFingerprints.delete(id)
+  localStorage.setItem(FINGERPRINT_KEY, JSON.stringify(Object.fromEntries(demoCredentialFingerprints)))
 }
 
 export async function discoverConnectionModels(input: ModelConnectionInput): Promise<ModelConnectionResult> {

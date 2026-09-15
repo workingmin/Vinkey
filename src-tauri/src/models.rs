@@ -3,9 +3,10 @@ use crate::{
     runtime_log::RuntimeLogState,
 };
 use futures_util::StreamExt;
-use rusqlite::params;
+use rusqlite::{params, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use std::{
     collections::HashMap,
     sync::{
@@ -41,6 +42,85 @@ pub struct ModelConnection {
     base_url: String,
     has_api_key: bool,
     updated_at: u64,
+}
+
+const EMPTY_CREDENTIAL_FINGERPRINT: &str = "none";
+
+fn credential_fingerprint(api_key: &str) -> String {
+    let digest = Sha256::digest(api_key.trim().as_bytes());
+    let encoded: String = digest.iter().map(|byte| format!("{byte:02x}")).collect();
+    format!("sha256:{encoded}")
+}
+
+fn reconcile_connection_identities(db: &mut rusqlite::Connection) -> Result<(), String> {
+    let mut statement = db
+        .prepare(
+            "SELECT id, kind, base_url, has_api_key, credential_fingerprint
+             FROM model_connections ORDER BY updated_at DESC, id ASC",
+        )
+        .map_err(|error| error.to_string())?;
+    let rows = statement
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, i64>(3)? != 0,
+                row.get::<_, String>(4)?,
+            ))
+        })
+        .map_err(|error| error.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?;
+    drop(statement);
+
+    let mut keepers: HashMap<(String, String), String> = HashMap::new();
+    let mut survivors = Vec::new();
+    let mut duplicates = Vec::new();
+    for (id, kind, stored_base, has_api_key, stored_fingerprint) in rows {
+        let base_url = normalize_base(&kind, &stored_base).unwrap_or(stored_base);
+        let fingerprint = if has_api_key {
+            get_secret(&id)
+                .ok()
+                .map(|key| credential_fingerprint(&key))
+                .unwrap_or(stored_fingerprint)
+        } else {
+            EMPTY_CREDENTIAL_FINGERPRINT.to_string()
+        };
+        let identity = (base_url.clone(), fingerprint.clone());
+        if let Some(keeper) = keepers.get(&identity) {
+            duplicates.push((id, keeper.clone()));
+        } else {
+            keepers.insert(identity, id.clone());
+            survivors.push((id, base_url, fingerprint));
+        }
+    }
+
+    let transaction = db.transaction().map_err(|error| error.to_string())?;
+    for (duplicate, keeper) in &duplicates {
+        transaction
+            .execute(
+                "UPDATE model_profile_connections SET connection_id=?1 WHERE connection_id=?2",
+                params![keeper, duplicate],
+            )
+            .map_err(|error| error.to_string())?;
+        transaction
+            .execute("DELETE FROM model_connections WHERE id=?1", [duplicate])
+            .map_err(|error| error.to_string())?;
+    }
+    for (id, base_url, fingerprint) in survivors {
+        transaction
+            .execute(
+                "UPDATE model_connections SET base_url=?1, credential_fingerprint=?2 WHERE id=?3",
+                params![base_url, fingerprint, id],
+            )
+            .map_err(|error| error.to_string())?;
+    }
+    transaction.commit().map_err(|error| error.to_string())?;
+    for (duplicate, _) in duplicates {
+        delete_secret(&duplicate)?;
+    }
+    Ok(())
 }
 
 fn connection_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ModelConnection> {
@@ -83,7 +163,8 @@ fn hydrate_profile(db: &rusqlite::Connection, profile: &mut ModelProfile) -> Res
 pub fn list_model_connections(
     state: State<'_, DatabaseState>,
 ) -> Result<Vec<ModelConnection>, String> {
-    let db = database::open(&state)?;
+    let mut db = database::open(&state)?;
+    reconcile_connection_identities(&mut db)?;
     let mut statement = db.prepare("SELECT id, name, kind, base_url, has_api_key, updated_at FROM model_connections ORDER BY updated_at DESC")
         .map_err(|error| error.to_string())?;
     let rows = statement
@@ -103,25 +184,60 @@ pub fn save_model_connection(
     if input.name.trim().is_empty() {
         return Err("连接名称不能为空".into());
     }
-    let db = database::open(&state)?;
+    let mut db = database::open(&state)?;
+    reconcile_connection_identities(&mut db)?;
     let mut has_key = load_connection(&db, &input.id)
         .map(|value| value.has_api_key)
         .unwrap_or(false);
+    let stored_fingerprint = db
+        .query_row(
+            "SELECT credential_fingerprint FROM model_connections WHERE id=?1",
+            [&input.id],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?;
+    let supplied_key = input
+        .api_key
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let fingerprint = if input.clear_api_key.unwrap_or(false) {
+        EMPTY_CREDENTIAL_FINGERPRINT.to_string()
+    } else if let Some(key) = supplied_key {
+        credential_fingerprint(key)
+    } else {
+        stored_fingerprint.unwrap_or_else(|| EMPTY_CREDENTIAL_FINGERPRINT.to_string())
+    };
+    let duplicate_name = db
+        .query_row(
+            "SELECT name FROM model_connections
+             WHERE base_url=?1 AND credential_fingerprint=?2 AND id<>?3 LIMIT 1",
+            params![base, fingerprint, input.id],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?;
+    if let Some(name) = duplicate_name {
+        return Err(format!("相同服务地址和 API 密钥的连接已存在：{name}"));
+    }
     if input.clear_api_key.unwrap_or(false) {
         delete_secret(&input.id)?;
         has_key = false;
     }
-    if let Some(key) = input
-        .api_key
-        .as_deref()
-        .filter(|value| !value.trim().is_empty())
-    {
-        set_secret(&input.id, key.trim())?;
+    if let Some(key) = supplied_key {
+        set_secret(&input.id, key)?;
         has_key = true;
     }
-    db.execute("INSERT INTO model_connections(id, name, kind, base_url, has_api_key, updated_at) VALUES(?1, ?2, ?3, ?4, ?5, ?6)
-        ON CONFLICT(id) DO UPDATE SET name=excluded.name, kind=excluded.kind, base_url=excluded.base_url, has_api_key=excluded.has_api_key, updated_at=excluded.updated_at",
-        params![input.id, input.name.trim(), input.kind, base, has_key as i32, now_ms() as i64]).map_err(|error| error.to_string())?;
+    db.execute("INSERT INTO model_connections(id, name, kind, base_url, has_api_key, credential_fingerprint, updated_at) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7)
+        ON CONFLICT(id) DO UPDATE SET name=excluded.name, kind=excluded.kind, base_url=excluded.base_url, has_api_key=excluded.has_api_key, credential_fingerprint=excluded.credential_fingerprint, updated_at=excluded.updated_at",
+        params![input.id, input.name.trim(), input.kind, base, has_key as i32, fingerprint, now_ms() as i64]).map_err(|error| {
+            if error.to_string().contains("model_connections.base_url") {
+                "相同服务地址和 API 密钥的连接已存在".to_string()
+            } else {
+                error.to_string()
+            }
+        })?;
     load_connection(&db, &input.id)
 }
 
@@ -1418,6 +1534,19 @@ mod tests {
             normalize_base("openai-compatible", "localhost:1234").unwrap(),
             "http://localhost:1234/v1"
         );
+    }
+
+    #[test]
+    fn fingerprints_credentials_without_exposing_them() {
+        assert_eq!(
+            credential_fingerprint(" secret "),
+            credential_fingerprint("secret")
+        );
+        assert_ne!(
+            credential_fingerprint("secret-a"),
+            credential_fingerprint("secret-b")
+        );
+        assert!(!credential_fingerprint("secret").contains("secret"));
     }
 
     #[test]
