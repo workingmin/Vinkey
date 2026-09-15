@@ -148,6 +148,23 @@
 | 消息内活动轨迹和产物对话框 | `src/components/MessageActivity.tsx` | 已实现，职责与任务中心分离 |
 | 暂停/恢复操作 | `src/lib/desktop.ts` 有底层接口 | 任务中心入口待补齐 |
 
+## 组件与业务功能映射
+
+本表是任务中心页面验收清单；对话页中的任务恢复、暂停和活动轨迹由 `UI_DESIGN_CHAT.md` 负责。
+
+| 组件 ID | 类型 | 组件 | 功能点 / 入口 | 行为或结果 | 实现位置 | 状态 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `UI-TASK-COUNTS` | 状态 | 运行、完成、失败计数 | `BF-TASK-001` / `EP-TASK-001` | 汇总当前工作区任务状态 | `src/components/TaskCenter.tsx` | 已实现 |
+| `UI-TASK-REFRESH` | 操作 | 刷新按钮和加载图标 | `BF-TASK-001` / `EP-TASK-001` | 重新读取任务列表；请求期间禁用 | `src/components/TaskCenter.tsx` | 已实现 |
+| `UI-TASK-LIST-STATE` | 状态 | 未打开项目、暂无任务和全局读取错误 | `BF-TASK-001` / `EP-TASK-001` | 表达任务列表边界状态 | `src/components/TaskCenter.tsx`、`src/App.tsx` | 部分实现（首次加载和局部错误待补） |
+| `UI-TASK-ROW-TOGGLE` | 操作 | 任务行展开/收起按钮 | `BF-TASK-002` / `EP-TASK-002` | 保持单个任务详情展开并同步 `aria-expanded` | `src/components/TaskCenter.tsx` | 已实现 |
+| `UI-TASK-STATUS` | 状态 | 任务状态、更新时间和步骤状态 | `BF-TASK-001`、`BF-TASK-002` / `EP-TASK-001`、`EP-TASK-002` | 展示持久化 Job/Step 状态、执行次数和检查点 | `src/components/TaskCenter.tsx` | 已实现 |
+| `UI-TASK-FAILURE` | 结果 | 错误代码、消息和可重试语义 | `BF-TASK-002`、`BF-TASK-003` / `EP-TASK-002`、`EP-TASK-003` | 区分可重试失败和需重新发起 | `src/components/TaskCenter.tsx` | 已实现 |
+| `UI-TASK-RETRY` | 输入/确认 | 步骤选择器和重跑按钮 | `BF-TASK-003` / `EP-TASK-003` | 默认失败步骤，确认后从指定检查点重跑；防重复提交 | `src/components/TaskCenter.tsx` | 已实现 |
+| `UI-TASK-OUTPUT` | 入口/结果 | 查看结果按钮和只读结果区 | `BF-TASK-004` / `EP-TASK-004` | 展示正文、产物目录、耗时和缓存/模型指标 | `src/components/TaskCenter.tsx` | 已实现 |
+| `UI-TASK-CONTROLS` | 操作 | 暂停、恢复和取消按钮 | `BF-TASK-005` / `EP-TASK-005` | 在任务中心控制可恢复任务 | `src/components/TaskCenter.tsx` | 待实现 |
+| `UI-TASK-SOURCE-LINK` | 入口 | 返回来源消息/文件 | `BF-TASK-007` / `EP-TASK-007` | 返回稳定来源并保留任务上下文 | `src/components/TaskCenter.tsx` | 待实现 |
+
 ## 验收标准
 
 1. 从内容区“任务”标签和标题栏菜单均可进入任务中心，且不改变当前会话或工作区。
@@ -159,6 +176,7 @@
 7. 任务列表只显示当前工作区数据，定时刷新不会跨项目串数据，也不会覆盖用户当前展开状态。
 8. 1440×900、1280×800、1024×680 以及窄屏下无文字、面板和按钮重叠；键盘焦点和减少动态效果符合系统设计标准。
 9. 任务中心不显示 API Key、隐藏思维链或未授权正文，不直接修改源文档。
+10. 表中每个 `UI-*` 均关联有效的 `BF-*`、`EP-*`，实现状态与源码和目标态缺口一致。
 
 ## 目标态缺口
 

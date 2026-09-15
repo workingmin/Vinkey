@@ -4,7 +4,7 @@
 - 日期：2026-09-15
 - 适用端：Tauri 2 Windows / macOS 桌面应用
 - 业务入口：[UI_ENTRY_POINTS.md](./UI_ENTRY_POINTS.md)
-- 组件映射：[UI_COMPONENT_MAP.md](./UI_COMPONENT_MAP.md)
+- 组件映射：[UI_DESIGN_SHELL.md](./UI_DESIGN_SHELL.md#组件与业务功能映射)
 
 ## 1. 目标
 

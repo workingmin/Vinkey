@@ -1,5 +1,9 @@
 # UI 设计：模型设置
 
+- 状态：当前实现基线
+- 日期：2026-09-15
+- 业务入口：[UI_ENTRY_POINTS.md](./UI_ENTRY_POINTS.md)
+
 ## 目标
 
 设置页用于设置当前模型、管理模型服务和查看本机配置。底层仍会检查模型能否支持应用所需的响应格式，但页面统一使用“检查”“可用”等用户语言，不呈现 Skill、Schema、格式准入等实现术语。
@@ -112,6 +116,28 @@
 - 无法读取必要硬件信息时显示“硬件未确认”；低于最低门槛时显示“低于最低配置”。
 - 硬件不足或无法确认时提供“添加远程服务”入口。
 
+## 组件与业务功能映射
+
+本表是设置页面验收清单，覆盖当前模型、模型服务、检查结果和本机配置。
+
+| 组件 ID | 类型 | 组件 | 功能点 / 入口 | 行为或结果 | 实现位置 | 状态 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `UI-SETTINGS-BACK` | 操作 | 返回工作区按钮和 Escape | `BF-SETTINGS-001` / `EP-SETTINGS-001` | 检查未保存连接修改后退出设置 | `src/components/SettingsPage.tsx` | 已实现 |
+| `UI-SETTINGS-NOTICE` | 结果 | 设置成功/失败内联提示 | `BF-MODEL-001` 至 `BF-MODEL-005` / `EP-MODEL-001` 至 `EP-MODEL-005` | 展示保存、连接、检查和删除结果 | `src/components/SettingsPage.tsx` | 已实现 |
+| `UI-MODEL-PICKER` | 输入 | 当前模型组合框和选项列表 | `BF-MODEL-001` / `EP-MODEL-001` | 键盘或鼠标选择应用级活动模型 | `src/components/SettingsPage.tsx` `ModelPicker` | 已实现 |
+| `UI-MODEL-ACTIVE-STATUS` | 状态 | 当前模型、服务、检查和上下文配置状态 | `BF-MODEL-001`、`BF-MODEL-004` / `EP-MODEL-001`、`EP-MODEL-004` | 显示可用、需要检查、未选择和自动配置结果 | `src/components/SettingsPage.tsx` | 已实现 |
+| `UI-CONNECTION-ADD` | 入口 | 添加服务按钮 | `BF-MODEL-002` / `EP-MODEL-002` | 打开新的连接表单 | `src/components/SettingsPage.tsx` | 已实现 |
+| `UI-CONNECTION-LIST` | 输入/状态 | 模型服务列表、选择和连接状态点 | `BF-MODEL-002`、`BF-MODEL-004` / `EP-MODEL-002`、`EP-MODEL-004` | 选择编辑对象并显示服务地址和可用模型数 | `src/components/SettingsPage.tsx` | 已实现 |
+| `UI-CONNECTION-DELETE` | 确认/操作 | 删除服务按钮 | `BF-MODEL-003` / `EP-MODEL-003` | 确认后删除连接；初始加载、保存、对话生成、分析运行或目标连接探测期间禁用 | `src/components/SettingsPage.tsx` | 已实现 |
+| `UI-CONNECTION-FORM` | 输入 | 名称、类型、服务地址和 API Key 字段 | `BF-MODEL-002` / `EP-MODEL-002` | 编辑连接草稿；API Key 可为空且不以明文持久化 | `src/components/SettingsPage.tsx` | 已实现 |
+| `UI-CONNECTION-KEY-CLEAR` | 输入 | 删除已保存密钥复选框 | `BF-MODEL-003` / `EP-MODEL-003` | 显式请求删除系统凭据中的密钥 | `src/components/SettingsPage.tsx` | 已实现 |
+| `UI-CONNECTION-SAVE-CHECK` | 操作 | 保存并检查模型 | `BF-MODEL-002`、`BF-MODEL-004` / `EP-MODEL-002`、`EP-MODEL-004` | 校验复合身份、保存连接、获取模型并执行准入检查 | `src/components/SettingsPage.tsx` | 已实现 |
+| `UI-MODEL-CATALOG-TOGGLE` | 操作 | 查看/收起模型列表 | `BF-MODEL-004` / `EP-MODEL-004` | 展开或收起当前服务模型目录 | `src/components/SettingsPage.tsx` | 已实现 |
+| `UI-MODEL-CATALOG-ACTIONS` | 操作 | 刷新模型列表、检查全部模型 | `BF-MODEL-004` / `EP-MODEL-004` | 获取服务模型并按顺序执行准入检查 | `src/components/SettingsPage.tsx` | 已实现 |
+| `UI-MODEL-CATALOG-RESULT` | 状态/结果 | 读取中、连接失败、无模型及逐模型检查结果 | `BF-MODEL-004` / `EP-MODEL-004` | 显示模型目录和可用/不可用/待检查状态 | `src/components/SettingsPage.tsx` | 已实现 |
+| `UI-HARDWARE-DETECT` | 操作 | 重新检测本机配置 | `BF-HARDWARE-001` / `EP-HARDWARE-001` | 读取本机平台、内存和显存信息 | `src/components/SettingsPage.tsx` | 已实现 |
+| `UI-HARDWARE-RESULT` | 状态/入口 | 硬件档位、建议和添加远程服务 | `BF-HARDWARE-001`、`BF-MODEL-005` / `EP-HARDWARE-001`、`EP-MODEL-005` | 显示本机能力；不足或未知时进入远程服务表单 | `src/components/SettingsPage.tsx` | 已实现 |
+
 ## 数据与状态
 
 - 模型列表、检查结果和自动配置的上下文长度缓存在 `vinkey.modelProbeCache`，按连接 ID、接口协议和 Base URL 校验。
@@ -123,3 +149,11 @@
 - 初始加载、保存、对话生成或分析运行期间锁定连接和活动模型修改；正在获取模型列表或检查模型的连接不能删除。
 - 离开存在未保存修改的表单前需要确认。
 - 浏览器模式使用模拟连接和探测结果；真实请求与凭据访问仅由桌面端执行。
+
+## 验收
+
+- 当前模型、服务列表和模型目录的选择、加载、空态、失败及检查结果均可在本页完成核对。
+- 相同规范化服务地址和相同 API Key（包括都为空）不能重复保存；同地址不同密钥可以共存。
+- API Key 不以明文进入数据库、缓存、日志或 UI 反馈；删除服务有确认，删除密钥必须显式勾选并保存。
+- 加载、保存、对话生成、分析运行和连接探测期间的禁用范围与组件表及源码一致。
+- 表中每个 `UI-*` 均关联有效的 `BF-*`、`EP-*`，实现状态与源码一致。

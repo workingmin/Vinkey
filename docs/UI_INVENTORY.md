@@ -2,7 +2,7 @@
 
 - 盘点日期：2026-09-15
 - 对比基线：2026-09-02 盘点；重点核对 2026-09-03 至 `a5e882b` 的实现提交
-- 依据：`src/App.tsx`、`src/components/*`、`src/store.ts`、`src/styles.css`、`src/lib/desktop.ts`、[UI_ENTRY_POINTS.md](./UI_ENTRY_POINTS.md)、[UI_COMPONENT_MAP.md](./UI_COMPONENT_MAP.md)
+- 依据：`src/App.tsx`、`src/components/*`、`src/store.ts`、`src/styles.css`、`src/lib/desktop.ts`、[UI_ENTRY_POINTS.md](./UI_ENTRY_POINTS.md) 和各 `UI_DESIGN_*.md` 的组件映射
 - 目的：为 UI 精细化调整提供可追踪的现状基线
 
 ## 0. 统计结论
@@ -10,7 +10,7 @@
 - **13 类 UI 界面/表面**：Windows 标题栏、macOS 原生窗口区、项目与会话侧栏、对话页、文件列表页、文件编辑页、任务中心、设置页、AI 修改提案条、分析产物预览、删除确认、运行日志、全局错误/状态反馈。
 - **6 个交互域**：应用壳层、项目与文件、AI 对话、文档编辑、后台任务、设置与反馈。
 - **21 个源码组件/组件函数**：`App`、`TitleBar`、`IconButton`、`ContentPanel`、`ProjectSessionSidebar`、`FileBrowserPanel`、`WorkspaceTree`、`TreeItem`、`FileWorkspace`、`EditorPanel`、`CodeEditor`、`ChatPanel`、`ChatMessageItem`、`MarkdownContent`、`MessageActivity`、`TaskCenter`、`SettingsPage`、`ModelPicker`、`FilePreview`、`RecordDeletionDialog`、`CodeBlock`。
-- **83 类业务语义 UI 组件模式**：包含入口、操作、输入、确认、状态和结果组件，关联 50 个稳定业务功能点；完整登记见 [UI_COMPONENT_MAP.md](./UI_COMPONENT_MAP.md)。
+- **83 类业务语义 UI 组件模式**：包含入口、操作、输入、确认、状态和结果组件，关联 50 个稳定业务功能点；按页面或交互域登记在对应 `UI_DESIGN_*.md`。
 - **5 类跨域状态**：本机工作区/多项目与会话状态、文档编辑与修改提案、模型连接/活动模型状态、流式对话/分析活动状态、可恢复后台任务状态。
 
 ## 1. 界面总览
@@ -79,7 +79,7 @@
 
 ## 3. 当前可见交互清单
 
-跨页面业务功能入口、前置条件和跳转目标统一见 [UI_ENTRY_POINTS.md](./UI_ENTRY_POINTS.md)；交互和结果组件与业务功能点的映射见 [UI_COMPONENT_MAP.md](./UI_COMPONENT_MAP.md)。本节只保留当前实现的可见交互事实。
+跨页面业务功能入口、前置条件和跳转目标统一见 [UI_ENTRY_POINTS.md](./UI_ENTRY_POINTS.md)；交互和结果组件与业务功能点的映射按页面见对应 `UI_DESIGN_*.md`。本节只保留当前实现的可见交互事实。
 
 ### 导航与窗口
 
@@ -149,17 +149,16 @@
 
 ## 5. 设计稿与实现的主要差异
 
-1. `@` 文件引用和基础 AI 修改提案审核已经实现，但 `UI_DESIGN.md`、`UI_DESIGN_CHAT.md`、`UI_DESIGN_STATES.md` 仍把它们标为目标态，需同步文档状态。
-2. 当前提案审核是编辑器内联基础视图，设计稿要求的完整 diff、接受全部/逐块审核、放弃提案流程仍未完全实现。
-3. 设计稿列出的编辑器、数据、权限等设置分组尚未实现，目前设置页聚焦模型服务和外观主题。
-4. 设计稿建议的 toast、统一原生确认对话框和统一内联重试还未形成公共组件，当前仍混用 `alert`、`prompt`、`confirm`、错误条和局部对话框。
-5. `EditorPanel` 目前数据模型保留 `tabs`，但 UI 仍没有多标签切换；外部文件冲突、对比、重新加载和另存为也未实现。
+1. 当前提案审核是编辑器内联基础视图，设计稿要求的完整 diff、接受全部/逐块审核、放弃提案流程仍未完全实现。
+2. 设计稿列出的编辑器、数据、权限等设置分组尚未实现，目前设置页聚焦模型服务和外观主题。
+3. 设计稿建议的 toast、统一原生确认对话框和统一内联重试还未形成公共组件，当前仍混用 `alert`、`prompt`、`confirm`、错误条和局部对话框。
+4. `EditorPanel` 目前数据模型保留 `tabs`，但 UI 仍没有多标签切换；外部文件冲突、对比、重新加载和另存为也未实现。
 
 ## 6. 2026-09-02 后 UI 变更核对
 
 | 日期 | 已确认的 UI 变化 | 当前验收状态 |
 | --- | --- | --- |
-| 2026-09-03 | `@` 文件引用、对话交互状态、可折叠活动轨迹、文档分析快捷入口、跨平台运行日志 | 已实现；设计文档状态标记需补同步 |
+| 2026-09-03 | `@` 文件引用、对话交互状态、可折叠活动轨迹、文档分析快捷入口、跨平台运行日志 | 已实现；设计文档状态已同步 |
 | 2026-09-04 | 会话侧栏操作、聚焦/概览/深度分析入口、结构化本地文学任务反馈 | 已实现；完整 Agent Runtime 仍为目标态 |
 | 2026-09-07 | 后台任务中心、任务步骤、失败重跑和结果入口 | 已实现；暂停/恢复和通知仍待补齐 |
 | 2026-09-08 | 多项目侧栏、项目/会话记录删除确认、侧栏主题切换、macOS 窗口控制适配 | 已实现 |

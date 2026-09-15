@@ -3,16 +3,15 @@
 - 状态：当前实现入口基线，目标态入口明确标注
 - 日期：2026-09-15
 - 适用端：Windows、macOS 桌面应用；浏览器模式仅提供有限演示能力
-- 关联文档：[UI_DESIGN.md](./UI_DESIGN.md)、[UI_COMPONENT_MAP.md](./UI_COMPONENT_MAP.md)、[UI_INVENTORY.md](./UI_INVENTORY.md)、[UI_DESIGN_SHELL.md](./UI_DESIGN_SHELL.md)、[UI_DESIGN_CHAT.md](./UI_DESIGN_CHAT.md)、[UI_DESIGN_EDITOR.md](./UI_DESIGN_EDITOR.md)、[UI_DESIGN_TASKS.md](./UI_DESIGN_TASKS.md)、[UI_DESIGN_SETTINGS.md](./UI_DESIGN_SETTINGS.md)
+- 关联文档：[UI_DESIGN.md](./UI_DESIGN.md)、[UI_INVENTORY.md](./UI_INVENTORY.md)、[UI_DESIGN_SHELL.md](./UI_DESIGN_SHELL.md)、[UI_DESIGN_CHAT.md](./UI_DESIGN_CHAT.md)、[UI_DESIGN_EDITOR.md](./UI_DESIGN_EDITOR.md)、[UI_DESIGN_TASKS.md](./UI_DESIGN_TASKS.md)、[UI_DESIGN_SETTINGS.md](./UI_DESIGN_SETTINGS.md)、[UI_DESIGN_STATES.md](./UI_DESIGN_STATES.md)
 
 ## 文档职责
 
-本文件是业务功能点和跨页面入口的唯一设计索引，回答“用户从哪里开始一项业务操作、需要什么前置条件、操作后到哪里”。它不替代页面设计文档或组件登记表：
+本文件是业务功能点和跨页面入口的唯一设计索引，回答“用户从哪里开始一项业务操作、需要什么前置条件、操作后到哪里”。它不替代页面设计文档中的组件登记和验收内容：
 
 - `UI_INVENTORY.md` 记录当前已有的页面、源码组件和交互事实。
 - `UI_ENTRY_POINTS.md` 为业务功能点分配稳定的 `BF-*` 编号，为业务入口分配稳定的 `EP-*` 编号。
-- `UI_COMPONENT_MAP.md` 使用 `UI-*` 编号登记交互组件和结果组件，并关联 `BF-*`、`EP-*`。
-- `UI_DESIGN_*.md` 记录对应页面或交互域的布局、详细步骤、状态、隐私边界和验收标准。
+- `UI_DESIGN_*.md` 记录对应页面或交互域的布局、详细步骤、组件映射、状态、隐私边界和验收标准，并为组件分配 `UI-*` 编号。
 - `UI_DESIGN.md` 只维护信息架构、跨域原则和文档索引。
 
 入口状态统一使用：`已实现`、`部分实现`、`待实现`。同一个入口在不同平台行为不同的，必须在实现状态中说明平台差异。
@@ -132,7 +131,7 @@
 
 ## 维护规则
 
-- 新增业务功能时，先在本文件分配 `BF-*` 和 `EP-*`，再登记 `UI_COMPONENT_MAP.md` 并更新对应域设计文档和 `UI_INVENTORY.md`。
+- 新增业务功能时，先在本文件分配 `BF-*` 和 `EP-*`，再登记到对应 `UI_DESIGN_*.md` 的组件映射并更新 `UI_INVENTORY.md`。
 - 入口位置或文案变化时，同时检查标题栏、侧栏、内容区、快捷键和 macOS 原生菜单。
 - 入口实现状态变化时，同步入口总表、组件映射和现状盘点；详细设计中的流程状态也必须更新。
 - 删除入口或功能点时保留编号并标记“已移除”，不得把旧编号复用给其他语义。
