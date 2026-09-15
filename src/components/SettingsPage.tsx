@@ -1,5 +1,6 @@
 import { ArrowLeft, BadgeCheck, Bot, Check, ChevronDown, CircleAlert, Cloud, Cpu, PlugZap, Plus, RefreshCw, Save, ShieldCheck, Trash2 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { deleteModelConnection, discoverConnectionModels, getLocalHardware, listModelConnections, listModelProfiles, probeModelAdmission, saveModelConnection, saveModelProfile } from '../lib/desktop'
 import { hardwareSummary, hardwareTier, hardwareTierLabels, LOCAL_CONTEXT_WINDOW, LOCAL_HARDWARE_ADVICE, type LocalHardware } from '../lib/hardwareProfile'
 import { formatServiceError } from '../lib/serviceError'
@@ -13,6 +14,18 @@ type PersistedProbe = {
   baseUrl: string
   catalog: ModelConnectionResult
   admissions: Record<string, AdmissionState>
+}
+
+type ModelPickerOption = {
+  value: string
+  model: string
+  connection: string
+  pending?: boolean
+}
+
+type ModelMenuPosition = {
+  placement: 'up' | 'down'
+  style: CSSProperties
 }
 
 const PROBE_CACHE_KEY = 'vinkey.modelProbeCache'
@@ -87,6 +100,163 @@ function removePersistedProbe(connectionId: string): void {
   if (!(connectionId in cache)) return
   delete cache[connectionId]
   writeProbeCache(cache)
+}
+
+function ModelPicker({ value, options, disabled, onChange }: {
+  value: string
+  options: ModelPickerOption[]
+  disabled: boolean
+  onChange: (value: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(0)
+  const [menuPosition, setMenuPosition] = useState<ModelMenuPosition>({ placement: 'down', style: {} })
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const listboxId = useId()
+  const selectedIndex = options.findIndex((option) => option.value === value)
+  const selected = selectedIndex >= 0 ? options[selectedIndex] : undefined
+
+  const positionMenu = useCallback(() => {
+    const button = buttonRef.current
+    if (!button) return
+    const rect = button.getBoundingClientRect()
+    const viewportMargin = 8
+    const menuGap = 5
+    const desiredHeight = Math.min(240, Math.max(52, options.length * 48 + 8))
+    const availableBelow = window.innerHeight - rect.bottom - viewportMargin - menuGap
+    const availableAbove = rect.top - viewportMargin - menuGap
+    const placement = availableBelow >= Math.min(desiredHeight, 144) || availableBelow >= availableAbove ? 'down' : 'up'
+    const availableHeight = placement === 'down' ? availableBelow : availableAbove
+    const width = Math.min(rect.width, window.innerWidth - viewportMargin * 2)
+    const left = Math.max(viewportMargin, Math.min(rect.left, window.innerWidth - width - viewportMargin))
+    setMenuPosition({
+      placement,
+      style: {
+        left,
+        top: placement === 'down' ? rect.bottom + menuGap : rect.top - menuGap,
+        width,
+        maxHeight: Math.max(52, Math.min(240, availableHeight)),
+      },
+    })
+  }, [options.length])
+
+  const showMenu = (initialIndex?: number) => {
+    if (disabled || options.length === 0) return
+    setActiveIndex(initialIndex ?? (selectedIndex >= 0 ? selectedIndex : 0))
+    positionMenu()
+    setOpen(true)
+  }
+
+  const chooseOption = (index: number) => {
+    const option = options[index]
+    if (!option) return
+    setOpen(false)
+    if (option.value !== value) onChange(option.value)
+    buttonRef.current?.focus()
+  }
+
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      event.stopPropagation()
+      if (!open) {
+        const fallback = event.key === 'ArrowDown' ? 0 : options.length - 1
+        showMenu(selectedIndex >= 0 ? selectedIndex : fallback)
+      } else {
+        const offset = event.key === 'ArrowDown' ? 1 : -1
+        setActiveIndex((index) => (index + offset + options.length) % options.length)
+      }
+      return
+    }
+    if (open && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault()
+      chooseOption(activeIndex)
+      return
+    }
+    if (open && event.key === 'Home') {
+      event.preventDefault()
+      setActiveIndex(0)
+      return
+    }
+    if (open && event.key === 'End') {
+      event.preventDefault()
+      setActiveIndex(options.length - 1)
+      return
+    }
+    if (open && event.key === 'Escape') {
+      event.preventDefault()
+      event.stopPropagation()
+      setOpen(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!open) return
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      const target = event.target as Node
+      if (!buttonRef.current?.contains(target) && !menuRef.current?.contains(target)) setOpen(false)
+    }
+    const reposition = () => positionMenu()
+    document.addEventListener('mousedown', closeOnOutsideClick)
+    window.addEventListener('resize', reposition)
+    window.addEventListener('scroll', reposition, true)
+    return () => {
+      document.removeEventListener('mousedown', closeOnOutsideClick)
+      window.removeEventListener('resize', reposition)
+      window.removeEventListener('scroll', reposition, true)
+    }
+  }, [open, positionMenu])
+
+  useEffect(() => {
+    if (disabled) setOpen(false)
+  }, [disabled])
+
+  return <div className="model-picker">
+    <button
+      ref={buttonRef}
+      type="button"
+      className="model-picker-trigger"
+      role="combobox"
+      aria-label="当前模型"
+      aria-haspopup="listbox"
+      aria-expanded={open}
+      aria-controls={listboxId}
+      aria-activedescendant={open ? `${listboxId}-option-${activeIndex}` : undefined}
+      disabled={disabled || options.length === 0}
+      onClick={() => open ? setOpen(false) : showMenu()}
+      onKeyDown={onKeyDown}
+    >
+      <span className="model-picker-value">
+        <strong>{selected?.model ?? '请选择模型'}</strong>
+        <small>{selected?.connection ?? (options.length ? '选择已检查可用的模型' : '请先检查模型服务')}</small>
+      </span>
+      <ChevronDown className={open ? 'expanded' : ''} />
+    </button>
+    {open && createPortal(<div
+      ref={menuRef}
+      id={listboxId}
+      className="model-picker-menu"
+      role="listbox"
+      aria-label="当前模型"
+      data-placement={menuPosition.placement}
+      style={menuPosition.style}
+    >
+      {options.map((option, index) => <div
+        id={`${listboxId}-option-${index}`}
+        key={option.value}
+        className={`model-picker-option ${index === activeIndex ? 'active' : ''}`}
+        role="option"
+        aria-selected={option.value === value}
+        onMouseDown={(event) => event.preventDefault()}
+        onMouseEnter={() => setActiveIndex(index)}
+        onClick={() => chooseOption(index)}
+      >
+        <span><strong>{option.model}</strong><small>{option.connection}{option.pending ? ' · 需要检查' : ''}</small></span>
+        {option.value === value && <Check />}
+      </div>)}
+    </div>, document.body)}
+  </div>
 }
 
 export function SettingsPage() {
@@ -316,7 +486,7 @@ export function SettingsPage() {
         })
       setModelProfiles(await listModelProfiles())
       setActiveModelId(profile.id)
-      setNotice({ error: false, text: `已将 ${model} 设为默认模型` })
+      setNotice({ error: false, text: `已切换到 ${model}` })
     } catch (error) { setNotice({ error: true, text: formatServiceError(error) }) }
     finally { setBusy(false) }
   }
@@ -331,16 +501,24 @@ export function SettingsPage() {
     .filter((value): value is { connection: ModelConnection; model: string } => Boolean(value))
   const activeValue = activeProfile && activeConnection ? JSON.stringify([activeConnection.id, activeProfile.model]) : ''
   const activeAdmission = activeProfile && activeConnection ? admissions[admissionKey(activeConnection.id, activeProfile.model)] : undefined
+  const modelOptions: ModelPickerOption[] = [
+    ...(activeProfile && activeConnection && !activeAdmission?.ok
+      ? [{ value: activeValue, model: activeProfile.model, connection: activeConnection.name, pending: true }]
+      : []),
+    ...availableModels.map(({ connection, model }) => ({
+      value: JSON.stringify([connection.id, model]), model, connection: connection.name,
+    })),
+  ]
 
   return <section className="settings-page" aria-label="模型设置">
-    <header className="settings-toolbar"><div><h1>模型设置</h1><p>选择默认模型并管理模型服务</p></div><button className="icon-button" title="返回工作区" aria-label="返回工作区" disabled={busy} onClick={close}><ArrowLeft /></button></header>
+    <header className="settings-toolbar"><div><h1>模型设置</h1><p>设置当前模型并管理模型服务</p></div><button className="icon-button" title="返回工作区" aria-label="返回工作区" disabled={busy} onClick={close}><ArrowLeft /></button></header>
     {notice && <div role={notice.error ? 'alert' : 'status'} className={`settings-notice ${notice.error ? 'failure' : ''}`}>{notice.error ? <CircleAlert /> : <Check />}<span>{notice.text}</span></div>}
     <div className="model-settings-scroll"><div className="settings-layout">
       <main className="settings-main">
         <section className="active-model-panel" aria-labelledby="active-model-title">
-          <div className="settings-section-heading"><div><h2 id="active-model-title">默认模型</h2></div></div>
-          <p className="section-description">对话、续写、改稿等功能将使用这个模型。</p>
-          <div className="active-model-row"><div className="active-model-icon"><Bot /></div><label className="assignment-select"><span className="sr-only">默认模型</span><select aria-label="默认模型" value={activeValue} disabled={locked} onChange={(event) => void selectModel(event.target.value)}><option value="">请选择模型</option>{activeProfile && !activeAdmission?.ok && <option value={activeValue}>{activeProfile.model}（需要检查）</option>}{availableModels.map(({ connection, model }) => <option key={`${connection.id}:${model}`} value={JSON.stringify([connection.id, model])}>{model} · {connection.name}</option>)}</select><ChevronDown /></label><div className={`admission-badge ${activeAdmission?.ok ? 'passed' : activeProfile ? 'pending' : ''}`}><span>{activeAdmission?.ok ? <BadgeCheck /> : <ShieldCheck />}</span>{activeAdmission?.ok ? '可用' : activeProfile ? '需要检查' : '未选择'}</div></div>
+          <div className="settings-section-heading"><div><h2 id="active-model-title">当前模型</h2></div></div>
+          <p className="section-description">对话、续写和改稿等功能均使用此模型。</p>
+          <div className="active-model-row"><div className="active-model-icon"><Bot /></div><ModelPicker value={activeValue} options={modelOptions} disabled={locked} onChange={(value) => void selectModel(value)} /><div className={`admission-badge ${activeAdmission?.ok ? 'passed' : activeProfile ? 'pending' : ''}`}><span>{activeAdmission?.ok ? <BadgeCheck /> : <ShieldCheck />}</span>{activeAdmission?.ok ? '可用' : activeProfile ? '需要检查' : '未选择'}</div></div>
           <div className="active-model-meta"><span><PlugZap />{activeConnection?.name ?? '未选择服务'}</span>{activeAdmission?.ok && <span><Cpu />上下文已自动配置</span>}</div>
           {activeProfile && activeAdmission && !activeAdmission.ok && <p className="assignment-warning"><CircleAlert />模型检查未通过，部分功能可能无法正常使用。</p>}
         </section>
@@ -354,10 +532,9 @@ export function SettingsPage() {
                 return <div className={`connection-list-item ${connection.id === selectedId ? 'active' : ''}`} key={connection.id}>
                   <button type="button" className="connection-select" disabled={locked} onClick={() => chooseConnection(connection)}>
                     <PlugZap />
-                    <span><b>{connection.name}</b><small>{connection.baseUrl}</small><small>{scanning.includes(connection.id) ? '正在获取模型列表…' : admissionScanning.includes(connection.id) ? '正在检查模型…' : catalog?.ok ? `${passed}/${catalog.models.length} 个模型可用` : '无法连接'}</small></span>
+                    <span className="connection-copy"><span className="connection-name"><b>{connection.name}</b><span className={`connection-dot ${catalog?.ok ? passed > 0 ? 'online' : 'warning' : ''}`} title={catalog?.ok ? passed > 0 ? '有可用模型' : '尚无可用模型' : '无法连接'} aria-label={catalog?.ok ? passed > 0 ? '有可用模型' : '尚无可用模型' : '无法连接'} /></span><small>{connection.baseUrl}</small><small>{scanning.includes(connection.id) ? '正在获取模型列表…' : admissionScanning.includes(connection.id) ? '正在检查模型…' : catalog?.ok ? `${passed}/${catalog.models.length} 个模型可用` : '无法连接'}</small></span>
                   </button>
                   <div className="connection-item-actions">
-                    <span className={`connection-dot ${catalog?.ok ? passed > 0 ? 'online' : 'warning' : ''}`} title={catalog?.ok ? passed > 0 ? '有可用模型' : '尚无可用模型' : '无法连接'} aria-label={catalog?.ok ? passed > 0 ? '有可用模型' : '尚无可用模型' : '无法连接'} />
                     <button type="button" className="icon-button connection-list-delete" title={`删除服务“${connection.name}”`} aria-label="删除服务" disabled={locked || scanning.includes(connection.id) || admissionScanning.includes(connection.id)} onClick={() => void remove(connection)}><Trash2 /></button>
                   </div>
                 </div>

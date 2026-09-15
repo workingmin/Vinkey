@@ -21,8 +21,9 @@ describe('model settings workflow', () => {
     render(<SettingsPage />)
     expect((await screen.findAllByText('标准配置')).length).toBeGreaterThan(0)
     fireEvent.click(await screen.findByRole('button', { name: '查看模型列表' }))
-    expect(await screen.findByText('qwen3:14b')).toBeTruthy()
-    expect(screen.getByRole('combobox', { name: '默认模型' })).toBeTruthy()
+    expect((await screen.findAllByText('qwen3:14b')).length).toBeGreaterThan(0)
+    expect(screen.getByRole('heading', { name: '当前模型' })).toBeTruthy()
+    expect(screen.getByRole('combobox', { name: '当前模型' })).toBeTruthy()
     expect(screen.queryByRole('spinbutton', { name: '上下文长度' })).toBeNull()
   })
 
@@ -52,13 +53,13 @@ describe('model settings workflow', () => {
     const saveButton = await screen.findByRole('button', { name: '保存并检查模型' })
     await waitFor(() => expect((screen.getByRole('button', { name: '保存并检查模型' }) as HTMLButtonElement).disabled).toBe(false))
     fireEvent.click(screen.getByRole('button', { name: '保存并检查模型' }))
-    await screen.findByRole('option', { name: 'qwen3:8b · Ollama · 浏览器演示' })
-    const activeModel = screen.getByRole('combobox', { name: '默认模型' }) as HTMLSelectElement
+    const activeModel = screen.getByRole('combobox', { name: '当前模型' }) as HTMLButtonElement
     await waitFor(() => expect(activeModel.disabled).toBe(false))
-    fireEvent.change(activeModel, { target: { value: JSON.stringify(['demo-ollama', 'qwen3:8b']) } })
-    await waitFor(() => expect(screen.getByText(/已将 qwen3:8b 设为默认模型/)).toBeTruthy())
+    fireEvent.click(activeModel)
+    fireEvent.click(await screen.findByRole('option', { name: /openbmb\/minicpm4\.1:latest.*Ollama · 浏览器演示/ }))
+    await waitFor(() => expect(screen.getByText('已切换到 openbmb/minicpm4.1:latest')).toBeTruthy())
     const state = useAppStore.getState()
-    expect(state.modelProfiles.find((profile) => profile.id === state.activeModelId)?.model).toBe('qwen3:8b')
+    expect(state.modelProfiles.find((profile) => profile.id === state.activeModelId)?.model).toBe('openbmb/minicpm4.1:latest')
   })
 
   it('keeps same-name models from different connections distinct and reconciles a deleted active model', async () => {
@@ -71,10 +72,10 @@ describe('model settings workflow', () => {
     await waitFor(() => expect((saveButton as HTMLButtonElement).disabled).toBe(false))
     fireEvent.click(saveButton)
     await screen.findByText('服务已保存，3/3 个模型可用', undefined, { timeout: 5000 })
-    await screen.findAllByRole('option', { name: 'qwen3:8b · 局域网' })
-    const secondActiveModel = screen.getByRole('combobox', { name: '默认模型' }) as HTMLSelectElement
+    const secondActiveModel = screen.getByRole('combobox', { name: '当前模型' }) as HTMLButtonElement
     await waitFor(() => expect(secondActiveModel.disabled).toBe(false))
-    fireEvent.change(secondActiveModel, { target: { value: JSON.stringify([second.id, 'qwen3:8b']) } })
+    fireEvent.click(secondActiveModel)
+    fireEvent.click(await screen.findByRole('option', { name: /qwen3:8b.*局域网/ }))
     await waitFor(() => expect(useAppStore.getState().modelProfiles.find((profile) => profile.id === useAppStore.getState().activeModelId)?.connectionId).toBe('second'))
     expect((await desktop.listModelProfiles()).some((profile) => profile.connectionId === initial[0].id)).toBe(true)
     vi.spyOn(window, 'confirm').mockReturnValue(true)
@@ -93,7 +94,23 @@ describe('model settings workflow', () => {
     fireEvent.click(await screen.findByRole('button', { name: '查看模型列表' }))
     await screen.findByText('服务返回 HTTP 401')
     expect(screen.getByText('需要检查')).toBeTruthy()
-    expect((screen.getByRole('combobox', { name: '默认模型' }) as HTMLSelectElement).selectedOptions[0].textContent).toContain('qwen3:8b')
+    expect(screen.getByRole('combobox', { name: '当前模型' }).textContent).toContain('qwen3:8b')
+  })
+
+  it('opens the model list upward only when the window has more room above', async () => {
+    render(<SettingsPage />)
+    const picker = screen.getByRole('combobox', { name: '当前模型' }) as HTMLButtonElement
+    await waitFor(() => expect(picker.disabled).toBe(false))
+    vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(500)
+    vi.spyOn(picker, 'getBoundingClientRect').mockReturnValue({
+      x: 100, y: 440, top: 440, bottom: 486, left: 100, right: 400, width: 300, height: 46,
+      toJSON: () => ({}),
+    })
+
+    fireEvent.click(picker)
+    expect((await screen.findByRole('listbox', { name: '当前模型' })).dataset.placement).toBe('up')
+    fireEvent.keyDown(picker, { key: 'Escape' })
+    expect(screen.queryByRole('listbox', { name: '当前模型' })).toBeNull()
   })
 
   it('restores the model catalog from cache when settings are reopened', async () => {
