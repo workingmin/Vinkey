@@ -38,4 +38,4 @@ export function hardwareSummary(hardware: LocalHardware | null): string {
 }
 
 export const LOCAL_CONTEXT_WINDOW = 16_384
-export const LOCAL_HARDWARE_ADVICE = '本机低于本地模型最低要求。建议连接局域网推理服务或商用 AI（OpenAI 兼容接口）。'
+export const LOCAL_HARDWARE_ADVICE = '本机配置较低，建议使用局域网或远程模型服务。'
