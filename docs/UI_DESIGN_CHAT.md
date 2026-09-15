@@ -9,7 +9,7 @@
 ## 布局
 
 ```text
-内容区顶栏：会话摘要                         对话 | 文件
+内容区顶栏：会话摘要                    对话 | 文件 | 任务
 消息流：助手左对齐、用户右对齐
 底部输入区：引用文件
              多行输入
@@ -33,7 +33,7 @@
 该 HTML 区块会直接显示对话页的空间层级和输入区入口。背景采用浅色中性灰阶，仅用于区分区域，不代表产品实际配色或状态语义：
 
 <table border="1" cellpadding="8" cellspacing="0" width="100%">
-  <tr><td bgcolor="#F1F3F5"><strong>会话摘要</strong>　会话标题　工作区 · 模型　　　　　　　　　<strong>对话</strong>　|　文件</td></tr>
+  <tr><td bgcolor="#F1F3F5"><strong>会话摘要</strong>　会话标题　工作区 · 模型　　　　　　　<strong>对话</strong>　|　文件　|　任务</td></tr>
   <tr>
     <td height="180" valign="top" bgcolor="#FFFFFF">
       <strong>消息流</strong><br><br>

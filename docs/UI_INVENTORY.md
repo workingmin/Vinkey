@@ -2,7 +2,7 @@
 
 - 盘点日期：2026-09-15
 - 对比基线：2026-09-02 盘点；重点核对 2026-09-03 至 `a5e882b` 的实现提交
-- 依据：`src/App.tsx`、`src/components/*`、`src/store.ts`、`src/styles.css`、`src/lib/desktop.ts`、[UI_ENTRY_POINTS.md](./UI_ENTRY_POINTS.md)
+- 依据：`src/App.tsx`、`src/components/*`、`src/store.ts`、`src/styles.css`、`src/lib/desktop.ts`、[UI_ENTRY_POINTS.md](./UI_ENTRY_POINTS.md)、[UI_COMPONENT_MAP.md](./UI_COMPONENT_MAP.md)
 - 目的：为 UI 精细化调整提供可追踪的现状基线
 
 ## 0. 统计结论
@@ -10,6 +10,7 @@
 - **13 类 UI 界面/表面**：Windows 标题栏、macOS 原生窗口区、项目与会话侧栏、对话页、文件列表页、文件编辑页、任务中心、设置页、AI 修改提案条、分析产物预览、删除确认、运行日志、全局错误/状态反馈。
 - **6 个交互域**：应用壳层、项目与文件、AI 对话、文档编辑、后台任务、设置与反馈。
 - **21 个源码组件/组件函数**：`App`、`TitleBar`、`IconButton`、`ContentPanel`、`ProjectSessionSidebar`、`FileBrowserPanel`、`WorkspaceTree`、`TreeItem`、`FileWorkspace`、`EditorPanel`、`CodeEditor`、`ChatPanel`、`ChatMessageItem`、`MarkdownContent`、`MessageActivity`、`TaskCenter`、`SettingsPage`、`ModelPicker`、`FilePreview`、`RecordDeletionDialog`、`CodeBlock`。
+- **83 类业务语义 UI 组件模式**：包含入口、操作、输入、确认、状态和结果组件，关联 50 个稳定业务功能点；完整登记见 [UI_COMPONENT_MAP.md](./UI_COMPONENT_MAP.md)。
 - **5 类跨域状态**：本机工作区/多项目与会话状态、文档编辑与修改提案、模型连接/活动模型状态、流式对话/分析活动状态、可恢复后台任务状态。
 
 ## 1. 界面总览
@@ -39,7 +40,7 @@
 | `App` | `src/App.tsx` | 页面切换、工作区恢复、模型/会话加载、文档打开保存、快捷键、平台菜单 |
 | `TitleBar` | `src/App.tsx` | 文件/编辑/查看/窗口/帮助菜单，窗口控制，主题切换 |
 | `IconButton` | `src/App.tsx` | 统一图标按钮、tooltip、禁用和选中态 |
-| `ContentPanel` | `src/App.tsx` | 对话/文件 tab、会话摘要、工作区与当前模型摘要 |
+| `ContentPanel` | `src/App.tsx` | 对话/文件/任务 tab、页面摘要、工作区与当前模型摘要 |
 
 ### 项目与文件
 
@@ -78,13 +79,13 @@
 
 ## 3. 当前可见交互清单
 
-跨页面业务功能入口、前置条件和跳转目标统一见 [UI_ENTRY_POINTS.md](./UI_ENTRY_POINTS.md)；本节只保留当前实现的可见交互事实。
+跨页面业务功能入口、前置条件和跳转目标统一见 [UI_ENTRY_POINTS.md](./UI_ENTRY_POINTS.md)；交互和结果组件与业务功能点的映射见 [UI_COMPONENT_MAP.md](./UI_COMPONENT_MAP.md)。本节只保留当前实现的可见交互事实。
 
 ### 导航与窗口
 
 - Windows 自绘标题栏双击切换最大化；按钮执行最小化、最大化/还原、关闭。
 - macOS 使用原生全局菜单；菜单命令与 Windows 保持同一集合。
-- 顶部“对话/文件”是互斥页面切换；进入“文件”时默认收起编辑器。
+- 顶部“对话/文件/任务”是互斥页面切换；进入“文件”时默认收起编辑器。
 - 设置打开时自动折叠侧栏；关闭时恢复进入前状态，设置期间手动切换优先。
 - 侧栏支持多项目展开/切换，项目和会话删除均经过确认对话框；主题可在侧栏和应用菜单切换。
 - macOS 原生窗口按钮会根据侧栏宽度同步布局；窄窗口下设置页和标题栏有专用响应式规则。
@@ -166,6 +167,6 @@
 | 2026-09-14 | 设置页重构、单一活动模型、服务列表/表单、模型目录操作、准入结果缓存、连接状态操作布局 | 已实现 |
 | 2026-09-15 | 当前模型选择器键盘/空间定位、上下文自动配置、连接复合身份去重及重复错误反馈 | 已实现；Rust 桌面构建需在目标平台复验 |
 
-本盘点以当前源码为准；后续 UI 修改应先更新本文件的页面清单和变更核对表，再同步对应域设计文档中的“已实现/部分实现/待实现”标记。
+本盘点以当前源码为准；后续 UI 修改应先更新本文件的页面清单和变更核对表，再同步入口总表、组件映射和对应域设计文档中的“已实现/部分实现/待实现”标记。
 
 后续精调应先选择“现状优化”或“目标态补齐”，并在对应设计域文档中记录验收条件。
