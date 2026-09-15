@@ -396,7 +396,9 @@ button.composer-model-indicator:hover { background: var(--bg-selected); color: v
 .task-center-counts { display: flex; gap: 16px; color: var(--text-secondary); font-size: 10px; }
 .task-center-counts .danger { color: var(--danger); }
 .task-list { min-height: 0; overflow-y: auto; }
-.task-row { display: grid; grid-template-columns: minmax(220px, 1fr) 72px 115px minmax(145px, auto); align-items: center; min-height: 54px; padding: 0 16px; border-bottom: 1px solid var(--border); }
+.task-list-header, .task-row { display: grid; grid-template-columns: minmax(250px, 1fr) 80px 120px 150px; align-items: center; }
+.task-list-header { min-height: 34px; padding: 0 16px; border-bottom: 1px solid var(--border); color: var(--text-muted); font-size: 9px; }
+.task-row { min-height: 54px; padding: 0 16px; border-bottom: 1px solid var(--border); }
 .task-row-toggle { min-width: 0; display: flex; align-items: center; gap: 7px; padding: 0; border: 0; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
 .task-row-toggle > svg { width: 14px; flex: 0 0 14px; color: var(--text-muted); }
 .task-row-toggle > span { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
@@ -405,10 +407,15 @@ button.composer-model-indicator:hover { background: var(--bg-selected); color: v
 .task-status { font-size: 10px; color: var(--text-secondary); }.task-status.status-running { color: var(--accent); }.task-status.status-failed { color: var(--danger); }.task-status.status-completed { color: #73b694; }.task-status.status-paused { color: var(--warning); }
 .task-row > time { color: var(--text-muted); font-size: 9px; }
 .task-row-actions { display: flex; justify-content: flex-end; align-items: center; gap: 6px; }
-.task-row-actions select { width: 110px; height: 27px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-main); color: var(--text-secondary); font-size: 10px; }
 .task-row-actions button { width: 27px; height: 27px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-main); color: var(--text-secondary); cursor: pointer; }
 .task-row-actions button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--bg-selected); color: var(--text); }.task-row-actions button:disabled { opacity: .45; cursor: default; }.task-row-actions svg { width: 13px; }
 .task-detail { grid-column: 1 / -1; padding: 0 0 14px 21px; }
+.task-metadata { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 8px 0; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 9px; }
+.task-metadata .task-id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+.task-retry-panel { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 9px 0; border-top: 1px solid var(--border); }
+.task-retry-panel label { color: var(--text-secondary); font-size: 10px; }
+.task-retry-panel select { width: 140px; height: 28px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-main); color: var(--text-secondary); font-size: 10px; }
+.task-retry-panel .secondary-button { min-height: 28px; padding: 0 8px; font-size: 10px; }
 .task-failure { display: flex; align-items: flex-start; gap: 8px; padding: 9px 0; color: var(--danger); border-top: 1px solid var(--border); }
 .task-failure > svg { width: 14px; flex: 0 0 14px; }.task-failure > span { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }.task-failure strong { font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; }.task-failure small { color: var(--text-secondary); font-size: 10px; overflow-wrap: anywhere; }.task-failure > b { font-size: 9px; font-weight: 500; }
 .task-steps { display: flex; flex-wrap: wrap; gap: 13px; margin: 0; padding: 8px 0; list-style: none; }.task-steps li { display: flex; align-items: center; gap: 6px; }.task-steps i { width: 6px; height: 6px; border-radius: 50%; background: var(--text-muted); }.task-steps .status-completed i { background: #73b694; }.task-steps .status-running i { background: var(--accent); }.task-steps .status-failed i { background: var(--danger); }.task-steps span { display: flex; flex-direction: column; gap: 1px; }.task-steps strong { font-size: 10px; }.task-steps small { color: var(--text-muted); font-size: 9px; }
@@ -717,10 +724,10 @@ button.composer-model-indicator:hover { background: var(--bg-selected); color: v
   .new-files-notice-actions button { max-width: 45%; }
   .editor-diff-proposal { grid-template-columns: 1fr; }
   .editor-diff-proposal > div:last-child { justify-content: flex-start; }
+  .task-list-header { display: none; }
   .task-row { grid-template-columns: minmax(0, 1fr) 62px; gap: 6px 10px; padding: 10px 12px; }
   .task-row > time { display: none; }
   .task-row-actions { grid-column: 1 / -1; justify-content: flex-start; padding-left: 21px; }
-  .task-row-actions select { width: min(180px, calc(100% - 36px)); }
   .task-detail { grid-column: 1 / -1; padding: 2px 0 4px 21px; }
 }
 

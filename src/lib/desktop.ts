@@ -359,6 +359,14 @@ export async function prepareLongTextWorker(
       taskType: 'long-text-analysis',
       instructionHash: input.instructionHash,
       sourceFingerprints: Object.fromEntries(input.documents.map((document) => [document.path, document.sourceFingerprint])),
+      displayTitle: input.displayTitle,
+      conversationId: input.conversationId,
+      sourceMessageId: input.sourceMessageId,
+      workspaceNameSnapshot: input.workspaceNameSnapshot,
+      conversationTitleSnapshot: input.conversationTitleSnapshot,
+      modelProfileId: input.profileId,
+      modelNameSnapshot: input.modelNameSnapshot,
+      connectionNameSnapshot: input.connectionNameSnapshot,
     })
     const manifests: ChunkManifest[] = []
     onEvent?.({ sequence: sequence++, timestamp: Date.now(), jobId: input.jobId, stage: 'chunking', status: 'running', completed: 0, total: input.documents.length, message: '浏览器演示正在准备分块' })

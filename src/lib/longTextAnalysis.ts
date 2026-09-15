@@ -27,6 +27,23 @@ export interface LongTextAnalysisResult {
   jobCheckpointHits: number
 }
 
+export interface LongTextTaskMetadata {
+  displayTitle?: string | null
+  conversationId?: string | null
+  sourceMessageId?: string | null
+  workspaceNameSnapshot?: string | null
+  conversationTitleSnapshot?: string | null
+  modelProfileId?: string | null
+  modelNameSnapshot?: string | null
+  connectionNameSnapshot?: string | null
+}
+
+/** Stable, local-only title used by the task list; it never requires a model call. */
+export function buildTaskDisplayTitle(instruction: string): string {
+  const summary = instruction.replace(/\s+/gu, ' ').trim().replace(/^(?:请)?分析\s*/u, '').slice(0, 24)
+  return summary ? `分析 ${summary}` : '长文本分析任务'
+}
+
 export interface SummaryRecord {
   sourceId: string
   chunkId: string
@@ -252,6 +269,7 @@ export async function analyzeLongText(
   resumeJobId?: string,
   toolCallGuard?: ToolCallGuard,
   workerDispatch?: TaskExecutionDispatch,
+  taskMetadata?: LongTextTaskMetadata,
 ): Promise<LongTextAnalysisResult> {
   if (documents.length === 0) throw new Error('没有可分析的文档')
   const jobId = resumeJobId ?? requestId
@@ -312,6 +330,13 @@ export async function analyzeLongText(
       documentIndex: indexMessage,
       documents: documents.map((document) => ({ path: document.path, sourceFingerprint: sourceFingerprints[document.path] })),
       excludedDocuments,
+      displayTitle: taskMetadata?.displayTitle,
+      conversationId: taskMetadata?.conversationId,
+      sourceMessageId: taskMetadata?.sourceMessageId,
+      workspaceNameSnapshot: taskMetadata?.workspaceNameSnapshot,
+      conversationTitleSnapshot: taskMetadata?.conversationTitleSnapshot,
+      modelNameSnapshot: taskMetadata?.modelNameSnapshot,
+      connectionNameSnapshot: taskMetadata?.connectionNameSnapshot,
     }, (event) => onProgress?.({
       stage: event.stage,
       completed: event.completed,

@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { batchSummaries, chunkTaskGuidance, finalTaskGuidance } from './longTextAnalysis'
+import { batchSummaries, buildTaskDisplayTitle, chunkTaskGuidance, finalTaskGuidance } from './longTextAnalysis'
 
 describe('long text analysis orchestration', () => {
+  it('generates a deterministic readable task title without model assistance', () => {
+    expect(buildTaskDisplayTitle('  分析  第三卷的人物关系  ')).toBe('分析 第三卷的人物关系')
+    expect(buildTaskDisplayTitle('   ')).toBe('长文本分析任务')
+  })
+
   it('packs summaries into budgeted reduce batches without dropping records', () => {
     const records = Array.from({ length: 5 }, (_, index) => ({
       sourceId: 'book.md', chunkId: `chunk-${index}`, heading: null, text: '雾'.repeat(900),

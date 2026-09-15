@@ -65,6 +65,20 @@ pub struct StartLongTextWorkerInput {
     pub documents: Vec<WorkerDocumentInput>,
     #[serde(default)]
     pub excluded_documents: Vec<WorkerExcludedDocument>,
+    #[serde(default)]
+    pub display_title: Option<String>,
+    #[serde(default)]
+    pub conversation_id: Option<String>,
+    #[serde(default)]
+    pub source_message_id: Option<String>,
+    #[serde(default)]
+    pub workspace_name_snapshot: Option<String>,
+    #[serde(default)]
+    pub conversation_title_snapshot: Option<String>,
+    #[serde(default)]
+    pub model_name_snapshot: Option<String>,
+    #[serde(default)]
+    pub connection_name_snapshot: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -2547,6 +2561,14 @@ pub fn start(
                 .iter()
                 .map(|document| (document.path.clone(), document.source_fingerprint.clone()))
                 .collect(),
+            display_title: input.display_title.clone(),
+            conversation_id: input.conversation_id.clone(),
+            source_message_id: input.source_message_id.clone(),
+            workspace_name_snapshot: input.workspace_name_snapshot.clone(),
+            conversation_title_snapshot: input.conversation_title_snapshot.clone(),
+            model_profile_id: Some(input.profile_id.clone()),
+            model_name_snapshot: input.model_name_snapshot.clone(),
+            connection_name_snapshot: input.connection_name_snapshot.clone(),
         },
     )?;
     persist_start_manifest(jobs_root, workspace, &input)?;
@@ -2888,6 +2910,13 @@ mod tests {
                 source_fingerprint: long_text::source_fingerprint("正文"),
             }],
             excluded_documents: Vec::new(),
+            display_title: None,
+            conversation_id: None,
+            source_message_id: None,
+            workspace_name_snapshot: None,
+            conversation_title_snapshot: None,
+            model_name_snapshot: None,
+            connection_name_snapshot: None,
         }
     }
 
@@ -3370,6 +3399,14 @@ mod tests {
                         .into_iter()
                         .map(|document| (document.path, document.source_fingerprint))
                         .collect(),
+                    display_title: task_input.display_title,
+                    conversation_id: task_input.conversation_id,
+                    source_message_id: task_input.source_message_id,
+                    workspace_name_snapshot: task_input.workspace_name_snapshot,
+                    conversation_title_snapshot: task_input.conversation_title_snapshot,
+                    model_profile_id: Some(task_input.profile_id),
+                    model_name_snapshot: task_input.model_name_snapshot,
+                    connection_name_snapshot: task_input.connection_name_snapshot,
                 },
             )
             .unwrap();

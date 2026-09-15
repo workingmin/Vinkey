@@ -27,7 +27,7 @@ import {
   confirmProjectMemory, listProjectMemory, proposeProjectMemory, rejectProjectMemory, searchProjectMemory,
 } from './lib/desktop'
 import { buildRevisionContextMessage, calculateContextBudget, selectRecentMessages } from './lib/context'
-import { analyzeLongText, cancelLongTextAnalysis, pauseLongTextAnalysis, resumeLongTextAnalysis } from './lib/longTextAnalysis'
+import { analyzeLongText, buildTaskDisplayTitle, cancelLongTextAnalysis, pauseLongTextAnalysis, resumeLongTextAnalysis } from './lib/longTextAnalysis'
 import { buildConversationReference, createTaskMessageRef, createTaskRequest, refineTaskForDocuments, routeTask } from './lib/taskRuntime'
 import type { TaskExecutionDispatch } from './lib/taskRuntime'
 import { createToolGateway } from './lib/runtimePolicy'
@@ -770,7 +770,16 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
         }, workspace?.id ?? 'workspace', excludedWorkspaceDocuments, taskDispatch.jobId === nextRequestId ? undefined : taskDispatch.jobId ?? undefined, (toolName, input, output) => {
           if (output) toolGateway.assertResult(toolName, output.value)
           else toolGateway.assert(toolName, input)
-        }, taskDispatch)
+        }, taskDispatch, {
+          displayTitle: buildTaskDisplayTitle(value),
+          conversationId: nextConversationId,
+          sourceMessageId: userMessage.id,
+          workspaceNameSnapshot: workspace?.name ?? null,
+          conversationTitleSnapshot: nextTitle,
+          modelProfileId: selectedModel.id,
+          modelNameSnapshot: selectedModel.model,
+          connectionNameSnapshot: selectedModel.name,
+        })
         setResumeJobId(null)
         setRecoverableJob(null)
         const excludedNote = taskPlan.documentAccess === 'workspace'
@@ -1199,7 +1208,7 @@ function ContentPanel({ page, onPageChange, showFileEditor, onOpenDocument, onOp
     <header className="content-panel-header">
       <div className="content-panel-summary">
         <strong title={pageTitle}>{pageTitle}</strong>
-        <span title={`${workspace?.name ?? '未打开项目'} · ${activeModel?.model ?? '未选择模型'}`}>{workspace?.name ?? '未打开项目'} · {activeModel?.model ?? '未选择模型'}</span>
+        <span title={page === 'tasks' ? `当前项目范围：${workspace?.name ?? '未打开项目'}` : `${workspace?.name ?? '未打开项目'} · ${activeModel?.model ?? '未选择模型'}`}>{page === 'tasks' ? `当前项目范围：${workspace?.name ?? '未打开项目'}` : `${workspace?.name ?? '未打开项目'} · ${activeModel?.model ?? '未选择模型'}`}</span>
       </div>
       <div className="content-switcher" role="tablist" aria-label="内容页面">
         <button role="tab" aria-selected={page === 'chat'} className={page === 'chat' ? 'active' : ''} onClick={() => onPageChange('chat')}><MessageSquareText />对话</button>

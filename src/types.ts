@@ -138,6 +138,15 @@ export interface TaskJob {
   events: TaskJobEvent[]
   error?: string | null
   failure?: ServiceError | null
+  /** Persisted presentation and execution snapshots; absent on legacy jobs. */
+  displayTitle?: string | null
+  conversationId?: string | null
+  sourceMessageId?: string | null
+  workspaceNameSnapshot?: string | null
+  conversationTitleSnapshot?: string | null
+  modelProfileId?: string | null
+  modelNameSnapshot?: string | null
+  connectionNameSnapshot?: string | null
   createdAt: number
   updatedAt: number
 }
@@ -147,6 +156,14 @@ export interface StartTaskJobInput {
   taskType: string
   instructionHash: string
   sourceFingerprints: Record<string, string>
+  displayTitle?: string | null
+  conversationId?: string | null
+  sourceMessageId?: string | null
+  workspaceNameSnapshot?: string | null
+  conversationTitleSnapshot?: string | null
+  modelProfileId?: string | null
+  modelNameSnapshot?: string | null
+  connectionNameSnapshot?: string | null
 }
 
 export interface UpdateTaskJobInput {
@@ -181,6 +198,13 @@ export interface StartLongTextWorkerInput {
   documentIndex?: string | null
   documents: Array<{ path: string; sourceFingerprint: string }>
   excludedDocuments: WorkspaceDocumentRef[]
+  displayTitle?: string | null
+  conversationId?: string | null
+  sourceMessageId?: string | null
+  workspaceNameSnapshot?: string | null
+  conversationTitleSnapshot?: string | null
+  modelNameSnapshot?: string | null
+  connectionNameSnapshot?: string | null
 }
 
 export interface LongTextWorkerOutput {

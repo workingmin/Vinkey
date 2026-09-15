@@ -20,6 +20,22 @@ pub struct StartTaskJobInput {
     pub instruction_hash: String,
     #[serde(default)]
     pub source_fingerprints: HashMap<String, String>,
+    #[serde(default)]
+    pub display_title: Option<String>,
+    #[serde(default)]
+    pub conversation_id: Option<String>,
+    #[serde(default)]
+    pub source_message_id: Option<String>,
+    #[serde(default)]
+    pub workspace_name_snapshot: Option<String>,
+    #[serde(default)]
+    pub conversation_title_snapshot: Option<String>,
+    #[serde(default)]
+    pub model_profile_id: Option<String>,
+    #[serde(default)]
+    pub model_name_snapshot: Option<String>,
+    #[serde(default)]
+    pub connection_name_snapshot: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -83,6 +99,22 @@ pub struct TaskJob {
     pub error: Option<String>,
     #[serde(default)]
     pub failure: Option<TaskJobFailure>,
+    #[serde(default)]
+    pub display_title: Option<String>,
+    #[serde(default)]
+    pub conversation_id: Option<String>,
+    #[serde(default)]
+    pub source_message_id: Option<String>,
+    #[serde(default)]
+    pub workspace_name_snapshot: Option<String>,
+    #[serde(default)]
+    pub conversation_title_snapshot: Option<String>,
+    #[serde(default)]
+    pub model_profile_id: Option<String>,
+    #[serde(default)]
+    pub model_name_snapshot: Option<String>,
+    #[serde(default)]
+    pub connection_name_snapshot: Option<String>,
     pub created_at: u64,
     pub updated_at: u64,
 }
@@ -289,6 +321,14 @@ pub fn start(root: &Path, workspace_id: &str, input: StartTaskJobInput) -> Resul
         events: Vec::new(),
         error: None,
         failure: None,
+        display_title: input.display_title,
+        conversation_id: input.conversation_id,
+        source_message_id: input.source_message_id,
+        workspace_name_snapshot: input.workspace_name_snapshot,
+        conversation_title_snapshot: input.conversation_title_snapshot,
+        model_profile_id: input.model_profile_id,
+        model_name_snapshot: input.model_name_snapshot,
+        connection_name_snapshot: input.connection_name_snapshot,
         created_at: timestamp,
         updated_at: timestamp,
     };
@@ -527,6 +567,14 @@ mod tests {
             task_type: "long-text-analysis".into(),
             instruction_hash: "abc123".into(),
             source_fingerprints: HashMap::from([("chapter.md".into(), "source-1".into())]),
+            display_title: Some("分析全文人物关系".into()),
+            conversation_id: None,
+            source_message_id: None,
+            workspace_name_snapshot: None,
+            conversation_title_snapshot: None,
+            model_profile_id: None,
+            model_name_snapshot: None,
+            connection_name_snapshot: None,
         }
     }
 
@@ -535,6 +583,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let started = start(directory.path(), "work", input("task-1")).unwrap();
         assert_eq!(started.status, "running");
+        assert_eq!(started.display_title.as_deref(), Some("分析全文人物关系"));
         let updated = update(
             directory.path(),
             UpdateTaskJobInput {
