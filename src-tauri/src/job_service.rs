@@ -535,6 +535,13 @@ pub fn cancel(root: &Path, task_id: &str) -> Result<TaskJob, String> {
 }
 
 pub fn list(root: &Path) -> Result<Vec<TaskJob>, String> {
+    list_for_conversation(root, None)
+}
+
+pub fn list_for_conversation(
+    root: &Path,
+    conversation_id: Option<&str>,
+) -> Result<Vec<TaskJob>, String> {
     if !root.exists() {
         return Ok(Vec::new());
     }
@@ -548,12 +555,16 @@ pub fn list(root: &Path) -> Result<Vec<TaskJob>, String> {
         let path = entry.path().join("task.json");
         if let Ok(bytes) = fs::read(path) {
             if let Ok(job) = serde_json::from_slice::<TaskJob>(&bytes) {
-                jobs.push(job);
+                if conversation_id.is_none_or(|id| job.conversation_id.as_deref() == Some(id)) {
+                    jobs.push(job);
+                }
             }
         }
     }
     jobs.sort_by(|left, right| right.updated_at.cmp(&left.updated_at));
-    jobs.truncate(50);
+    if conversation_id.is_none() {
+        jobs.truncate(50);
+    }
     Ok(jobs)
 }
 
@@ -668,6 +679,27 @@ mod tests {
         assert!(cancelled.cancel_requested);
         assert_eq!(get(directory.path(), "task-3").unwrap().status, "cancelled");
         assert_eq!(list(directory.path()).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn lists_all_jobs_for_a_source_conversation_without_the_page_limit() {
+        let directory = tempfile::tempdir().unwrap();
+        for index in 0..55 {
+            let mut task = input(&format!("conversation-task-{index}"));
+            task.conversation_id = Some("conversation-a".into());
+            start(directory.path(), "work", task).unwrap();
+        }
+        let mut other = input("other-conversation-task");
+        other.conversation_id = Some("conversation-b".into());
+        start(directory.path(), "work", other).unwrap();
+
+        assert_eq!(list(directory.path()).unwrap().len(), 50);
+        assert_eq!(
+            list_for_conversation(directory.path(), Some("conversation-a"))
+                .unwrap()
+                .len(),
+            55
+        );
     }
 
     #[test]

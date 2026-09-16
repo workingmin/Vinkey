@@ -82,8 +82,7 @@
 | `UI-ANALYSIS-DOCUMENT-ACTIONS` | 入口 | 分析文本、拆分章节、提取人物线 | `BF-ANALYSIS-001`、`BF-STRUCTURE-001`、`BF-CHARACTER-001` / `EP-ANALYSIS-001`、`EP-STRUCTURE-001`、`EP-CHARACTER-001` | 预填结构化问题，不自动发送 | `src/App.tsx` `ChatPanel` | 已实现 |
 | `UI-ANALYSIS-WORKSPACE-ACTION` | 入口 | 分析整个项目 | `BF-ANALYSIS-002` / `EP-ANALYSIS-002` | 预填项目分析请求，发送后由策略选择分析范围 | `src/App.tsx` `ChatPanel` | 已实现 |
 | `UI-ANALYSIS-NEW-FILES-NOTICE` | 状态/入口 | 新增文本文件提示及逐个/全部分析 | `BF-ANALYSIS-001` / `EP-ANALYSIS-001` | 展示新增文件，允许选择分析或忽略 | `src/App.tsx` `ChatPanel` | 已实现 |
-| `UI-TASK-RECOVERY-NOTICE` | 状态/入口 | 未完成任务提示、恢复和忽略 | `BF-TASK-006` / `EP-TASK-006` | 恢复任务来源文件和指令，等待用户确认发送 | `src/App.tsx` `ChatPanel` | 已实现 |
-| `UI-TASK-PAUSE` | 操作 | 暂停/继续长文本任务按钮 | `BF-TASK-005` / `EP-TASK-005` | 向 Worker 和前端分析控制器同步暂停或恢复请求 | `src/App.tsx` `ChatPanel` | 已实现 |
+| `UI-CONVERSATION-TASK-CONTROLS` | 操作/状态 | 来源会话任务控制区 | `BF-TASK-003`、`BF-TASK-005`、`BF-TASK-006` / `EP-TASK-003`、`EP-TASK-005`、`EP-TASK-006` | 按持久化任务状态提供暂停、继续、取消和失败步骤重试；页面切换后可恢复 | `src/components/ConversationTaskControls.tsx` | 已实现 |
 | `UI-ACTIVITY-TOGGLE` | 操作/状态 | 处理记录展开按钮和当前步骤摘要 | `BF-ACTIVITY-001` / `EP-ACTIVITY-001` | 展开/收起消息内活动轨迹；折叠时显示当前步骤 | `src/components/MessageActivity.tsx` | 已实现 |
 | `UI-ACTIVITY-STEPS` | 结果 | 工序列表、进度、耗时、缓存和模型调用 | `BF-ACTIVITY-001` / `EP-ACTIVITY-001` | 展示可公开的执行事件，不展示隐藏思维链 | `src/components/MessageActivity.tsx` | 已实现 |
 | `UI-ACTIVITY-ARTIFACT-ENTRY` | 入口 | 产物名称和“查看产物清单” | `BF-ACTIVITY-001` / `EP-ACTIVITY-001` | 打开指定 Job 的只读产物预览 | `src/components/MessageActivity.tsx` | 已实现 |
@@ -105,5 +104,5 @@
 
 - 消息流、输入、发送/停止和复制组件的状态与当前会话一致，不产生重复消息。
 - `@` 引用、上下文标签、预算状态和分析快捷入口在键盘操作及中文 IME 下可用。
-- 任务恢复、暂停、活动轨迹和产物预览保持当前工作区边界，不展示隐藏思维链或未授权内容。
+- 任务恢复、生命周期控制、活动轨迹和产物预览保持当前工作区及来源会话边界，不展示隐藏思维链或未授权内容。
 - 表中每个 `UI-*` 均关联有效的 `BF-*`、`EP-*`，实现状态与源码和目标态说明一致。

@@ -353,9 +353,12 @@ fn get_task_job(
 }
 
 #[tauri::command]
-fn list_task_jobs(state: State<'_, WorkspaceState>) -> Result<Vec<job_service::TaskJob>, String> {
+fn list_task_jobs(
+    conversation_id: Option<String>,
+    state: State<'_, WorkspaceState>,
+) -> Result<Vec<job_service::TaskJob>, String> {
     let workspace = lock_workspace(&state)?;
-    job_service::list(&analysis_jobs_dir(&workspace))
+    job_service::list_for_conversation(&analysis_jobs_dir(&workspace), conversation_id.as_deref())
 }
 
 #[tauri::command]

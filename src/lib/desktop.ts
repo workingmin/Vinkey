@@ -331,9 +331,9 @@ export async function getTaskJob(taskId: string): Promise<TaskJob> {
   return invoke<TaskJob>('get_task_job', { taskId })
 }
 
-export async function listTaskJobs(): Promise<TaskJob[]> {
-  if (!isDesktop()) return [...demoTaskJobs.values()].filter((job) => job.workspaceId === currentDemoProjectId()).sort((left, right) => right.updatedAt - left.updatedAt).map((job) => structuredClone(job))
-  return invoke<TaskJob[]>('list_task_jobs')
+export async function listTaskJobs(conversationId?: string): Promise<TaskJob[]> {
+  if (!isDesktop()) return [...demoTaskJobs.values()].filter((job) => job.workspaceId === currentDemoProjectId() && (!conversationId || job.conversationId === conversationId)).sort((left, right) => right.updatedAt - left.updatedAt).map((job) => structuredClone(job))
+  return invoke<TaskJob[]>('list_task_jobs', { conversationId: conversationId ?? null })
 }
 
 export async function cancelTaskJob(taskId: string): Promise<TaskJob> {

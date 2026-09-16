@@ -79,6 +79,7 @@ export interface ChatRun {
   conversationId: string
   conversationTitle: string
   requestId: string
+  taskJobId?: string | null
   status: ChatRunStatus
   statusMessage: string | null
   activityLog: ChatActivity[]

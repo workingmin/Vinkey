@@ -1,6 +1,6 @@
-import { AlertCircle, Check, ChevronDown, ChevronRight, Eye, Pause, Play, RefreshCw, RotateCcw, X } from 'lucide-react'
+import { AlertCircle, Check, ChevronDown, ChevronRight, Copy, Eye, MessageSquareText, RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { cancelTaskJob, getLongTextWorkerOutput, listTaskJobs, pauseTaskWorker, resumeTaskWorker, retryTaskWorkerStep } from '../lib/desktop'
+import { getLongTextWorkerOutput, listTaskJobs } from '../lib/desktop'
 import { formatServiceError } from '../lib/serviceError'
 import { useAppStore } from '../store'
 import type { LongTextWorkerOutput, TaskJob } from '../types'
@@ -20,15 +20,39 @@ function stepLabel(stepId: string): string {
   return stepId
 }
 
-export function TaskCenter() {
+function eventLabel(eventType: string): string {
+  const labels: Record<string, string> = {
+    'task.started': '任务已启动', 'task.resumed': '任务已恢复', 'task.paused': '任务已暂停',
+    'task.failed': '任务执行失败', 'task.cancelled': '任务已取消', 'task.completed': '任务已完成',
+    'worker.paused': 'Worker 已暂停', 'worker.resumed': 'Worker 已恢复', 'step.completed': '步骤已完成',
+    'step.started': '步骤已开始', 'step.failed': '步骤执行失败', 'step.retry_requested': '步骤已请求重试',
+    'worker.step_retry_requested': '步骤已请求重试', 'worker.completed': 'Worker 已完成', 'worker.failed': 'Worker 执行失败',
+    'worker.restore_failed': 'Worker 恢复失败', 'worker.cache_recovered': '已恢复缓存产物',
+  }
+  return labels[eventType] ?? eventType
+}
+
+export function diagnosticsText(job: TaskJob): string {
+  const lines = [
+    `任务：${job.displayTitle || job.taskType}`,
+    `任务 ID：${job.taskId}`,
+    `状态：${statusLabels[job.status]}`,
+    `项目：${job.workspaceNameSnapshot || job.workspaceId}`,
+    `会话：${job.conversationTitleSnapshot || '来源未知'}`,
+    `执行模型：${[job.modelNameSnapshot, job.connectionNameSnapshot].filter(Boolean).join(' · ') || '来源未知'}`,
+  ]
+  if (job.failure) lines.push(`失败：${job.failure.code} · ${job.failure.message}`)
+  lines.push('', '业务链路：', ...job.events.slice(-50).map((event) => `${new Date(event.timestamp).toLocaleString('zh-CN')} · ${eventLabel(event.eventType)}${event.stepId ? ` · ${stepLabel(event.stepId)}` : ''}`))
+  return lines.join('\n')
+}
+
+export function TaskCenter({ onOpenSource }: { onOpenSource: (conversationId: string) => Promise<void> }) {
   const workspace = useAppStore((state) => state.workspace)
   const setError = useAppStore((state) => state.setError)
   const [jobs, setJobs] = useState<TaskJob[]>([])
   const [loading, setLoading] = useState(false)
   const [expanded, setExpanded] = useState<string | null>(null)
-  const [selectedSteps, setSelectedSteps] = useState<Record<string, string>>({})
-  const [retrying, setRetrying] = useState<string | null>(null)
-  const [updating, setUpdating] = useState<string | null>(null)
+  const [copiedTaskId, setCopiedTaskId] = useState<string | null>(null)
   const [outputs, setOutputs] = useState<Record<string, LongTextWorkerOutput>>({})
 
   const refresh = useCallback(async () => {
@@ -49,27 +73,12 @@ export function TaskCenter() {
     completed: jobs.filter((job) => job.status === 'completed').length,
   }), [jobs])
 
-  const retry = async (job: TaskJob) => {
-    const fallback = [...job.steps].reverse().find((step) => step.status === 'failed')?.id ?? job.steps.at(-1)?.id
-    const stepId = selectedSteps[job.taskId] ?? fallback
-    if (!stepId || !window.confirm(`从“${stepLabel(stepId)}”重新执行任务？`)) return
-    setRetrying(job.taskId)
+  const copyDiagnostics = async (job: TaskJob) => {
     try {
-      await retryTaskWorkerStep(job.taskId, stepId)
-      setOutputs((current) => { const next = { ...current }; delete next[job.taskId]; return next })
-      await refresh()
-    } catch (error) { setError(formatServiceError(error)) } finally { setRetrying(null) }
-  }
-
-  const updateStatus = async (job: TaskJob, action: 'pause' | 'resume' | 'cancel') => {
-    if (action === 'cancel' && !window.confirm('取消此任务？已完成的中间产物会保留。')) return
-    setUpdating(job.taskId)
-    try {
-      if (action === 'pause') await pauseTaskWorker(job.taskId)
-      else if (action === 'resume') await resumeTaskWorker(job.taskId)
-      else await cancelTaskJob(job.taskId)
-      await refresh()
-    } catch (error) { setError(formatServiceError(error)) } finally { setUpdating(null) }
+      await navigator.clipboard.writeText(diagnosticsText(job))
+      setCopiedTaskId(job.taskId)
+      window.setTimeout(() => setCopiedTaskId((current) => current === job.taskId ? null : current), 1_800)
+    } catch { setError('复制任务诊断信息失败') }
   }
 
   const inspectOutput = async (jobId: string) => {
@@ -91,14 +100,10 @@ export function TaskCenter() {
     </header>
     <div className="task-list">
       {jobs.length > 0 && <div className="task-list-header" role="row">
-        <span>任务</span><span>状态</span><span>更新时间</span><span>操作</span>
+        <span>任务</span><span>状态</span><span>更新时间</span><span>查看</span>
       </div>}
       {jobs.length === 0 && <div className="task-center-empty"><Check /><strong>暂无后台任务</strong></div>}
       {jobs.map((job) => {
-        const selectedStep = selectedSteps[job.taskId]
-          ?? [...job.steps].reverse().find((step) => step.status === 'failed')?.id
-          ?? job.steps.at(-1)?.id
-          ?? ''
         const output = outputs[job.taskId]
         const shortId = job.taskId.slice(0, 6).toUpperCase()
         const title = job.displayTitle || (job.taskType === 'long-text-analysis' ? '长文本分析任务' : job.taskType)
@@ -112,15 +117,14 @@ export function TaskCenter() {
           <time>{new Date(job.updatedAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })}</time>
           <div className="task-row-actions">
             {job.status === 'completed' && <button title="查看结果" aria-label="查看结果" onClick={() => void inspectOutput(job.taskId)}><Eye /></button>}
-            {job.status === 'running' && <><button title="暂停任务" aria-label="暂停任务" disabled={updating === job.taskId} onClick={() => void updateStatus(job, 'pause')}><Pause /></button><button title="取消任务" aria-label="取消任务" disabled={updating === job.taskId} onClick={() => void updateStatus(job, 'cancel')}><X /></button></>}
-            {job.status === 'paused' && <><button title="继续任务" aria-label="继续任务" disabled={updating === job.taskId} onClick={() => void updateStatus(job, 'resume')}><Play /></button><button title="取消任务" aria-label="取消任务" disabled={updating === job.taskId} onClick={() => void updateStatus(job, 'cancel')}><X /></button></>}
-            {job.status === 'failed' && <button title={job.failure?.retryable === false ? '该失败需重新发起任务' : '重试任务'} aria-label="重试任务" disabled={retrying === job.taskId || job.failure?.retryable === false} onClick={() => void retry(job)}><RotateCcw /></button>}
+            {job.conversationId && <button title="返回来源会话" aria-label="返回来源会话" onClick={() => void onOpenSource(job.conversationId!)}><MessageSquareText /></button>}
+            <button title={copiedTaskId === job.taskId ? '诊断信息已复制' : '复制诊断信息'} aria-label={copiedTaskId === job.taskId ? '诊断信息已复制' : '复制诊断信息'} onClick={() => void copyDiagnostics(job)}>{copiedTaskId === job.taskId ? <Check /> : <Copy />}</button>
           </div>
           {expanded === job.taskId && <div className="task-detail">
             <div className="task-metadata"><span>项目：{job.workspaceNameSnapshot || '来源未知'}</span><span>会话：{job.conversationTitleSnapshot || '来源未知'}</span><span>执行模型：{job.modelNameSnapshot || '来源未知'}{job.connectionNameSnapshot ? ` · ${job.connectionNameSnapshot}` : ''}</span><span className="task-id">任务 ID：{job.taskId}</span></div>
             {job.failure && <div className="task-failure"><AlertCircle /><span><strong>{job.failure.code}</strong><small>{job.failure.message}</small></span><b>{job.failure.retryable ? '可重试' : '需重新发起'}</b></div>}
-            {job.status === 'failed' && job.steps.length > 0 && <div className="task-retry-panel"><label htmlFor={`retry-step-${job.taskId}`}>从此步骤重新执行</label><select id={`retry-step-${job.taskId}`} aria-label="选择重跑步骤" value={selectedStep} disabled={job.failure?.retryable === false} onChange={(event) => setSelectedSteps((current) => ({ ...current, [job.taskId]: event.target.value }))}>{job.steps.map((step) => <option key={step.id} value={step.id}>{stepLabel(step.id)}</option>)}</select><button className="secondary-button" disabled={retrying === job.taskId || job.failure?.retryable === false} onClick={() => void retry(job)}><RotateCcw />确认重跑</button></div>}
             <ol className="task-steps">{job.steps.map((step) => <li key={step.id} className={`status-${step.status}`}><i /><span><strong>{stepLabel(step.id)}</strong><small>第 {step.attempt} 次 · {step.checkpoint ?? '无检查点'}</small></span></li>)}</ol>
+            <section className="task-events" aria-label="业务链路"><strong>业务链路</strong><ol>{job.events.length === 0 ? <li><span>暂无运行事件</span></li> : job.events.slice(-50).map((event) => <li key={event.sequence}><time>{new Date(event.timestamp).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}</time><span>{eventLabel(event.eventType)}</span>{event.stepId && <code>{stepLabel(event.stepId)}</code>}</li>)}</ol></section>
             {output && <div className="task-output">
               <div><span>模型调用 {output.modelInvocationCount}</span><span>跨任务命中 {output.stageCacheHits}</span><span>任务内命中 {output.jobCheckpointHits}</span><span>耗时 {(output.durationMs / 1000).toFixed(1)} 秒</span></div>
               <small>中间产物：.vinkey/analysis/jobs/{job.taskId}/</small>
