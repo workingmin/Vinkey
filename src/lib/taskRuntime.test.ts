@@ -35,6 +35,19 @@ describe('structured task runtime intake', () => {
     expect(() => validateTaskExecutionInput({ taskId: 'task-2', stage: 'preflight', resumeJobId: null, request, plan })).not.toThrow()
   })
 
+  it('keeps explicit analysis actions as drafts even when their prompt mentions structure', () => {
+    const request = createTaskRequest({
+      actionId: 'document-analysis',
+      instruction: '请分析文档内容，并输出章节结构和伏笔报告。',
+      targets: [{ id: 'chapter-1', kind: 'document' }],
+    })
+    const plan = routeTask(request, true)
+    expect(plan.intent).toBe('document-analysis')
+    expect(plan.sideEffect).toBe('draft')
+    expect(request.requestedEffect).toBe('draft')
+    expect(() => validateTaskExecutionInput({ taskId: 'task-3', stage: 'preflight', resumeJobId: null, request, plan })).not.toThrow()
+  })
+
   it('keeps small revisions on bounded original-text context', () => {
     const plan = refineTaskForDocuments(routeTask(createTaskRequest({ instruction: '根据文档润色', actionId: null }), true), [document('短段落')])
     expect(plan.revisionStrategy).toBe('bounded')

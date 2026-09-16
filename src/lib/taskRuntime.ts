@@ -65,6 +65,9 @@ export interface TaskExecutionDispatch {
 function requestedEffect(input: TaskRequestInput): TaskRequest['requestedEffect'] {
   if (input.requestedEffect) return input.requestedEffect
   if (input.actionId === 'structure-segmentation' || input.intent === 'structure-segmentation') return 'proposal'
+  // Explicit analysis/revision actions own their side-effect contract; prompt
+  // keywords must not turn an analysis request into a proposal.
+  if (input.actionId) return 'draft'
   return /(?:拆分章节|章节拆分|拆分场景|场景边界|识别章节(?:和|与)?场景|章节结构)/u.test(input.instruction)
     ? 'proposal'
     : 'draft'

@@ -919,6 +919,8 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
         }
       }
       const names = paths.map((path) => path.split('/').at(-1) ?? path).join('、')
+      // Programmatic file analysis must replace any previous shortcut action.
+      setPendingActionId('document-analysis')
       setPrompt(`${instruction}\n\n目标文档：${names}`)
       setMention(null)
       clearPendingNewFiles()
