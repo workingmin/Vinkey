@@ -1,5 +1,5 @@
-import { AlertCircle, Check, ChevronDown, ChevronRight, Copy, Eye, MessageSquareText, RefreshCw } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { AlertCircle, Check, ChevronDown, ChevronRight, Copy, MessageSquareText, RefreshCw } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getLongTextWorkerOutput, listTaskJobs } from '../lib/desktop'
 import { formatServiceError } from '../lib/serviceError'
 import { useAppStore } from '../store'
@@ -54,6 +54,9 @@ export function TaskCenter({ onOpenSource }: { onOpenSource: (conversationId: st
   const [expanded, setExpanded] = useState<string | null>(null)
   const [copiedTaskId, setCopiedTaskId] = useState<string | null>(null)
   const [outputs, setOutputs] = useState<Record<string, LongTextWorkerOutput>>({})
+  const [outputLoading, setOutputLoading] = useState<Record<string, boolean>>({})
+  const [outputErrors, setOutputErrors] = useState<Record<string, string>>({})
+  const outputRequests = useRef(new Set<string>())
 
   const refresh = useCallback(async () => {
     if (!workspace) { setJobs([]); return }
@@ -81,14 +84,40 @@ export function TaskCenter({ onOpenSource }: { onOpenSource: (conversationId: st
     } catch { setError('复制任务诊断信息失败') }
   }
 
-  const inspectOutput = async (jobId: string) => {
-    if (outputs[jobId]) { setExpanded(expanded === jobId ? null : jobId); return }
+  const loadOutput = useCallback(async (jobId: string) => {
+    if (outputs[jobId] || outputRequests.current.has(jobId)) return
+    outputRequests.current.add(jobId)
+    setOutputLoading((current) => ({ ...current, [jobId]: true }))
+    setOutputErrors((current) => ({ ...current, [jobId]: '' }))
     try {
       const output = await getLongTextWorkerOutput(jobId)
       if (!output) throw new Error('任务结果尚未完成或已经失效')
       setOutputs((current) => ({ ...current, [jobId]: output }))
-      setExpanded(jobId)
-    } catch (error) { setError(formatServiceError(error)) }
+    } catch (error) {
+      setOutputErrors((current) => ({ ...current, [jobId]: formatServiceError(error) }))
+    } finally {
+      outputRequests.current.delete(jobId)
+      setOutputLoading((current) => ({ ...current, [jobId]: false }))
+    }
+  }, [outputs])
+
+  useEffect(() => {
+    if (!expanded || outputs[expanded] || outputErrors[expanded]) return
+    const expandedJob = jobs.find((job) => job.taskId === expanded)
+    if (expandedJob?.status === 'completed') void loadOutput(expanded)
+  }, [expanded, jobs, loadOutput, outputErrors, outputs])
+
+  useEffect(() => {
+    setExpanded(null)
+    setOutputs({})
+    setOutputLoading({})
+    setOutputErrors({})
+    outputRequests.current.clear()
+  }, [workspace?.id])
+
+  const toggleDetails = (job: TaskJob) => {
+    if (expanded === job.taskId) { setExpanded(null); return }
+    setExpanded(job.taskId)
   }
 
   if (!workspace) return <div className="task-center-empty"><AlertCircle /><strong>未打开项目</strong></div>
@@ -100,7 +129,7 @@ export function TaskCenter({ onOpenSource }: { onOpenSource: (conversationId: st
     </header>
     <div className="task-list">
       {jobs.length > 0 && <div className="task-list-header" role="row">
-        <span>任务</span><span>状态</span><span>更新时间</span><span>查看</span>
+        <span>任务</span><span>状态</span><span>更新时间</span><span>来源</span>
       </div>}
       {jobs.length === 0 && <div className="task-center-empty"><Check /><strong>暂无后台任务</strong></div>}
       {jobs.map((job) => {
@@ -109,14 +138,13 @@ export function TaskCenter({ onOpenSource }: { onOpenSource: (conversationId: st
         const title = job.displayTitle || (job.taskType === 'long-text-analysis' ? '长文本分析任务' : job.taskType)
         const conversation = job.conversationTitleSnapshot ? `${job.conversationTitleSnapshot} · #${shortId}` : `独立任务 · #${shortId}`
         return <article className="task-row" key={job.taskId}>
-          <button className="task-row-toggle" onClick={() => setExpanded(expanded === job.taskId ? null : job.taskId)} aria-expanded={expanded === job.taskId}>
+          <button className="task-row-toggle" onClick={() => toggleDetails(job)} aria-expanded={expanded === job.taskId}>
             {expanded === job.taskId ? <ChevronDown /> : <ChevronRight />}
             <span title={`${title} · ${conversation}`}><strong>{title}</strong><small>{conversation}</small></span>
           </button>
           <span className={`task-status status-${job.status}`}>{statusLabels[job.status]}</span>
           <time>{new Date(job.updatedAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })}</time>
           <div className="task-row-actions">
-            {job.status === 'completed' && <button title="查看结果" aria-label="查看结果" onClick={() => void inspectOutput(job.taskId)}><Eye /></button>}
             {job.conversationId && <button title="返回来源会话" aria-label="返回来源会话" onClick={() => void onOpenSource(job.conversationId!)}><MessageSquareText /></button>}
           </div>
           {expanded === job.taskId && <div className="task-detail">
@@ -124,7 +152,10 @@ export function TaskCenter({ onOpenSource }: { onOpenSource: (conversationId: st
             {job.failure && <div className="task-failure"><AlertCircle /><span><strong>{job.failure.code}</strong><small>{job.failure.message}</small></span><b>{job.failure.retryable ? '可重试' : '需重新发起'}</b></div>}
             <ol className="task-steps">{job.steps.map((step) => <li key={step.id} className={`status-${step.status}`}><i /><span><strong>{stepLabel(step.id)}</strong><small>第 {step.attempt} 次 · {step.checkpoint ?? '无检查点'}</small></span></li>)}</ol>
             <section className="task-events" aria-label="业务链路"><strong>业务链路</strong><ol>{job.events.length === 0 ? <li><span>暂无运行事件</span></li> : job.events.slice(-50).map((event) => <li key={event.sequence}><time>{new Date(event.timestamp).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}</time><span>{eventLabel(event.eventType)}</span>{event.stepId && <code>{stepLabel(event.stepId)}</code>}</li>)}</ol></section>
+            {job.status === 'completed' && outputLoading[job.taskId] && <div className="task-output-state" role="status"><RefreshCw className="spin" /><span>正在读取分析产物</span></div>}
+            {job.status === 'completed' && outputErrors[job.taskId] && !outputLoading[job.taskId] && <div className="task-output-state error" role="alert"><AlertCircle /><span><strong>分析产物读取失败</strong><small>{outputErrors[job.taskId]}</small></span><button onClick={() => void loadOutput(job.taskId)}><RefreshCw />重新加载</button></div>}
             {output && <div className="task-output">
+              <strong>分析产物</strong>
               <div><span>模型调用 {output.modelInvocationCount}</span><span>跨任务命中 {output.stageCacheHits}</span><span>任务内命中 {output.jobCheckpointHits}</span><span>耗时 {(output.durationMs / 1000).toFixed(1)} 秒</span></div>
               <small>中间产物：.vinkey/analysis/jobs/{job.taskId}/</small>
               <pre>{output.content}</pre>
