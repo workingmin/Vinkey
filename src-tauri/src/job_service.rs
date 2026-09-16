@@ -534,10 +534,6 @@ pub fn cancel(root: &Path, task_id: &str) -> Result<TaskJob, String> {
     Ok(job)
 }
 
-pub fn list(root: &Path) -> Result<Vec<TaskJob>, String> {
-    list_for_conversation(root, None)
-}
-
 pub fn list_for_conversation(
     root: &Path,
     conversation_id: Option<&str>,
@@ -708,7 +704,7 @@ mod tests {
         let cancelled = cancel(directory.path(), "task-3").unwrap();
         assert!(cancelled.cancel_requested);
         assert_eq!(get(directory.path(), "task-3").unwrap().status, "cancelled");
-        assert_eq!(list(directory.path()).unwrap().len(), 1);
+        assert_eq!(list_for_conversation(directory.path(), None).unwrap().len(), 1);
     }
 
     #[test]
@@ -723,7 +719,7 @@ mod tests {
         other.conversation_id = Some("conversation-b".into());
         start(directory.path(), "work", other).unwrap();
 
-        assert_eq!(list(directory.path()).unwrap().len(), 50);
+        assert_eq!(list_for_conversation(directory.path(), None).unwrap().len(), 50);
         assert_eq!(
             list_for_conversation(directory.path(), Some("conversation-a"))
                 .unwrap()
@@ -756,7 +752,7 @@ mod tests {
         cancel(directory.path(), &cancelled.task_id).unwrap();
 
         assert_eq!(clear_history(directory.path()).unwrap(), 2);
-        assert_eq!(list(directory.path()).unwrap().len(), 1);
+        assert_eq!(list_for_conversation(directory.path(), None).unwrap().len(), 1);
         assert_eq!(
             get(directory.path(), "running-task").unwrap().status,
             "running"
