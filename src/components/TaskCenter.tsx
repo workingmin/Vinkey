@@ -118,7 +118,6 @@ export function TaskCenter({ onOpenSource }: { onOpenSource: (conversationId: st
           <div className="task-row-actions">
             {job.status === 'completed' && <button title="查看结果" aria-label="查看结果" onClick={() => void inspectOutput(job.taskId)}><Eye /></button>}
             {job.conversationId && <button title="返回来源会话" aria-label="返回来源会话" onClick={() => void onOpenSource(job.conversationId!)}><MessageSquareText /></button>}
-            <button title={copiedTaskId === job.taskId ? '诊断信息已复制' : '复制诊断信息'} aria-label={copiedTaskId === job.taskId ? '诊断信息已复制' : '复制诊断信息'} onClick={() => void copyDiagnostics(job)}>{copiedTaskId === job.taskId ? <Check /> : <Copy />}</button>
           </div>
           {expanded === job.taskId && <div className="task-detail">
             <div className="task-metadata"><span>项目：{job.workspaceNameSnapshot || '来源未知'}</span><span>会话：{job.conversationTitleSnapshot || '来源未知'}</span><span>执行模型：{job.modelNameSnapshot || '来源未知'}{job.connectionNameSnapshot ? ` · ${job.connectionNameSnapshot}` : ''}</span><span className="task-id">任务 ID：{job.taskId}</span></div>
@@ -130,6 +129,12 @@ export function TaskCenter({ onOpenSource }: { onOpenSource: (conversationId: st
               <small>中间产物：.vinkey/analysis/jobs/{job.taskId}/</small>
               <pre>{output.content}</pre>
             </div>}
+            <div className="task-detail-actions">
+              <button title={copiedTaskId === job.taskId ? '诊断摘要已复制' : '复制诊断摘要'} aria-label={copiedTaskId === job.taskId ? '诊断摘要已复制' : '复制诊断摘要'} onClick={() => void copyDiagnostics(job)}>
+                {copiedTaskId === job.taskId ? <Check /> : <Copy />}
+                {copiedTaskId === job.taskId ? '已复制' : '复制诊断摘要'}
+              </button>
+            </div>
           </div>}
         </article>
       })}
