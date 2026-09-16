@@ -9,11 +9,13 @@ import type { ModelAdmissionResult, ModelConnection, ModelConnectionInput, Model
 
 type AdmissionState = ModelAdmissionResult & { testedAt?: number }
 const REMOTE_CONTEXT_WINDOW = 8_192
+const ADMISSION_CHECK_VERSION = 2
 type PersistedProbe = {
   kind: ModelConnection['kind']
   baseUrl: string
   catalog: ModelConnectionResult
   admissions: Record<string, AdmissionState>
+  admissionVersion: number
 }
 
 type ModelPickerOption = {
@@ -71,8 +73,10 @@ function readProbeCache(): Record<string, PersistedProbe> {
         || typeof value.baseUrl !== 'string'
         || !isConnectionResult(value.catalog)
         || !isRecord(value.admissions)) return []
-      const admissions = Object.fromEntries(Object.entries(value.admissions).filter((entry): entry is [string, AdmissionState] => isAdmissionState(entry[1])))
-      return [[id, { kind: value.kind, baseUrl: value.baseUrl, catalog: value.catalog, admissions }]]
+      const admissions = value.admissionVersion === ADMISSION_CHECK_VERSION
+        ? Object.fromEntries(Object.entries(value.admissions).filter((entry): entry is [string, AdmissionState] => isAdmissionState(entry[1])))
+        : {}
+      return [[id, { kind: value.kind, baseUrl: value.baseUrl, catalog: value.catalog, admissions, admissionVersion: ADMISSION_CHECK_VERSION }]]
     }))
   }
   catch { return {} }
@@ -91,6 +95,7 @@ function persistProbe(connection: ModelConnectionInput | ModelConnection, patch:
     baseUrl: connection.baseUrl,
     catalog: patch.catalog ?? previous?.catalog ?? { ok: false, message: '尚未获取模型列表', models: [] },
     admissions: patch.admissions ?? previous?.admissions ?? {},
+    admissionVersion: ADMISSION_CHECK_VERSION,
   }
   writeProbeCache(cache)
 }

@@ -16,7 +16,7 @@ use std::{
 use tauri::{AppHandle, Emitter};
 
 const WORKER_VERSION: &str = "long-text-worker-6";
-const PROMPT_VERSION: &str = "long-text-prompts-2";
+const PROMPT_VERSION: &str = "long-text-prompts-3";
 const OUTPUT_SCHEMA_VERSION: &str = "long-text-output-3";
 const INPUT_NAME: &str = "worker-input.json";
 const OUTPUT_NAME: &str = "worker-output.json";
@@ -29,7 +29,7 @@ const MAX_MAP_CACHE_ENTRIES: usize = 1_024;
 const MAX_WORKER_EVENTS: usize = 1_000;
 const MAX_MODEL_ATTEMPTS: u32 = 3;
 const MIN_CHUNK_TOKENS: usize = 128;
-const VALIDATOR_VERSION: &str = "evidence-gate-2";
+const VALIDATOR_VERSION: &str = "evidence-gate-3";
 const NO_EVIDENCE: &str = "未找到与任务相关的证据。";
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -1292,10 +1292,14 @@ fn chunk_prompt(input: &StartLongTextWorkerInput, chunk: &long_text::TextChunk) 
         .as_deref()
         .map(|value| format!("章节/标题：{value}\n"))
         .unwrap_or_default();
+    let citation_template = format!(
+        "本块证据模板：[source: {} chunk={} lines={}-{} quote=\"本行原文的连续短引\"]。字段之间使用空格，不要使用冒号连接；路径和 chunk 必须原样保留。",
+        chunk.source_id, chunk.id, chunk.line_start, chunk.line_start
+    );
     format!(
         "你是长文本任务 Agent 的局部 Map Skill。只依据下面这个原文分块处理用户任务。\n\n{index}用户任务：{}\n{heading}来源：{}，行 {}-{}\n\n<chunk id=\"{}\">\n{}\n</chunk>\n\n{}\n请输出简洁的结构化要点：内容概要、事件/冲突、人物及其目标或变化、线索/伏笔、可引用的原文证据，以及与用户任务直接相关的素材。每条证据必须附来源标记，格式为 [source: 相对路径 chunk=块ID lines=起始行-结束行 quote=\"原文短引\"]。",
         input.instruction, chunk.source_id, chunk.line_start, chunk.line_end, chunk.id, chunk.text, chunk_task_guidance(&input.instruction)
-    )
+    ) + "\n" + &citation_template
 }
 
 fn summary_material(record: &SummaryRecord) -> String {
@@ -1398,7 +1402,7 @@ fn batch_summaries(
 
 fn parse_evidence(value: &str) -> Vec<EvidenceReference> {
     let Ok(pattern) = Regex::new(
-        r#"\[source:\s*([^\]\n]+?)(?:\s+chunk=([^\]\s]+))?\s+lines=(\d+)-(\d+)(?:\s+quote=\"((?:\\.|[^\"\\])*)\")?\]"#,
+        r#"\[source:\s*([^\]\n]+?)(?:(?:\s+|:)chunk=([^\]\s]+))?(?:\s+|:)lines=(\d+)(?:-(\d+))?(?:(?:\s+|:)quote=\"((?:\\.|[^\"\\])*)\")?\]"#,
     ) else {
         return Vec::new();
     };
@@ -1409,7 +1413,12 @@ fn parse_evidence(value: &str) -> Vec<EvidenceReference> {
                 source_id: captures.get(1)?.as_str().to_string(),
                 chunk_id: captures.get(2).map(|value| value.as_str().to_string()),
                 line_start: captures.get(3)?.as_str().parse().ok()?,
-                line_end: captures.get(4)?.as_str().parse().ok()?,
+                line_end: captures
+                    .get(4)
+                    .or_else(|| captures.get(3))?
+                    .as_str()
+                    .parse()
+                    .ok()?,
                 start_char: None,
                 end_char: None,
                 quote: captures
@@ -1492,11 +1501,16 @@ fn validate_stage_output(
         return Ok(Vec::new());
     }
     let evidence = verify_evidence(parse_evidence(content), documents);
-    if content.matches("[source:").count() != evidence.len()
-        || content.matches("```").count() % 2 != 0
-    {
+    let source_marker_count = content.matches("[source:").count();
+    if source_marker_count != evidence.len() {
         return Err(format!(
-            "模型输出结构不完整：{stage}（来源标记无法完整解析或代码块未闭合）"
+            "模型输出结构不完整：{stage}（来源标记 {source_marker_count} 个，成功解析 {} 个）",
+            evidence.len()
+        ));
+    }
+    if content.matches("```").count() % 2 != 0 {
+        return Err(format!(
+            "模型输出结构不完整：{stage}（Markdown 代码块未闭合）"
         ));
     }
     if evidence.is_empty() {
@@ -1588,7 +1602,7 @@ async fn model_text(
             &input.profile_id,
             vec![models::RequestMessage {
                 role: "user".into(),
-                content: format!("{}{}\n\n输出合同：每条事实保留来源路径、行号和非空原文短引。来源路径必须逐字使用当前原文档路径，行号必须使用原文绝对行号，短引必须逐字出现在指定行。不要返回残缺标记或未闭合代码块。当前分块没有直接证据时，只返回：{}", prompt, correction_hint, NO_EVIDENCE),
+                content: format!("{}{}\n\n输出合同：只返回最终答案，不要输出 <think> 推理语段。每条事实保留来源路径、行号和非空原文短引。来源路径必须逐字使用当前原文档路径，行号必须使用原文绝对行号，短引必须逐字出现在指定行；优先引用单行内的连续片段，禁止将多行内容去掉换行后拼接为短引。不要返回残缺标记或未闭合代码块。当前分块没有直接证据时，只返回：{}", prompt, correction_hint, NO_EVIDENCE),
             }],
             database,
             &snapshot.model,
@@ -1613,6 +1627,9 @@ async fn model_text(
         match result {
             Ok(content) => return Ok(content),
             Err(message) if attempt < MAX_MODEL_ATTEMPTS && retryable_model_error(&message) => {
+                if message.contains("模型输出") {
+                    correction = Some(message.clone());
+                }
                 wait_for_control(control).await?;
                 let progress = control.snapshot();
                 let step_id = progress
@@ -1662,6 +1679,8 @@ fn retryable_model_error(message: &str) -> bool {
         "模型流响应格式无效",
         "模型没有返回可用内容",
         "模型输出为空",
+        "模型输出包含未闭合的 <think>",
+        "模型输出包含未匹配的 </think>",
         "模型输出结构不完整",
         "模型输出缺少可验证来源引用",
         "模型输出包含未通过校验的来源引用",
@@ -3354,6 +3373,67 @@ mod tests {
     }
 
     #[test]
+    fn accepts_colon_separators_and_single_line_citations() {
+        let documents = HashMap::from([("chapter with spaces.md".into(), "标题\n作者".into())]);
+        for citation in [
+            "[source: chapter with spaces.md:chunk=c1 lines=1-1 quote=\"标题\"]",
+            "[source: chapter with spaces.md:lines=2-2:quote=\"作者\"]",
+            "[source: chapter with spaces.md chunk=c1 lines=1 quote=\"标题\"]",
+        ] {
+            let evidence = validate_stage_output("map", citation, &documents).unwrap();
+            assert_eq!(evidence[0].source_id, "chapter with spaces.md");
+            assert_eq!(evidence[0].line_start, evidence[0].line_end);
+            assert!(evidence[0].verified);
+        }
+        assert_eq!(
+            parse_evidence("[source: chapter.md:chunk=c1:lines=1:quote=\"标题\"]")[0]
+                .chunk_id
+                .as_deref(),
+            Some("c1")
+        );
+    }
+
+    #[test]
+    fn validates_only_the_final_answer_without_relaxing_quote_checks() {
+        let path = "一个陌生男子的来信-章节拆分/001-章节-前置内容.txt";
+        let documents =
+            HashMap::from([(path.into(), "《一个陌生男子的来信》\n作者：林如是".into())]);
+        let raw = format!("<think>推理中的示例 [source: 错误格式]</think>\n内容概要 [source: {path}:lines=1-1:quote=\"《一个陌生男子的来信》\"]\n作者 [source: {path}:chunk=c1 lines=2-2 quote=\"作者：林如是\"]");
+        let answer = crate::model_output::strip_thinking_sections(&raw).unwrap();
+        assert_eq!(
+            validate_stage_output("map", &answer, &documents)
+                .unwrap()
+                .len(),
+            2
+        );
+        let concatenated =
+            format!("[source: {path}:lines=1-2:quote=\"《一个陌生男子的来信》作者：林如是\"]");
+        assert!(validate_stage_output("map", &concatenated, &documents)
+            .unwrap_err()
+            .contains("引用原文与来源行不一致"));
+    }
+
+    #[test]
+    fn distinguishes_unparsed_markers_from_unclosed_code_fences() {
+        let documents = HashMap::from([("chapter.md".into(), "正文".into())]);
+        let reason = validate_stage_output(
+            "map",
+            "[source: chapter.md lines=1 quote=\"正文\"",
+            &documents,
+        )
+        .unwrap_err();
+        assert!(reason.contains("来源标记 1 个，成功解析 0 个"));
+        assert!(!reason.contains("代码块"));
+        let reason = validate_stage_output(
+            "map",
+            "```markdown\n[source: chapter.md lines=1 quote=\"正文\"]",
+            &documents,
+        )
+        .unwrap_err();
+        assert!(reason.contains("代码块未闭合"));
+    }
+
+    #[test]
     fn summary_batches_always_converge_with_a_large_document_index() {
         let mut worker_input = input();
         worker_input.context_window = 2_048;
@@ -3494,6 +3574,8 @@ mod tests {
         assert!(retryable_model_error("模型请求超时：300 秒"));
         assert!(retryable_model_error("模型服务返回 HTTP 503：busy"));
         assert!(retryable_model_error("模型没有返回可用内容"));
+        assert!(retryable_model_error("模型输出包含未闭合的 <think> 语段"));
+        assert!(retryable_model_error("模型输出包含未匹配的 </think> 语段"));
         assert!(!retryable_model_error(
             "模型配置已变化，不能复用当前 Worker 检查点"
         ));

@@ -6,6 +6,8 @@ mod pipeline_integration {
             job_id: id.into(), instruction: "概括正文".into(), instruction_hash: long_text::source_fingerprint("概括正文"),
             profile_id: "test".into(), context_window: 8192, source_policy: "local-chunks".into(),
             max_tokens: 512, overlap_tokens: 32, document_index: None, excluded_documents: vec![],
+            display_title: None, conversation_id: None, source_message_id: None, workspace_name_snapshot: None,
+            conversation_title_snapshot: None, model_name_snapshot: None, connection_name_snapshot: None,
             dispatch: task_runtime::WorkerDispatchIdentity { job_id: id.into(), workspace_id: workspace.id.clone(),
                 service_id: "long-text-analysis".into(), policy_version: "1".into(), dispatch_version: "1".into(), execution_owner: "rust-worker".into() },
             documents: vec![WorkerDocumentInput { path: "book.md".into(), source_fingerprint: long_text::source_fingerprint(&fs::read_to_string(workspace.root.join("book.md")).unwrap()) }],
@@ -15,6 +17,8 @@ mod pipeline_integration {
         job_service::start(root, &workspace.id, job_service::StartTaskJobInput {
             task_id: id.into(), task_type: "long-text-analysis".into(), instruction_hash: input.instruction_hash.clone(),
             source_fingerprints: input.documents.iter().map(|d| (d.path.clone(), d.source_fingerprint.clone())).collect(),
+            display_title: None, conversation_id: None, source_message_id: None, workspace_name_snapshot: None,
+            conversation_title_snapshot: None, model_profile_id: None, model_name_snapshot: None, connection_name_snapshot: None,
         }).unwrap();
         run_pipeline_worker(root.into(), workspace.clone(), db.clone(), snapshot, Arc::new(WorkerControl::default()), WorkerRuntimeState::default(), AppHandle::default()).await.unwrap();
         read_output_at(root, id).unwrap().unwrap()
@@ -37,6 +41,21 @@ mod pipeline_integration {
         assert!(second.stage_cache_hits > second.map_cache_hits);
         fs::write(root.join("second/analysis.md"), "损坏").unwrap();
         assert!(read_output_at(&root, "second").is_err());
+    }
+
+    #[tokio::test]
+    async fn reasoning_and_citation_variants_do_not_pollute_saved_output() {
+        let dir = tempfile::tempdir().unwrap();
+        let workspace = Workspace { id: "workspace".into(), name: "Test".into(), root: dir.path().into() };
+        fs::write(dir.path().join("book.md"), "标题\n作者").unwrap();
+        let db = database::DatabaseState::default();
+        db.responses.lock().unwrap().push("<think>错误示例 [source: broken]</think>\n概要 [source: book.md:chunk=c1:lines=1:quote=\"标题\"]".into());
+        let root = dir.path().join("jobs");
+        let output = run(&root, &workspace, &db, "first").await;
+        assert!(!output.content.contains("<think>"));
+        assert!(!output.content.contains("broken"));
+        assert!(output.evidence.iter().all(|reference| reference.verified));
+        assert!(!fs::read_dir(root.join("first")).unwrap().any(|entry| entry.unwrap().file_name().to_string_lossy().starts_with("quarantine-")));
     }
 
     #[tokio::test]

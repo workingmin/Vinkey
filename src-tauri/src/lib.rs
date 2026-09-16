@@ -16,6 +16,7 @@ mod database;
 mod hardware;
 mod job_service;
 mod long_text;
+mod model_output;
 mod models;
 mod projects;
 mod runtime_log;

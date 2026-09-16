@@ -136,6 +136,50 @@ describe('model settings workflow', () => {
     expect(await desktop.listModelProfiles()).toEqual([])
   })
 
+  it('keeps the cached model list but requires old admissions to pass the new checks', async () => {
+    const [connection] = await desktop.listModelConnections()
+    const discover = vi.spyOn(desktop, 'discoverConnectionModels')
+    localStorage.setItem('vinkey.modelProbeCache', JSON.stringify({
+      [connection.id]: { kind: connection.kind, baseUrl: connection.baseUrl,
+        catalog: { ok: true, message: '', models: ['legacy-model'] },
+        admissions: { 'legacy-model': { ok: true, message: '旧检查通过', model: 'legacy-model', structuredOutput: true, contextWindow: 8192 } },
+      },
+    }))
+    render(<SettingsPage />)
+    await screen.findByText('0/1 个模型可用')
+    expect(discover).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: '查看模型列表' }))
+    await screen.findByText('尚未检查')
+    expect(screen.queryByText('旧检查通过')).toBeNull()
+  })
+
+  it('shows structured output failure details without marking the model available', async () => {
+    vi.spyOn(desktop, 'discoverConnectionModels').mockResolvedValue({ ok: true, message: '', models: ['unstable-model'] })
+    vi.spyOn(desktop, 'probeModelAdmission').mockResolvedValue({ ok: false, message: '普通请求结构化输出不稳定：响应包含 <think> 推理语段', model: 'unstable-model', structuredOutput: false, contextWindow: 8192 })
+    render(<SettingsPage />)
+    await screen.findByText('0/1 个模型可用')
+    fireEvent.click(screen.getByRole('button', { name: '查看模型列表' }))
+    fireEvent.click(await screen.findByRole('button', { name: '检查全部模型' }))
+    await screen.findByText('普通请求结构化输出不稳定：响应包含 <think> 推理语段')
+    expect(screen.getByText('不可用')).toBeTruthy()
+    expect(screen.getByText('0/1 个模型可用')).toBeTruthy()
+  })
+
+  it('restores admissions produced by the new checks without rechecking', async () => {
+    vi.spyOn(desktop, 'discoverConnectionModels').mockResolvedValue({ ok: true, message: '', models: ['stable-model'] })
+    const probe = vi.spyOn(desktop, 'probeModelAdmission').mockResolvedValue({ ok: true, message: '新版输出检查通过', model: 'stable-model', structuredOutput: true, contextWindow: 8192 })
+    const firstView = render(<SettingsPage />)
+    await screen.findByText('0/1 个模型可用')
+    fireEvent.click(screen.getByRole('button', { name: '查看模型列表' }))
+    fireEvent.click(await screen.findByRole('button', { name: '检查全部模型' }))
+    await screen.findByText('1/1 个模型可用')
+    firstView.unmount()
+    probe.mockClear()
+    render(<SettingsPage />)
+    await screen.findByText('1/1 个模型可用')
+    expect(probe).not.toHaveBeenCalled()
+  })
+
   it('deduplicates connections by normalized address and empty credential', async () => {
     const [connection] = await desktop.listModelConnections()
     await expect(desktop.saveModelConnection({

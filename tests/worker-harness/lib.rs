@@ -99,7 +99,7 @@ pub mod models {
         let prompt = &messages[0].content;
         database.calls.lock().unwrap().push(prompt.clone());
         if let Some(response) = database.responses.lock().unwrap().pop() {
-            return Ok(response);
+            return crate::model_output::strip_thinking_sections(&response);
         }
         if let Some(captures) =
             regex::Regex::new(r#"来源：(.+)，行 (\d+)-\d+\n\n<chunk id="([^"]+)">\n([^\n]+)"#)
@@ -124,6 +124,8 @@ pub mod models {
 mod job_service;
 #[path = "../../src-tauri/src/long_text.rs"]
 mod long_text;
+#[path = "../../src-tauri/src/model_output.rs"]
+mod model_output;
 mod worker_service {
     include!("../../src-tauri/src/worker_service.rs");
     include!("pipeline_tests.rs");

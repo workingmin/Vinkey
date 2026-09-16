@@ -153,9 +153,9 @@ export async function readWorkspaceDocuments(
 
 export function parseEvidenceReferences(value: string): EvidenceReference[] {
   const references: EvidenceReference[] = []
-  const pattern = /\[source:\s*([^\]\s]+)(?:\s+chunk=([^\]\s]+))?\s+lines=(\d+)-(\d+)(?:\s+quote="([^"]*)")?\]/gu
+  const pattern = /\[source:\s*([^\]\n]+?)(?:(?:\s+|:)chunk=([^\]\s]+))?(?:\s+|:)lines=(\d+)(?:-(\d+))?(?:(?:\s+|:)quote="((?:\\.|[^"\\])*)")?\]/gu
   for (const match of value.matchAll(pattern)) {
-    references.push({ sourceId: match[1], chunkId: match[2] ?? null, lineStart: Number(match[3]), lineEnd: Number(match[4]), quote: match[5] ?? null, verified: false })
+    references.push({ sourceId: match[1], chunkId: match[2] ?? null, lineStart: Number(match[3]), lineEnd: Number(match[4] ?? match[3]), quote: match[5]?.replace(/\\\\/gu, '\\').replace(/\\"/gu, '"') ?? null, verified: false })
   }
   return references
 }

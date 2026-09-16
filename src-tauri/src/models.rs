@@ -1,5 +1,6 @@
 use crate::{
     database::{self, DatabaseState},
+    model_output::{strip_thinking_sections, validate_admission_payload},
     runtime_log::RuntimeLogState,
 };
 use futures_util::StreamExt;
@@ -812,7 +813,7 @@ pub async fn probe_model_context(
         .post(format!("{}/api/chat", profile.base_url))
         .json(&json!({
             "model": profile.model, "messages": [{"role": "user", "content": "Reply with OK."}],
-            "stream": false, "options": {"num_ctx": requested_context}
+            "stream": false, "think": false, "options": {"num_ctx": requested_context}
         }));
     if let Some(value) = key.filter(|value| !value.is_empty()) {
         request = request.bearer_auth(value);
@@ -1070,30 +1071,42 @@ async fn probe_model_admission_request(
             .json::<Value>()
             .await
             .map_err(|_| "模型检查响应无效".to_string())?;
-        let content = if input.kind == "ollama" {
-            payload.pointer("/message/content").and_then(Value::as_str)
-        } else {
-            payload
-                .pointer("/choices/0/message/content")
-                .and_then(Value::as_str)
-        };
-        let parsed = content
-            .and_then(|value| serde_json::from_str::<Value>(value.trim()).ok())
-            .filter(|value| value.get("status").and_then(Value::as_str) == Some("ready"))
-            .filter(|value| value.get("structured").and_then(Value::as_bool) == Some(true));
+        let mut validation = validate_admission_payload(&payload, &input.kind);
+        if validation.is_ok() {
+            runtime.info(
+                "model.output_stability_probe_started",
+                json!({"model": input.model})
+                    .as_object()
+                    .cloned()
+                    .unwrap_or_default(),
+            );
+            validation =
+                probe_prompt_output_stability(input, base_url, api_key.as_deref(), context_window)
+                    .await;
+            match &validation {
+                Ok(()) => runtime.info(
+                    "model.output_stability_probe_completed",
+                    json!({"model": input.model})
+                        .as_object()
+                        .cloned()
+                        .unwrap_or_default(),
+                ),
+                Err(reason) => runtime.error("model.output_stability_probe_failed", reason),
+            }
+        }
         let result = ModelAdmissionResult {
-            ok: parsed.is_some(),
-            message: if parsed.is_some() {
+            ok: validation.is_ok(),
+            message: if validation.is_ok() {
                 format!(
-                    "模型检查通过，已自动设置约 {} tokens 上下文（{} ms）",
+                    "模型检查通过：结构化与普通请求输出检查通过，已自动设置约 {} tokens 上下文（{} ms）",
                     context_window,
                     started.elapsed().as_millis()
                 )
             } else {
-                "模型检查未通过：模型没有返回可用结果".into()
+                validation.as_ref().unwrap_err().clone()
             },
             model: input.model.clone(),
-            structured_output: parsed.is_some(),
+            structured_output: validation.is_ok(),
             context_window,
         };
         if result.ok {
@@ -1118,6 +1131,42 @@ async fn probe_model_admission_request(
         structured_output: false,
         context_window,
     })
+}
+
+async fn probe_prompt_output_stability(
+    input: &ModelProfileInput,
+    base_url: &str,
+    api_key: Option<&str>,
+    context_window: u32,
+) -> Result<(), String> {
+    let messages = json!([{"role": "user", "content": "只返回以下 JSON 对象：{\"status\":\"ready\",\"structured\":true}。不得增加字段、解释文字、Markdown 代码块或 <think> 推理语段。"}]);
+    let (url, body) = if input.kind == "ollama" {
+        (
+            format!("{base_url}/api/chat"),
+            json!({"model": input.model, "messages": messages,
+            "stream": false, "think": false, "options": {"num_ctx": context_window}}),
+        )
+    } else {
+        (
+            format!("{base_url}/chat/completions"),
+            json!({"model": input.model, "messages": messages, "stream": false}),
+        )
+    };
+    let mut request = admission_client()?.post(url).json(&body);
+    if let Some(key) = api_key.filter(|value| !value.is_empty()) {
+        request = request.bearer_auth(key);
+    }
+    let response = request
+        .send()
+        .await
+        .map_err(|error| format!("普通请求输出检查失败：{error}"))?;
+    let payload = response_or_error(response)
+        .await?
+        .json::<Value>()
+        .await
+        .map_err(|_| "普通请求输出检查响应无效".to_string())?;
+    validate_admission_payload(&payload, &input.kind)
+        .map_err(|reason| format!("普通请求结构化输出不稳定：{reason}"))
 }
 
 async fn cleanup_local_ollama_probe(
@@ -1192,6 +1241,7 @@ async fn run_stream_with(
     key: Option<&str>,
     cancel: &AtomicBool,
     runtime: Option<&RuntimeLogState>,
+    disable_thinking: bool,
     mut on_chunk: impl FnMut(&str) -> Result<(), String>,
 ) -> Result<(), String> {
     if cancel.load(Ordering::Relaxed) {
@@ -1203,11 +1253,12 @@ async fn run_stream_with(
         .map(|message| json!({"role": message.role, "content": message.content}))
         .collect::<Vec<_>>();
     let (url, body) = if profile.kind == "ollama" {
-        (
-            format!("{}/api/chat", profile.base_url),
-            json!({"model": profile.model, "messages": messages, "stream": true,
-                "options": {"num_ctx": profile.context_window}}),
-        )
+        let mut body = json!({"model": profile.model, "messages": messages, "stream": true,
+            "options": {"num_ctx": profile.context_window}});
+        if disable_thinking {
+            body["think"] = json!(false);
+        }
+        (format!("{}/api/chat", profile.base_url), body)
     } else {
         (
             format!("{}/chat/completions", profile.base_url),
@@ -1313,6 +1364,7 @@ async fn run_stream(
         key.as_deref(),
         &cancel,
         Some(runtime),
+        false,
         |content| {
             let _ = channel.send(ChatStreamEvent::Chunk {
                 content: content.to_string(),
@@ -1359,11 +1411,17 @@ pub(crate) async fn complete_worker_chat(
         None
     };
     let mut content = String::new();
-    run_stream_with(&request, &profile, key.as_deref(), cancel, None, |chunk| {
-        append_worker_chunk(&mut content, chunk)
-    })
+    run_stream_with(
+        &request,
+        &profile,
+        key.as_deref(),
+        cancel,
+        None,
+        true,
+        |chunk| append_worker_chunk(&mut content, chunk),
+    )
     .await?;
-    Ok(content.trim().to_string())
+    strip_thinking_sections(&content)
 }
 
 #[tauri::command]

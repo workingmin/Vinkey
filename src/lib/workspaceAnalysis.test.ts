@@ -83,4 +83,17 @@ describe('workspace analysis inventory and evidence', () => {
     expect(verified[0]).toMatchObject({ sourceId: '故事.md', lineStart: 1, lineEnd: 2, verified: true })
     expect(verifyEvidenceReferences(parseEvidenceReferences('[source: 故事.md lines=4-4]'), [{ path: '故事.md', name: '故事.md', content: '第一行', size: 3 }])[0].verified).toBe(false)
   })
+
+  it('accepts colon separators, single lines, spaced paths and escaped quotes', () => {
+    const documents = [{ path: 'chapter with spaces.md', name: 'chapter.md', content: '他说"你好"\n作者', size: 12 }]
+    const refs = parseEvidenceReferences(String.raw`[source: chapter with spaces.md:chunk=c1:lines=1:quote="他说\"你好\""] [source: chapter with spaces.md:lines=2-2:quote="作者"]`)
+    expect(refs).toHaveLength(2)
+    expect(refs[0]).toMatchObject({ sourceId: 'chapter with spaces.md', chunkId: 'c1', lineStart: 1, lineEnd: 1, quote: '他说"你好"' })
+    expect(verifyEvidenceReferences(refs, documents).every((ref) => ref.verified)).toBe(true)
+  })
+
+  it('still rejects mismatched source quotes after parsing a format variant', () => {
+    const refs = parseEvidenceReferences('[source: 故事.md:lines=1-2:quote="标题作者"]')
+    expect(verifyEvidenceReferences(refs, [{ path: '故事.md', name: '故事.md', content: '标题\n作者', size: 5 }])[0].verified).toBe(false)
+  })
 })
