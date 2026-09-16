@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { classifyTask } from './intent'
+import { classifyTask, extractDocumentMentionPaths, stripDocumentMentions } from './intent'
 
 describe('task routing', () => {
   it('routes chapter segmentation without a model', () => {
@@ -9,6 +9,14 @@ describe('task routing', () => {
     expect(plan.requiresModel).toBe(false)
     expect(plan.sideEffect).toBe('proposal')
     expect(plan.execution.currentMode).toBe('deterministic-service')
+  })
+
+  it('ignores chapter keywords inside an @document path while routing the request', () => {
+    const path = '一个陌生男子的来信-章节拆分/002-章节-第一章.txt'
+    const prompt = `@${path} 分析这个文件内容`
+    expect(stripDocumentMentions(prompt)).toBe('分析这个文件内容')
+    expect(extractDocumentMentionPaths(prompt)).toEqual([path])
+    expect(classifyTask(prompt, true).intent).toBe('document-analysis')
   })
 
   it('accepts both natural word orders for chapter splitting', () => {

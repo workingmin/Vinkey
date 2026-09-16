@@ -35,6 +35,19 @@ describe('structured task runtime intake', () => {
     expect(() => validateTaskExecutionInput({ taskId: 'task-2', stage: 'preflight', resumeJobId: null, request, plan })).not.toThrow()
   })
 
+  it('keeps an @document analysis request on the model-backed path', () => {
+    const path = '一个陌生男子的来信-章节拆分/002-章节-第一章.txt'
+    const request = createTaskRequest({
+      instruction: `@${path} 分析这个文件内容`,
+      targets: [{ id: path, kind: 'document' }],
+    })
+    const plan = routeTask(request, true)
+    expect(plan.intent).toBe('document-analysis')
+    expect(plan.execution.workflow).toBe('long-text-analysis')
+    expect(request.requestedEffect).toBe('draft')
+    expect(() => validateTaskExecutionInput({ taskId: 'task-mention', stage: 'preflight', resumeJobId: null, request, plan })).not.toThrow()
+  })
+
   it('keeps explicit analysis actions as drafts even when their prompt mentions structure', () => {
     const request = createTaskRequest({
       actionId: 'document-analysis',

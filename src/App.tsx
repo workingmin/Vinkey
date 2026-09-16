@@ -31,6 +31,7 @@ import { buildRevisionContextMessage, calculateContextBudget, selectRecentMessag
 import { analyzeLongText, buildTaskDisplayTitle, cancelLongTextAnalysis } from './lib/longTextAnalysis'
 import { buildConversationReference, createTaskMessageRef, createTaskRequest, refineTaskForDocuments, routeTask } from './lib/taskRuntime'
 import type { TaskExecutionDispatch } from './lib/taskRuntime'
+import { extractDocumentMentionPaths } from './lib/intent'
 import { createToolGateway } from './lib/runtimePolicy'
 import { isContextRecoveryResponse } from './lib/contextRecovery'
 import { buildMemoryCandidates, buildProjectMemoryContext, selectRelevantMemory } from './lib/projectMemory'
@@ -41,6 +42,7 @@ import { getDocumentKind, getLanguageName, isEditableDocument } from './lib/file
 import { findNewTextFiles, flattenWorkspaceFiles } from './lib/tree'
 import { readWorkspaceDocuments } from './lib/workspaceAnalysis'
 import { buildSelectedDocumentsOverviewMessage, formatWorkspaceOverview } from './lib/workspaceOverview'
+import { buildDocumentIndexMessage } from './lib/documentMetadata'
 import { buildFocusedWorkspaceMessage } from './lib/focusedAnalysis'
 import { isLoopbackModelEndpoint } from './lib/modelPrivacy'
 
@@ -486,6 +488,17 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
     let selectedContextDocuments = editorRevision
       ? [{ path: editorRevision.path, name: editorRevision.documentName, content: editorRevision.text, size: editorRevision.text.length, kind: getDocumentKind(editorRevision.documentName) }]
       : contextDocuments
+    if (!editorRevision) {
+      const mentionedPaths = extractDocumentMentionPaths(value)
+      const missingMentionedPaths = mentionedPaths.filter((path) => !selectedContextDocuments.some((document) => document.path === path))
+      try {
+        for (const path of missingMentionedPaths) await onToggleContext(path)
+        if (missingMentionedPaths.length > 0) selectedContextDocuments = useAppStore.getState().contextDocuments
+      } catch (error) {
+        setError(`读取引用文档失败：${formatError(error)}`)
+        return
+      }
+    }
     const activeDocument = activePath ? tabs.find((tab) => tab.path === activePath) : undefined
     const nextRequestId = crypto.randomUUID()
     const conversationRef = buildConversationReference(messages)
@@ -687,7 +700,10 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
       } catch (error) { setError(`读取项目记忆失败：${String(error)}`) }
     }
     const selectionContract = editorRevision ? buildSelectionRevisionContract({ ...editorRevision, instruction: value }) : null
-    const contextDraft = [overviewContext, memoryContext, revisionContext, selectionContract, multiRevisionContract].filter(Boolean).join('\n\n')
+    const referencedDocumentContext = taskPlan.documentAccess === 'selected'
+      ? buildDocumentIndexMessage(requestContextDocuments)
+      : null
+    const contextDraft = [referencedDocumentContext, overviewContext, memoryContext, revisionContext, selectionContract, multiRevisionContract].filter(Boolean).join('\n\n')
     const budgetDraft = [value, contextDraft].filter(Boolean).join('\n\n')
     const requestBudget = taskPlan.requiresModel
       ? calculateContextBudget(messages, [], budgetDraft, selectedModel?.contextWindow ?? 32768)

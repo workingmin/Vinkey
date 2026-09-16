@@ -47,6 +47,17 @@ function withCapabilities(plan: Omit<TaskPlan, 'agent' | 'skill' | 'allowedTools
   return { ...routed, execution: resolveExecutionStrategy(routed) }
 }
 
+/** Extract file paths from the composer mention syntax without reading bodies. */
+export function extractDocumentMentionPaths(value: string): string[] {
+  const paths = [...value.matchAll(/(?:^|\s)@([^\s@]+)/gu)].map((match) => match[1]).filter(Boolean)
+  return [...new Set(paths)]
+}
+
+/** Remove mention tokens before matching natural-language routing keywords. */
+export function stripDocumentMentions(value: string): string {
+  return value.replace(/(?:^|\s)@[^\s@]+/gu, ' ').replace(/\s+/gu, ' ').trim()
+}
+
 function referencesSelectedDocuments(prompt: string): boolean {
   return /(?:根据|参考|基于|结合|按照)[^。！？\n]{0,20}(?:文档|文件|文本|小说|故事|文章)|(?:这|该|此|这个|这篇|所选|当前)(?:篇)?(?:文档|文件|文本|小说|故事|文章)|(?:文档|文件|文本|小说|故事|文章)(?:中|内容|正文)|(?:续写|改写|润色|校对|修改)(?:当前|这|该|此|这个|这篇|所选)?(?:文档|文件|文本|小说|故事|内容|段落|章节|下一章|一版)/u.test(prompt)
 }
@@ -101,7 +112,7 @@ function deepAnalysisPolicy(prompt: string): Pick<TaskPlan, 'analysisMode' | 'an
  * This is deliberately deterministic: ambiguous prompts remain ordinary chat.
  */
 export function classifyTask(value: string, hasContextDocuments: boolean, actionId: string | null = null): TaskPlan {
-  const prompt = value.trim()
+  const prompt = stripDocumentMentions(value)
 
   if (actionId === 'structure-segmentation') {
     return withCapabilities({

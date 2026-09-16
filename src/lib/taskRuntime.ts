@@ -1,5 +1,5 @@
 import type { TaskIntent, TaskPlan, TaskScope } from './intent'
-import { classifyTask, refineTaskPlanForDocuments } from './intent'
+import { classifyTask, refineTaskPlanForDocuments, stripDocumentMentions } from './intent'
 import type { ChatMessage, ContextDocument, TaskMessageRef } from '../types'
 import { assertRoutedTaskPolicy } from './runtimePolicy'
 import { resolveExecutionStrategy } from './executionStrategy'
@@ -68,7 +68,7 @@ function requestedEffect(input: TaskRequestInput): TaskRequest['requestedEffect'
   // Explicit analysis/revision actions own their side-effect contract; prompt
   // keywords must not turn an analysis request into a proposal.
   if (input.actionId) return 'draft'
-  return /(?:拆分章节|章节拆分|拆分场景|场景边界|识别章节(?:和|与)?场景|章节结构)/u.test(input.instruction)
+  return /(?:拆分章节|章节拆分|拆分场景|场景边界|识别章节(?:和|与)?场景|章节结构)/u.test(stripDocumentMentions(input.instruction))
     ? 'proposal'
     : 'draft'
 }
