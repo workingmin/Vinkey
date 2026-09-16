@@ -1398,7 +1398,7 @@ fn batch_summaries(
 
 fn parse_evidence(value: &str) -> Vec<EvidenceReference> {
     let Ok(pattern) = Regex::new(
-        r#"\[source:\s*([^\]\n]+?)(?:\s+chunk=([^\]\s]+))?\s+lines=(\d+)-(\d+)(?:\s+quote=\"([^\"]*)\")?\]"#,
+        r#"\[source:\s*([^\]\n]+?)(?:\s+chunk=([^\]\s]+))?\s+lines=(\d+)-(\d+)(?:\s+quote=\"((?:\\.|[^\"\\])*)\")?\]"#,
     ) else {
         return Vec::new();
     };
@@ -1412,7 +1412,9 @@ fn parse_evidence(value: &str) -> Vec<EvidenceReference> {
                 line_end: captures.get(4)?.as_str().parse().ok()?,
                 start_char: None,
                 end_char: None,
-                quote: captures.get(5).map(|value| value.as_str().to_string()),
+                quote: captures
+                    .get(5)
+                    .map(|value| value.as_str().replace("\\\\", "\\").replace("\\\"", "\"")),
                 verified: false,
                 verification_error: None,
             })
@@ -1493,13 +1495,35 @@ fn validate_stage_output(
     if content.matches("[source:").count() != evidence.len()
         || content.matches("```").count() % 2 != 0
     {
-        return Err(format!("模型输出结构不完整：{stage}"));
+        return Err(format!(
+            "模型输出结构不完整：{stage}（来源标记无法完整解析或代码块未闭合）"
+        ));
     }
     if evidence.is_empty() {
         return Err(format!("模型输出缺少可验证来源引用：{stage}"));
     }
-    if evidence.iter().any(|reference| !reference.verified) {
-        return Err(format!("模型输出包含未通过校验的来源引用：{stage}"));
+    let invalid = evidence
+        .iter()
+        .filter(|reference| !reference.verified)
+        .map(|reference| {
+            format!(
+                "{} lines={}-{}：{}",
+                reference.source_id,
+                reference.line_start,
+                reference.line_end,
+                reference
+                    .verification_error
+                    .as_deref()
+                    .unwrap_or("来源引用未通过校验")
+            )
+        })
+        .take(3)
+        .collect::<Vec<_>>();
+    if !invalid.is_empty() {
+        return Err(format!(
+            "模型输出包含未通过校验的来源引用：{stage}（{}）",
+            invalid.join("；")
+        ));
     }
     Ok(evidence)
 }
@@ -1552,14 +1576,19 @@ async fn model_text(
     documents: &HashMap<String, String>,
     attempts: &mut usize,
 ) -> Result<String, String> {
+    let mut correction: Option<String> = None;
     for attempt in 1..=MAX_MODEL_ATTEMPTS {
         wait_for_control(control).await?;
         *attempts += 1;
+        let correction_hint = correction
+            .as_deref()
+            .map(|value| format!("\n\n上一次输出未通过校验，具体原因：{value}\n请修正后重新输出；不要复用错误的来源路径、行号或原文短引。"))
+            .unwrap_or_default();
         let result = models::complete_worker_chat(
             &input.profile_id,
             vec![models::RequestMessage {
                 role: "user".into(),
-                content: format!("{}\n\n输出合同：每条事实保留来源路径、行号和非空原文短引。不要返回残缺标记或未闭合代码块。没有相关证据时，只返回：{}", prompt, NO_EVIDENCE),
+                content: format!("{}{}\n\n输出合同：每条事实保留来源路径、行号和非空原文短引。来源路径必须逐字使用当前原文档路径，行号必须使用原文绝对行号，短引必须逐字出现在指定行。不要返回残缺标记或未闭合代码块。当前分块没有直接证据时，只返回：{}", prompt, correction_hint, NO_EVIDENCE),
             }],
             database,
             &snapshot.model,
@@ -1568,6 +1597,7 @@ async fn model_text(
         .await
         .and_then(|content| {
             if let Err(reason) = validate_stage_output(stage, &content, documents) {
+                correction = Some(reason.clone());
                 let name = format!("quarantine-{}.json", uuid::Uuid::new_v4());
                 write_json(&artifact_path(jobs_root, &input.job_id, &name),
                     &json!({"status": "quarantined", "stage": stage, "reason": reason,
@@ -3300,6 +3330,27 @@ mod tests {
         assert!(verify_evidence(valid, &documents)[0].verified);
         let invalid = parse_evidence("[source: chapter.md chunk=c1 lines=1-1 quote=\"不存在\"]");
         assert!(!verify_evidence(invalid, &documents)[0].verified);
+    }
+
+    #[test]
+    fn preserves_specific_evidence_validation_reason() {
+        let documents = HashMap::from([("chapter.md".into(), "第一行".into())]);
+        let error = validate_stage_output(
+            "map",
+            "[source: missing.md chunk=c1 lines=1-1 quote=\"第一行\"]",
+            &documents,
+        )
+        .unwrap_err();
+        assert!(error.contains("map"));
+        assert!(error.contains("missing.md"));
+        assert!(error.contains("来源文件不在本次分析快照中"));
+    }
+
+    #[test]
+    fn parses_escaped_quotes_in_evidence_short_quotes() {
+        let references =
+            parse_evidence(r#"[source: chapter.md chunk=c1 lines=1-1 quote="他说\"你好\""]"#);
+        assert_eq!(references[0].quote.as_deref(), Some("他说\"你好\""));
     }
 
     #[test]
