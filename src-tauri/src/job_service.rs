@@ -568,6 +568,36 @@ pub fn list_for_conversation(
     Ok(jobs)
 }
 
+pub fn clear_history(root: &Path) -> Result<usize, String> {
+    let _guard = JOB_WRITE_LOCK
+        .lock()
+        .map_err(|_| "任务写入状态不可用".to_string())?;
+    if !root.exists() {
+        return Ok(0);
+    }
+    let mut removed = 0;
+    for entry in fs::read_dir(root).map_err(|error| format!("无法读取任务目录：{error}"))?
+    {
+        let entry = entry.map_err(|error| format!("无法读取任务目录项：{error}"))?;
+        if !entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false) {
+            continue;
+        }
+        let task_file = entry.path().join("task.json");
+        let Ok(bytes) = fs::read(&task_file) else {
+            continue;
+        };
+        let Ok(job) = serde_json::from_slice::<TaskJob>(&bytes) else {
+            continue;
+        };
+        if !matches!(job.status.as_str(), "completed" | "failed" | "cancelled") {
+            continue;
+        }
+        fs::remove_file(&task_file).map_err(|error| format!("无法清除任务记录：{error}"))?;
+        removed += 1;
+    }
+    Ok(removed)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -699,6 +729,37 @@ mod tests {
                 .unwrap()
                 .len(),
             55
+        );
+    }
+
+    #[test]
+    fn clears_only_terminal_task_records() {
+        let directory = tempfile::tempdir().unwrap();
+        start(directory.path(), "work", input("running-task")).unwrap();
+        let completed = start(directory.path(), "work", input("completed-task")).unwrap();
+        update(
+            directory.path(),
+            UpdateTaskJobInput {
+                task_id: completed.task_id,
+                status: Some("completed".into()),
+                step_id: None,
+                step_kind: None,
+                step_status: None,
+                checkpoint: None,
+                error: None,
+                event_type: None,
+                event_fields: Map::new(),
+            },
+        )
+        .unwrap();
+        let cancelled = start(directory.path(), "work", input("cancelled-task")).unwrap();
+        cancel(directory.path(), &cancelled.task_id).unwrap();
+
+        assert_eq!(clear_history(directory.path()).unwrap(), 2);
+        assert_eq!(list(directory.path()).unwrap().len(), 1);
+        assert_eq!(
+            get(directory.path(), "running-task").unwrap().status,
+            "running"
         );
     }
 

@@ -45,7 +45,7 @@
   </tr>
   <tr>
     <td colspan="3" bgcolor="#F8F9FA"><strong>运行</strong>　3　　<strong>完成</strong>　12　　<strong>失败</strong>　1</td>
-    <td width="16%" bgcolor="#F8F9FA" align="right"><strong>刷新</strong></td>
+    <td width="16%" bgcolor="#F8F9FA" align="right"><strong>历史记录清除</strong>　<strong>刷新</strong></td>
   </tr>
   <tr bgcolor="#F1F3F5">
     <td width="42%"><strong>任务</strong></td>
@@ -97,7 +97,10 @@
 ### 工具栏
 
 - 工具栏保持稳定高度；左侧按“运行”统计 `running + paused`，分别统计“完成”和“失败”。
-- 右侧只有刷新按钮。刷新期间按钮禁用并显示旋转图标，列表保留原内容，避免跳变。
+- 右侧按“历史记录清除 / 刷新”排列；刷新保持最右侧，清除作为有副作用的操作放在刷新左侧。
+- “历史记录清除”仅清除当前项目中 `completed`、`failed`、`cancelled` 的任务状态记录；`planned`、`running`、`paused` 任务不会被清除，分析产物目录也不会删除。
+- 清除前必须二次确认；清除期间两个工具栏按钮禁用，完成后刷新列表并保留仍在运行的任务。
+- 刷新期间按钮禁用并显示旋转图标，列表保留原内容，避免跳变。
 - 统计只针对当前工作区，由 `listTaskJobs()` 返回结果计算。
 - 项目范围位于页面顶部，不与统计混排；当前实现阶段仅展示当前项目，不提供无效的跨项目选择器。
 
@@ -257,6 +260,7 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | `UI-TASK-COUNTS` | 状态 | 运行、完成、失败计数 | `BF-TASK-001` / `EP-TASK-001` | 汇总当前工作区任务状态 | `src/components/TaskCenter.tsx` | 已实现 |
 | `UI-TASK-REFRESH` | 操作 | 刷新按钮和加载图标 | `BF-TASK-001` / `EP-TASK-001` | 重新读取任务列表；请求期间禁用 | `src/components/TaskCenter.tsx` | 已实现 |
+| `UI-TASK-CLEAR-HISTORY` | 操作/确认 | 历史记录清除按钮 | `BF-TASK-001` / `EP-TASK-001` | 二次确认后清除当前项目的终态任务记录，保留运行任务和分析产物 | `src/components/TaskCenter.tsx`、`src/lib/desktop.ts`、`src-tauri/src/job_service.rs` | 已实现 |
 | `UI-TASK-LIST-STATE` | 状态 | 未打开项目、暂无任务和全局读取错误 | `BF-TASK-001` / `EP-TASK-001` | 表达任务列表边界状态 | `src/components/TaskCenter.tsx`、`src/App.tsx` | 部分实现（首次加载和局部错误待补） |
 | `UI-TASK-ROW-TOGGLE` | 操作/结果 | 任务摘要、来源次标题和展开/收起按钮 | `BF-TASK-002` / `EP-TASK-002` | 显示任务摘要、会话来源和短编号；保持单个任务详情展开并同步 `aria-expanded` | `src/components/TaskCenter.tsx` | 已实现 |
 | `UI-TASK-STATUS` | 状态 | 任务状态、更新时间、步骤和执行元数据 | `BF-TASK-001`、`BF-TASK-002` / `EP-TASK-001`、`EP-TASK-002` | 展示持久化 Job/Step 状态、执行次数、检查点及模型快照 | `src/components/TaskCenter.tsx` | 已实现 |
@@ -280,7 +284,8 @@
 10. 1440×900、1280×800、1024×680 以及窄屏下无文字、面板和按钮重叠；键盘焦点和减少动态效果符合系统设计标准。
 11. 任务中心不显示 API Key、隐藏思维链或未授权正文，不直接修改源文档。
 12. 返回来源会话后，运行、暂停和失败任务具有对应的控制入口；页面切换后仍以持久化任务状态恢复控制区。
-13. 表中每个 `UI-*` 均关联有效的 `BF-*`、`EP-*`，实现状态与源码和目标态缺口一致。
+13. “历史记录清除”位于“刷新”左侧；确认后只清除当前项目的已完成、失败和已取消任务记录，不影响运行中任务或分析产物。
+14. 表中每个 `UI-*` 均关联有效的 `BF-*`、`EP-*`，实现状态与源码和目标态缺口一致。
 
 ## 目标态缺口
 

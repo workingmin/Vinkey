@@ -1,6 +1,6 @@
-import { AlertCircle, Check, ChevronDown, ChevronRight, Copy, MessageSquareText, RefreshCw } from 'lucide-react'
+import { AlertCircle, Check, ChevronDown, ChevronRight, Copy, MessageSquareText, RefreshCw, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { getLongTextWorkerOutput, listTaskJobs } from '../lib/desktop'
+import { clearTaskJobHistory, getLongTextWorkerOutput, listTaskJobs } from '../lib/desktop'
 import { formatServiceError } from '../lib/serviceError'
 import { useAppStore } from '../store'
 import type { LongTextWorkerOutput, TaskJob } from '../types'
@@ -56,6 +56,7 @@ export function TaskCenter({ onOpenSource }: { onOpenSource: (conversationId: st
   const [outputs, setOutputs] = useState<Record<string, LongTextWorkerOutput>>({})
   const [outputLoading, setOutputLoading] = useState<Record<string, boolean>>({})
   const [outputErrors, setOutputErrors] = useState<Record<string, string>>({})
+  const [clearingHistory, setClearingHistory] = useState(false)
   const outputRequests = useRef(new Set<string>())
 
   const refresh = useCallback(async () => {
@@ -76,12 +77,34 @@ export function TaskCenter({ onOpenSource }: { onOpenSource: (conversationId: st
     completed: jobs.filter((job) => job.status === 'completed').length,
   }), [jobs])
 
+  const hasHistory = jobs.some((job) => ['completed', 'failed', 'cancelled'].includes(job.status))
+
   const copyDiagnostics = async (job: TaskJob) => {
     try {
       await navigator.clipboard.writeText(diagnosticsText(job))
       setCopiedTaskId(job.taskId)
       window.setTimeout(() => setCopiedTaskId((current) => current === job.taskId ? null : current), 1_800)
     } catch { setError('复制任务诊断信息失败') }
+  }
+
+  const clearHistory = async () => {
+    if (!hasHistory || clearingHistory) return
+    if (!window.confirm('清除当前项目的已完成、失败和已取消任务记录？运行中的任务不会被清除，分析产物会保留。')) return
+    setClearingHistory(true)
+    try {
+      const removed = await clearTaskJobHistory()
+      setExpanded(null)
+      setOutputs({})
+      setOutputLoading({})
+      setOutputErrors({})
+      outputRequests.current.clear()
+      await refresh()
+      if (removed === 0) setError('没有可清除的历史任务记录')
+    } catch (error) {
+      setError(formatServiceError(error))
+    } finally {
+      setClearingHistory(false)
+    }
   }
 
   const loadOutput = useCallback(async (jobId: string) => {
@@ -125,7 +148,10 @@ export function TaskCenter({ onOpenSource }: { onOpenSource: (conversationId: st
   return <section className="task-center" aria-label="任务中心">
     <header className="task-center-toolbar">
       <div className="task-center-counts"><span>运行 {counts.running}</span><span>完成 {counts.completed}</span><span className={counts.failed ? 'danger' : ''}>失败 {counts.failed}</span></div>
-      <button className="secondary-button" onClick={() => void refresh()} disabled={loading}><RefreshCw className={loading ? 'spin' : ''} />刷新</button>
+      <div className="task-center-toolbar-actions">
+        <button className="secondary-button danger-action" onClick={() => void clearHistory()} disabled={!hasHistory || loading || clearingHistory} title="清除已完成、失败和已取消任务记录"><Trash2 />{clearingHistory ? '正在清除...' : '历史记录清除'}</button>
+        <button className="secondary-button" onClick={() => void refresh()} disabled={loading || clearingHistory}><RefreshCw className={loading ? 'spin' : ''} />刷新</button>
+      </div>
     </header>
     <div className="task-list">
       {jobs.length > 0 && <div className="task-list-header" role="row">

@@ -362,6 +362,12 @@ fn list_task_jobs(
 }
 
 #[tauri::command]
+fn clear_task_job_history(state: State<'_, WorkspaceState>) -> Result<usize, String> {
+    let workspace = lock_workspace(&state)?;
+    job_service::clear_history(&analysis_jobs_dir(&workspace))
+}
+
+#[tauri::command]
 fn cancel_task_job(
     task_id: String,
     state: State<'_, WorkspaceState>,
@@ -1330,6 +1336,7 @@ pub fn run() {
             update_task_job,
             get_task_job,
             list_task_jobs,
+            clear_task_job_history,
             cancel_task_job,
             start_long_text_worker,
             get_long_text_worker_output,

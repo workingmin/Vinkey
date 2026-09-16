@@ -336,6 +336,21 @@ export async function listTaskJobs(conversationId?: string): Promise<TaskJob[]> 
   return invoke<TaskJob[]>('list_task_jobs', { conversationId: conversationId ?? null })
 }
 
+export async function clearTaskJobHistory(): Promise<number> {
+  if (!isDesktop()) {
+    const terminalStatuses = new Set<TaskJob['status']>(['completed', 'failed', 'cancelled'])
+    let removed = 0
+    for (const [taskId, job] of demoTaskJobs) {
+      if (job.workspaceId === currentDemoProjectId() && terminalStatuses.has(job.status)) {
+        demoTaskJobs.delete(taskId)
+        removed += 1
+      }
+    }
+    return removed
+  }
+  return invoke<number>('clear_task_job_history')
+}
+
 export async function cancelTaskJob(taskId: string): Promise<TaskJob> {
   if (!isDesktop()) {
     const job = demoTaskJobs.get(taskId)
