@@ -4,7 +4,7 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  clearTaskJobHistory, getLongTextWorkerOutput, listConversations,
+  clearConversationRunHistory, clearTaskJobHistory, getLongTextWorkerOutput, listConversations,
   listTaskJobs, loadConversation,
 } from '../lib/desktop'
 import { normalizeServiceError, formatServiceError } from '../lib/serviceError'
@@ -277,7 +277,7 @@ export function LogCenter({ onOpenSource }: {
         .some((value) => value?.toLocaleLowerCase('zh-CN').includes(normalizedQuery))
     })
   }, [entries, filter, query])
-  const hasTaskHistory = jobs.some((job) => ['completed', 'failed', 'cancelled'].includes(job.status))
+  const hasFinishedHistory = entries.some((entry) => ['completed', 'failed', 'cancelled'].includes(entry.status))
 
   const copyDiagnostics = async (entry: ConversationLogEntry) => {
     try {
@@ -288,14 +288,17 @@ export function LogCenter({ onOpenSource }: {
   }
 
   const clearHistory = async () => {
-    if (!hasTaskHistory || clearingHistory) return
-    if (!window.confirm('清理当前项目中已完成、失败和已取消的后台任务记录？对话执行日志和分析产物会保留。')) return
+    if (!hasFinishedHistory || clearingHistory) return
+    if (!window.confirm('清理当前日志中心中已结束的请求记录？运行中的请求保留；对话正文和分析产物会保留。')) return
     setClearingHistory(true)
     try {
-      const removed = await clearTaskJobHistory()
+      const [conversationRemoved, taskRemoved] = await Promise.all([
+        clearConversationRunHistory(workspace?.id),
+        clearTaskJobHistory(),
+      ])
       setExpanded(null)
-      await refreshJobs()
-      if (removed === 0) setError('没有可清除的后台任务记录')
+      await Promise.all([refreshJobs(), refreshConversations()])
+      if (conversationRemoved + taskRemoved === 0) setError('没有可清理的已结束请求记录')
     } catch (error) { setError(formatServiceError(error)) } finally { setClearingHistory(false) }
   }
 
@@ -339,7 +342,7 @@ export function LogCenter({ onOpenSource }: {
       </div>
       <div className="log-center-toolbar-actions">
         <label className="log-search"><Search /><input aria-label="搜索执行日志" placeholder="搜索对话、请求或错误" value={query} onChange={(event) => setQuery(event.target.value)} />{query && <button type="button" title="清除搜索" aria-label="清除搜索" onClick={() => setQuery('')}><X /></button>}</label>
-        <button className="secondary-button danger-action" onClick={() => void clearHistory()} disabled={!hasTaskHistory || loading || clearingHistory} title="仅清理已结束的后台任务记录，不删除对话执行日志"><Trash2 />{clearingHistory ? '正在清理...' : '清理后台任务记录'}</button>
+        <button className="secondary-button danger-action" onClick={() => void clearHistory()} disabled={!hasFinishedHistory || loading || clearingHistory} title="清理已完成、失败或取消的请求记录，运行中的请求保留"><Trash2 />{clearingHistory ? '正在清理...' : '清理已结束请求记录'}</button>
         <button className="secondary-button" onClick={() => void refresh()} disabled={loading || clearingHistory}><RefreshCw className={loading ? 'spin' : ''} />刷新</button>
       </div>
     </header>

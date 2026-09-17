@@ -946,6 +946,24 @@ export async function saveConversationMessage(conversationId: string, title: str
   await invoke('save_conversation_message', { conversationId, title, message, workspaceId })
 }
 
+export async function clearConversationRunHistory(workspaceId?: string): Promise<number> {
+  if (!isDesktop()) {
+    const values = readDemoConversations(workspaceId)
+    let cleared = 0
+    for (const conversation of values) {
+      for (const message of conversation.messages) {
+        if (message.role !== 'assistant' || !message.completedAt || (!message.activityLog?.length && !message.runResult)) continue
+        message.activityLog = undefined
+        message.runResult = undefined
+        cleared += 1
+      }
+    }
+    localStorage.setItem(demoConversationKey(workspaceId), JSON.stringify(values))
+    return cleared
+  }
+  return invoke<number>('clear_conversation_run_history', { workspaceId })
+}
+
 export async function deleteConversation(id: string, workspaceId?: string): Promise<void> {
   if (!isDesktop()) {
     localStorage.setItem(demoConversationKey(workspaceId), JSON.stringify(readDemoConversations(workspaceId).filter((item) => item.id !== id)))

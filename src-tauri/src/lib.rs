@@ -1371,6 +1371,7 @@ pub fn run() {
             database::list_conversations,
             database::load_conversation,
             database::save_conversation_message,
+            database::clear_conversation_run_history,
             database::delete_conversation,
             database::list_project_memory,
             database::search_project_memory,

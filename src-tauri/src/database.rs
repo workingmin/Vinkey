@@ -1336,6 +1336,23 @@ pub fn save_conversation_message(
 }
 
 #[tauri::command]
+pub fn clear_conversation_run_history(
+    workspace_id: Option<String>,
+    state: State<'_, crate::WorkspaceState>,
+    legacy: State<'_, DatabaseState>,
+) -> Result<usize, String> {
+    let connection = conversation_database(&state, &legacy, workspace_id, true)?;
+    connection
+        .execute(
+            "UPDATE messages SET activity_log = NULL, run_result = NULL
+             WHERE role = 'assistant' AND completed_at IS NOT NULL
+               AND (activity_log IS NOT NULL OR run_result IS NOT NULL)",
+            [],
+        )
+        .map_err(|error| format!("无法清理请求执行记录：{error}"))
+}
+
+#[tauri::command]
 pub fn delete_conversation(
     id: String,
     workspace_id: Option<String>,
