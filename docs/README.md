@@ -31,7 +31,7 @@
 - [标题栏与功能菜单](design/ui/TITLE_BAR_DESIGN.md)
 - [对话页](design/ui/UI_DESIGN_CHAT.md)
 - [文件与编辑器](design/ui/UI_DESIGN_EDITOR.md)
-- [任务中心](design/ui/UI_DESIGN_TASKS.md)
+- [日志中心](design/ui/UI_DESIGN_LOGS.md)
 - [模型设置](design/ui/UI_DESIGN_SETTINGS.md)
 - [视觉与组件系统](design/ui/UI_DESIGN_SYSTEM.md)
 - [状态、流程与验收](design/ui/UI_DESIGN_STATES.md)

@@ -144,6 +144,22 @@ describe('conversation chat runs', () => {
     expect(assistant?.activityLog?.[0].completedAt).toBeLessThanOrEqual(assistant.completedAt ?? 0)
   })
 
+  it('keeps the structured run result on the completed assistant message', () => {
+    const store = useAppStore.getState()
+    store.setConversation(conversation('a'))
+    store.beginChatRun(run('a'))
+    store.appendChatRunChunk('a', '> 任务未完成：模型输出无效')
+    store.endChatRun('a', false, {
+      status: 'failed',
+      error: { code: 'model.output_invalid', category: 'model', message: '模型输出无效', retryable: true },
+    })
+
+    expect(useAppStore.getState().completedChatMessages.a?.runResult).toEqual({
+      status: 'failed',
+      error: { code: 'model.output_invalid', category: 'model', message: '模型输出无效', retryable: true },
+    })
+  })
+
   it('keeps a bounded activity trail on the completed assistant message', () => {
     const store = useAppStore.getState()
     store.setConversation(conversation('a'))

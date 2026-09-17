@@ -8,7 +8,7 @@ import { observeNativeWindowControls } from '../lib/nativeWindowControls'
 import { RecordDeletionDialog } from './RecordDeletionDialog'
 
 type Props = {
-  onPageChange: (page: 'chat' | 'file' | 'tasks') => void
+  onPageChange: (page: 'chat' | 'file' | 'logs') => void
   onOpenWorkspace: () => void
   onRefreshWorkspace: () => void
   onOpenDocument: (path: string) => Promise<void>
