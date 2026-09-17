@@ -3,7 +3,7 @@
 - 状态：持续实施中
 - 适用版本：Vinkey 本地 AI 文学创作工作台
 - 目标：在现有 Tauri 2 + React + Rust + SQLite MVP 上，建立可审核、可恢复、适配本地模型能力的文学创作 Agent/Skill 系统。
-- 相关文档：[AI 业务链路架构与改造方案](AI_BUSINESS_CHAINS.md)、[开发框架与技术选型](DEVELOPMENT_FRAMEWORK.md)、[GitHub 同类项目调研与功能取舍](GITHUB_REFERENCE.md)、[对话页设计](UI_DESIGN_CHAT.md)、[文件与编辑器设计](UI_DESIGN_EDITOR.md)
+- 相关文档：[Agent 流程模板](AGENT_FLOW_TEMPLATES.md)、[Agent 流程对比](AGENT_FLOW_COMPARISON.md)、[AI 业务链路架构与改造方案](AI_BUSINESS_CHAINS.md)、[开发框架与技术选型](DEVELOPMENT_FRAMEWORK.md)、[GitHub 同类项目调研与功能取舍](GITHUB_REFERENCE.md)、[对话页设计](UI_DESIGN_CHAT.md)、[文件与编辑器设计](UI_DESIGN_EDITOR.md)
 
 业务链路采用确定性 Service、单次模型调用、固定 Workflow、自适应 Agent 或 Hybrid 的判定，以《AI 业务链路架构与改造方案》为实施基线。本文件继续维护领域 Agent、Skill、长文本和人物资产的详细计划。Codex、Claude 等 Agent 能力体系仅作为架构参考或由具体业务缺口驱动的内部原型。当前版本不提供外部 Agent Runtime 的用户选择入口，也不为此新增需要配置的商用付费 API。
 

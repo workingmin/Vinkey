@@ -5,7 +5,7 @@ import {
   RotateCcw, RotateCw, Copy, Scissors, Clipboard, Moon, Sun, Keyboard, ListChecks, RefreshCw,
   ScrollText, Trash2, WandSparkles,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize from 'rehype-sanitize'
@@ -16,6 +16,7 @@ import { SettingsPage } from './components/SettingsPage'
 import { TaskCenter } from './components/TaskCenter'
 import { ConversationTaskControls } from './components/ConversationTaskControls'
 import { MessageActivity } from './components/MessageActivity'
+import { TaskRequestSummary } from './components/TaskRequestSummary'
 import { MarkdownContent } from './components/MarkdownContent'
 import { ProjectSessionSidebar } from './components/ProjectSessionSidebar'
 import { WorkspaceTree, workspaceActions } from './components/WorkspaceTree'
@@ -260,26 +261,6 @@ const chatStatusMeta: Record<ChatRunStatus, { label: string; title: string }> = 
   stopping: { label: '停止中', title: 'stopping · 正在等待请求结束' },
 }
 
-function formatLongTextPipelineReceipt(result: {
-  jobId: string
-  chunkCount: number
-  summaryCount: number
-  modelInvocationCount: number
-  mapCacheHits: number
-  stageCacheHits: number
-  jobCheckpointHits: number
-}): string {
-  return [
-    '',
-    '---',
-    '**处理记录**',
-    `长文本流水线已完成：${result.chunkCount} 个分块，${result.summaryCount} 条局部摘要。`,
-    isDesktop() ? '分块、摘要、汇总及证据产物已保存，可在处理记录中查看。' : '浏览器演示产物保存在内存中。',
-    `已复用 ${result.stageCacheHits} 个跨任务结果和 ${result.jobCheckpointHits} 个任务检查点；本次模型请求 ${result.modelInvocationCount} 次。`,
-  ].join('\n')
-}
-
-
 function FileBrowserPanel({ onOpenDocument, onToggleContext, onOpenWorkspace, onRefreshWorkspace }: {
   onOpenDocument: (path: string) => Promise<void>
   onToggleContext: (path: string) => Promise<void>
@@ -367,6 +348,7 @@ function ChatMessageItem({ message, activity, onCopyError }: {
     <div className="message-stack">
       {isAssistant && <div className="message-author">Vinkey</div>}
       {isAssistant && <MessageActivity items={activityLog} active={Boolean(activity)} />}
+      {!isAssistant && <TaskRequestSummary task={message.taskRef} />}
       <div className="message-bubble">
         {message.content ? <MarkdownContent content={message.content} />
           : activity ? <div className="typing" aria-label={activity.statusMessage ?? chatStatusMeta[activity.status].label}><i /><i /><i /></div> : null}
@@ -415,7 +397,8 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
   const [prompt, setPrompt] = useState('')
   const [pendingActionId, setPendingActionId] = useState<string | null>(null)
   const [analysisStatus, setAnalysisStatus] = useState<string | null>(null)
-  const [pendingMemory, setPendingMemory] = useState<ProjectMemoryItem[]>([])
+  const [pendingMemory, setPendingMemory] = useState<{ items: ProjectMemoryItem[]; sourceMessageId: string | null } | null>(null)
+  const [pendingDiffSourceMessageId, setPendingDiffSourceMessageId] = useState<string | null>(null)
   const [mention, setMention] = useState<{ start: number; end: number; query: string } | null>(null)
   const [mentionIndex, setMentionIndex] = useState(0)
   const promptRef = useRef<HTMLTextAreaElement>(null)
@@ -433,8 +416,10 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
   }, [pendingEditorRevision])
 
   useEffect(() => {
-    if (!workspace) { setPendingMemory([]); return }
-    void listProjectMemory('proposed').then(setPendingMemory).catch((error) => setError(String(error)))
+    if (!workspace) { setPendingMemory(null); return }
+    void listProjectMemory('proposed')
+      .then((items) => setPendingMemory(items.length > 0 ? { items, sourceMessageId: null } : null))
+      .catch((error) => setError(String(error)))
   }, [setError, workspace])
 
   const mentionFiles = useMemo(() => {
@@ -789,13 +774,13 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
         const evidenceNote = result.evidence.length > 0
           ? `\n\n> 证据校验：发现 ${result.evidence.length} 条来源引用，其中 ${result.evidence.filter((item) => item.verified).length} 条已通过行号和原文校验。`
           : '\n\n> 证据校验：最终回答没有生成可解析的来源引用。'
-        appendChatRunChunk(nextConversationId, `${result.content}\n${formatLongTextPipelineReceipt(result)}${excludedNote}${evidenceNote}`)
+        appendChatRunChunk(nextConversationId, `${result.content}${excludedNote}${evidenceNote}`)
         const candidates = taskPlan.intent === 'continuity-review' || taskPlan.intent === 'document-revision'
           ? []
           : buildMemoryCandidates(result.content, requestContextDocuments.map((document) => document.path), value)
         if (candidates.length > 0) {
           try {
-            setPendingMemory(await proposeProjectMemory(candidates))
+            setPendingMemory({ items: await proposeProjectMemory(candidates), sourceMessageId: assistantMessage.id })
           } catch (error) { setError(`创建项目记忆提案失败：${String(error)}`) }
         }
       } else {
@@ -821,6 +806,7 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
         if (editorRevision) {
           const proposal = createDiffProposal(firstResponse, { ...editorRevision, instruction: value })
           setDiffProposals([proposal])
+          setPendingDiffSourceMessageId(assistantMessage.id)
           appendChatRunChunk(nextConversationId, formatDiffProposalMessage(proposal))
         } else if (multiRevisionTargets.length > 0) {
           const proposals = createMultiFileDiffProposals(firstResponse, multiRevisionTargets)
@@ -831,6 +817,7 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
             }
           }
           setDiffProposals(proposals)
+          setPendingDiffSourceMessageId(assistantMessage.id)
           appendChatRunChunk(nextConversationId, formatMultiFileDiffProposalMessage(proposals))
         }
 
@@ -905,16 +892,18 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
   }
 
   const approvePendingMemory = async () => {
+    if (!pendingMemory) return
     try {
-      await confirmProjectMemory(pendingMemory.map((item) => item.id))
-      setPendingMemory([])
+      await confirmProjectMemory(pendingMemory.items.map((item) => item.id))
+      setPendingMemory(null)
     } catch (error) { setError(`确认项目记忆失败：${String(error)}`) }
   }
 
   const rejectPendingMemory = async () => {
+    if (!pendingMemory) return
     try {
-      await rejectProjectMemory(pendingMemory.map((item) => item.id))
-      setPendingMemory([])
+      await rejectProjectMemory(pendingMemory.items.map((item) => item.id))
+      setPendingMemory(null)
     } catch (error) { setError(`拒绝项目记忆失败：${String(error)}`) }
   }
 
@@ -934,10 +923,9 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
           await onToggleContext(path)
         }
       }
-      const names = paths.map((path) => path.split('/').at(-1) ?? path).join('、')
       // Programmatic file analysis must replace any previous shortcut action.
       setPendingActionId('document-analysis')
-      setPrompt(`${instruction}\n\n目标文档：${names}`)
+      setPrompt(instruction)
       setMention(null)
       clearPendingNewFiles()
       window.setTimeout(() => promptRef.current?.focus(), 0)
@@ -945,19 +933,6 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
   }
 
   return <main className="chat-panel">
-    <ConversationTaskControls conversationId={conversationId} />
-    {diffProposals.some((proposal) => proposal.status === 'proposed') && (() => {
-      const proposal = diffProposals.find((item) => item.status === 'proposed')!
-      const pendingCount = diffProposals.filter((item) => item.status === 'proposed').length
-      return <aside className="new-files-notice diff-proposal-notice" role="status">
-        <div className="new-files-notice-copy"><WandSparkles /><span><strong>{pendingCount} 个修改提案待审核</strong><small>{proposal.path} · {proposal.chunkCount ? `${(proposal.chunkIndex ?? 0) + 1}/${proposal.chunkCount} 块` : `${proposal.from}-${proposal.to}`}</small></span></div>
-        <div className="new-files-notice-actions"><button onClick={applyPendingDiff}>接受此块</button><button onClick={() => rejectDiffProposal(proposal.id)}>拒绝此块</button><button onClick={() => { const tab = useAppStore.getState().tabs.find((item) => item.path === proposal.path); if (tab) useAppStore.getState().openTab(tab); onReviewDiff() }}>查看文档</button></div>
-      </aside>
-    })()}
-    {pendingMemory.length > 0 && <aside className="new-files-notice memory-notice" role="status">
-      <div className="new-files-notice-copy"><Check /><span><strong>发现 {pendingMemory.length} 条项目记忆候选</strong><small>{pendingMemory[0].title} · 仅确认后写入本项目</small></span></div>
-      <div className="new-files-notice-actions"><button onClick={() => void approvePendingMemory()}>确认写入</button><button onClick={() => void rejectPendingMemory()}>忽略</button></div>
-    </aside>}
     {pendingNewFiles.length > 0 && <aside className="new-files-notice" role="status">
       <div className="new-files-notice-copy"><FileText /><span><strong>检测到 {pendingNewFiles.length} 个新增文本文件</strong><small>是否要让 AI 分析其中某个文件？</small></span></div>
       <div className="new-files-notice-actions">
@@ -968,15 +943,33 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
     </aside>}
     <div className="message-stream">
       <div className="message-inner">
-        {messages.map((message) => <ChatMessageItem
-          key={message.id}
-          message={message}
-          activity={activeChatRun?.assistantMessage.id === message.id ? activeChatRun : undefined}
-          onCopyError={setError}
-        />)}
+        {messages.map((message) => <Fragment key={message.id}>
+          <ChatMessageItem
+            message={message}
+            activity={activeChatRun?.assistantMessage.id === message.id ? activeChatRun : undefined}
+            onCopyError={setError}
+          />
+          {message.role === 'assistant' && pendingDiffSourceMessageId === message.id && diffProposals.some((proposal) => proposal.status === 'proposed') && (() => {
+            const proposal = diffProposals.find((item) => item.status === 'proposed')!
+            const pendingCount = diffProposals.filter((item) => item.status === 'proposed').length
+            return <aside className="new-files-notice turn-action-panel diff-proposal-notice" role="status">
+              <div className="new-files-notice-copy"><WandSparkles /><span><strong>{pendingCount} 个修改提案待审核</strong><small>{proposal.path} · {proposal.chunkCount ? `${(proposal.chunkIndex ?? 0) + 1}/${proposal.chunkCount} 块` : `${proposal.from}-${proposal.to}`}</small></span></div>
+              <div className="new-files-notice-actions"><button onClick={applyPendingDiff}>接受此块</button><button onClick={() => rejectDiffProposal(proposal.id)}>拒绝此块</button><button onClick={() => { const tab = useAppStore.getState().tabs.find((item) => item.path === proposal.path); if (tab) useAppStore.getState().openTab(tab); onReviewDiff() }}>查看文档</button></div>
+            </aside>
+          })()}
+          {message.role === 'assistant' && pendingMemory?.sourceMessageId === message.id && pendingMemory.items.length > 0 && <aside className="new-files-notice turn-action-panel memory-notice" role="status">
+            <div className="new-files-notice-copy"><Check /><span><strong>发现 {pendingMemory.items.length} 条项目记忆候选</strong><small>{pendingMemory.items[0].title} · 仅确认后写入本项目</small></span></div>
+            <div className="new-files-notice-actions"><button onClick={() => void approvePendingMemory()}>确认写入</button><button onClick={() => void rejectPendingMemory()}>忽略</button></div>
+          </aside>}
+        </Fragment>)}
+        {pendingMemory?.sourceMessageId === null && pendingMemory.items.length > 0 && <aside className="new-files-notice history-action-panel memory-notice" role="status">
+          <div className="new-files-notice-copy"><Check /><span><strong>{pendingMemory.items.length} 条项目记忆候选待处理</strong><small>{pendingMemory.items[0].title} · 历史来源任务未记录消息归属</small></span></div>
+          <div className="new-files-notice-actions"><button onClick={() => void approvePendingMemory()}>确认写入</button><button onClick={() => void rejectPendingMemory()}>忽略</button></div>
+        </aside>}
       </div>
     </div>
     <div className="composer-wrap">
+      <ConversationTaskControls conversationId={conversationId} />
       <div className="composer">
         {contextDocuments.length > 0 && <div className="composer-context-list" aria-label="已引用文档">
           {contextDocuments.map((document) => <button className="composer-context-chip" key={document.path} title={`移除引用：${document.path}`} onClick={() => void onToggleContext(document.path)}><FileText /><span>{document.name}</span><X /></button>)}

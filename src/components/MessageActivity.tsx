@@ -17,6 +17,9 @@ export function MessageActivity({ items, active = false }: { items: ChatActivity
   const last = workers.at(-1)?.worker
   const hasFailure = workers.some((item) => item.worker?.status === 'failed')
   const hasCancelled = last?.status === 'cancelled'
+  const startedAt = items[0]?.timestamp
+  const finishedAt = items.reduce((latest, item) => Math.max(latest, item.completedAt ?? item.timestamp), startedAt ?? 0)
+  const elapsedSeconds = startedAt === undefined ? 0 : Math.max(0, Math.round((finishedAt - startedAt) / 1000))
 
   useEffect(() => {
     if (!selected) return
@@ -42,7 +45,10 @@ export function MessageActivity({ items, active = false }: { items: ChatActivity
     else dialog.current?.removeAttribute('open')
     setSelected(null)
   }
-  const label = hasFailure ? '处理失败' : hasCancelled ? '已停止' : active ? '正在处理' : '处理记录'
+  const elapsedLabel = elapsedSeconds >= 60
+    ? `${Math.floor(elapsedSeconds / 60)} 分 ${elapsedSeconds % 60} 秒`
+    : `${elapsedSeconds} 秒`
+  const label = hasFailure ? '处理失败' : hasCancelled ? '已停止' : active ? '正在处理' : `共用时 ${elapsedLabel}`
   return <div className="execution-trace">
     <button className="execution-toggle" type="button" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
       {expanded ? <ChevronDown /> : <ChevronRight />}

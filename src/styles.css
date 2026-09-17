@@ -255,6 +255,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 1px
 .new-files-notice-actions button:hover { border-color: var(--border-strong); color: var(--text); background: var(--bg-selected); }
 .new-files-notice-actions .notice-dismiss { width: 24px; display: grid; place-items: center; padding: 0; border-color: transparent; background: transparent; }
 .new-files-notice-actions .notice-dismiss svg { width: 13px; height: 13px; }
+.turn-action-panel { width: calc(100% - 40px); margin: -22px 0 36px 40px; }
+.history-action-panel { width: 100%; margin: 0 0 24px; }
 .conversation-task-controls { flex: 0 0 auto; width: min(800px, calc(100% - 40px)); margin: 12px auto 0; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-raised); }
 .conversation-task-control { min-height: 44px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px 12px; padding: 8px 10px; }
 .conversation-task-control + .conversation-task-control { border-top: 1px solid var(--border); }
@@ -283,6 +285,14 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 1px
 .message.assistant .message-stack { width: calc(100% - 40px); }
 .message.user .message-stack { max-width: 78%; align-items: flex-end; }
 .message-author { margin: 3px 0 12px; color: var(--text-secondary); font-size: 12px; font-weight: 600; }
+.message-request-context { max-width: 100%; margin: 0 0 7px; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.message-request-targets { max-width: 100%; display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 5px; }
+.message-request-kind, .message-request-target, .message-request-more { min-width: 0; height: 24px; display: inline-flex; align-items: center; gap: 5px; padding: 0 7px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-main); color: var(--text-secondary); font-size: 10px; }
+.message-request-kind { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
+.message-request-target { max-width: 190px; }
+.message-request-target span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.message-request-context svg { width: 12px; height: 12px; flex: 0 0 12px; }
+.message-request-context > small { color: var(--text-muted); font-size: 9px; }
 .message-bubble { width: 100%; min-width: 0; max-width: 100%; color: var(--text); font-size: 15px; line-height: 1.85; overflow-wrap: anywhere; }
 .message.user .message-bubble { padding: 11px 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-raised); }
 .message-bubble p { margin: 0 0 16px; }
@@ -353,6 +363,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 1px
 .typing i:nth-child(2) { animation-delay: .15s; }.typing i:nth-child(3) { animation-delay: .3s; }
 @keyframes pulse { 0%, 70%, 100% { opacity: .3 } 35% { opacity: 1 } }
 .composer-wrap { flex: 0 0 auto; padding: 0 20px 16px; background: linear-gradient(transparent, var(--bg-main) 18%); }
+.composer-wrap > .conversation-task-controls { width: min(760px, 100%); margin: 0 auto 8px; box-shadow: 0 -8px 24px color-mix(in srgb, var(--bg-main) 72%, transparent); }
 .composer { position: relative; width: min(760px, 100%); margin: 0 auto; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--bg-raised); overflow: visible; }
 .composer:focus-within { border-color: #4d7378; }
 .composer-context-list { display: flex; flex-wrap: wrap; gap: 6px; padding: 9px 10px 5px; }
@@ -740,6 +751,7 @@ button.composer-model-indicator:hover { background: var(--bg-selected); color: v
   .new-files-notice { width: calc(100% - 24px); align-items: flex-start; flex-direction: column; gap: 8px; }
   .new-files-notice-actions { width: 100%; justify-content: flex-start; }
   .new-files-notice-actions button { max-width: 45%; }
+  .turn-action-panel { width: calc(100% - 37px); margin-left: 37px; }
   .conversation-task-controls { width: calc(100% - 24px); }
   .conversation-task-control { grid-template-columns: minmax(0, 1fr); align-items: flex-start; }
   .conversation-task-actions { width: 100%; flex-wrap: wrap; }
