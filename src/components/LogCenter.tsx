@@ -289,7 +289,7 @@ export function LogCenter({ onOpenSource }: {
 
   const clearHistory = async () => {
     if (!hasTaskHistory || clearingHistory) return
-    if (!window.confirm('清除当前项目中已完成、失败和已取消的后台任务记录？对话运行记录和分析产物会保留。')) return
+    if (!window.confirm('清理当前项目中已完成、失败和已取消的后台任务记录？对话执行日志和分析产物会保留。')) return
     setClearingHistory(true)
     try {
       const removed = await clearTaskJobHistory()
@@ -338,17 +338,17 @@ export function LogCenter({ onOpenSource }: {
         {filters.map((item) => <button key={item.id} role="tab" aria-selected={filter === item.id} className={filter === item.id ? 'active' : ''} onClick={() => setFilter(item.id)}>{item.label}</button>)}
       </div>
       <div className="log-center-toolbar-actions">
-        <label className="log-search"><Search /><input aria-label="搜索运行日志" placeholder="搜索对话、请求或错误" value={query} onChange={(event) => setQuery(event.target.value)} />{query && <button type="button" title="清除搜索" aria-label="清除搜索" onClick={() => setQuery('')}><X /></button>}</label>
-        <button className="secondary-button danger-action" onClick={() => void clearHistory()} disabled={!hasTaskHistory || loading || clearingHistory} title="仅清理后台任务记录"><Trash2 />{clearingHistory ? '正在清理...' : '清理任务记录'}</button>
+        <label className="log-search"><Search /><input aria-label="搜索执行日志" placeholder="搜索对话、请求或错误" value={query} onChange={(event) => setQuery(event.target.value)} />{query && <button type="button" title="清除搜索" aria-label="清除搜索" onClick={() => setQuery('')}><X /></button>}</label>
+        <button className="secondary-button danger-action" onClick={() => void clearHistory()} disabled={!hasTaskHistory || loading || clearingHistory} title="仅清理已结束的后台任务记录，不删除对话执行日志"><Trash2 />{clearingHistory ? '正在清理...' : '清理后台任务记录'}</button>
         <button className="secondary-button" onClick={() => void refresh()} disabled={loading || clearingHistory}><RefreshCw className={loading ? 'spin' : ''} />刷新</button>
       </div>
     </header>
     <div className="log-list">
       {visibleEntries.length > 0 && <div className="log-list-header" role="row">
-        <span>运行记录</span><span>状态</span><span>更新时间</span><span>来源对话</span>
+        <span>执行记录</span><span>状态</span><span>更新时间</span><span>来源对话</span>
       </div>}
-      {entries.length === 0 && <div className="log-center-empty"><Activity /><strong>暂无对话运行记录</strong></div>}
-      {entries.length > 0 && visibleEntries.length === 0 && <div className="log-center-empty"><Search /><strong>没有匹配的运行记录</strong></div>}
+      {entries.length === 0 && <div className="log-center-empty"><Activity /><strong>暂无执行记录</strong></div>}
+      {entries.length > 0 && visibleEntries.length === 0 && <div className="log-center-empty"><Search /><strong>没有匹配的执行记录</strong></div>}
       {visibleEntries.map((entry) => {
         const job = entry.job
         const output = job ? outputs[job.taskId] : null
