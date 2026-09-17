@@ -98,6 +98,26 @@ CLI 读取 `model_profiles`、`model_profile_connections`、`model_connections`�
 
 桌面应用当前把 `vinkey.activeModelId` 保存在 WebView localStorage，而不是 SQLite。独立 CLI 无法可靠读取该值，因此默认选择 SQLite 中 `updated_at` 最新的 profile。需要验收应用当前选中的模型时，先列出 profile，再显式指定 ID。
 
+### 推荐执行顺序
+
+在仓库根目录依次执行：
+
+```bash
+# 1. 查看帮助和参数
+npm run test:intent-model -- --help
+
+# 2. 只读检查 SQLite，并找出要验收的 profile ID
+npm run test:intent-model -- --list-profiles
+
+# 3. 使用明确的 profile 执行全部 12 个版本化用例
+npm run test:intent-model -- --profile-id <profile-id>
+
+# 4. 可选：保存机器可读结果用于验收归档
+npm run test:intent-model -- --profile-id <profile-id> --json > intent-model-eval-result.json
+```
+
+`--list-profiles` 不会调用模型，也不会执行分类用例。它会显示数据库路径、评测套件、用例总数、候选 profile，以及下一条建议命令。只有不带 `--list-profiles` 的第三步才会逐项调用真实本地模型。
+
 ## 6. macOS 执行
 
 在仓库根目录：
@@ -156,7 +176,44 @@ npm run test:intent-model -- --profile-id <profile-id> --json
 
 ## 8. 结果与退出码
 
-人类可读输出逐项显示 `PASS/FAIL`，最后显示 Agent 准确率和全字段精确匹配率。
+### 配置检查输出
+
+`npm run test:intent-model -- --list-profiles` 的输出结构如下：
+
+```text
+Vinkey IntentRouter 本地模型专项评测 - 配置检查
+数据库：<vinkey.sqlite3 路径>
+评测套件：intent-model-eval-2（12 个版本化用例）
+已配置模型：2 个
+[1] router（默认候选）
+    名称：Router
+    模型：qwen3:8b
+说明：--list-profiles 仅检查配置，未调用模型，12 个版本化用例尚未执行。
+执行评测：npm run test:intent-model -- --profile-id router
+```
+
+### 真实评测输出
+
+人类可读输出首先声明将执行 12 个用例，然后按 `[01/12]` 到 `[12/12]` 显示 `PASS/FAIL` 及模型返回的 Intent、Agent、Skill、Scope、DocumentSelection。成功结尾如下：
+
+```text
+逐项结果（精确匹配 12/12）：
+...
+[12/12] PASS workspace-deep-analysis
+
+汇总指标：
+  执行完成：12/12
+  JSON 解析：12/12（100.0%）
+  Intent 准确率：100.0%
+  Agent 准确率：100.0%
+  Skill 准确率：100.0%
+  Scope 准确率：100.0%
+  DocumentSelection 准确率：100.0%
+  全字段精确匹配率：100.0%
+验收结论：通过，12 个版本化用例全部执行成功且精确匹配。
+```
+
+`--json` 模式保持纯 JSON 输出，不打印启动提示，适合重定向到验收记录文件。
 
 | 退出码 | 含义 |
 | --- | --- |
