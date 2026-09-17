@@ -23,6 +23,8 @@
 - 消息流是主要滚动容器，输入区固定在底部并随内容在 96–220px 内增长。
 - 助手消息使用无边框文本块；用户消息使用弱底色气泡，不把每条消息做成卡片。
 - 每条消息显示复制操作和时间；助手生成中状态留在原条目内。
+- 结构化任务的用户消息在正文上方保留意图、目标文档和作用域快照；普通聊天不增加元数据噪声。
+- 当前会话的可暂停任务在输入区上方显示紧凑控制行，不占用消息流顶部；任务产物、修改提案和记忆候选跟随产生它们的助手回合。
 
 ## 输入与上下文
 
@@ -73,6 +75,7 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | `UI-CHAT-MESSAGE-STREAM` | 结果 | 用户和助手消息流 | `BF-CHAT-001` / `EP-CHAT-001` | 展示历史消息、流式正文和完成时间 | `src/App.tsx` `ChatPanel`、`ChatMessageItem` | 已实现 |
 | `UI-CHAT-MESSAGE-COPY` | 操作 | 消息复制按钮和已复制状态 | `BF-CHAT-003` / `EP-CHAT-003` | 复制单条消息；成功状态原位短暂显示 | `src/App.tsx` `ChatMessageItem` | 已实现 |
+| `UI-CHAT-REQUEST-SUMMARY` | 状态 | 用户回合任务范围与附件快照 | `BF-CHAT-001`、`BF-CONTEXT-001` / `EP-CHAT-001`、`EP-CONTEXT-001` | 展示路由后的任务类型、目标和副作用；普通聊天不显示 | `src/components/TaskRequestSummary.tsx` | 已实现 |
 | `UI-CHAT-COMPOSER` | 输入 | 多行对话输入框 | `BF-CHAT-001` / `EP-CHAT-001` | 接收指令；Enter 发送、Shift+Enter 换行、IME 组字不发送 | `src/App.tsx` `ChatPanel` | 已实现 |
 | `UI-CHAT-SEND-STOP` | 操作 | 发送/停止状态按钮 | `BF-CHAT-001`、`BF-CHAT-002` / `EP-CHAT-001`、`EP-CHAT-002` | 空闲时发送，运行时停止；停止中禁用重复操作 | `src/App.tsx` `ChatPanel` | 已实现 |
 | `UI-CHAT-MODEL-INDICATOR` | 状态/入口 | 当前模型或“添加模型” | `BF-MODEL-001` / `EP-MODEL-001` | 显示活动模型；未配置时进入设置页 | `src/App.tsx` `ChatPanel` | 已实现 |
@@ -82,13 +85,13 @@
 | `UI-ANALYSIS-DOCUMENT-ACTIONS` | 入口 | 分析文本、拆分章节、提取人物线 | `BF-ANALYSIS-001`、`BF-STRUCTURE-001`、`BF-CHARACTER-001` / `EP-ANALYSIS-001`、`EP-STRUCTURE-001`、`EP-CHARACTER-001` | 预填结构化问题，不自动发送 | `src/App.tsx` `ChatPanel` | 已实现 |
 | `UI-ANALYSIS-WORKSPACE-ACTION` | 入口 | 分析整个项目 | `BF-ANALYSIS-002` / `EP-ANALYSIS-002` | 预填项目分析请求，发送后由策略选择分析范围 | `src/App.tsx` `ChatPanel` | 已实现 |
 | `UI-ANALYSIS-NEW-FILES-NOTICE` | 状态/入口 | 新增文本文件提示及逐个/全部分析 | `BF-ANALYSIS-001` / `EP-ANALYSIS-001` | 展示新增文件，允许选择分析或忽略 | `src/App.tsx` `ChatPanel` | 已实现 |
-| `UI-CONVERSATION-TASK-CONTROLS` | 操作/状态 | 来源会话任务控制区 | `BF-TASK-003`、`BF-TASK-005`、`BF-TASK-006` / `EP-TASK-003`、`EP-TASK-005`、`EP-TASK-006` | 按持久化任务状态提供暂停、继续、取消和失败步骤重试；页面切换后可恢复 | `src/components/ConversationTaskControls.tsx` | 已实现 |
+| `UI-CONVERSATION-TASK-CONTROLS` | 操作/状态 | 输入区上方任务控制行 | `BF-TASK-003`、`BF-TASK-005`、`BF-TASK-006` / `EP-TASK-003`、`EP-TASK-005`、`EP-TASK-006` | 按持久化任务状态提供暂停、继续、取消和失败步骤重试；页面切换后可恢复 | `src/components/ConversationTaskControls.tsx` | 已实现 |
 | `UI-ACTIVITY-TOGGLE` | 操作/状态 | 处理记录展开按钮和当前步骤摘要 | `BF-ACTIVITY-001` / `EP-ACTIVITY-001` | 展开/收起消息内活动轨迹；折叠时显示当前步骤 | `src/components/MessageActivity.tsx` | 已实现 |
 | `UI-ACTIVITY-STEPS` | 结果 | 工序列表、进度、耗时、缓存和模型调用 | `BF-ACTIVITY-001` / `EP-ACTIVITY-001` | 展示可公开的执行事件，不展示隐藏思维链 | `src/components/MessageActivity.tsx` | 已实现 |
 | `UI-ACTIVITY-ARTIFACT-ENTRY` | 入口 | 产物名称和“查看产物清单” | `BF-ACTIVITY-001` / `EP-ACTIVITY-001` | 打开指定 Job 的只读产物预览 | `src/components/MessageActivity.tsx` | 已实现 |
 | `UI-ACTIVITY-ARTIFACT-DIALOG` | 结果 | 分析产物预览、加载、错误和复制 | `BF-ACTIVITY-001` / `EP-ACTIVITY-001` | 安全渲染 Markdown/JSON，允许复制，不写回源文档 | `src/components/MessageActivity.tsx` | 已实现 |
-| `UI-MEMORY-CANDIDATE-NOTICE` | 确认/结果 | 项目记忆候选、确认写入和忽略 | `BF-MEMORY-001` / `EP-MEMORY-001` | 只有用户确认后写入当前项目记忆 | `src/App.tsx` `ChatPanel` | 已实现 |
-| `UI-REVISION-PENDING-NOTICE` | 确认/状态 | 待审核修改提案提示 | `BF-REVISION-001` / `EP-REVISION-001` | 展示待审核数量并提供接受、拒绝和查看文档 | `src/App.tsx` `ChatPanel` | 部分实现 |
+| `UI-MEMORY-CANDIDATE-NOTICE` | 确认/结果 | 助手回合后的项目记忆候选 | `BF-MEMORY-001` / `EP-MEMORY-001` | 只有用户确认后写入当前项目记忆；历史无归属候选显示在会话末尾 | `src/App.tsx` `ChatPanel` | 已实现 |
+| `UI-REVISION-PENDING-NOTICE` | 确认/状态 | 助手回合后的修改提案 | `BF-REVISION-001` / `EP-REVISION-001` | 展示待审核数量并提供接受、拒绝和查看文档 | `src/App.tsx` `ChatPanel` | 部分实现 |
 
 ## AI 修改审核（目标态）
 

@@ -43,7 +43,7 @@ describe('MessageActivity', () => {
   it('loads an intermediate artifact into a read-only preview', async () => {
     vi.spyOn(desktop, 'readAnalysisArtifact').mockResolvedValue('# 章节摘要\n\n正文')
     render(<MessageActivity items={[activity]} />)
-    fireEvent.click(screen.getByRole('button', { name: /处理记录/ }))
+    fireEvent.click(screen.getByRole('button', { name: /共用时/ }))
     fireEvent.click(screen.getByRole('button', { name: /chapter-a\.md/ }))
 
     expect(await screen.findByRole('dialog', { name: '分析产物预览' })).toBeTruthy()
