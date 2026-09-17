@@ -2,7 +2,7 @@
 
 - 状态：首版已落地基础状态，Agent Runtime 状态为目标态
 - 日期：2026-09-03
-- 关联文档：[对话页设计](UI_DESIGN_CHAT.md)、[状态、流程与验收](UI_DESIGN_STATES.md)、[Agent 与 Skill 建设计划](AGENT_SKILL_PLAN.md)
+- 关联文档：[对话页设计](UI_DESIGN_CHAT.md)、[状态、流程与验收](UI_DESIGN_STATES.md)、[Agent 与 Skill 建设计划](../agent/AGENT_SKILL_PLAN.md)
 
 ## 1. 目标与边界
 

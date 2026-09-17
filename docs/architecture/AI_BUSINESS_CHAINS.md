@@ -4,7 +4,7 @@
 - 日期：2026-09-04
 - 适用范围：Vinkey 本地 AI 文学创作工作台
 - 目标：以受控的 `Service/Tool + Workflow/Agent/Skill` 组合处理用户请求，并保持业务合同、Agent Runtime 与模型提供商相互独立。
-- 相关文档：[开发框架与技术选型](DEVELOPMENT_FRAMEWORK.md)、[Agent 与 Skill 建设计划](AGENT_SKILL_PLAN.md)、[对话页设计](UI_DESIGN_CHAT.md)
+- 相关文档：[开发框架与技术选型](DEVELOPMENT_FRAMEWORK.md)、[Agent 与 Skill 建设计划](../design/agent/AGENT_SKILL_PLAN.md)、[对话页设计](../design/ui/UI_DESIGN_CHAT.md)
 
 ## 1. 产品定位
 
@@ -462,7 +462,7 @@ TaskIntake / IntentRouter
 | P1 | DiffProposal 审核持久化与撤销 | 多文件逐块生成、冲突检查和审核已完成；下一步补跨会话恢复、撤销和审计记录 |
 | P2 | Outline/Scene/Draft 多阶段创作 | 依赖 Proposal、记忆、任务恢复和模型能力路由 |
 | P2 | Codex/Claude Agent Harness 内部原型 | 仅验证具体业务缺口；无需新增付费 API 配置，不形成用户选项 |
-| P2 | [轻量级外部研究与联网 Skill](LIGHTWEIGHT_WEB_RESEARCH.md) | 下一版本候选；先验证可信来源、事实收益、隐私和来源治理成本 |
+| P2 | [轻量级外部研究与联网 Skill](../research/LIGHTWEIGHT_WEB_RESEARCH.md) | 下一版本候选；先验证可信来源、事实收益、隐私和来源治理成本 |
 
 ## 9. 全局不变量
 
