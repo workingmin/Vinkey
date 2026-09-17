@@ -4,7 +4,15 @@ import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ChatRequest, ModelConnection, ModelProfile } from '../src/types'
-import { invokeModel, listConfiguredProfiles, loadConfiguredRows, parseArguments } from './intent-model-eval'
+import type { IntentClassificationCaseResult, IntentClassificationEvaluationSummary } from '../src/lib/intentModelEvaluation'
+import {
+  formatEvaluationReport,
+  formatProfileListReport,
+  invokeModel,
+  listConfiguredProfiles,
+  loadConfiguredRows,
+  parseArguments,
+} from './intent-model-eval'
 
 const temporaryDirectories: string[] = []
 
@@ -55,6 +63,52 @@ describe('IntentRouter model evaluation CLI', () => {
     const options = parseArguments(['--db', dbPath, '--profile-id', 'older', '--timeout-ms', '3000', '--json'])
     expect(options).toMatchObject({ profileId: 'older', timeoutMs: 3000, json: true })
     expect(loadConfiguredRows(options!).profile.model).toBe('qwen3:4b')
+  })
+
+  it('makes profile listing explicit about the 12 unexecuted evaluation cases', () => {
+    const report = formatProfileListReport('/tmp/vinkey.sqlite3', [
+      { id: 'router', name: 'Router', model: 'qwen3:8b', updatedAt: 2 },
+      { id: 'older', name: 'Older', model: 'qwen3:4b', updatedAt: 1 },
+    ])
+    expect(report).toContain('intent-model-eval-2（12 个版本化用例）')
+    expect(report).toContain('[1] router（默认候选）')
+    expect(report).toContain('12 个版本化用例尚未执行')
+    expect(report).toContain('npm run test:intent-model -- --profile-id router')
+  })
+
+  it('prints detailed case counts, field metrics, and the final acceptance result', () => {
+    const prediction = {
+      intent: 'general-chat', agent: 'GeneralConversation', skill: 'general-conversation',
+      scope: 'conversation', documentSelection: 'none',
+    } as const
+    const results: IntentClassificationCaseResult[] = Array.from({ length: 12 }, (_, index) => ({
+      caseId: `case-${index + 1}`,
+      output: JSON.stringify(prediction),
+      prediction,
+      matchedFields: ['intent', 'agent', 'skill', 'scope', 'documentSelection'],
+      exactMatch: true,
+      error: null,
+    }))
+    const summary: IntentClassificationEvaluationSummary = {
+      suiteVersion: 'intent-model-eval-2', profileId: 'router', model: 'qwen3:8b', caseCount: 12,
+      parsedCount: 12, exactMatchRate: 1, intentAccuracy: 1, agentAccuracy: 1,
+      skillAccuracy: 1, scopeAccuracy: 1, documentSelectionAccuracy: 1, passed: true,
+    }
+    const profile: ModelProfile = {
+      id: 'router', connectionId: 'local', name: 'Router', kind: 'ollama', baseUrl: 'http://127.0.0.1:11434',
+      model: 'qwen3:8b', contextWindow: 16_384, hasApiKey: false, updatedAt: 1,
+    }
+    const connection: ModelConnection = {
+      id: 'local', name: 'Local Ollama', kind: 'ollama', baseUrl: profile.baseUrl, hasApiKey: false, updatedAt: 1,
+    }
+    const report = formatEvaluationReport({ database: '/tmp/vinkey.sqlite3', profile, connection, results, summary })
+    expect(report).toContain('版本化用例：12 个')
+    expect(report).toContain('[01/12] PASS case-1')
+    expect(report).toContain('[12/12] PASS case-12')
+    expect(report).toContain('执行完成：12/12')
+    expect(report).toContain('Agent 准确率：100.0%')
+    expect(report).toContain('DocumentSelection 准确率：100.0%')
+    expect(report).toContain('验收结论：通过，12 个版本化用例全部执行成功且精确匹配。')
   })
 
   it('calls an Ollama endpoint with deterministic JSON settings', async () => {

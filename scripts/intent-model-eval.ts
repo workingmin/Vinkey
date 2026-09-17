@@ -6,7 +6,10 @@ import { pathToFileURL } from 'node:url'
 import type { ChatRequest, ChatStreamEvent, ModelConnection, ModelProfile } from '../src/types'
 import {
   INTENT_CLASSIFICATION_EVALUATION_CASES,
+  INTENT_MODEL_EVALUATION_SUITE_VERSION,
   runConfiguredIntentModelEvaluation,
+  type IntentClassificationCaseResult,
+  type IntentClassificationEvaluationSummary,
   type IntentModelEvaluationDependencies,
 } from '../src/lib/intentModelEvaluation'
 
@@ -32,6 +35,13 @@ interface ModelRow {
   connection_updated_at: number | null
 }
 
+export interface ConfiguredProfileSummary {
+  id: string
+  name: string
+  model: string
+  updatedAt: number
+}
+
 function defaultDatabasePath(): string {
   if (process.platform === 'darwin') {
     return join(homedir(), 'Library', 'Application Support', 'com.vinkey.desktop', 'vinkey.sqlite3')
@@ -54,7 +64,7 @@ function usage(): string {
   --profile-id <id>   指定模型 profile；默认使用数据库中最近更新的 profile
   --db <path>         指定 vinkey.sqlite3；默认使用当前系统的 Vinkey 应用数据目录
   --timeout-ms <ms>   每个用例的请求超时，默认 120000
-  --list-profiles     只列出 SQLite 中的模型 profile，不调用模型
+  --list-profiles     只检查并列出 SQLite 模型配置，不执行 ${INTENT_CLASSIFICATION_EVALUATION_CASES.length} 个评测用例
   --json              输出完整 JSON 结果
   -h, --help          显示帮助
 
@@ -94,7 +104,7 @@ export function parseArguments(values: string[]): CliOptions | null {
   return options
 }
 
-export function listConfiguredProfiles(dbPath: string): Array<{ id: string; name: string; model: string; updatedAt: number }> {
+export function listConfiguredProfiles(dbPath: string): ConfiguredProfileSummary[] {
   if (!existsSync(dbPath)) throw new Error(`未找到 Vinkey 数据库：${dbPath}`)
   const database = new DatabaseSync(dbPath, { readOnly: true })
   try {
@@ -102,10 +112,82 @@ export function listConfiguredProfiles(dbPath: string): Array<{ id: string; name
       SELECT id, name, model, updated_at AS updatedAt
       FROM model_profiles
       ORDER BY updated_at DESC, id ASC
-    `).all().map((row) => row as { id: string; name: string; model: string; updatedAt: number })
+    `).all().map((row) => row as unknown as ConfiguredProfileSummary)
   } finally {
     database.close()
   }
+}
+
+export function formatProfileListReport(dbPath: string, profiles: ConfiguredProfileSummary[]): string {
+  const lines = [
+    'Vinkey IntentRouter 本地模型专项评测 - 配置检查',
+    `数据库：${dbPath}`,
+    `评测套件：${INTENT_MODEL_EVALUATION_SUITE_VERSION}（${INTENT_CLASSIFICATION_EVALUATION_CASES.length} 个版本化用例）`,
+    `已配置模型：${profiles.length} 个`,
+  ]
+  profiles.forEach((profile, index) => {
+    lines.push(`[${index + 1}] ${profile.id}${index === 0 ? '（默认候选）' : ''}`)
+    lines.push(`    名称：${profile.name}`)
+    lines.push(`    模型：${profile.model}`)
+  })
+  if (profiles.length === 0) lines.push('没有已配置的模型 profile。')
+  lines.push(`说明：--list-profiles 仅检查配置，未调用模型，${INTENT_CLASSIFICATION_EVALUATION_CASES.length} 个版本化用例尚未执行。`)
+  if (profiles[0]) lines.push(`执行评测：npm run test:intent-model -- --profile-id ${profiles[0].id}`)
+  return lines.join('\n')
+}
+
+function percentage(value: number): string {
+  return `${(value * 100).toFixed(1)}%`
+}
+
+export function formatEvaluationReport(input: {
+  database: string
+  profile: ModelProfile
+  connection: ModelConnection
+  results: IntentClassificationCaseResult[]
+  summary: IntentClassificationEvaluationSummary
+}): string {
+  const { database, profile, connection, results, summary } = input
+  const passedCount = results.filter((result) => result.exactMatch).length
+  const lines = [
+    'Vinkey IntentRouter 本地模型专项评测 - 验收结果',
+    `数据库：${database}`,
+    `评测套件：${summary.suiteVersion}`,
+    `版本化用例：${summary.caseCount} 个`,
+    `模型配置：${profile.name}（profileId=${profile.id}）`,
+    `模型：${profile.model}（contextWindow=${profile.contextWindow}）`,
+    `连接：${connection.name}（${connection.kind}，${connection.baseUrl}）`,
+    '',
+    `逐项结果（精确匹配 ${passedCount}/${summary.caseCount}）：`,
+  ]
+  results.forEach((result, index) => {
+    const prediction = result.prediction
+    const expected = INTENT_CLASSIFICATION_EVALUATION_CASES.find((testCase) => testCase.id === result.caseId)?.expected
+    const detail = prediction
+      ? `intent=${prediction.intent} | agent=${prediction.agent} | skill=${prediction.skill} | scope=${prediction.scope} | documentSelection=${prediction.documentSelection}`
+      : `无法解析${result.error ? ` | ${result.error}` : ''}`
+    lines.push(`[${String(index + 1).padStart(2, '0')}/${summary.caseCount}] ${result.exactMatch ? 'PASS' : 'FAIL'} ${result.caseId}`)
+    lines.push(`         ${detail}`)
+    if (!result.exactMatch && expected) {
+      lines.push(`         期望：intent=${expected.intent} | agent=${expected.agent} | skill=${expected.skill} | scope=${expected.scope} | documentSelection=${expected.documentSelection}`)
+    }
+  })
+  lines.push(
+    '',
+    '汇总指标：',
+    `  执行完成：${results.length}/${summary.caseCount}`,
+    `  JSON 解析：${summary.parsedCount}/${summary.caseCount}（${percentage(summary.parsedCount / summary.caseCount)}）`,
+    `  Intent 准确率：${percentage(summary.intentAccuracy)}`,
+    `  Agent 准确率：${percentage(summary.agentAccuracy)}`,
+    `  Skill 准确率：${percentage(summary.skillAccuracy)}`,
+    `  Scope 准确率：${percentage(summary.scopeAccuracy)}`,
+    `  DocumentSelection 准确率：${percentage(summary.documentSelectionAccuracy)}`,
+    `  全字段精确匹配率：${percentage(summary.exactMatchRate)}`,
+    summary.passed
+      ? `验收结论：通过，${summary.caseCount} 个版本化用例全部执行成功且精确匹配。`
+      : `验收结论：未通过，${passedCount}/${summary.caseCount} 个版本化用例精确匹配。`,
+  )
+  return lines.join('\n')
 }
 
 export function loadConfiguredRows(options: CliOptions): { profile: ModelProfile; connection: ModelConnection } {
@@ -248,14 +330,14 @@ export async function main(): Promise<void> {
   if (options.listProfiles) {
     const profiles = listConfiguredProfiles(options.dbPath)
     if (options.json) console.log(JSON.stringify({ database: options.dbPath, profiles }, null, 2))
-    else {
-      console.log(`数据库：${options.dbPath}`)
-      if (profiles.length === 0) console.log('没有已配置的模型 profile。')
-      for (const profile of profiles) console.log(`${profile.id}\t${profile.name}\t${profile.model}`)
-    }
+    else console.log(formatProfileListReport(options.dbPath, profiles))
     return
   }
   const configured = loadConfiguredRows(options)
+  if (!options.json) {
+    console.log(`开始评测：${INTENT_MODEL_EVALUATION_SUITE_VERSION}，共 ${INTENT_CLASSIFICATION_EVALUATION_CASES.length} 个版本化用例。`)
+    console.log('正在逐项调用本地模型，请等待...\n')
+  }
   const evaluation = await runConfiguredIntentModelEvaluation(
     configured.profile.id,
     dependencies(configured.profile, configured.connection, options.timeoutMs),
@@ -264,15 +346,13 @@ export async function main(): Promise<void> {
   if (options.json) {
     console.log(JSON.stringify({ database: options.dbPath, ...evaluation }, null, 2))
   } else {
-    console.log(`数据库：${options.dbPath}`)
-    console.log(`模型：${configured.profile.name} (${configured.profile.model})`)
-    console.log(`连接：${configured.connection.name} (${configured.connection.baseUrl})`)
-    for (const result of evaluation.results) {
-      console.log(`${result.exactMatch ? 'PASS' : 'FAIL'}  ${result.caseId}${result.error ? ` - ${result.error}` : ''}`)
-    }
-    console.log(`Agent 准确率：${(evaluation.summary.agentAccuracy * 100).toFixed(1)}%`)
-    console.log(`全字段精确匹配率：${(evaluation.summary.exactMatchRate * 100).toFixed(1)}%`)
-    console.log(evaluation.summary.passed ? '结论：通过' : '结论：未通过')
+    console.log(formatEvaluationReport({
+      database: options.dbPath,
+      profile: configured.profile,
+      connection: configured.connection,
+      results: evaluation.results,
+      summary: evaluation.summary,
+    }))
   }
   if (!evaluation.summary.passed) process.exitCode = 2
 }
