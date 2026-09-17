@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import type {
   ChatMessage, ContextDocument, Conversation, ConversationSummary, DocumentTab,
   ModelProfile, ThemeMode, ViewMode, WorkspaceSnapshot, ProjectSummary,
-  ChatActivity, ChatRunStatus, TaskWorkerEvent,
+  ChatActivity, ChatRunResult, ChatRunStatus, TaskWorkerEvent,
   DiffProposal, EditorRevisionRequest, EditorSelection,
 } from './types'
 import { applyDiffProposalSet, fingerprintDocument } from './lib/diffProposal'
@@ -56,7 +56,7 @@ interface AppState {
   recordWorkerEvent: (conversationId: string, event: TaskWorkerEvent) => void
   appendChatRunChunk: (conversationId: string, chunk: string) => void
   resetChatRunResponse: (conversationId: string) => void
-  endChatRun: (conversationId: string, discardAssistant: boolean) => void
+  endChatRun: (conversationId: string, discardAssistant: boolean, result?: ChatRunResult) => void
   setConversation: (conversation: Conversation) => void
   newConversation: () => void
   setConversations: (conversations: ConversationSummary[]) => void
@@ -242,7 +242,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         : state.messages,
     }
   }),
-  endChatRun: (conversationId, discardAssistant) => set((state) => {
+  endChatRun: (conversationId, discardAssistant, result = { status: 'completed' }) => set((state) => {
     const run = state.chatRuns[conversationId]
     if (!run) return state
     const chatRuns = { ...state.chatRuns }
@@ -252,7 +252,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const activityLog = previous && !previous.completedAt
       ? [...run.activityLog.slice(0, -1), { ...previous, completedAt }]
       : run.activityLog
-    const completedAssistant = { ...run.assistantMessage, completedAt, activityLog }
+    const completedAssistant = { ...run.assistantMessage, completedAt, activityLog, runResult: result }
     const completedChatMessages = { ...state.completedChatMessages }
     if (discardAssistant || !completedAssistant.content.trim()) delete completedChatMessages[conversationId]
     else completedChatMessages[conversationId] = completedAssistant

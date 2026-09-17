@@ -338,7 +338,7 @@ Agent architecture references / internal prototypes
 - [x] 将 final Service Dispatch 的稳定身份写入 Worker 快照和兼容键；启动前使用 10 分钟短期票据在 Rust 内复验 job/workspace、policy/dispatch、Service 和 owner，票据不落盘。
 - [x] 为 Map/Reduce/Synthesis 建立版本化检查点依赖图；启动时校验产物哈希、来源指纹和上游依赖，并清理损坏、孤立或不再被有效清单引用的模型产物。
 - [x] 提供失败 Job 的指定步骤人工重跑 command；按 `chunking/map/reduce-N/synthesis/evidence` 定向删除目标及依赖后代，并持久化重跑目标和删除清单。
-- [x] 增加任务中心步骤选择/确认重跑、Worker 持久化结构化错误，以及不绑定 Job ID 的精确 Map Prompt 内容寻址缓存。
+- [x] 增加日志中心步骤选择/确认重跑、Worker 持久化结构化错误，以及不绑定 Job ID 的精确 Map Prompt 内容寻址缓存。
 - [ ] 补齐操作系统级常驻执行、其余 Service 的统一结构化错误和更广泛的源文档增量计划。当前模型编排不依赖 WebView 页面状态，但应用进程退出会停止推理；下次启动从兼容检查点恢复。跨 Job 缓存仅复用相同版本、模型和实际 Prompt 的 Map 结果，不复用 Reduce/Synthesis，也不恢复源指纹已变化的原 Job。
 
 验收：关闭窗口后可恢复；已完成 Map 不重复调用；活动模型配置变化后不会复用不兼容缓存。
@@ -436,7 +436,7 @@ TaskIntake / IntentRouter
 - 已实现编辑器选区 `DiffProposal`：路径、范围、原文和源指纹由本地锁定，模型只返回替换文本；用户可查看、接受或拒绝，接受仅更新编辑器且仍需显式保存。
 - 已实现 Rust `execute_task` 策略控制：Rust 独立复验 intent/Agent/Skill、Tool allowlist、作用域、副作用、正文策略和 ExecutionStrategy；前端在读取 Tool 前和最终执行前分别请求 Dispatch。
 - 已实现长文本任务协作式暂停/继续；运行中的单次模型调用不会被暂停破坏，状态会在下一步骤边界进入 `paused`，继续后恢复 `running`；取消可以中止模型响应流。
-- 已补充入口、短/长改稿分流、Tool 输入/输出拒绝、续问继承、选区冲突、Rust Dispatch/澄清、JobService、Reduce 收敛、事件回放、恢复候选、授权票据、重试分类和检查点依赖失效测试。任务中心重跑、精确 Map Prompt 跨 Job 缓存、多文件逐块 DiffProposal 和模型能力离线回归框架也已落地。
+- 已补充入口、短/长改稿分流、Tool 输入/输出拒绝、续问继承、选区冲突、Rust Dispatch/澄清、JobService、Reduce 收敛、事件回放、恢复候选、授权票据、重试分类和检查点依赖失效测试。日志中心重跑、精确 Map Prompt 跨 Job 缓存、多文件逐块 DiffProposal 和模型能力离线回归框架也已落地。
 - 已将 Rust `execute_task` 扩展为 Service Dispatcher：两阶段请求得到版本化 Dispatch，包含具体 Service、执行所有者、流式需求、后台化资格、稳定 Job ID 和澄清结果。桌面长文本任务返回 `executionOwner=rust-worker`、`frontendStreamingRequired=false`；其他 Service 仍由 WebView 承载。
 - 已完成第一层低置信度门禁：隐式且低置信度的正文读取在 preflight 返回一个最小澄清问题，并在任何正文 Tool、工作区扫描或模型调用前停止；显式 action、安全续问和恢复 Job 不增加分类模型调用。
 - 已完成版本化 Worker 输入快照、Rust 全 Pipeline、持久化事件回放和启动恢复协调器。Worker/Prompt/Output/Chunk 版本、Provider、URL、模型、上下文与预算共同组成兼容键；变化时拒绝缓存，API Key 不进入快照。
@@ -444,7 +444,7 @@ TaskIntake / IntentRouter
 - `worker-events.json` 保留最近 1,000 条带 sequence 的事件。前端先订阅再回放并去重；实时事件不是完成依据。启动时只自动恢复 `running` Job，`paused` 保持暂停；应用进程停止期间不执行模型，下次启动从 Map/Reduce 检查点继续。
 - 暂态模型失败在当前 Map/Reduce/Synthesis Step 内最多自动尝试 3 次，并持久化 attempt、退避时长和截断后的错误；非暂态错误立即失败，等待用户修正或显式恢复。
 - `worker-checkpoints.json` 已记录 Map 来源指纹、各级 Reduce/Synthesis 的产物依赖和内容哈希。损坏或孤立节点会连同依赖后代被清理；失败 Job 可通过 Rust command 指定 `chunking/map/reduce-N/synthesis/evidence` 重跑，并在恢复前复验工作区、协议版本、模型配置和兼容键。
-- Worker 失败已持久化稳定错误码、类别、可重试性和失败步骤，并兼容历史字符串错误；任务中心支持选择失败步骤、确认重跑、查看 attempt/checkpoint 和结果指标。该错误合同目前只覆盖 Worker 持久化边界。
+- Worker 失败已持久化稳定错误码、类别、可重试性和失败步骤，并兼容历史字符串错误；日志中心支持选择失败步骤、确认重跑、查看 attempt/checkpoint 和结果指标。该错误合同目前只覆盖 Worker 持久化边界。
 - Map 已使用工作区级内容寻址缓存：键绑定 Worker/Prompt/Output/Chunk 版本、完整模型兼容配置和实际 Prompt hash，不绑定 Job ID。相同 Prompt 可跨 Job 命中，损坏或不兼容项会失效；Reduce/Synthesis 不跨 Job 复用，源文档变化仍会拒绝恢复旧 Job。
 - 模型能力评测已有版本化用例、完整性校验、延迟/吞吐/结构化输出/证据召回/改写忠实度评分、基线回归判定和执行模式资格导出。它目前不自动调用真实模型，也未持久化到能力注册表。
 - 多文件逐块 `DiffProposal` 已支持最多 8 个文档、逐块审核、任意审核顺序及用户编辑冲突检测；接受结果只进入编辑器，不自动保存。持久化审核记录和撤销仍待实现。
@@ -453,7 +453,7 @@ TaskIntake / IntentRouter
 
 | 优先级 | 工作项 | 原因 |
 | --- | --- | --- |
-| P0 | 全 Service 结构化错误与常驻任务 | Worker 错误码和任务中心重跑已完成；下一步统一其余 Rust command、超时/幂等语义和操作系统级常驻执行 |
+| P0 | 全 Service 结构化错误与常驻任务 | Worker 错误码和日志中心重跑已完成；下一步统一其余 Rust command、超时/幂等语义和操作系统级常驻执行 |
 | P0 | 跨 Job 增量计划与缓存观测 | 精确 Map Prompt 内容寻址缓存已完成；下一步显式规划变化/未变化来源并呈现命中原因，Reduce/Synthesis 保持任务隔离 |
 | P0 | 歧义分类回归集与可选轻量分类模型 | 确定性低置信度门禁和最小澄清已完成，需用数据控制漏判与打断率 |
 | P0 | 真实模型跑批与能力注册表 | 离线评分和回归门禁已完成；下一步调用 Provider、持久化结果并用实测数据校准分流阈值 |

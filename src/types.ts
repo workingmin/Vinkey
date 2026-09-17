@@ -267,6 +267,12 @@ export interface ChatMessage {
   completedAt?: number
   activityLog?: ChatActivity[]
   taskRef?: TaskMessageRef | null
+  runResult?: ChatRunResult | null
+}
+
+export interface ChatRunResult {
+  status: 'completed' | 'failed' | 'cancelled'
+  error?: ServiceError | null
 }
 
 export interface TaskMessageRef {

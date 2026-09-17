@@ -13,7 +13,7 @@ import remarkGfm from 'remark-gfm'
 import { CodeEditor } from './components/CodeEditor'
 import { FilePreview, downloadBytes } from './components/FilePreview'
 import { SettingsPage } from './components/SettingsPage'
-import { TaskCenter } from './components/TaskCenter'
+import { LogCenter } from './components/LogCenter'
 import { ConversationTaskControls } from './components/ConversationTaskControls'
 import { MessageActivity } from './components/MessageActivity'
 import { TaskRequestSummary } from './components/TaskRequestSummary'
@@ -38,11 +38,12 @@ import { isContextRecoveryResponse } from './lib/contextRecovery'
 import { buildMemoryCandidates, buildProjectMemoryContext, selectRelevantMemory } from './lib/projectMemory'
 import { formatStructureResult, segmentDocument } from './lib/structureSegmentation'
 import { useAppStore } from './store'
-import type { ChatActivity, ChatMessage, ChatRunStatus, DocumentSnapshot, ProjectMemoryItem, ProjectSummary, ViewMode, WorkspaceEntry } from './types'
+import type { ChatActivity, ChatMessage, ChatRunResult, ChatRunStatus, DocumentSnapshot, ProjectMemoryItem, ProjectSummary, ViewMode, WorkspaceEntry } from './types'
 import { getDocumentKind, getLanguageName, isEditableDocument } from './lib/fileTypes'
 import { findNewTextFiles, flattenWorkspaceFiles } from './lib/tree'
 import { readWorkspaceDocuments } from './lib/workspaceAnalysis'
 import { buildSelectedDocumentsOverviewMessage, formatWorkspaceOverview } from './lib/workspaceOverview'
+import { normalizeServiceError } from './lib/serviceError'
 import { buildDocumentIndexMessage } from './lib/documentMetadata'
 import { buildFocusedWorkspaceMessage } from './lib/focusedAnalysis'
 import { isLoopbackModelEndpoint } from './lib/modelPrivacy'
@@ -69,7 +70,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window'
 import { Menu, MenuItem, PredefinedMenuItem, Submenu } from '@tauri-apps/api/menu'
 import type { PredefinedMenuItemOptions } from '@tauri-apps/api/menu'
 
-type ContentPage = 'chat' | 'file' | 'tasks'
+type ContentPage = 'chat' | 'file' | 'logs'
 
 const isMacPlatform = () => typeof navigator !== 'undefined' && /mac/i.test(navigator.platform)
 
@@ -108,7 +109,7 @@ async function installMacMenu(callbacks: {
   const view = await Submenu.new({ text: '查看', items: [
     await menuItem('对话页', () => callbacks.changePage('chat')),
     await menuItem('文件页', () => callbacks.changePage('file')),
-    await menuItem('任务中心', () => callbacks.changePage('tasks')),
+    await menuItem('日志中心', () => callbacks.changePage('logs')),
     await menuItem('切换浅色/深色主题', callbacks.toggleTheme),
     await menuItem('模型与应用设置', callbacks.openSettings),
   ] })
@@ -121,7 +122,7 @@ async function installMacMenu(callbacks: {
   const help = await Submenu.new({ text: '帮助', items: [
     await menuItem('查看快捷键', callbacks.showShortcuts),
     await menuItem('窗口诊断信息', callbacks.showWindowDiagnostics),
-    await menuItem('运行日志', callbacks.showRuntimeDiagnostics),
+    await menuItem('应用诊断日志', callbacks.showRuntimeDiagnostics),
   ] })
   const appMenu = await Submenu.new({ text: 'Vinkey', items: [
     await PredefinedMenuItem.new({ item: { About: { name: 'Vinkey', version: '0.1.0', comments: '本地优先的 AI 文学创作工作台' } }, text: '关于 Vinkey' }),
@@ -211,7 +212,7 @@ function TitleBar({ onPageChange, onOpenWorkspace, onNewDocument, onRefreshWorks
     { label: '查看', items: [
       { label: '对话页', icon: MessageSquareText, action: () => onPageChange('chat') },
       { label: '文件页', icon: FileText, action: () => onPageChange('file') },
-      { label: '任务中心', icon: ListChecks, action: () => onPageChange('tasks') },
+      { label: '日志中心', icon: ScrollText, action: () => onPageChange('logs') },
       { label: theme === 'dark' ? '切换浅色主题' : '切换深色主题', icon: theme === 'dark' ? Sun : Moon, action: () => setTheme(theme === 'dark' ? 'light' : 'dark') },
       { label: '模型与应用设置', icon: Settings, action: () => setSettingsOpen(true) },
     ] },
@@ -223,7 +224,7 @@ function TitleBar({ onPageChange, onOpenWorkspace, onNewDocument, onRefreshWorks
     { label: '帮助', items: [
       { label: '查看快捷键', icon: Keyboard, action: onShowShortcuts },
       { label: '窗口诊断信息', icon: Settings, action: onShowWindowDiagnostics },
-      { label: '运行日志', icon: ScrollText, action: onShowRuntimeDiagnostics },
+      { label: '应用诊断日志', icon: ScrollText, action: onShowRuntimeDiagnostics },
       { label: '关于 Vinkey', icon: Bot, action: onShowAbout },
     ] },
   ]
@@ -343,7 +344,7 @@ function ChatMessageItem({ message, activity, onCopyError }: {
     month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
   })
 
-  return <article className={`message ${message.role}`}>
+  return <article id={`message-${message.id}`} data-message-id={message.id} tabIndex={-1} className={`message ${message.role}`}>
     {isAssistant && <div className="avatar" aria-hidden="true"><Bot /></div>}
     <div className="message-stack">
       {isAssistant && <div className="message-author">Vinkey</div>}
@@ -541,7 +542,8 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
       endChatRun(nextConversationId, false)
       try {
         await saveConversationMessage(nextConversationId, nextTitle, userMessage, workspace?.id)
-        await saveConversationMessage(nextConversationId, nextTitle, { ...assistantMessage, completedAt: Date.now() }, workspace?.id)
+        const completed = useAppStore.getState().completedChatMessages[nextConversationId]
+        if (completed) await saveConversationMessage(nextConversationId, nextTitle, completed, workspace?.id)
         setConversations(await listConversations(workspace?.id))
       } catch (error) { setError(String(error)) }
       return
@@ -659,6 +661,7 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
     }
     const revisionSourceBudget = Math.min(12_000, Math.max(512, Math.floor((selectedModel?.contextWindow ?? 32_768) * 0.55)))
     taskPlan = refineTaskForDocuments(taskPlan, requestContextDocuments, revisionSourceBudget)
+    let runResult: ChatRunResult = { status: 'completed' }
     try {
       taskDispatch = await executeTask({ taskId: nextRequestId, stage: 'final', resumeJobId: null, request: taskRequest, plan: taskPlan })
       taskPlan = taskDispatch.plan
@@ -865,12 +868,16 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
       }
     } catch (error) {
       const message = formatError(error)
+      const cancelled = message.includes('请求已停止')
+      runResult = cancelled
+        ? { status: 'cancelled' }
+        : { status: 'failed', error: normalizeServiceError(message) }
       if (!message.includes('请求已停止')) setError(message)
-      appendChatRunChunk(nextConversationId, `\n\n> ${message.includes('请求已停止') ? '任务已停止，已完成的产物仍保留。' : `任务未完成：${message}`}`)
+      appendChatRunChunk(nextConversationId, `\n\n> ${cancelled ? '任务已停止，已完成的产物仍保留。' : `任务未完成：${message}`}`)
     } finally {
       setAnalysisStatus(null)
       const completedBeforeEnd = useAppStore.getState().chatRuns[nextConversationId]?.assistantMessage
-      endChatRun(nextConversationId, !completedBeforeEnd?.content)
+      endChatRun(nextConversationId, !completedBeforeEnd?.content, runResult)
       const completed = useAppStore.getState().completedChatMessages[nextConversationId]
       if (completed?.content) {
         try {
@@ -1141,7 +1148,7 @@ function FileWorkspace({ showEditor, onOpenDocument, onToggleContext, onOpenWork
   </div>
 }
 
-function ContentPanel({ page, onPageChange, showFileEditor, onOpenDocument, onOpenWorkspace, onRefreshWorkspace, onSave, onCloseEditor, onToggleContext, onReviewDiff, onOpenTaskSource }: {
+function ContentPanel({ page, onPageChange, showFileEditor, onOpenDocument, onOpenWorkspace, onRefreshWorkspace, onSave, onCloseEditor, onToggleContext, onReviewDiff, onOpenLogSource }: {
   page: ContentPage
   onPageChange: (page: ContentPage) => void
   showFileEditor: boolean
@@ -1152,31 +1159,31 @@ function ContentPanel({ page, onPageChange, showFileEditor, onOpenDocument, onOp
   onCloseEditor: () => void
   onToggleContext: (path: string) => Promise<void>
   onReviewDiff: () => void
-  onOpenTaskSource: (conversationId: string) => Promise<void>
+  onOpenLogSource: (conversationId: string, sourceMessageId?: string | null) => Promise<void>
 }) {
   const workspace = useAppStore((state) => state.workspace)
   const conversationTitle = useAppStore((state) => state.conversationTitle)
   const modelProfiles = useAppStore((state) => state.modelProfiles)
   const activeModelId = useAppStore((state) => state.activeModelId)
   const activeModel = modelProfiles.find((profile) => profile.id === activeModelId)
-  const pageTitle = page === 'tasks' ? '任务中心' : conversationTitle || '新会话'
+  const pageTitle = page === 'logs' ? '日志中心' : conversationTitle || '新会话'
 
   return <section className="content-panel" aria-label="内容区">
     <header className="content-panel-header">
       <div className="content-panel-summary">
         <strong title={pageTitle}>{pageTitle}</strong>
-        <span title={page === 'tasks' ? `当前项目范围：${workspace?.name ?? '未打开项目'}` : `${workspace?.name ?? '未打开项目'} · ${activeModel?.model ?? '未选择模型'}`}>{page === 'tasks' ? `当前项目范围：${workspace?.name ?? '未打开项目'}` : `${workspace?.name ?? '未打开项目'} · ${activeModel?.model ?? '未选择模型'}`}</span>
+        <span title={page === 'logs' ? `当前项目范围：${workspace?.name ?? '未打开项目'}` : `${workspace?.name ?? '未打开项目'} · ${activeModel?.model ?? '未选择模型'}`}>{page === 'logs' ? `当前项目范围：${workspace?.name ?? '未打开项目'}` : `${workspace?.name ?? '未打开项目'} · ${activeModel?.model ?? '未选择模型'}`}</span>
       </div>
       <div className="content-switcher" role="tablist" aria-label="内容页面">
         <button role="tab" aria-selected={page === 'chat'} className={page === 'chat' ? 'active' : ''} onClick={() => onPageChange('chat')}><MessageSquareText />对话</button>
         <button role="tab" aria-selected={page === 'file'} className={page === 'file' ? 'active' : ''} onClick={() => onPageChange('file')}><FileText />文件</button>
-        <button role="tab" aria-selected={page === 'tasks'} className={page === 'tasks' ? 'active' : ''} onClick={() => onPageChange('tasks')}><ListChecks />任务</button>
+        <button role="tab" aria-selected={page === 'logs'} className={page === 'logs' ? 'active' : ''} onClick={() => onPageChange('logs')}><ScrollText />日志</button>
       </div>
     </header>
     <div className="content-panel-body">
       {page === 'chat' && <ChatPanel onToggleContext={onToggleContext} onReviewDiff={onReviewDiff} />}
       {page === 'file' && <FileWorkspace showEditor={showFileEditor} onOpenDocument={onOpenDocument} onToggleContext={onToggleContext} onOpenWorkspace={onOpenWorkspace} onRefreshWorkspace={onRefreshWorkspace} onSave={onSave} onCloseEditor={onCloseEditor} onOpenChat={() => onPageChange('chat')} />}
-      {page === 'tasks' && <TaskCenter onOpenSource={onOpenTaskSource} />}
+      {page === 'logs' && <LogCenter onOpenSource={onOpenLogSource} />}
     </div>
   </section>
 }
@@ -1433,7 +1440,7 @@ export function App() {
     } catch (cause) { setError(String(cause)) }
   }, [setError, toggleContext])
 
-  const openTaskSource = useCallback(async (conversationId: string) => {
+  const openLogSource = useCallback(async (conversationId: string, sourceMessageId?: string | null) => {
     const currentWorkspace = useAppStore.getState().workspace
     if (!currentWorkspace) return
     try {
@@ -1442,7 +1449,12 @@ export function App() {
       setConversation(conversation)
       setContentPage('chat')
       setSettingsOpen(false)
-    } catch (cause) { setError(`无法打开任务来源会话：${formatError(cause)}`) }
+      if (sourceMessageId) window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+        const target = document.getElementById(`message-${sourceMessageId}`)
+        target?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        target?.focus({ preventScroll: true })
+      }))
+    } catch (cause) { setError(`无法打开日志来源对话：${formatError(cause)}`) }
   }, [setConversation, setError, setSettingsOpen])
 
   const saveActive = useCallback(async () => {
@@ -1488,12 +1500,12 @@ export function App() {
     <TitleBar onPageChange={changeContentPage} onOpenWorkspace={() => void openWorkspaceFromMenu()} onNewDocument={() => void newDocumentFromMenu()} onRefreshWorkspace={() => void refreshWorkspaceFromMenu()} onCloseDocument={closeDocumentFromMenu} onSave={() => void saveActive()} onShowShortcuts={showShortcuts} onShowAbout={showAbout} onShowWindowDiagnostics={showWindowDiagnostics} onShowRuntimeDiagnostics={() => void showRuntimeDiagnostics()} />
     <div className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`} data-theme={theme}>
       <ProjectSessionSidebar onPageChange={changeContentPage} onOpenWorkspace={() => void openWorkspaceFromMenu()} onRefreshWorkspace={() => void refreshWorkspaceFromMenu()} onOpenDocument={openDocument} onSelectProject={selectProject} onDeleteProject={removeProject} />
-      {settingsOpen ? <SettingsPage /> : <ContentPanel key={workspace?.id ?? 'no-project'} page={contentPage} onPageChange={changeContentPage} showFileEditor={fileEditorVisible && hasActiveDocument} onOpenDocument={openDocument} onOpenWorkspace={() => void openWorkspaceFromMenu()} onRefreshWorkspace={refreshWorkspaceFromMenu} onSave={saveActive} onCloseEditor={() => setFileEditorVisible(false)} onToggleContext={toggleDocumentContext} onOpenTaskSource={openTaskSource} onReviewDiff={() => { setContentPage('file'); setFileEditorVisible(true); setSettingsOpen(false) }} />}
+      {settingsOpen ? <SettingsPage /> : <ContentPanel key={workspace?.id ?? 'no-project'} page={contentPage} onPageChange={changeContentPage} showFileEditor={fileEditorVisible && hasActiveDocument} onOpenDocument={openDocument} onOpenWorkspace={() => void openWorkspaceFromMenu()} onRefreshWorkspace={refreshWorkspaceFromMenu} onSave={saveActive} onCloseEditor={() => setFileEditorVisible(false)} onToggleContext={toggleDocumentContext} onOpenLogSource={openLogSource} onReviewDiff={() => { setContentPage('file'); setFileEditorVisible(true); setSettingsOpen(false) }} />}
       {error && <div className="error-banner" role="alert"><span>{error}</span><button aria-label="关闭错误提示" onClick={() => setError(null)}><X /></button></div>}
     </div>
     {runtimeDiagnosticsOpen && <div className="runtime-diagnostics-backdrop" role="presentation" onClick={() => setRuntimeDiagnosticsOpen(false)}>
       <section className="runtime-diagnostics-modal" role="dialog" aria-modal="true" aria-labelledby="runtime-diagnostics-title" onClick={(event) => event.stopPropagation()}>
-        <header><div><h2 id="runtime-diagnostics-title"><ScrollText />运行日志</h2><p>{runtimeDiagnostics?.path ?? '正在读取日志路径…'}</p></div><button className="icon-button" aria-label="关闭运行日志" title="关闭" onClick={() => setRuntimeDiagnosticsOpen(false)}><X /></button></header>
+        <header><div><h2 id="runtime-diagnostics-title"><ScrollText />应用诊断日志</h2><p>{runtimeDiagnostics?.path ?? '正在读取日志路径…'}</p></div><button className="icon-button" aria-label="关闭应用诊断日志" title="关闭" onClick={() => setRuntimeDiagnosticsOpen(false)}><X /></button></header>
         {runtimeDiagnosticsLoading ? <div className="runtime-diagnostics-empty">正在读取最近运行事件…</div> : runtimeDiagnostics && <>
           <div className="runtime-diagnostics-meta"><span>平台 {runtimeDiagnostics.platform}</span><span>版本 {runtimeDiagnostics.version}</span><span>{runtimeDiagnostics.lines.length} 条最近事件</span></div>
           <pre className="runtime-diagnostics-log">{runtimeDiagnostics.lines.length > 0 ? runtimeDiagnostics.lines.join('\n') : '暂无运行日志。'}</pre>

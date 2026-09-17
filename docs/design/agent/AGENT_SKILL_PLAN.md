@@ -607,7 +607,7 @@ quality_profile
 
 ### 11.2 尚未实现
 
-1. 其余 Rust command 的统一结构化错误、任务中心与后台常驻执行的完整产品化，以及更广泛的源文档增量复用；当前 Worker 失败已持久化稳定错误码/类别/可重试性，任务中心支持失败步骤选择和确认重跑，Map 已按精确 Prompt 与版本化模型配置做跨 Job 内容寻址缓存。该缓存不含 Job ID，不能把 Reduce/Synthesis 结果跨 Job 复用；源文档变化仍会拒绝恢复原 Job。
+1. 其余 Rust command 的统一结构化错误、日志中心与后台常驻执行的完整产品化，以及更广泛的源文档增量复用；当前 Worker 失败已持久化稳定错误码/类别/可重试性，日志中心支持失败步骤选择和确认重跑，Map 已按精确 Prompt 与版本化模型配置做跨 Job 内容寻址缓存。该缓存不含 Job ID，不能把 Reduce/Synthesis 结果跨 Job 复用；源文档变化仍会拒绝恢复原 Job。
 2. 基于领域评测的轻量歧义分类；当前已完成确定性低置信度门禁和单问题澄清，低置信度正文请求在任何 Tool 读取前停止，但尚未引入分类模型，也未覆盖需要多轮槽位收集的复杂歧义。
 3. 项目级检索层、`DocumentTriage`、`StoryDeconstruction` 和按目录/主题的持久化分层摘要。
 4. 多文件/逐块 `DiffProposal` 的持久化审核记录与撤销，以及完整结构化 canon；当前最多 8 个文档、逐块冲突检测、基于不可变 baseline 的任意顺序审核已落地，人物关系的 SQLite/FTS5/图算法底座仍待实体抽取和提案审核闭环。
@@ -675,11 +675,11 @@ quality_profile
 - 新增 `retry_task_worker_step(jobId, stepId)` Rust command 和桌面端封装。只允许重跑 `failed` 的长文本 Job 且目标必须是已出现步骤；启动前复验工作区、Worker/Prompt/Output Schema 版本、当前模型配置和兼容键，随后删除目标步骤及其依赖后代并复用现有 Pipeline。
 - `chunking` 重跑会同时清除 manifest 和全部模型后代；`map` 清除全部 Map 及后代；`reduce-N` 只清除该层及更高依赖层；`synthesis` 保留 Map/Reduce；`evidence` 保留 `analysis.md`。最终输出、完成/失败清单和证据文件会按需重建，删除清单持久化到 `worker.step_retry_requested` 事件。
 - Worker 协议升级为 `long-text-worker-4`，桌面与浏览器回退保持一致。这里完成的是单个 Job 内的依赖级精确失效；源文档变化后创建新 Job 并跨 Job 复用未变化文档的内容寻址缓存仍未实现。
-- 下一批按依赖顺序实施：统一结构化错误与任务中心重跑交互 → 跨 Job 内容寻址 Map 缓存和源文档增量失效 → 模型能力回归评测 → 多文件逐块 `DiffProposal`。
+- 下一批按依赖顺序实施：统一结构化错误与日志中心重跑交互 → 跨 Job 内容寻址 Map 缓存和源文档增量失效 → 模型能力回归评测 → 多文件逐块 `DiffProposal`。
 
 ### 11.11 2026-09-07 Worker 第五批实施进展
 
-- Worker 失败会持久化 `TaskJobFailure`，包含稳定 `code/category/retryable/stepId`，同时保留旧 `error` 字符串并兼容读取缺少 `failure` 字段的历史任务。前端统一归一化两种错误形态；任务中心可轮询状态、选择失败步骤、确认重跑、查看检查点/attempt，并展示模型调用、跨 Job 缓存命中和耗时指标。该合同目前覆盖 Worker Job 失败，不代表所有 Rust command 已迁移。
+- Worker 失败会持久化 `TaskJobFailure`，包含稳定 `code/category/retryable/stepId`，同时保留旧 `error` 字符串并兼容读取缺少 `failure` 字段的历史任务。前端统一归一化两种错误形态；日志中心可轮询状态、选择失败步骤、确认重跑、查看检查点/attempt，并展示模型调用、跨 Job 缓存命中和耗时指标。该合同目前覆盖 Worker Job 失败，不代表所有 Rust command 已迁移。
 - 新增工作区级 `_map-cache`。键包含 Map cache schema、Worker/Prompt/Output/Chunk 版本、完整模型兼容配置及实际 Map Prompt hash，不绑定 Job/Dispatch ID；相同 Prompt 可跨 Job 命中，模型、Prompt 或版本变化会 miss，损坏项会删除，最多保留 1,024 项。该机制只复用精确 Map 输入，不跨 Job 复用 Reduce/Synthesis，也不允许恢复源指纹已变化的原 Job。
 - 新增版本化模型能力回归评测框架，要求每个套件用例恰好一条有效观测，计算首 token/总耗时 p95、吞吐、结构化输出成功率、证据召回率和改写忠实度，并基于阈值导出 Direct/Bounded/LongText 资格。当前是可重复评分与基线比较模块，真实 Provider 自动跑批、人工修正量采集和能力注册表持久化尚未实施。
 - `RevisionEditor` 已支持多文件逐块 Proposal：最多 8 个文档、每块默认最多 6,000 UTF-16 字符；路径、范围、原文和 baseline 由本地锁定，模型只能返回 `targetId + replacementText`。未知、重复、额外字段和重叠目标会拒绝，同文件多块从不可变 baseline 重算，允许任意审核顺序；接受只更新编辑器，不自动保存。

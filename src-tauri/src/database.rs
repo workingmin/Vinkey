@@ -31,6 +31,7 @@ pub struct StoredMessage {
     pub completed_at: Option<u64>,
     pub activity_log: Option<serde_json::Value>,
     pub task_ref: Option<StoredTaskRef>,
+    pub run_result: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -357,7 +358,8 @@ fn init_conversation_schema(connection: &Connection) -> Result<(), rusqlite::Err
            created_at INTEGER NOT NULL,
            completed_at INTEGER,
            activity_log TEXT,
-           task_ref TEXT
+           task_ref TEXT,
+           run_result TEXT
          );
          CREATE INDEX IF NOT EXISTS messages_conversation_id ON messages(conversation_id, created_at);
          CREATE TABLE IF NOT EXISTS project_memory (
@@ -453,6 +455,7 @@ fn init_conversation_schema(connection: &Connection) -> Result<(), rusqlite::Err
         "ALTER TABLE messages ADD COLUMN completed_at INTEGER",
         "ALTER TABLE messages ADD COLUMN activity_log TEXT",
         "ALTER TABLE messages ADD COLUMN task_ref TEXT",
+        "ALTER TABLE messages ADD COLUMN run_result TEXT",
     ] {
         let _ = connection.execute(statement, []);
     }
@@ -663,7 +666,7 @@ fn import_conversation_records(target: &Connection, source: &Path) -> Result<(),
         .map_err(|e| e.to_string())?
         .collect::<Result<HashSet<_>, _>>()
         .map_err(|e| e.to_string())?;
-    let optional = ["completed_at", "activity_log", "task_ref"].map(|column| {
+    let optional = ["completed_at", "activity_log", "task_ref", "run_result"].map(|column| {
         if columns.contains(column) {
             column
         } else {
@@ -672,8 +675,8 @@ fn import_conversation_records(target: &Connection, source: &Path) -> Result<(),
     });
     let mut statement = old
         .prepare(&format!(
-            "SELECT id, conversation_id, role, content, created_at, {}, {}, {} FROM messages",
-            optional[0], optional[1], optional[2]
+            "SELECT id, conversation_id, role, content, created_at, {}, {}, {}, {} FROM messages",
+            optional[0], optional[1], optional[2], optional[3]
         ))
         .map_err(|e| e.to_string())?;
     let rows = statement
@@ -687,13 +690,14 @@ fn import_conversation_records(target: &Connection, source: &Path) -> Result<(),
                 row.get::<_, Option<i64>>(5)?,
                 row.get::<_, Option<String>>(6)?,
                 row.get::<_, Option<String>>(7)?,
+                row.get::<_, Option<String>>(8)?,
             ))
         })
         .map_err(|e| e.to_string())?;
     for row in rows {
-        let (id, conversation, role, content, created, completed, activity, task) =
+        let (id, conversation, role, content, created, completed, activity, task, run_result) =
             row.map_err(|e| e.to_string())?;
-        target.execute("INSERT OR IGNORE INTO messages (id, conversation_id, role, content, created_at, completed_at, activity_log, task_ref) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)", params![id, conversation, role, content, created, completed, activity, task]).map_err(|e| e.to_string())?;
+        target.execute("INSERT OR IGNORE INTO messages (id, conversation_id, role, content, created_at, completed_at, activity_log, task_ref, run_result) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)", params![id, conversation, role, content, created, completed, activity, task, run_result]).map_err(|e| e.to_string())?;
     }
     Ok(())
 }
@@ -1252,7 +1256,7 @@ pub fn load_conversation(
         )
         .map_err(|_| "找不到该会话".to_string())?;
     let mut statement = connection.prepare(
-        "SELECT id, role, content, created_at, completed_at, activity_log, task_ref FROM messages WHERE conversation_id = ?1 ORDER BY created_at, rowid"
+        "SELECT id, role, content, created_at, completed_at, activity_log, task_ref, run_result FROM messages WHERE conversation_id = ?1 ORDER BY created_at, rowid"
     ).map_err(|error| format!("无法读取消息：{error}"))?;
     let rows = statement
         .query_map([&id], |row| {
@@ -1267,6 +1271,9 @@ pub fn load_conversation(
                     .and_then(|value| serde_json::from_str(&value).ok()),
                 task_ref: row
                     .get::<_, Option<String>>(6)?
+                    .and_then(|value| serde_json::from_str(&value).ok()),
+                run_result: row
+                    .get::<_, Option<String>>(7)?
                     .and_then(|value| serde_json::from_str(&value).ok()),
             })
         })
@@ -1320,8 +1327,8 @@ pub fn save_conversation_message(
         )
         .map_err(|error| format!("无法保存会话：{error}"))?;
     transaction.execute(
-        "INSERT OR REPLACE INTO messages(id, conversation_id, role, content, created_at, completed_at, activity_log, task_ref) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-        params![message.id, conversation_id, message.role, message.content, message.created_at as i64, message.completed_at.map(|value| value as i64), message.activity_log.map(|value| value.to_string()), task_ref],
+        "INSERT OR REPLACE INTO messages(id, conversation_id, role, content, created_at, completed_at, activity_log, task_ref, run_result) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        params![message.id, conversation_id, message.role, message.content, message.created_at as i64, message.completed_at.map(|value| value as i64), message.activity_log.map(|value| value.to_string()), task_ref, message.run_result.map(|value| value.to_string())],
     ).map_err(|error| format!("无法保存消息：{error}"))?;
     transaction
         .commit()
@@ -1568,19 +1575,19 @@ mod tests {
     }
 
     #[test]
-    fn initializes_persisted_task_reference_column() {
+    fn initializes_persisted_message_run_columns() {
         let directory = tempfile::tempdir().expect("temp directory");
         let path = directory.path().join("conversation.sqlite3");
         init(&path).expect("database schema");
         let connection = Connection::open(path).expect("database connection");
         let count: i64 = connection
             .query_row(
-                "SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name = 'task_ref'",
+                "SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name IN ('task_ref', 'run_result')",
                 [],
                 |row| row.get(0),
             )
-            .expect("task_ref column");
-        assert_eq!(count, 1);
+            .expect("message run columns");
+        assert_eq!(count, 2);
     }
 
     #[test]

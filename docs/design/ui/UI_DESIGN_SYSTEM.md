@@ -44,7 +44,7 @@
 该 HTML 区块用实际 token 和入口标签展示常用工作区控件的组合方式。背景采用浅色中性灰阶，仅用于区分区域，不代表产品实际配色或状态语义；颜色名称只保留为语义标签：
 
 <table border="1" cellpadding="8" cellspacing="0" width="100%">
-  <tr><td colspan="4" bgcolor="#F1F3F5"><strong>工具栏</strong>　↶ 撤销　↷ 重做　⌕ 查找　　<strong>保存</strong>　　<strong>对话</strong>　|　<strong>文件</strong>　|　<strong>任务</strong></td></tr>
+  <tr><td colspan="4" bgcolor="#F1F3F5"><strong>工具栏</strong>　↶ 撤销　↷ 重做　⌕ 查找　　<strong>保存</strong>　　<strong>对话</strong>　|　<strong>文件</strong>　|　<strong>日志</strong></td></tr>
   <tr>
     <td bgcolor="#F8F9FA"><strong>侧栏入口</strong><br>搜索<br>新建会话<br>设置</td>
     <td bgcolor="#FFFFFF"><strong>内容入口</strong><br>引用文件<br>编辑 / 分栏 / 预览<br>模型选择</td>

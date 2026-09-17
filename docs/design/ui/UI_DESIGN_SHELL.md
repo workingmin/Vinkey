@@ -6,7 +6,7 @@
 
 ## 目标
 
-让工作区、会话和当前模型始终可见；让“对话/文件/任务”成为稳定的内容级导航；平台差异只影响窗口外壳，不改变工作流。
+让工作区、会话和当前模型始终可见；让“对话/文件/日志”成为稳定的内容级导航；平台差异只影响窗口外壳，不改变工作流。
 
 ## 结构
 
@@ -32,7 +32,7 @@ macOS：  原生 Overlay 标题区与交通灯
   <tr><td colspan="2" bgcolor="#F1F3F5"><strong>Windows 自绘标题栏 / macOS Overlay 标题区</strong>　品牌　工作区　模型　　文件　编辑　查看　窗口　帮助　　最小化 / 最大化 / 关闭</td></tr>
   <tr>
     <td width="28%" height="230" valign="top" bgcolor="#F8F9FA"><strong>项目与会话栏</strong><br>刷新　切换工作区　折叠<br><strong>统一搜索</strong><br><br>项目名称 · 路径　<strong>新建会话</strong><br>会话历史<br><br><strong>设置</strong></td>
-    <td valign="top" bgcolor="#FFFFFF"><strong>内容区顶栏</strong>　会话标题/任务中心　工作区 · 模型　　　　<strong>对话</strong>　|　<strong>文件</strong>　|　<strong>任务</strong><br><br><div align="center"><strong>稳定内容工作面</strong><br>对话：消息流 + 输入区<br>文件：文件列表 + 编辑器 / 预览<br>任务：后台任务状态 + 分析产物</div></td>
+    <td valign="top" bgcolor="#FFFFFF"><strong>内容区顶栏</strong>　会话标题/日志中心　工作区 · 模型　　　　<strong>对话</strong>　|　<strong>文件</strong>　|　<strong>日志</strong><br><br><div align="center"><strong>稳定内容工作面</strong><br>对话：消息流 + 输入区<br>文件：文件列表 + 编辑器 / 预览<br>任务：后台任务状态 + 分析产物</div></td>
   </tr>
 </table>
 
@@ -40,7 +40,7 @@ macOS：  原生 Overlay 标题区与交通灯
 
 Windows 自绘标题栏显示品牌、工作区、模型、文件/编辑/查看/窗口/帮助菜单及窗口控制。空白区域可拖动，双击切换最大化。macOS 通过系统全局菜单提供同一命令集合，窗口使用原生 Overlay 标题区和红黄绿交通灯。
 
-菜单命令包括：新建会话、打开工作区、新建文档、刷新、保存、关闭文档、撤销/重做/剪切/复制/粘贴/全选、对话/文件/任务切换、主题、设置、快捷键、诊断和关于。
+菜单命令包括：新建会话、打开工作区、新建文档、刷新、保存、关闭文档、撤销/重做/剪切/复制/粘贴/全选、对话/文件/日志切换、主题、设置、快捷键、诊断和关于。
 
 ## 项目与会话栏
 
@@ -57,7 +57,7 @@ Windows 自绘标题栏显示品牌、工作区、模型、文件/编辑/查看/
 
 ## 内容区导航
 
-统一顶栏左侧显示会话标题或任务中心标题和“工作区 · 模型”，右侧显示互斥的“对话/文件/任务”分段控件。对话是默认页。切换到文件页时先显示完整文件列表，选中文档后再展开右侧编辑器；收起编辑器后保留文件列表。任务页显示当前工作区的后台任务和分析产物，不改变当前会话。
+统一顶栏左侧显示会话标题或日志中心标题和“工作区 · 模型”，右侧显示互斥的“对话/文件/日志”分段控件。对话是默认页。切换到文件页时先显示完整文件列表，选中文档后再展开右侧编辑器；收起编辑器后保留文件列表。日志页显示当前工作区的后台任务和分析产物，不改变当前会话。
 
 ## 响应式规则
 
@@ -79,7 +79,7 @@ Windows 自绘标题栏显示品牌、工作区、模型、文件/编辑/查看/
 | `UI-SHELL-WINDOW-CONTROLS` | 操作 | 最小化、最大化/还原、关闭按钮 | `BF-SHELL-003` / `EP-SHELL-003` | 调用桌面窗口能力并同步最大化状态 | `src/App.tsx` `TitleBar` | 已实现 |
 | `UI-SHELL-CONTENT-SWITCHER` | 入口 | 对话、文件、任务分段控件 | `BF-NAV-001`、`BF-NAV-002`、`BF-NAV-003` / `EP-NAV-001`、`EP-NAV-002`、`EP-NAV-003` | 在三个内容页之间互斥切换，不改变当前会话和工作区 | `src/App.tsx` `ContentPanel` | 已实现 |
 | `UI-SHELL-CONTENT-SUMMARY` | 状态 | 页面标题、工作区和模型摘要 | `BF-NAV-001`、`BF-NAV-002`、`BF-NAV-003` / `EP-NAV-001`、`EP-NAV-002`、`EP-NAV-003` | 展示当前页面、工作区和活动模型 | `src/App.tsx` `ContentPanel` | 已实现 |
-| `UI-SHELL-RUNTIME-LOG-DIALOG` | 结果 | 运行日志面板 | `BF-DIAGNOSTICS-001` / `EP-DIAGNOSTICS-001` | 展示日志路径、平台、版本和最近运行事件 | `src/App.tsx` `App` | 已实现 |
+| `UI-SHELL-RUNTIME-LOG-DIALOG` | 结果 | 应用诊断日志弹窗 | `BF-DIAGNOSTICS-001` / `EP-DIAGNOSTICS-001` | 展示日志路径、平台、版本和最近应用事件，与对话日志中心区分 | `src/App.tsx` `App` | 已实现 |
 | `UI-SHELL-RUNTIME-LOG-ACTIONS` | 操作 | 关闭、刷新、复制日志 | `BF-DIAGNOSTICS-001` / `EP-DIAGNOSTICS-001` | 控制日志面板并复制只读诊断内容 | `src/App.tsx` `App` | 已实现 |
 
 ### 项目、会话与搜索
