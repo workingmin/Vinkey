@@ -18,7 +18,6 @@ const profile: ModelProfile = {
   id: 'local-profile', connectionId: connection.id, name: 'Qwen Router', kind: connection.kind,
   baseUrl: connection.baseUrl, model: 'qwen3:8b', contextWindow: 16_384, hasApiKey: false, updatedAt: 2,
 }
-
 function dependencies(stream?: IntentModelEvaluationDependencies['stream']): IntentModelEvaluationDependencies {
   return {
     listProfiles: async () => [profile],
@@ -67,8 +66,8 @@ describe('IntentRouter local model evaluation', () => {
     const requests: ChatRequest[] = []
     const stream = async (request: ChatRequest, onEvent: (event: ChatStreamEvent) => void) => {
       requests.push(request)
-      const payload = JSON.parse(request.messages.at(-1)?.content ?? '{}') as { caseId: string }
-      const testCase = INTENT_CLASSIFICATION_EVALUATION_CASES.find((item) => item.id === payload.caseId)
+      const payload = JSON.parse(request.messages.at(-1)?.content ?? '{}') as { instruction: string }
+      const testCase = INTENT_CLASSIFICATION_EVALUATION_CASES.find((item) => item.instruction === payload.instruction)
       if (!testCase) throw new Error('unknown test case')
       const output = JSON.stringify(testCase.expected)
       onEvent({ type: 'chunk', content: output.slice(0, 20) })
@@ -112,8 +111,10 @@ describe('IntentRouter local model evaluation', () => {
 
   it('builds a body-free classification contract', () => {
     const messages = buildIntentClassificationMessages(INTENT_CLASSIFICATION_EVALUATION_CASES[1])
-    expect(messages.at(-1)?.content).toContain('"caseId":"single-file-analysis"')
-    expect(messages.at(-1)?.content).toContain('"id":"章节/第一章.md"')
+    expect(messages.at(-1)?.content).toContain('"instruction":"分析这个文档的故事主线"')
+    expect(messages.at(-1)?.content).toContain('"id":"短篇/孔乙己.txt"')
+    expect(messages.at(-1)?.content).not.toContain('caseId')
+    expect(messages.at(-1)?.content).not.toContain('suiteVersion')
     expect(messages.at(-1)?.content).not.toContain('content')
   })
 })

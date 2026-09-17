@@ -1,0 +1,41 @@
+{
+  "generatedAt": "2026-09-17",
+  "works": [
+    {
+      "path": "短篇/孔乙己.txt",
+      "title": "孔乙己",
+      "author": "鲁迅",
+      "source": "https://zh.wikisource.org/wiki/%E5%AD%94%E4%B9%99%E5%B7%B1?action=render&variant=zh-hans",
+      "characters": 2639,
+      "bytes": 7881,
+      "sha256": "4278af73a82c7be575e0e7762462e2722fcd978efc53dc0aec05c79e170003a9"
+    },
+    {
+      "path": "短篇/狂人日记.txt",
+      "title": "狂人日记",
+      "author": "鲁迅",
+      "source": "https://zh.wikisource.org/wiki/%E7%8B%82%E4%BA%BA%E6%97%A5%E8%A8%98?action=render&variant=zh-hans",
+      "characters": 4937,
+      "bytes": 14595,
+      "sha256": "956d16b6a27ffc3da493eadffab38c37e2fa94335b9fd6fc22cf8ef091dbfb73"
+    },
+    {
+      "path": "短篇/故乡.txt",
+      "title": "故乡",
+      "author": "鲁迅",
+      "source": "https://zh.wikisource.org/wiki/%E6%95%85%E9%84%89?action=render&variant=zh-hans",
+      "characters": 5086,
+      "bytes": 15056,
+      "sha256": "38a53084f66cb1c9d40d73adba8bb1c719bb2f2814e3b148b0ff4c63ca1df8b8"
+    },
+    {
+      "path": "中篇/阿Q正传.txt",
+      "title": "阿Q正传",
+      "author": "鲁迅",
+      "source": "https://zh.wikisource.org/wiki/%E9%98%BFQ%E6%AD%A3%E5%82%B3?action=render&variant=zh-hans",
+      "characters": 21771,
+      "bytes": 63958,
+      "sha256": "eab986a7009eb6f5ac7166bc8222ba1e5dd94acc08c26ca1612421672b36363b"
+    }
+  ]
+}

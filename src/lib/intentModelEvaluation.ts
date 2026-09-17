@@ -3,7 +3,7 @@ import type { DocumentSelectionMode, TaskIntent, TaskScope } from './intent'
 import type { ChatRequest, ChatStreamEvent, ModelConnection, ModelProfile } from '../types'
 import { isLoopbackModelEndpoint } from './modelPrivacy'
 
-export const INTENT_MODEL_EVALUATION_SUITE_VERSION = 'intent-model-eval-1'
+export const INTENT_MODEL_EVALUATION_SUITE_VERSION = 'intent-model-eval-2'
 
 export interface IntentClassificationPrediction {
   intent: TaskIntent
@@ -80,28 +80,46 @@ export const INTENT_CLASSIFICATION_EVALUATION_CASES: IntentClassificationEvaluat
     expected: { intent: 'general-chat', agent: 'GeneralConversation', skill: 'general-conversation', scope: 'conversation', documentSelection: 'none' },
   },
   {
-    id: 'single-file-analysis', instruction: '分析这个文档的故事主线', targets: [{ id: '章节/第一章.md', kind: 'document' }],
+    id: 'single-file-analysis', instruction: '分析这个文档的故事主线', targets: [{ id: '短篇/孔乙己.txt', kind: 'document' }],
     expected: { intent: 'document-analysis', agent: 'StoryDeconstruction', skill: 'long-text-analysis', scope: 'selected-documents', documentSelection: 'single' },
   },
   {
-    id: 'single-file-character-analysis', instruction: '林晚和林崇山是什么关系？', targets: [{ id: '设定/人物.md', kind: 'document' }],
+    id: 'single-file-character-analysis', instruction: '分析阿Q与赵太爷之间的人物关系', targets: [{ id: '中篇/阿Q正传.txt', kind: 'document' }],
     expected: { intent: 'character-analysis', agent: 'StoryDeconstruction', skill: 'character-arc-extraction', scope: 'selected-documents', documentSelection: 'single' },
   },
   {
     id: 'multi-file-continuity-review', instruction: '检查这几章有没有前后矛盾', targets: [
-      { id: '章节/第一章.md', kind: 'document' }, { id: '章节/第二章.md', kind: 'document' },
+      { id: '短篇/狂人日记.txt', kind: 'document' }, { id: '短篇/故乡.txt', kind: 'document' },
     ],
     expected: { intent: 'continuity-review', agent: 'ContinuityReviewer', skill: 'continuity-review', scope: 'selected-documents', documentSelection: 'multiple' },
   },
   {
-    id: 'single-file-revision', instruction: '根据这个文件改写一版', targets: [{ id: '章节/第一章.md', kind: 'document' }],
+    id: 'single-file-revision', instruction: '根据这个文件改写一版', targets: [{ id: '短篇/故乡.txt', kind: 'document' }],
     expected: { intent: 'document-revision', agent: 'RevisionEditor', skill: 'document-revision', scope: 'selected-documents', documentSelection: 'single' },
   },
   {
     id: 'multi-file-revision', instruction: '统一润色所选文件', targets: [
-      { id: '章节/第一章.md', kind: 'document' }, { id: '章节/第二章.md', kind: 'document' },
+      { id: '短篇/孔乙己.txt', kind: 'document' }, { id: '短篇/狂人日记.txt', kind: 'document' }, { id: '短篇/故乡.txt', kind: 'document' },
     ],
     expected: { intent: 'document-revision', agent: 'RevisionEditor', skill: 'document-revision', scope: 'selected-documents', documentSelection: 'multiple' },
+  },
+  {
+    id: 'single-long-file-analysis', instruction: '完整分析这篇小说的人物命运和情节结构，不要遗漏', targets: [{ id: '中篇/阿Q正传.txt', kind: 'document' }],
+    expected: { intent: 'character-analysis', agent: 'StoryDeconstruction', skill: 'character-arc-extraction', scope: 'selected-documents', documentSelection: 'single' },
+  },
+  {
+    id: 'multi-file-comparison', instruction: '比较所选文档的人物塑造和叙事视角', targets: [
+      { id: '短篇/孔乙己.txt', kind: 'document' }, { id: '短篇/狂人日记.txt', kind: 'document' }, { id: '中篇/阿Q正传.txt', kind: 'document' },
+    ],
+    expected: { intent: 'document-analysis', agent: 'StoryDeconstruction', skill: 'long-text-analysis', scope: 'selected-documents', documentSelection: 'multiple' },
+  },
+  {
+    id: 'attached-file-unrelated-chat', instruction: '给我三个适合雨天写作的灵感', targets: [{ id: '短篇/故乡.txt', kind: 'document' }],
+    expected: { intent: 'general-chat', agent: 'GeneralConversation', skill: 'general-conversation', scope: 'conversation', documentSelection: 'single' },
+  },
+  {
+    id: 'single-file-structure-segmentation', instruction: '拆分章节和场景', targets: [{ id: '中篇/阿Q正传.txt', kind: 'document' }],
+    expected: { intent: 'structure-segmentation', agent: 'StructureSegmentation', skill: 'chapter-boundary-detect', scope: 'selected-documents', documentSelection: 'single' },
   },
   {
     id: 'workspace-overview', instruction: '当前项目有哪些文件', targets: [],
@@ -149,8 +167,6 @@ export function buildIntentClassificationMessages(testCase: IntentClassification
     {
       role: 'user',
       content: JSON.stringify({
-        suiteVersion: INTENT_MODEL_EVALUATION_SUITE_VERSION,
-        caseId: testCase.id,
         instruction: testCase.instruction,
         targets: testCase.targets,
       }),
