@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:intent-model": "node scripts/run-intent-model-eval.mjs",
+    "fixtures:chinese-fiction": "node scripts/fetch-chinese-fiction-fixtures.mjs",
     "tauri": "tauri",
     "desktop:dev": "tauri dev",
     "desktop:build": "tauri build",

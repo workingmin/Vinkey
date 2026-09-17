@@ -1,7 +1,7 @@
 # IntentRouter 测试与验收
 
 - 对应设计：[IntentRouter 专项设计](INTENT_ROUTER_DESIGN.md)
-- 评测套件：`intent-model-eval-1`
+- 评测套件：`intent-model-eval-2`
 - 目标：分别验证确定性路由合同与真实本地模型的 Agent 分类能力
 
 ## 1. 测试分层
@@ -13,22 +13,28 @@
 | Rust 调度测试 | 否 | `TaskPlan` 跨端字段、枚举和执行准入 |
 | macOS/Windows 本地验收 | 是 | 已安装配置和实际模型能否完成版本化分类用例 |
 
-CI 的 mock 结果只能证明代码合同正确，不能证明某个本地模型具备分类能力。模型能力结论必须来自最后一层。
+CI 的 mock 结果只能证明代码合同正确，不能证明某个本地模型具备分类能力。模型能力结论必须来自最后一层。真实模型输入不包含 `caseId` 或期望分类名称，避免测试标签泄露答案。
 
 ## 2. 确定性测试矩阵
 
 | 用例 | 输入 | 目标 | 预期 Agent / Skill | `documentSelection` |
 | --- | --- | --- | --- | --- |
 | `no-file-general-chat` | 帮我想三个标题 | 无 | `GeneralConversation / general-conversation` | `none` |
-| `single-file-analysis` | 分析这个文档的故事主线 | 单文件 | `StoryDeconstruction / long-text-analysis` | `single` |
-| `single-file-character-analysis` | 林晚和林崇山是什么关系 | 单文件 | `StoryDeconstruction / character-arc-extraction` | `single` |
+| `single-file-analysis` | 分析这个文档的故事主线 | `短篇/孔乙己.txt` | `StoryDeconstruction / long-text-analysis` | `single` |
+| `single-file-character-analysis` | 分析阿Q与赵太爷之间的人物关系 | `中篇/阿Q正传.txt` | `StoryDeconstruction / character-arc-extraction` | `single` |
 | `multi-file-continuity-review` | 检查这几章有没有前后矛盾 | 多文件 | `ContinuityReviewer / continuity-review` | `multiple` |
-| `single-file-revision` | 根据这个文件改写一版 | 单文件 | `RevisionEditor / document-revision` | `single` |
+| `single-file-revision` | 根据这个文件改写一版 | `短篇/故乡.txt` | `RevisionEditor / document-revision` | `single` |
 | `multi-file-revision` | 统一润色所选文件 | 多文件 | `RevisionEditor / document-revision` | `multiple` |
+| `single-long-file-analysis` | 完整分析这篇小说的人物命运和情节结构，不要遗漏 | `中篇/阿Q正传.txt` | `StoryDeconstruction / character-arc-extraction` | `single` |
+| `multi-file-comparison` | 比较所选文档的人物塑造和叙事视角 | 三文件 | `StoryDeconstruction / long-text-analysis` | `multiple` |
+| `attached-file-unrelated-chat` | 给我三个适合雨天写作的灵感 | `短篇/故乡.txt` | `GeneralConversation / general-conversation` | `single` |
+| `single-file-structure-segmentation` | 拆分章节和场景 | `中篇/阿Q正传.txt` | `StructureSegmentation / chapter-boundary-detect` | `single` |
 | `workspace-overview` | 当前项目有哪些文件 | 无 | `StoryDeconstruction / workspace-overview` | `none` |
 | `workspace-deep-analysis` | 详细分析这个项目的人物关系 | 无 | `StoryDeconstruction / workspace-analysis` | `none` |
 
 还必须覆盖：重复 mention 去重、中文路径、路径内路由关键词不误触发、附带文件但普通聊天仍为 `documentAccess=none`、非法模型 JSON 不被接受。
+
+共享测试素材位于 `tests/fixtures/chinese-fiction/`，包含 4 份公版中文小说文本、来源 URL、规模和 SHA-256 清单，可供 IntentRouter、Agent、Skill 和 Workflow 测试共同使用。`scripts/chinese-fiction-fixtures.test.ts` 会校验当前评测用例引用的文档均存在于素材清单，并验证文件内容未漂移。需要在 Vinkey 中手工复核时，可直接把该目录作为工作区打开。
 
 ## 3. 开发测试命令
 
@@ -36,6 +42,7 @@ CI 的 mock 结果只能证明代码合同正确，不能证明某个本地模�
 
 ```bash
 NODE_ENV=test npm test -- --run \
+  scripts/chinese-fiction-fixtures.test.ts \
   src/lib/intent.test.ts \
   src/lib/taskRuntime.test.ts \
   src/lib/intentModelEvaluation.test.ts
@@ -54,7 +61,7 @@ Windows PowerShell 等价命令：
 
 ```powershell
 $env:NODE_ENV = "test"
-npm test -- --run src/lib/intent.test.ts src/lib/taskRuntime.test.ts src/lib/intentModelEvaluation.test.ts
+npm test -- --run scripts/chinese-fiction-fixtures.test.ts src/lib/intent.test.ts src/lib/taskRuntime.test.ts src/lib/intentModelEvaluation.test.ts
 npm test
 npm run build
 Remove-Item Env:NODE_ENV
@@ -153,7 +160,7 @@ npm run test:intent-model -- --profile-id <profile-id> --json
 
 | 退出码 | 含义 |
 | --- | --- |
-| `0` | 8 个版本化用例全部精确匹配 |
+| `0` | 12 个版本化用例全部精确匹配 |
 | `1` | 配置、SQLite、网络、超时或模型响应调用失败 |
 | `2` | 模型完成调用，但至少一个分类用例不匹配 |
 
