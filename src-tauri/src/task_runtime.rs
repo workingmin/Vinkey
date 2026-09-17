@@ -61,6 +61,7 @@ pub struct TaskPlan {
     pub operation: String,
     pub scope: String,
     pub side_effect: String,
+    pub document_selection: String,
     pub document_access: String,
     pub analysis_mode: Option<String>,
     pub analysis_coverage: String,
@@ -678,23 +679,27 @@ fn validate_plan(request: &TaskRequest, plan: &TaskPlan) -> Result<(), String> {
     if !one_of(
         &plan.operation,
         &["segment", "analyze", "revise", "review", "chat"],
-    ) || !one_of(
-        &plan.document_access,
-        &[
-            "none",
-            "selected-metadata",
-            "selected",
-            "workspace-metadata",
-            "workspace-focused",
-            "workspace",
-        ],
-    ) || !one_of(
-        &plan.analysis_coverage,
-        &["index-only", "targeted", "exhaustive"],
-    ) || !one_of(
-        &plan.source_policy,
-        &["metadata-only", "local-excerpts", "local-chunks"],
-    ) || !one_of(&plan.confidence, &["low", "medium", "high"])
+    ) || !one_of(&plan.document_selection, &["none", "single", "multiple"])
+        || !one_of(
+            &plan.document_access,
+            &[
+                "none",
+                "selected-metadata",
+                "selected",
+                "workspace-metadata",
+                "workspace-focused",
+                "workspace",
+            ],
+        )
+        || !one_of(
+            &plan.analysis_coverage,
+            &["index-only", "targeted", "exhaustive"],
+        )
+        || !one_of(
+            &plan.source_policy,
+            &["metadata-only", "local-excerpts", "local-chunks"],
+        )
+        || !one_of(&plan.confidence, &["low", "medium", "high"])
         || plan
             .analysis_mode
             .as_deref()
@@ -978,6 +983,7 @@ mod tests {
             operation: "chat".into(),
             scope: "conversation".into(),
             side_effect: "draft".into(),
+            document_selection: "none".into(),
             document_access: "none".into(),
             analysis_mode: None,
             analysis_coverage: "index-only".into(),
@@ -1023,6 +1029,7 @@ mod tests {
             operation: "analyze".into(),
             scope: "selected-documents".into(),
             side_effect: "draft".into(),
+            document_selection: "single".into(),
             document_access: "selected".into(),
             analysis_mode: Some("deep".into()),
             analysis_coverage: "targeted".into(),
@@ -1079,6 +1086,20 @@ mod tests {
         )
         .is_err());
 
+        let mut invalid_selection = plan();
+        invalid_selection.document_selection = "many".into();
+        assert!(execute(
+            ExecuteTaskInput {
+                task_id: "task-invalid-selection".into(),
+                stage: "preflight".into(),
+                resume_job_id: None,
+                request: request(),
+                plan: invalid_selection,
+            },
+            None,
+        )
+        .is_err());
+
         let mut mismatched = request();
         mismatched.requested_effect = "proposal".into();
         assert!(execute(
@@ -1122,6 +1143,7 @@ mod tests {
                 "operation": "revise",
                 "scope": "editor-selection",
                 "sideEffect": "draft",
+                "documentSelection": "single",
                 "documentAccess": "selected",
                 "analysisMode": null,
                 "analysisCoverage": "targeted",

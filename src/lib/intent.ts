@@ -20,7 +20,13 @@ export type TaskOperation = 'segment' | 'analyze' | 'revise' | 'review' | 'chat'
 export type TaskScope = 'editor-selection' | 'selected-documents' | 'current-document' | 'workspace' | 'conversation'
 export type TaskSideEffect = 'read' | 'draft' | 'proposal'
 export type DocumentAccess = 'none' | 'selected-metadata' | 'selected' | 'workspace-metadata' | 'workspace-focused' | 'workspace'
+export type DocumentSelectionMode = 'none' | 'single' | 'multiple'
 export type RevisionStrategy = 'direct' | 'bounded' | 'long' | null
+
+export interface TaskRoutingContext {
+  hasContextDocuments?: boolean
+  targetDocumentCount?: number
+}
 
 export interface TaskPlan {
   intent: TaskIntent
@@ -30,6 +36,8 @@ export interface TaskPlan {
   operation: TaskOperation
   scope: TaskScope
   sideEffect: TaskSideEffect
+  /** Number category of explicitly selected/mentioned document targets; this does not grant body access. */
+  documentSelection: DocumentSelectionMode
   /** Whether the downstream service may read the selected document bodies. */
   documentAccess: DocumentAccess
   analysisMode: AnalysisMode | null
@@ -41,10 +49,12 @@ export interface TaskPlan {
   execution: ExecutionStrategy
 }
 
-function withCapabilities(plan: Omit<TaskPlan, 'agent' | 'skill' | 'allowedTools' | 'execution'>): TaskPlan {
+type TaskPlanInput = Omit<TaskPlan, 'agent' | 'skill' | 'allowedTools' | 'execution' | 'documentSelection'>
+
+function withCapabilities(plan: TaskPlanInput, documentSelection: DocumentSelectionMode): TaskPlan {
   const routed = { ...plan, ...getTaskCapabilities(plan.intent, plan.analysisMode) }
   assertRoutedTaskPolicy(routed)
-  return { ...routed, execution: resolveExecutionStrategy(routed) }
+  return { ...routed, documentSelection, execution: resolveExecutionStrategy(routed) }
 }
 
 /** Extract file paths from the composer mention syntax without reading bodies. */
@@ -56,6 +66,20 @@ export function extractDocumentMentionPaths(value: string): string[] {
 /** Remove mention tokens before matching natural-language routing keywords. */
 export function stripDocumentMentions(value: string): string {
   return value.replace(/(?:^|\s)@[^\s@]+/gu, ' ').replace(/\s+/gu, ' ').trim()
+}
+
+function resolveRoutingContext(value: string, input: boolean | TaskRoutingContext): {
+  hasContextDocuments: boolean
+  documentSelection: DocumentSelectionMode
+} {
+  const mentionedCount = extractDocumentMentionPaths(value).length
+  const requestedCount = typeof input === 'boolean' ? (input ? 1 : 0) : input.targetDocumentCount ?? 0
+  const targetDocumentCount = Math.max(mentionedCount, Number.isFinite(requestedCount) ? Math.max(0, Math.floor(requestedCount)) : 0)
+  const hasContextDocuments = targetDocumentCount > 0 || (typeof input === 'boolean' ? input : Boolean(input.hasContextDocuments))
+  return {
+    hasContextDocuments,
+    documentSelection: targetDocumentCount > 1 ? 'multiple' : hasContextDocuments ? 'single' : 'none',
+  }
 }
 
 function referencesSelectedDocuments(prompt: string): boolean {
@@ -111,52 +135,54 @@ function deepAnalysisPolicy(prompt: string): Pick<TaskPlan, 'analysisMode' | 'an
  * Route explicit document operations before assembling a model request.
  * This is deliberately deterministic: ambiguous prompts remain ordinary chat.
  */
-export function classifyTask(value: string, hasContextDocuments: boolean, actionId: string | null = null): TaskPlan {
+export function classifyTask(value: string, context: boolean | TaskRoutingContext, actionId: string | null = null): TaskPlan {
   const prompt = stripDocumentMentions(value)
+  const { hasContextDocuments, documentSelection } = resolveRoutingContext(value, context)
+  const route = (plan: TaskPlanInput) => withCapabilities(plan, documentSelection)
 
   if (actionId === 'structure-segmentation') {
-    return withCapabilities({
+    return route({
       intent: 'structure-segmentation', operation: 'segment', scope: 'selected-documents', sideEffect: 'proposal',
       documentAccess: 'selected', analysisMode: null, analysisCoverage: 'targeted', sourcePolicy: 'local-chunks',
       requiresModel: false, confidence: 'high', revisionStrategy: null,
     })
   }
   if (actionId === 'structure-enhancement') {
-    return withCapabilities({
+    return route({
       intent: 'structure-enhancement', operation: 'analyze', scope: 'selected-documents', sideEffect: 'draft',
       documentAccess: 'selected', ...deepAnalysisPolicy(prompt), requiresModel: true, confidence: 'high', revisionStrategy: null,
     })
   }
   if (actionId === 'document-analysis') {
     const policy = deepAnalysisPolicy(prompt)
-    return withCapabilities({
+    return route({
       intent: 'document-analysis', operation: 'analyze', scope: 'selected-documents', sideEffect: 'draft',
       documentAccess: 'selected', ...policy, requiresModel: true, confidence: 'high', revisionStrategy: null,
     })
   }
   if (actionId === 'character-analysis') {
     const policy = deepAnalysisPolicy(prompt)
-    return withCapabilities({
+    return route({
       intent: 'character-analysis', operation: 'analyze', scope: 'selected-documents', sideEffect: 'draft',
       documentAccess: 'selected', ...policy, requiresModel: true, confidence: 'high', revisionStrategy: null,
     })
   }
   if (actionId === 'document-revision') {
-    return withCapabilities({
+    return route({
       intent: 'document-revision', operation: 'revise', scope: 'selected-documents', sideEffect: 'draft',
       documentAccess: 'selected', ...deepAnalysisPolicy(prompt), requiresModel: true, confidence: 'high', revisionStrategy: 'long',
     })
   }
   if (actionId === 'continuity-review') {
     const workspaceScope = asksAboutWorkspace(prompt)
-    return withCapabilities({
+    return route({
       intent: 'continuity-review', operation: 'review', scope: workspaceScope ? 'workspace' : 'selected-documents', sideEffect: 'draft',
       documentAccess: workspaceScope ? 'workspace' : 'selected', ...deepAnalysisPolicy(prompt), requiresModel: true, confidence: 'high', revisionStrategy: null,
     })
   }
   if (actionId === 'workspace-analysis') {
     const policy = workspaceAnalysisPolicy(prompt)
-    return withCapabilities({
+    return route({
       intent: 'workspace-analysis', operation: 'analyze', scope: 'workspace', sideEffect: 'draft',
       documentAccess: policy.analysisMode === 'overview' ? 'workspace-metadata' : policy.analysisMode === 'focused' ? 'workspace-focused' : 'workspace',
       ...policy, requiresModel: policy.analysisMode !== 'overview', confidence: 'high', revisionStrategy: null,
@@ -164,7 +190,7 @@ export function classifyTask(value: string, hasContextDocuments: boolean, action
   }
 
   if (/(?:重新梳理|深入梳理|语义梳理|隐含场景|剧情阶段|章节命名|结构归纳)/u.test(prompt)) {
-    return withCapabilities({
+    return route({
       intent: 'structure-enhancement',
       operation: 'analyze',
       scope: 'selected-documents',
@@ -180,7 +206,7 @@ export function classifyTask(value: string, hasContextDocuments: boolean, action
   }
 
   if (/(?:拆分章节|章节拆分|拆分场景|场景边界|识别章节(?:和|与)?场景|章节结构)/u.test(prompt)) {
-    return withCapabilities({
+    return route({
       intent: 'structure-segmentation',
       operation: 'segment',
       scope: 'selected-documents',
@@ -198,7 +224,7 @@ export function classifyTask(value: string, hasContextDocuments: boolean, action
   if (asksForContinuityReview(prompt)) {
     const workspaceScope = asksAboutWorkspace(prompt)
     const policy = deepAnalysisPolicy(prompt)
-    return withCapabilities({
+    return route({
       intent: 'continuity-review',
       operation: 'review',
       scope: workspaceScope ? 'workspace' : 'selected-documents',
@@ -213,7 +239,7 @@ export function classifyTask(value: string, hasContextDocuments: boolean, action
 
   if (hasContextDocuments && referencesSelectedDocuments(prompt) && asksForDocumentRevision(prompt)) {
     const policy = deepAnalysisPolicy(prompt)
-    return withCapabilities({
+    return route({
       intent: 'document-revision',
       operation: 'revise',
       scope: 'selected-documents',
@@ -228,7 +254,7 @@ export function classifyTask(value: string, hasContextDocuments: boolean, action
 
   if (asksAboutWorkspace(prompt)) {
     const policy = workspaceAnalysisPolicy(prompt)
-    return withCapabilities({
+    return route({
       intent: 'workspace-analysis',
       operation: 'analyze',
       scope: 'workspace',
@@ -245,7 +271,7 @@ export function classifyTask(value: string, hasContextDocuments: boolean, action
 
   if (/(?:分析(?:当前|这个|已选)?(?:文档|文件|文本|小说|故事)|(?:这|该|此|这个|这篇|所选)?(?:篇)?(?:小说|故事|文章|文本)(?:主要)?(?:说了什么|讲了什么|讲述了什么|内容是什么|写了什么)|(?:小说|故事|文章|文本)(?:内容|概要|梗概|摘要|概括|总结)|故事主线|人物线|提取人物|伏笔|情节结构)/u.test(prompt)) {
     const policy = deepAnalysisPolicy(prompt)
-    return withCapabilities({
+    return route({
       intent: prompt.includes('人物') ? 'character-analysis' : 'document-analysis',
       operation: 'analyze',
       scope: 'selected-documents',
@@ -260,7 +286,7 @@ export function classifyTask(value: string, hasContextDocuments: boolean, action
 
   if (asksAboutCharacterRelations(prompt)) {
     const policy = deepAnalysisPolicy(prompt)
-    return withCapabilities({
+    return route({
       intent: 'character-analysis',
       operation: 'analyze',
       scope: 'selected-documents',
@@ -275,7 +301,7 @@ export function classifyTask(value: string, hasContextDocuments: boolean, action
 
   if (hasContextDocuments && referencesSelectedDocuments(prompt)) {
     const policy = deepAnalysisPolicy(prompt)
-    return withCapabilities({
+    return route({
       intent: 'document-analysis',
       operation: 'analyze',
       scope: 'selected-documents',
@@ -288,7 +314,7 @@ export function classifyTask(value: string, hasContextDocuments: boolean, action
     })
   }
 
-  return withCapabilities({
+  return route({
     intent: 'general-chat',
     operation: 'chat',
     scope: 'conversation',

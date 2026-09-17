@@ -8,6 +8,45 @@ const document = (content: string): ContextDocument => ({
 })
 
 describe('structured task runtime intake', () => {
+  it.each([
+    {
+      name: 'no document', instruction: '帮我想三个标题', targets: [],
+      selection: 'none', intent: 'general-chat', agent: 'GeneralConversation', skill: 'general-conversation', access: 'none',
+    },
+    {
+      name: 'one document', instruction: '分析这个文档的故事主线', targets: [{ id: 'chapter-1.md', kind: 'document' as const }],
+      selection: 'single', intent: 'document-analysis', agent: 'StoryDeconstruction', skill: 'long-text-analysis', access: 'selected',
+    },
+    {
+      name: 'multiple documents', instruction: '检查这几章有没有前后矛盾', targets: [
+        { id: 'chapter-1.md', kind: 'document' as const },
+        { id: 'chapter-2.md', kind: 'document' as const },
+      ],
+      selection: 'multiple', intent: 'continuity-review', agent: 'ContinuityReviewer', skill: 'continuity-review', access: 'selected',
+    },
+  ])('distinguishes $name requests before agent dispatch', ({ instruction, targets, selection, intent, agent, skill, access }) => {
+    const plan = routeTask(createTaskRequest({ instruction, targets }), false)
+    expect(plan.documentSelection).toBe(selection)
+    expect(plan.intent).toBe(intent)
+    expect(plan.agent).toBe(agent)
+    expect(plan.skill).toBe(skill)
+    expect(plan.documentAccess).toBe(access)
+  })
+
+  it('records multiple selected files without attaching them to unrelated chat', () => {
+    const request = createTaskRequest({
+      instruction: '写一句晚安',
+      targets: [
+        { id: 'chapter-1.md', kind: 'document' },
+        { id: 'chapter-2.md', kind: 'document' },
+      ],
+    })
+    const plan = routeTask(request)
+    expect(plan.documentSelection).toBe('multiple')
+    expect(plan.intent).toBe('general-chat')
+    expect(plan.documentAccess).toBe('none')
+  })
+
   it('routes an explicit action without reclassifying its prompt', () => {
     const request = createTaskRequest({
       entryPoint: 'context-menu', actionId: 'structure-segmentation', instruction: '执行拆分',

@@ -19,6 +19,14 @@ describe('task routing', () => {
     expect(classifyTask(prompt, true).intent).toBe('document-analysis')
   })
 
+  it('deduplicates mentions and derives document selection without a separate boolean', () => {
+    const prompt = '@章节/第一章.md @章节/第一章.md @章节/第二章.md 检查前后矛盾'
+    expect(extractDocumentMentionPaths(prompt)).toEqual(['章节/第一章.md', '章节/第二章.md'])
+    const plan = classifyTask(prompt, { targetDocumentCount: 0 })
+    expect(plan.documentSelection).toBe('multiple')
+    expect(plan.intent).toBe('continuity-review')
+  })
+
   it('accepts both natural word orders for chapter splitting', () => {
     expect(classifyTask('拆分章节', true).intent).toBe('structure-segmentation')
     expect(classifyTask('章节拆分', true).intent).toBe('structure-segmentation')

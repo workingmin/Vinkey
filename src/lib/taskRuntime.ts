@@ -1,4 +1,4 @@
-import type { TaskIntent, TaskPlan, TaskScope } from './intent'
+import type { TaskIntent, TaskPlan, TaskRoutingContext, TaskScope } from './intent'
 import { classifyTask, refineTaskPlanForDocuments, stripDocumentMentions } from './intent'
 import type { ChatMessage, ContextDocument, TaskMessageRef } from '../types'
 import { assertRoutedTaskPolicy } from './runtimePolicy'
@@ -154,19 +154,28 @@ export function createTaskExecutionDispatch(input: TaskExecutionInput, workspace
   }
 }
 
-export function routeTask(request: TaskRequest, hasContextDocuments: boolean): TaskPlan {
+function taskRoutingContext(request: TaskRequest, hasContextDocuments: boolean): TaskRoutingContext {
+  const documentTargets = request.targets.filter((target) => target.kind === 'document' || target.kind === 'selection')
+  return {
+    hasContextDocuments: hasContextDocuments || documentTargets.length > 0,
+    targetDocumentCount: documentTargets.length,
+  }
+}
+
+export function routeTask(request: TaskRequest, hasContextDocuments = false): TaskPlan {
   const actionId = request.actionId ?? (request.intent && request.intent !== 'general-chat' ? request.intent : null)
+  const context = taskRoutingContext(request, hasContextDocuments)
   if (!actionId && isContinuation(request.instruction)) {
     const previous = parseConversationSummary(request.conversationRef.summary)
     if (previous && previous.sideEffect !== 'proposal') {
-      if (previous.targets.some((target) => target.kind === 'selection')) return classifyTask(request.instruction, hasContextDocuments)
+      if (previous.targets.some((target) => target.kind === 'selection')) return classifyTask(request.instruction, context)
       const continuationIntent = /(?:改|润色|重写|续写|修改)/u.test(request.instruction) && previous.targets.length > 0
         ? 'document-revision'
         : previous.intent
-      if (continuationIntent !== 'general-chat') return applyRequestContext(classifyTask(request.instruction, hasContextDocuments, continuationIntent), request)
+      if (continuationIntent !== 'general-chat') return applyRequestContext(classifyTask(request.instruction, context, continuationIntent), request)
     }
   }
-  return applyRequestContext(classifyTask(request.instruction, hasContextDocuments, actionId), request)
+  return applyRequestContext(classifyTask(request.instruction, context, actionId), request)
 }
 
 function applyRequestContext(plan: TaskPlan, request: TaskRequest): TaskPlan {
