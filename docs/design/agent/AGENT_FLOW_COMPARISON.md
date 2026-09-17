@@ -106,5 +106,5 @@ comparison_run:
 ## 7. 资料
 
 - OpenAI Docs：[Long-running work](https://learn.chatgpt.com/docs/long-running-work)
-- 仓库调研：[AI 业务链路架构](AI_BUSINESS_CHAINS.md#6-codexclaude-与-vinkey-native-agent-参考取舍)
-- Vinkey 交互基线：[对话页设计](UI_DESIGN_CHAT.md)、[临时交互状态](TEMPORARY_INTERACTION_STATES.md)
+- 仓库调研：[AI 业务链路架构](../../architecture/AI_BUSINESS_CHAINS.md#6-codexclaude-与-vinkey-native-agent-参考取舍)
+- Vinkey 交互基线：[对话页设计](../ui/UI_DESIGN_CHAT.md)、[临时交互状态](../ui/TEMPORARY_INTERACTION_STATES.md)

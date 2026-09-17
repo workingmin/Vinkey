@@ -8,7 +8,7 @@
 
 Vinkey 采用 **Tauri 2 + React + TypeScript + Rust + SQLite** 的本地优先桌面架构。
 
-界面布局、视觉令牌和交互约束见 [UI 设计方案](UI_DESIGN.md)。
+界面布局、视觉令牌和交互约束见 [UI 设计方案](../design/ui/UI_DESIGN.md)。
 
 NoteGen 已验证这条技术路线可同时覆盖 Windows、macOS、本地 Markdown 工作区、AI 对话和知识库。Vinkey 只参考其产品分层和工程思路，不直接复制代码：NoteGen 使用 GPL-3.0 许可证，且其 Tauri 文件能力包含全路径通配符。Vinkey 必须把“仅访问用户授权目录”作为后端强制边界。
 
@@ -223,8 +223,14 @@ Local machine
 ```text
 Vinkey/
 ├─ docs/
-│  ├─ DEVELOPMENT_FRAMEWORK.md
-│  └─ UI_DESIGN.md
+│  ├─ architecture/
+│  │  ├─ DEVELOPMENT_FRAMEWORK.md
+│  │  └─ AI_BUSINESS_CHAINS.md
+│  ├─ design/
+│  │  ├─ agent/
+│  │  └─ ui/
+│  ├─ research/
+│  └─ runtime/
 ├─ src/
 │  ├─ app/
 │  ├─ components/

@@ -2,7 +2,7 @@
 
 - 状态：设计基线，供实现、评测和实测对照
 - 日期：2026-09-17
-- 来源：[Agent 与 Skill 建设计划](AGENT_SKILL_PLAN.md)、[AI 业务链路架构](AI_BUSINESS_CHAINS.md)
+- 来源：[Agent 与 Skill 建设计划](AGENT_SKILL_PLAN.md)、[AI 业务链路架构](../../architecture/AI_BUSINESS_CHAINS.md)
 - 对比说明：[Agent 流程对比](AGENT_FLOW_COMPARISON.md)
 
 ## 1. 使用方式
