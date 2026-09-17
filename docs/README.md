@@ -40,6 +40,8 @@
 ### Agent 与架构
 
 - [Agent 与 Skill 建设计划](design/agent/AGENT_SKILL_PLAN.md)
+- [IntentRouter 专项设计](design/agent/INTENT_ROUTER_DESIGN.md)
+- [IntentRouter 测试与验收](design/agent/INTENT_ROUTER_TEST_ACCEPTANCE.md)
 - [Agent 流程模板](design/agent/AGENT_FLOW_TEMPLATES.md)
 - [Agent 流程模板对比](design/agent/AGENT_FLOW_COMPARISON.md)
 - [开发框架与技术选型](architecture/DEVELOPMENT_FRAMEWORK.md)

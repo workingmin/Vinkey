@@ -3,7 +3,7 @@
 - 状态：持续实施中
 - 适用版本：Vinkey 本地 AI 文学创作工作台
 - 目标：在现有 Tauri 2 + React + Rust + SQLite MVP 上，建立可审核、可恢复、适配本地模型能力的文学创作 Agent/Skill 系统。
-- 相关文档：[Agent 流程模板](AGENT_FLOW_TEMPLATES.md)、[Agent 流程对比](AGENT_FLOW_COMPARISON.md)、[AI 业务链路架构与改造方案](../../architecture/AI_BUSINESS_CHAINS.md)、[开发框架与技术选型](../../architecture/DEVELOPMENT_FRAMEWORK.md)、[GitHub 同类项目调研与功能取舍](../../research/GITHUB_REFERENCE.md)、[对话页设计](../ui/UI_DESIGN_CHAT.md)、[文件与编辑器设计](../ui/UI_DESIGN_EDITOR.md)
+- 相关文档：[IntentRouter 专项设计](INTENT_ROUTER_DESIGN.md)、[IntentRouter 测试与验收](INTENT_ROUTER_TEST_ACCEPTANCE.md)、[Agent 流程模板](AGENT_FLOW_TEMPLATES.md)、[Agent 流程对比](AGENT_FLOW_COMPARISON.md)、[AI 业务链路架构与改造方案](../../architecture/AI_BUSINESS_CHAINS.md)、[开发框架与技术选型](../../architecture/DEVELOPMENT_FRAMEWORK.md)、[GitHub 同类项目调研与功能取舍](../../research/GITHUB_REFERENCE.md)、[对话页设计](../ui/UI_DESIGN_CHAT.md)、[文件与编辑器设计](../ui/UI_DESIGN_EDITOR.md)
 
 业务链路采用确定性 Service、单次模型调用、固定 Workflow、自适应 Agent 或 Hybrid 的判定，以《AI 业务链路架构与改造方案》为实施基线。本文件继续维护领域 Agent、Skill、长文本和人物资产的详细计划。Codex、Claude 等 Agent 能力体系仅作为架构参考或由具体业务缺口驱动的内部原型。当前版本不提供外部 Agent Runtime 的用户选择入口，也不为此新增需要配置的商用付费 API。
 
@@ -104,6 +104,8 @@ AI 入口
 6. 普通打开、浏览、手工编辑和显式保存仍可直接使用受控编辑器 Service，不需要为了“所有入口”承担意图识别延迟。
 
 该设计与主流创作工作台的可观察交互一致：自由对话隐藏路由，明确的 Rewrite、Story Bible、场景或选区操作携带结构化上下文；复杂编排只在确有多步决策收益时使用 Agent。Vinkey 不以“所有消息都调用路由模型”换取形式上的统一。
+
+IntentRouter 的输入输出合同、文档数量语义、决策顺序、Agent/Skill 映射和代码索引统一维护在 [IntentRouter 专项设计](INTENT_ROUTER_DESIGN.md)。确定性测试矩阵、本地模型评测、SQLite 配置读取、macOS/Windows 执行命令和验收标准统一维护在 [IntentRouter 测试与验收](INTENT_ROUTER_TEST_ACCEPTANCE.md)。本计划不重复维护专项细节，避免实现与验收口径分叉。
 
 ### 2.2 分析模式与项目锚定
 
@@ -608,10 +610,10 @@ quality_profile
 ### 11.2 尚未实现
 
 1. 其余 Rust command 的统一结构化错误、日志中心与后台常驻执行的完整产品化，以及更广泛的源文档增量复用；当前 Worker 失败已持久化稳定错误码/类别/可重试性，日志中心支持失败步骤选择和确认重跑，Map 已按精确 Prompt 与版本化模型配置做跨 Job 内容寻址缓存。该缓存不含 Job ID，不能把 Reduce/Synthesis 结果跨 Job 复用；源文档变化仍会拒绝恢复原 Job。
-2. 基于领域评测的轻量歧义分类；当前已完成确定性低置信度门禁和单问题澄清，低置信度正文请求在任何 Tool 读取前停止，但尚未引入分类模型，也未覆盖需要多轮槽位收集的复杂歧义。
+2. 基于领域评测的轻量歧义分类；当前已完成确定性低置信度门禁、单问题澄清和本地模型分类专项跑批，但跑批结果尚未接入在线路由决策，也未覆盖需要多轮槽位收集的复杂歧义。
 3. 项目级检索层、`DocumentTriage`、`StoryDeconstruction` 和按目录/主题的持久化分层摘要。
 4. 多文件/逐块 `DiffProposal` 的持久化审核记录与撤销，以及完整结构化 canon；当前最多 8 个文档、逐块冲突检测、基于不可变 baseline 的任意顺序审核已落地，人物关系的 SQLite/FTS5/图算法底座仍待实体抽取和提案审核闭环。
-5. 模型能力注册表的持久化与真实模型跑批；当前已有版本化结构化输出/证据召回/改写忠实度评测、延迟吞吐指标和回归门禁，尚未自动调用 Provider 或写入注册表。
+5. 模型能力注册表的持久化与通用能力真实模型跑批；当前已有版本化结构化输出/证据召回/改写忠实度评测、延迟吞吐指标和回归门禁，IntentRouter 专项评测已可调用已配置 Provider，但评测结果尚未写入能力注册表。
 
 ### 11.3 2026-09-04 业务链路改造进展
 
