@@ -1038,7 +1038,7 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
     <div className="composer-wrap">
       {isNewConversation && <div className="new-conversation-prompt" aria-label="Vinkey 新会话">
         <span className="new-conversation-prompt-icon" aria-hidden="true"><WandSparkles /></span>
-        <span className="new-conversation-prompt-copy"><strong>Vinkey</strong><span>今天想写些什么？</span></span>
+        <span className="new-conversation-prompt-copy"><strong>Vinkey</strong><span>今天，和 Vinkey 一起把灵感写成故事。</span></span>
       </div>}
       <ConversationTaskControls conversationId={conversationId} />
       <div className="composer">
