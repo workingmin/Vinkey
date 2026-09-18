@@ -66,6 +66,13 @@ describe('task routing', () => {
     expect(plan.requiresModel).toBe(true)
   })
 
+  it('treats an explicit selected-document content analysis as high confidence', () => {
+    const plan = classifyTask('@一个陌生男子的来信.txt 分析文档内容', { targetDocumentCount: 1 })
+    expect(plan.intent).toBe('document-analysis')
+    expect(plan.documentAccess).toBe('selected')
+    expect(plan.confidence).toBe('high')
+  })
+
   it('routes specific character relationship questions to document analysis', () => {
     const plan = classifyTask('林晚和林崇山是什么关系？', true)
     expect(plan.intent).toBe('character-analysis')

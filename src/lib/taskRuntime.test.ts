@@ -155,6 +155,19 @@ describe('structured task runtime intake', () => {
     expect(dispatch.clarification?.question).toContain('分析所选文档正文')
   })
 
+  it('dispatches an explicit mentioned-document content analysis without clarification', () => {
+    const request = createTaskRequest({
+      instruction: '@一个陌生男子的来信.txt 分析文档内容',
+      targets: [{ id: '一个陌生男子的来信.txt', kind: 'document' }],
+    })
+    const plan = routeTask(request, true)
+    expect(plan.intent).toBe('document-analysis')
+    expect(plan.confidence).toBe('high')
+    const dispatch = createTaskExecutionDispatch({ taskId: 'task-explicit-analysis', stage: 'preflight', resumeJobId: null, request, plan }, 'workspace-1')
+    expect(dispatch.executionPhase).toBe('ready')
+    expect(dispatch.serviceId).toBe('long-text-analysis')
+  })
+
   it('stops a close mixed character-and-plot request before body access', () => {
     const request = createTaskRequest({
       instruction: '人物命运和情节结构',

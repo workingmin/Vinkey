@@ -133,6 +133,11 @@ function asksForDocumentRevision(prompt: string): boolean {
   return /(?:续写|改写|润色|校对|修改|重写|创作|生成)/u.test(prompt)
 }
 
+function asksForExplicitDocumentAnalysis(prompt: string): boolean {
+  return /(?:分析|概括|总结|梳理|解读|提取).{0,10}(?:文档|文件|文本|小说|故事|文章)(?:的)?(?:内容|正文|主要内容|概要|梗概|摘要|主线|情节|结构)?/u.test(prompt)
+    || /(?:文档|文件|文本|小说|故事|文章)(?:内容|正文).{0,10}(?:分析|概括|总结|梳理|解读)/u.test(prompt)
+}
+
 function asksAboutWorkspace(prompt: string): boolean {
   return /(?:这个|当前|整个|本地|该|本)(?:项目|工作区|工程)|(?:项目|工作区|工程)(?:目录|文件)|(?:项目|工作区|工程)(?:中|里|内|的)?(?:有哪些|包含|有多少|是什么|做什么|讲了什么|介绍|概况|总览|全貌|结构|组成|分析|总结)|(?:分析|介绍|概览|总结|梳理|通读)(?:一下|下)?(?:这个|当前|整个|本地|该|本)?(?:项目|工作区|工程)|(?:全部|所有)(?:文件|文档)(?:内容|概要|摘要|总结|汇总|分析)/u.test(prompt)
 }
@@ -338,7 +343,9 @@ export function classifyTask(value: string, context: boolean | TaskRoutingContex
       documentAccess: 'selected',
       ...policy,
       requiresModel: true,
-      confidence: lexical.intent ? lexical.confidence : 'medium',
+      confidence: hasContextDocuments && asksForExplicitDocumentAnalysis(prompt)
+        ? 'high'
+        : lexical.intent ? lexical.confidence : 'medium',
       revisionStrategy: null,
     })
   }
