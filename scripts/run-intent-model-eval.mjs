@@ -26,7 +26,7 @@ try {
   })
   const result = spawnSync(process.execPath, [output, ...process.argv.slice(2)], {
     cwd: root,
-    env: process.env,
+    env: { ...process.env, VINKEY_INTENT_MODEL_EVAL_CLI: '1' },
     stdio: 'inherit',
   })
   process.exitCode = result.status ?? 1

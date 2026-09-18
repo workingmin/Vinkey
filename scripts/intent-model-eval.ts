@@ -2,7 +2,6 @@ import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import { pathToFileURL } from 'node:url'
 import type { ChatRequest, ChatStreamEvent, ModelConnection, ModelProfile } from '../src/types'
 import {
   INTENT_CLASSIFICATION_EVALUATION_CASES,
@@ -357,7 +356,7 @@ export async function main(): Promise<void> {
   if (!evaluation.summary.passed) process.exitCode = 2
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+if (process.env.VINKEY_INTENT_MODEL_EVAL_CLI === '1') {
   main().catch((cause) => {
     console.error(`IntentRouter 评测失败：${cause instanceof Error ? cause.message : String(cause)}`)
     process.exitCode = 1
