@@ -5,7 +5,7 @@ import {
   RotateCcw, RotateCw, Copy, Scissors, Clipboard, Moon, Sun, Keyboard, ListChecks, RefreshCw,
   ScrollText, Trash2, WandSparkles,
 } from 'lucide-react'
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize from 'rehype-sanitize'
@@ -37,8 +37,8 @@ import { createToolGateway } from './lib/runtimePolicy'
 import { isContextRecoveryResponse } from './lib/contextRecovery'
 import { buildMemoryCandidates, buildProjectMemoryContext, selectRelevantMemory } from './lib/projectMemory'
 import { formatStructureResult, segmentDocument } from './lib/structureSegmentation'
-import { useAppStore } from './store'
-import type { ChatActivity, ChatMessage, ChatRunResult, ChatRunStatus, DocumentSnapshot, ProjectMemoryItem, ProjectSummary, ViewMode, WorkspaceEntry } from './types'
+import { useAppStore, type ChatRun } from './store'
+import type { ChatActivity, ChatMessage, ChatRunResult, ChatRunStatus, DiffProposal, DocumentSnapshot, ProjectMemoryItem, ProjectSummary, ViewMode, WorkspaceEntry } from './types'
 import { getDocumentKind, getLanguageName, isEditableDocument } from './lib/fileTypes'
 import { findNewTextFiles, flattenWorkspaceFiles } from './lib/tree'
 import { readWorkspaceDocuments } from './lib/workspaceAnalysis'
@@ -363,6 +363,64 @@ function ChatMessageItem({ message, activity, onCopyError }: {
   </article>
 }
 
+type PendingMemory = { items: ProjectMemoryItem[]; sourceMessageId: string | null }
+
+interface ChatMessageStreamProps {
+  messages: ChatMessage[]
+  activeChatRun?: ChatRun
+  pendingDiffSourceMessageId: string | null
+  diffProposals: DiffProposal[]
+  pendingMemory: PendingMemory | null
+  onCopyError: (message: string) => void
+  onApplyPendingDiff: () => void
+  onRejectDiffProposal: (proposalId: string) => void
+  onReviewDiff: () => void
+  onApprovePendingMemory: () => void
+  onRejectPendingMemory: () => void
+}
+
+const ChatMessageStream = memo(function ChatMessageStream({
+  messages,
+  activeChatRun,
+  pendingDiffSourceMessageId,
+  diffProposals,
+  pendingMemory,
+  onCopyError,
+  onApplyPendingDiff,
+  onRejectDiffProposal,
+  onReviewDiff,
+  onApprovePendingMemory,
+  onRejectPendingMemory,
+}: ChatMessageStreamProps) {
+  return <div className="message-stream">
+    <div className="message-inner">
+      {messages.map((message) => <Fragment key={message.id}>
+        <ChatMessageItem
+          message={message}
+          activity={activeChatRun?.assistantMessage.id === message.id ? activeChatRun : undefined}
+          onCopyError={onCopyError}
+        />
+        {message.role === 'assistant' && pendingDiffSourceMessageId === message.id && diffProposals.some((proposal) => proposal.status === 'proposed') && (() => {
+          const proposal = diffProposals.find((item) => item.status === 'proposed')!
+          const pendingCount = diffProposals.filter((item) => item.status === 'proposed').length
+          return <aside className="new-files-notice turn-action-panel diff-proposal-notice" role="status">
+            <div className="new-files-notice-copy"><WandSparkles /><span><strong>{pendingCount} 个修改提案待审核</strong><small>{proposal.path} · {proposal.chunkCount ? `${(proposal.chunkIndex ?? 0) + 1}/${proposal.chunkCount} 块` : `${proposal.from}-${proposal.to}`}</small></span></div>
+            <div className="new-files-notice-actions"><button onClick={onApplyPendingDiff}>接受此块</button><button onClick={() => onRejectDiffProposal(proposal.id)}>拒绝此块</button><button onClick={() => { const tab = useAppStore.getState().tabs.find((item) => item.path === proposal.path); if (tab) useAppStore.getState().openTab(tab); onReviewDiff() }}>查看文档</button></div>
+          </aside>
+        })()}
+        {message.role === 'assistant' && pendingMemory?.sourceMessageId === message.id && pendingMemory.items.length > 0 && <aside className="new-files-notice turn-action-panel memory-notice" role="status">
+          <div className="new-files-notice-copy"><Check /><span><strong>发现 {pendingMemory.items.length} 条项目记忆候选</strong><small>{pendingMemory.items[0].title} · 仅确认后写入本项目</small></span></div>
+          <div className="new-files-notice-actions"><button onClick={onApprovePendingMemory}>确认写入</button><button onClick={onRejectPendingMemory}>忽略</button></div>
+        </aside>}
+      </Fragment>)}
+      {pendingMemory?.sourceMessageId === null && pendingMemory.items.length > 0 && <aside className="new-files-notice history-action-panel memory-notice" role="status">
+        <div className="new-files-notice-copy"><Check /><span><strong>{pendingMemory.items.length} 条项目记忆候选待处理</strong><small>{pendingMemory.items[0].title} · 历史来源任务未记录消息归属</small></span></div>
+        <div className="new-files-notice-actions"><button onClick={onApprovePendingMemory}>确认写入</button><button onClick={onRejectPendingMemory}>忽略</button></div>
+      </aside>}
+    </div>
+  </div>
+})
+
 function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: string) => Promise<void>; onReviewDiff: () => void }) {
   const workspace = useAppStore((state) => state.workspace)
   const projectTransition = useAppStore((state) => state.projectTransition)
@@ -406,7 +464,6 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
   const activeModel = modelProfiles.find((profile) => profile.id === activeModelId) ?? null
   const activeChatRun = conversationId ? chatRuns[conversationId] : undefined
   const busy = Boolean(activeChatRun)
-  const budget = calculateContextBudget(messages, contextDocuments, prompt, activeModel?.contextWindow ?? 32768)
   const activeStatus = activeChatRun ? chatStatusMeta[activeChatRun.status] : null
 
   useEffect(() => {
@@ -423,13 +480,18 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
       .catch((error) => setError(String(error)))
   }, [setError, workspace])
 
-  const mentionFiles = useMemo(() => {
-    if (!workspace || !mention) return []
-    const query = mention.query.trim().toLocaleLowerCase()
+  const workspaceFiles = useMemo(() => {
+    if (!workspace) return []
     return flattenWorkspaceFiles(workspace.entries)
+  }, [workspace])
+
+  const mentionFiles = useMemo(() => {
+    if (!mention) return []
+    const query = mention.query.trim().toLocaleLowerCase()
+    return workspaceFiles
       .filter((entry) => !query || entry.name.toLocaleLowerCase().includes(query) || entry.path.toLocaleLowerCase().includes(query))
       .slice(0, 40)
-  }, [mention, workspace])
+  }, [mention, workspaceFiles])
 
   const updateMention = useCallback((value: string, caret: number) => {
     if (!workspace) { setMention(null); return }
@@ -445,12 +507,11 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
     if (mentionIndex >= mentionFiles.length && mentionFiles.length > 0) setMentionIndex(mentionFiles.length - 1)
   }, [mentionFiles.length, mentionIndex])
 
-  const selectMention = async (entry: WorkspaceEntry) => {
+  const selectMention = (entry: WorkspaceEntry) => {
     if (!mention) return
     const value = `${prompt.slice(0, mention.start)}@${entry.path}${prompt.slice(mention.end)}`
     setPrompt(value)
     setMention(null)
-    if (!contextDocuments.some((document) => document.path === entry.path)) await onToggleContext(entry.path)
     const caret = mention.start + entry.path.length + 1
     window.setTimeout(() => {
       promptRef.current?.focus()
@@ -703,7 +764,7 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
       `intent=${taskPlan.intent}, operation=${taskPlan.operation}, scope=${taskPlan.scope}, documentAccess=${taskPlan.documentAccess}, analysisMode=${taskPlan.analysisMode ?? 'none'}, coverage=${taskPlan.analysisCoverage}, sourcePolicy=${taskPlan.sourcePolicy}, service=${taskDispatch.serviceId ?? 'none'}, owner=${taskDispatch.executionOwner}, backgroundEligible=${taskDispatch.backgroundEligible}, executionMode=${taskPlan.execution.currentMode}, targetMode=${taskPlan.execution.targetMode}, workflow=${taskPlan.execution.workflow ?? 'none'}, agentUpgrade=${taskPlan.execution.agentUpgrade}, requiresModel=${taskPlan.requiresModel}, contextDocuments=${requestContextDocuments.length}, estimatedTokens=${requestBudget?.estimatedTokens ?? 0}, limit=${requestBudget?.limit ?? 0}`,
     )
     if (requestBudget?.exceedsLimit && !useLongTextPipeline) {
-      setError('当前消息和上下文超过模型可用窗口。请缩短输入，或使用“分析文本”让系统自动分块汇总。')
+      setError('当前消息和上下文超过模型可用窗口。请缩短输入，或分批提交分析请求。')
       return
     }
     const now = Date.now()
@@ -898,30 +959,33 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
     await cancelChat(activeChatRun.requestId)
   }
 
-  const approvePendingMemory = async () => {
+  const approvePendingMemory = useCallback(async () => {
     if (!pendingMemory) return
     try {
       await confirmProjectMemory(pendingMemory.items.map((item) => item.id))
       setPendingMemory(null)
     } catch (error) { setError(`确认项目记忆失败：${String(error)}`) }
-  }
+  }, [pendingMemory, setError])
 
-  const rejectPendingMemory = async () => {
+  const rejectPendingMemory = useCallback(async () => {
     if (!pendingMemory) return
     try {
       await rejectProjectMemory(pendingMemory.items.map((item) => item.id))
       setPendingMemory(null)
     } catch (error) { setError(`拒绝项目记忆失败：${String(error)}`) }
-  }
+  }, [pendingMemory, setError])
 
-  const applyPendingDiff = () => {
+  const applyPendingDiff = useCallback(() => {
     const proposal = diffProposals.find((item) => item.status === 'proposed')
     if (!proposal) return
     try {
       applyDiffProposal(proposal.id)
       onReviewDiff()
     } catch (error) { setError(String(error)) }
-  }
+  }, [applyDiffProposal, diffProposals, onReviewDiff, setError])
+
+  const approvePendingMemoryAction = useCallback(() => { void approvePendingMemory() }, [approvePendingMemory])
+  const rejectPendingMemoryAction = useCallback(() => { void rejectPendingMemory() }, [rejectPendingMemory])
 
   const prepareAnalysis = async (paths: string[], instruction: string) => {
     try {
@@ -948,46 +1012,24 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
         <button className="notice-dismiss" aria-label="忽略新增文件提示" title="忽略" onClick={clearPendingNewFiles}><X /></button>
       </div>
     </aside>}
-    <div className="message-stream">
-      <div className="message-inner">
-        {messages.map((message) => <Fragment key={message.id}>
-          <ChatMessageItem
-            message={message}
-            activity={activeChatRun?.assistantMessage.id === message.id ? activeChatRun : undefined}
-            onCopyError={setError}
-          />
-          {message.role === 'assistant' && pendingDiffSourceMessageId === message.id && diffProposals.some((proposal) => proposal.status === 'proposed') && (() => {
-            const proposal = diffProposals.find((item) => item.status === 'proposed')!
-            const pendingCount = diffProposals.filter((item) => item.status === 'proposed').length
-            return <aside className="new-files-notice turn-action-panel diff-proposal-notice" role="status">
-              <div className="new-files-notice-copy"><WandSparkles /><span><strong>{pendingCount} 个修改提案待审核</strong><small>{proposal.path} · {proposal.chunkCount ? `${(proposal.chunkIndex ?? 0) + 1}/${proposal.chunkCount} 块` : `${proposal.from}-${proposal.to}`}</small></span></div>
-              <div className="new-files-notice-actions"><button onClick={applyPendingDiff}>接受此块</button><button onClick={() => rejectDiffProposal(proposal.id)}>拒绝此块</button><button onClick={() => { const tab = useAppStore.getState().tabs.find((item) => item.path === proposal.path); if (tab) useAppStore.getState().openTab(tab); onReviewDiff() }}>查看文档</button></div>
-            </aside>
-          })()}
-          {message.role === 'assistant' && pendingMemory?.sourceMessageId === message.id && pendingMemory.items.length > 0 && <aside className="new-files-notice turn-action-panel memory-notice" role="status">
-            <div className="new-files-notice-copy"><Check /><span><strong>发现 {pendingMemory.items.length} 条项目记忆候选</strong><small>{pendingMemory.items[0].title} · 仅确认后写入本项目</small></span></div>
-            <div className="new-files-notice-actions"><button onClick={() => void approvePendingMemory()}>确认写入</button><button onClick={() => void rejectPendingMemory()}>忽略</button></div>
-          </aside>}
-        </Fragment>)}
-        {pendingMemory?.sourceMessageId === null && pendingMemory.items.length > 0 && <aside className="new-files-notice history-action-panel memory-notice" role="status">
-          <div className="new-files-notice-copy"><Check /><span><strong>{pendingMemory.items.length} 条项目记忆候选待处理</strong><small>{pendingMemory.items[0].title} · 历史来源任务未记录消息归属</small></span></div>
-          <div className="new-files-notice-actions"><button onClick={() => void approvePendingMemory()}>确认写入</button><button onClick={() => void rejectPendingMemory()}>忽略</button></div>
-        </aside>}
-      </div>
-    </div>
+    <ChatMessageStream
+      messages={messages}
+      activeChatRun={activeChatRun}
+      pendingDiffSourceMessageId={pendingDiffSourceMessageId}
+      diffProposals={diffProposals}
+      pendingMemory={pendingMemory}
+      onCopyError={setError}
+      onApplyPendingDiff={applyPendingDiff}
+      onRejectDiffProposal={rejectDiffProposal}
+      onReviewDiff={onReviewDiff}
+      onApprovePendingMemory={approvePendingMemoryAction}
+      onRejectPendingMemory={rejectPendingMemoryAction}
+    />
     <div className="composer-wrap">
       <ConversationTaskControls conversationId={conversationId} />
       <div className="composer">
         {contextDocuments.length > 0 && <div className="composer-context-list" aria-label="已引用文档">
           {contextDocuments.map((document) => <button className="composer-context-chip" key={document.path} title={`移除引用：${document.path}`} onClick={() => void onToggleContext(document.path)}><FileText /><span>{document.name}</span><X /></button>)}
-        </div>}
-        {contextDocuments.length > 0 && <div className="composer-analysis-actions" aria-label="文档分析快捷入口">
-          <button onClick={() => { setPendingActionId('document-analysis'); setPrompt('请分析已选文档，输出内容概要、结构、故事主线和人物线报告。') }}><FileText />分析文本</button>
-          <button onClick={() => { setPendingActionId('structure-segmentation'); setPrompt('请在当前项目中按已选文档的章节和场景边界生成拆分文件；首轮使用本地规则粗分，不覆盖原文。') }}><ListChecks />拆分章节</button>
-          <button onClick={() => { setPendingActionId('character-analysis'); setPrompt('请从已选文档中整理主要人物、人物关系、目标变化和人物线，输出可回溯的分析报告。') }}><Bot />提取人物线</button>
-        </div>}
-        {workspace && <div className="composer-analysis-actions" aria-label="项目分析快捷入口">
-          <button onClick={() => { setPendingActionId('workspace-analysis'); setPrompt('分析当前项目的内容、结构和跨文件关系，并为关键结论附来源证据。') }}><FolderOpen />分析整个项目</button>
         </div>}
         {mention && <div id="mention-menu" className="mention-menu" role="listbox" aria-label="引用工作区文件">
           {mentionFiles.length > 0 ? mentionFiles.map((entry, index) => {
@@ -1012,13 +1054,12 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
           aria-controls={mention ? 'mention-menu' : undefined}
           aria-activedescendant={mention && mentionFiles.length > 0 ? `mention-option-${mentionIndex}` : undefined}
           value={prompt}
-          onChange={(event) => { setPendingActionId(null); setPrompt(event.target.value); updateMention(event.target.value, event.target.selectionStart) }}
+          onChange={(event) => { setPrompt(event.target.value); updateMention(event.target.value, event.target.selectionStart) }}
           onClick={(event) => updateMention(event.currentTarget.value, event.currentTarget.selectionStart)}
           onBlur={(event) => {
             const nextFocus = event.relatedTarget
             if (!(nextFocus instanceof Node) || !event.currentTarget.closest('.composer')?.contains(nextFocus)) setMention(null)
           }}
-          onKeyUp={(event) => { if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown' && event.key !== 'Enter' && event.key !== 'Escape') updateMention(event.currentTarget.value, event.currentTarget.selectionStart) }}
           onKeyDown={(event) => {
             if (mention) {
               if (event.key === 'ArrowDown' && mentionFiles.length > 0) { event.preventDefault(); setMentionIndex((index) => (index + 1) % mentionFiles.length); return }
@@ -1033,7 +1074,7 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
         <div className="composer-tools">
           {activeModel ? <span className="composer-model-indicator" title={`${activeModel.model} · ${activeModel.baseUrl}`}><Bot /><span>{activeModel.model}</span></span>
             : <button className="composer-model-indicator missing" onClick={() => setSettingsOpen(true)}><Bot /><span>添加模型</span></button>}
-          <span className={`composer-hint ${budget.exceedsLimit && !analysisStatus && !activeStatus ? 'over-limit' : ''}`} title={activeStatus?.title ?? `预计 ${budget.estimatedTokens} / ${budget.limit} tokens`}>{analysisStatus ?? activeStatus?.label ?? `上下文 ${budget.usedPercent}% · Enter 发送`}</span>
+          <span className="composer-hint" title={activeStatus?.title ?? '发送后评估上下文预算'}>{analysisStatus ?? activeStatus?.label ?? 'Enter 发送'}</span>
           <button className="send-button" aria-label={activeChatRun?.status === 'stopping' ? '正在停止' : busy ? '停止生成' : '发送'} disabled={projectTransition || !workspace || activeChatRun?.status === 'stopping' || (!prompt.trim() && !busy)} onClick={busy ? () => void stop() : () => void send()}>{busy ? <Square /> : <Send />}</button>
         </div>
       </div>
