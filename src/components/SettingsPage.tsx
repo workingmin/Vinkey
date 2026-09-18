@@ -1,7 +1,7 @@
 import { ArrowLeft, BadgeCheck, Bot, Check, ChevronDown, CircleAlert, Cloud, Cpu, PlugZap, Plus, RefreshCw, Save, ShieldCheck, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { deleteModelConnection, discoverConnectionModels, getLocalHardware, listModelConnections, listModelProfiles, probeModelAdmission, saveModelConnection, saveModelProfile } from '../lib/desktop'
+import { deleteModelConnection, discoverConnectionModels, getLocalHardware, listModelConnections, listModelProfiles, persistActiveModelId, probeModelAdmission, saveModelConnection, saveModelProfile } from '../lib/desktop'
 import { hardwareSummary, hardwareTier, hardwareTierLabels, LOCAL_CONTEXT_WINDOW, LOCAL_HARDWARE_ADVICE, type LocalHardware } from '../lib/hardwareProfile'
 import { formatServiceError } from '../lib/serviceError'
 import { useAppStore } from '../store'
@@ -457,7 +457,14 @@ export function SettingsPage() {
       setConnections(values)
       setCatalogs((previous) => Object.fromEntries(Object.entries(previous).filter(([id]) => id !== target.id)))
       setAdmissions((previous) => Object.fromEntries(Object.entries(previous).filter(([key]) => !key.startsWith(`${target.id}::`))))
-      setModelProfiles(await listModelProfiles())
+      const refreshedProfiles = await listModelProfiles()
+      const currentActiveId = useAppStore.getState().activeModelId
+      const nextActiveId = refreshedProfiles.some((profile) => profile.id === currentActiveId)
+        ? currentActiveId
+        : refreshedProfiles[0]?.id ?? null
+      setModelProfiles(refreshedProfiles)
+      await persistActiveModelId(nextActiveId)
+      setActiveModelId(nextActiveId)
       const nextSelected = target.id === selectedId ? values[0] : connections.find((value) => value.id === selectedId)
       setSelectedId(nextSelected?.id ?? null)
       setDraft(nextSelected ?? emptyConnection())
@@ -490,6 +497,7 @@ export function SettingsPage() {
           contextWindow: admission.contextWindow,
         })
       setModelProfiles(await listModelProfiles())
+      await persistActiveModelId(profile.id)
       setActiveModelId(profile.id)
       setNotice({ error: false, text: `已切换到 ${model}` })
     } catch (error) { setNotice({ error: true, text: formatServiceError(error) }) }

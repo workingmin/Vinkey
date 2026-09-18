@@ -20,6 +20,18 @@ interface CliOptions {
   listProfiles: boolean
 }
 
+export function readPersistedActiveProfileId(dbPath: string): string | null {
+  if (!existsSync(dbPath)) throw new Error(`未找到 Vinkey 数据库：${dbPath}`)
+  const database = new DatabaseSync(dbPath, { readOnly: true })
+  try {
+    const table = database.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'app_preferences'").get()
+    if (!table) return null
+    return (database.prepare('SELECT value FROM app_preferences WHERE key = ?').get('activeModelId') as { value?: string } | undefined)?.value ?? null
+  } finally {
+    database.close()
+  }
+}
+
 interface ModelRow {
   profile_id: string
   connection_id: string | null
@@ -60,7 +72,7 @@ function usage(): string {
   npm run test:intent-model -- [--profile-id <id>] [--db <path>] [--timeout-ms <ms>] [--list-profiles] [--json]
 
 参数：
-  --profile-id <id>   指定模型 profile；默认使用数据库中最近更新的 profile
+  --profile-id <id>   指定要验收的模型 profile；未传时读取 SQLite 当前值
   --db <path>         指定 vinkey.sqlite3；默认使用当前系统的 Vinkey 应用数据目录
   --timeout-ms <ms>   每个用例的请求超时，默认 120000
   --list-profiles     只检查并列出 SQLite 模型配置，不执行 ${INTENT_CLASSIFICATION_EVALUATION_CASES.length} 个评测用例
@@ -117,7 +129,7 @@ export function listConfiguredProfiles(dbPath: string): ConfiguredProfileSummary
   }
 }
 
-export function formatProfileListReport(dbPath: string, profiles: ConfiguredProfileSummary[]): string {
+export function formatProfileListReport(dbPath: string, profiles: ConfiguredProfileSummary[], activeProfileId: string | null = null): string {
   const lines = [
     'Vinkey IntentRouter 本地模型专项评测 - 配置检查',
     `数据库：${dbPath}`,
@@ -125,13 +137,13 @@ export function formatProfileListReport(dbPath: string, profiles: ConfiguredProf
     `已配置模型：${profiles.length} 个`,
   ]
   profiles.forEach((profile, index) => {
-    lines.push(`[${index + 1}] ${profile.id}${index === 0 ? '（默认候选）' : ''}`)
+    lines.push(`[${index + 1}] ${profile.id}${profile.id === activeProfileId ? '（当前）' : ''}`)
     lines.push(`    名称：${profile.name}`)
     lines.push(`    模型：${profile.model}`)
   })
   if (profiles.length === 0) lines.push('没有已配置的模型 profile。')
   lines.push(`说明：--list-profiles 仅检查配置，未调用模型，${INTENT_CLASSIFICATION_EVALUATION_CASES.length} 个版本化用例尚未执行。`)
-  if (profiles[0]) lines.push(`执行评测：npm run test:intent-model -- --profile-id ${profiles[0].id}`)
+  lines.push('请确认带有（当前）标记的 profile；也可显式传入对应 profile ID 执行评测。')
   return lines.join('\n')
 }
 
@@ -191,6 +203,10 @@ export function formatEvaluationReport(input: {
 
 export function loadConfiguredRows(options: CliOptions): { profile: ModelProfile; connection: ModelConnection } {
   if (!existsSync(options.dbPath)) throw new Error(`未找到 Vinkey 数据库：${options.dbPath}`)
+  const selectedProfileId = options.profileId?.trim() || readPersistedActiveProfileId(options.dbPath)
+  if (!selectedProfileId) {
+    throw new Error('数据库中没有已持久化的当前模型。请先启动新版 Vinkey 完成 activeModelId 迁移，或显式传入 --profile-id <id>。')
+  }
   const database = new DatabaseSync(options.dbPath, { readOnly: true })
   try {
     const row = database.prepare(`
@@ -209,13 +225,13 @@ export function loadConfiguredRows(options: CliOptions): { profile: ModelProfile
       FROM model_profiles p
       LEFT JOIN model_profile_connections pc ON pc.profile_id = p.id
       LEFT JOIN model_connections c ON c.id = pc.connection_id
-      WHERE (? IS NULL OR p.id = ?)
+      WHERE p.id = ?
       ORDER BY p.updated_at DESC, p.id ASC
       LIMIT 1
-    `).get(options.profileId, options.profileId) as unknown as ModelRow | undefined
+    `).get(selectedProfileId) as unknown as ModelRow | undefined
     if (!row) {
-      throw new Error(options.profileId
-        ? `数据库中找不到模型 profile：${options.profileId}`
+      throw new Error(selectedProfileId
+        ? `数据库中找不到模型 profile：${selectedProfileId}`
         : '数据库中没有已配置的模型 profile。')
     }
     if (!row.connection_id || !row.connection_name || !row.connection_kind || !row.connection_base_url) {
@@ -328,8 +344,9 @@ export async function main(): Promise<void> {
   if (!options) { console.log(usage()); return }
   if (options.listProfiles) {
     const profiles = listConfiguredProfiles(options.dbPath)
-    if (options.json) console.log(JSON.stringify({ database: options.dbPath, profiles }, null, 2))
-    else console.log(formatProfileListReport(options.dbPath, profiles))
+    const activeProfileId = readPersistedActiveProfileId(options.dbPath)
+    if (options.json) console.log(JSON.stringify({ database: options.dbPath, activeProfileId, profiles }, null, 2))
+    else console.log(formatProfileListReport(options.dbPath, profiles, activeProfileId))
     return
   }
   const configured = loadConfiguredRows(options)

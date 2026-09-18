@@ -121,7 +121,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   chatRuns: {},
   completedChatMessages: {},
   modelProfiles: [],
-  activeModelId: localStorage.getItem('vinkey.activeModelId'),
+  activeModelId: null,
   settingsOpen: false,
   sidebarCollapsed: localStorage.getItem('vinkey.sidebarCollapsed') === 'true',
   settingsSidebarBeforeOpen: null,
@@ -301,15 +301,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   }),
   setModelProfiles: (modelProfiles) => set((state) => {
     const activeModelId = modelProfiles.some((profile) => profile.id === state.activeModelId) ? state.activeModelId : modelProfiles[0]?.id ?? null
-    if (activeModelId) localStorage.setItem('vinkey.activeModelId', activeModelId)
-    else localStorage.removeItem('vinkey.activeModelId')
     return { modelProfiles, activeModelId }
   }),
-  setActiveModelId: (activeModelId) => {
-    if (activeModelId) localStorage.setItem('vinkey.activeModelId', activeModelId)
-    else localStorage.removeItem('vinkey.activeModelId')
-    set({ activeModelId })
-  },
+  setActiveModelId: (activeModelId) => set({ activeModelId }),
   setSidebarCollapsed: (sidebarCollapsed) => {
     localStorage.setItem('vinkey.sidebarCollapsed', String(sidebarCollapsed))
     set((state) => ({

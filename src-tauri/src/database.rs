@@ -292,6 +292,13 @@ pub fn init(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
            WHERE id NOT IN (SELECT profile_id FROM model_profile_connections);
          INSERT OR IGNORE INTO model_profile_connections SELECT id, id FROM model_profiles;",
     )?;
+    connection.execute_batch(
+        "CREATE TABLE IF NOT EXISTS app_preferences (
+           key TEXT PRIMARY KEY,
+           value TEXT NOT NULL,
+           updated_at INTEGER NOT NULL
+         );",
+    )?;
     let _ = connection.execute(
         "ALTER TABLE model_connections ADD COLUMN credential_fingerprint TEXT NOT NULL DEFAULT 'none'",
         [],

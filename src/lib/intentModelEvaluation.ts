@@ -53,7 +53,7 @@ export interface IntentModelEvaluationDependencies {
   listProfiles: () => Promise<ModelProfile[]>
   listConnections: () => Promise<ModelConnection[]>
   stream: (request: ChatRequest, onEvent: (event: ChatStreamEvent) => void) => Promise<void>
-  getActiveProfileId: () => string | null
+  getActiveProfileId: () => string | null | Promise<string | null>
 }
 
 const intents = new Set<TaskIntent>([
@@ -136,9 +136,9 @@ export async function loadConfiguredIntentModel(
   dependencies: Pick<IntentModelEvaluationDependencies, 'listProfiles' | 'listConnections' | 'getActiveProfileId'>,
 ): Promise<ConfiguredIntentModel> {
   const [profiles, connections] = await Promise.all([dependencies.listProfiles(), dependencies.listConnections()])
-  const selectedId = preferredProfileId ?? dependencies.getActiveProfileId()
-  const profile = (selectedId ? profiles.find((item) => item.id === selectedId) : null) ?? profiles[0]
-  if (!profile) throw new Error('尚未配置可用于 IntentRouter 评测的默认模型。')
+  const selectedId = preferredProfileId ?? await dependencies.getActiveProfileId()
+  const profile = selectedId ? profiles.find((item) => item.id === selectedId) : null
+  if (!profile) throw new Error('尚未配置可用于 IntentRouter 评测的当前模型。')
 
   const connectionId = profile.connectionId ?? profile.id
   const connection = connections.find((item) => item.id === connectionId)

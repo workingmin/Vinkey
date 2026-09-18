@@ -1357,6 +1357,8 @@ pub fn run() {
             record_runtime_event,
             search::search_workspace,
             models::list_model_profiles,
+            models::get_active_model_id,
+            models::set_active_model_id,
             get_local_hardware,
             models::list_model_connections,
             models::save_model_connection,

@@ -1,6 +1,7 @@
 # IntentRouter 测试与验收
 
 - 对应设计：[IntentRouter 专项设计](INTENT_ROUTER_DESIGN.md)
+- 配置审计：[Vinkey 配置持久化审计](CONFIG_PERSISTENCE_REVIEW.md)
 - 评测套件：`intent-model-eval-2`
 - 目标：分别验证确定性路由合同与真实本地模型的 Agent 分类能力
 
@@ -96,7 +97,9 @@ Windows  %APPDATA%\com.vinkey.desktop\vinkey.sqlite3
 
 CLI 读取 `model_profiles`、`model_profile_connections`、`model_connections`，并校验 profile/connection 关联、provider 和回环地址。
 
-桌面应用当前把 `vinkey.activeModelId` 保存在 WebView localStorage，而不是 SQLite。独立 CLI 无法可靠读取该值，因此默认选择 SQLite 中 `updated_at` 最新的 profile。需要验收应用当前选中的模型时，先列出 profile，再显式指定 ID。
+旧版桌面应用把 `vinkey.activeModelId` 保存在 WebView localStorage，而不是 SQLite。独立 CLI 无法可靠读取旧值，因此不能把 SQLite 中 `updated_at` 最新的 profile 当作“当前模型”。新版应用完成迁移后 CLI 会读取 SQLite 当前值；未迁移时应显式传入 `--profile-id`，避免误验其他模型。
+
+新版 Vinkey 已将 `activeModelId` 持久化到 SQLite `app_preferences`。启动一次新版应用后，CLI 可以从 SQLite 读取带有 `（当前）` 标记的 profile；升级迁移和其他配置的保留策略见 [配置持久化审计](CONFIG_PERSISTENCE_REVIEW.md)。
 
 ### 推荐执行顺序
 
@@ -116,7 +119,7 @@ npm run test:intent-model -- --profile-id <profile-id>
 npm run test:intent-model -- --profile-id <profile-id> --json > intent-model-eval-result.json
 ```
 
-`--list-profiles` 不会调用模型，也不会执行分类用例。它会显示数据库路径、评测套件、用例总数、候选 profile，以及下一条建议命令。只有不带 `--list-profiles` 的第三步才会逐项调用真实本地模型。
+`--list-profiles` 不会调用模型，也不会执行分类用例。它会显示数据库路径、评测套件、用例总数和全部 profile，并标记 SQLite 中的当前 profile。确认标记无误后，可以直接执行评测或显式传入对应 ID；只有不带 `--list-profiles` 的第三步才会逐项调用真实本地模型。
 
 ## 6. macOS 执行
 
@@ -185,11 +188,11 @@ Vinkey IntentRouter 本地模型专项评测 - 配置检查
 数据库：<vinkey.sqlite3 路径>
 评测套件：intent-model-eval-2（12 个版本化用例）
 已配置模型：2 个
-[1] router（默认候选）
+[1] router（当前）
     名称：Router
     模型：qwen3:8b
 说明：--list-profiles 仅检查配置，未调用模型，12 个版本化用例尚未执行。
-执行评测：npm run test:intent-model -- --profile-id router
+请确认带有 `（当前）` 标记的 profile；也可显式传入对应 profile ID 执行评测。
 ```
 
 ### 真实评测输出

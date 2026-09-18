@@ -19,6 +19,7 @@ use std::{
 use tauri::{ipc::Channel, State};
 
 const KEYRING_SERVICE: &str = "com.vinkey.desktop";
+const ACTIVE_MODEL_PREFERENCE_KEY: &str = "activeModelId";
 const CHAT_TIMEOUT_SECS: u64 = 300;
 const ADMISSION_TIMEOUT_SECS: u64 = 30;
 const MAX_WORKER_CHAT_BYTES: usize = 16 * 1024 * 1024;
@@ -527,6 +528,52 @@ pub fn list_model_profiles(state: State<'_, DatabaseState>) -> Result<Vec<ModelP
         hydrate_profile(&connection, profile)?;
     }
     Ok(profiles)
+}
+
+#[tauri::command]
+pub fn get_active_model_id(state: State<'_, DatabaseState>) -> Result<Option<String>, String> {
+    let connection = database::open(&state)?;
+    connection
+        .query_row(
+            "SELECT value FROM app_preferences WHERE key = ?1",
+            [ACTIVE_MODEL_PREFERENCE_KEY],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|error| format!("无法读取当前模型配置：{error}"))
+}
+
+#[tauri::command]
+pub fn set_active_model_id(
+    id: Option<String>,
+    state: State<'_, DatabaseState>,
+) -> Result<Option<String>, String> {
+    let connection = database::open(&state)?;
+    if let Some(id) = id.as_deref() {
+        validate_id(id)?;
+        connection
+            .query_row(
+                "SELECT id FROM model_profiles WHERE id = ?1",
+                [id],
+                |_row| Ok(()),
+            )
+            .map_err(|_| "找不到要设为当前模型的 profile".to_string())?;
+        connection
+            .execute(
+                "INSERT INTO app_preferences(key, value, updated_at) VALUES(?1, ?2, ?3)
+                 ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+                params![ACTIVE_MODEL_PREFERENCE_KEY, id, now_ms() as i64],
+            )
+            .map_err(|error| format!("无法保存当前模型配置：{error}"))?;
+        return Ok(Some(id.to_string()));
+    }
+    connection
+        .execute(
+            "DELETE FROM app_preferences WHERE key = ?1",
+            [ACTIVE_MODEL_PREFERENCE_KEY],
+        )
+        .map_err(|error| format!("无法清除当前模型配置：{error}"))?;
+    Ok(None)
 }
 
 #[tauri::command]

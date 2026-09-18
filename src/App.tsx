@@ -23,7 +23,7 @@ import { WorkspaceTree, workspaceActions } from './components/WorkspaceTree'
 import {
   activateProject, deleteProject, listProjects,
   cancelChat, cancelTaskJob, chooseWorkspace, createDirectory, createDocument, executeTask, isDesktop, listConversations,
-  getWindowDiagnostics, getRuntimeDiagnostics, listModelProfiles, loadConversation, readDocument, readFileBytes, refreshWorkspace,
+  getActiveModelId, getWindowDiagnostics, getRuntimeDiagnostics, listModelProfiles, loadConversation, persistActiveModelId, readDocument, readFileBytes, refreshWorkspace,
   recordRuntimeEvent, writeStructureOutputs,
   saveConversationMessage, saveDocument, streamChat, syncNativeWindowTheme,
   confirmProjectMemory, listProjectMemory, proposeProjectMemory, rejectProjectMemory, searchProjectMemory,
@@ -1212,6 +1212,7 @@ export function App() {
   const markSaved = useAppStore((state) => state.markSaved)
   const setError = useAppStore((state) => state.setError)
   const setModelProfiles = useAppStore((state) => state.setModelProfiles)
+  const setActiveModelId = useAppStore((state) => state.setActiveModelId)
   const setConversations = useAppStore((state) => state.setConversations)
   const setConversation = useAppStore((state) => state.setConversation)
   const setSettingsOpen = useAppStore((state) => state.setSettingsOpen)
@@ -1398,8 +1399,25 @@ export function App() {
   }, [applyWorkspaceSnapshot, setProjects, setProjectTransition, setError])
 
   useEffect(() => {
-    void listModelProfiles().then(setModelProfiles).catch((cause) => setError(String(cause)))
-  }, [setError, setModelProfiles])
+    let active = true
+    void Promise.all([listModelProfiles(), getActiveModelId()]).then(async ([profiles, storedActiveId]) => {
+      if (!active) return
+      const currentId = useAppStore.getState().activeModelId
+      const legacyActiveId = localStorage.getItem('vinkey.activeModelId')
+      const selectedId = profiles.some((profile) => profile.id === storedActiveId)
+        ? storedActiveId
+        : profiles.some((profile) => profile.id === legacyActiveId)
+          ? legacyActiveId
+          : profiles.some((profile) => profile.id === currentId)
+            ? currentId
+          : profiles[0]?.id ?? null
+      setModelProfiles(profiles)
+      setActiveModelId(selectedId)
+      if (selectedId !== storedActiveId) await persistActiveModelId(selectedId)
+      if (isDesktop()) localStorage.removeItem('vinkey.activeModelId')
+    }).catch((cause) => { if (active) setError(String(cause)) })
+    return () => { active = false }
+  }, [setError, setModelProfiles, setActiveModelId])
 
   useEffect(() => {
     if (!workspace) {

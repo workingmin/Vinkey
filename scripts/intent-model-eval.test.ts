@@ -32,12 +32,14 @@ function databaseFixture(): string {
       has_api_key INTEGER NOT NULL, credential_fingerprint TEXT NOT NULL, updated_at INTEGER NOT NULL
     );
     CREATE TABLE model_profile_connections (profile_id TEXT PRIMARY KEY, connection_id TEXT NOT NULL);
+    CREATE TABLE app_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at INTEGER NOT NULL);
     INSERT INTO model_profiles VALUES
       ('older', 'Older', 'ollama', 'http://127.0.0.1:11434', 'qwen3:4b', 8192, 0, 1),
       ('router', 'Router', 'ollama', 'http://127.0.0.1:11434', 'qwen3:8b', 16384, 0, 2);
     INSERT INTO model_connections VALUES
       ('local', 'Local Ollama', 'ollama', 'http://127.0.0.1:11434', 0, 'none', 3);
     INSERT INTO model_profile_connections VALUES ('older', 'local'), ('router', 'local');
+    INSERT INTO app_preferences VALUES ('activeModelId', 'router', 4);
   `)
   database.close()
   return path
@@ -59,14 +61,21 @@ describe('IntentRouter model evaluation CLI', () => {
     expect(result.stdout).toContain('--list-profiles')
   })
 
-  it('lists profiles and defaults to the most recently updated SQLite profile', () => {
+  it('uses the SQLite active profile instead of the newest updated profile', () => {
     const dbPath = databaseFixture()
     expect(listConfiguredProfiles(dbPath).map((item) => item.id)).toEqual(['router', 'older'])
     const options = parseArguments(['--db', dbPath])
     expect(options).not.toBeNull()
-    const configured = loadConfiguredRows(options!)
-    expect(configured.profile).toMatchObject({ id: 'router', connectionId: 'local', model: 'qwen3:8b' })
-    expect(configured.connection).toMatchObject({ id: 'local', kind: 'ollama', hasApiKey: false })
+    expect(loadConfiguredRows(options!).profile).toMatchObject({ id: 'router', model: 'qwen3:8b' })
+  })
+
+  it('refuses to guess when the SQLite active profile has not been migrated', () => {
+    const dbPath = databaseFixture()
+    const database = new DatabaseSync(dbPath)
+    database.exec("DELETE FROM app_preferences WHERE key = 'activeModelId'")
+    database.close()
+    const options = parseArguments(['--db', dbPath])
+    expect(() => loadConfiguredRows(options!)).toThrow('没有已持久化的当前模型')
   })
 
   it('loads an explicitly selected profile', () => {
@@ -80,11 +89,12 @@ describe('IntentRouter model evaluation CLI', () => {
     const report = formatProfileListReport('/tmp/vinkey.sqlite3', [
       { id: 'router', name: 'Router', model: 'qwen3:8b', updatedAt: 2 },
       { id: 'older', name: 'Older', model: 'qwen3:4b', updatedAt: 1 },
-    ])
+    ], 'router')
     expect(report).toContain('intent-model-eval-2（12 个版本化用例）')
-    expect(report).toContain('[1] router（默认候选）')
+    expect(report).toContain('[1] router（当前）')
+    expect(report).not.toContain('默认候选')
     expect(report).toContain('12 个版本化用例尚未执行')
-    expect(report).toContain('npm run test:intent-model -- --profile-id router')
+    expect(report).toContain('请确认带有（当前）标记的 profile')
   })
 
   it('prints detailed case counts, field metrics, and the final acceptance result', () => {

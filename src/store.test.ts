@@ -48,15 +48,12 @@ describe('single active model', () => {
 
     useAppStore.getState().setModelProfiles([first, second])
     expect(useAppStore.getState().activeModelId).toBe('first')
-    expect(localStorage.getItem('vinkey.activeModelId')).toBe('first')
-
     useAppStore.getState().setActiveModelId('second')
     useAppStore.getState().setModelProfiles([first])
     expect(useAppStore.getState().activeModelId).toBe('first')
 
     useAppStore.getState().setModelProfiles([])
     expect(useAppStore.getState().activeModelId).toBeNull()
-    expect(localStorage.getItem('vinkey.activeModelId')).toBeNull()
   })
 })
 

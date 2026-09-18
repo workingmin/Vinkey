@@ -725,6 +725,20 @@ export async function listModelProfiles(): Promise<ModelProfile[]> {
   return invoke<ModelProfile[]>('list_model_profiles')
 }
 
+export async function getActiveModelId(): Promise<string | null> {
+  if (!isDesktop()) return localStorage.getItem('vinkey.activeModelId')
+  return invoke<string | null>('get_active_model_id')
+}
+
+export async function persistActiveModelId(id: string | null): Promise<string | null> {
+  if (!isDesktop()) {
+    if (id) localStorage.setItem('vinkey.activeModelId', id)
+    else localStorage.removeItem('vinkey.activeModelId')
+    return id
+  }
+  return invoke<string | null>('set_active_model_id', { id })
+}
+
 function readDemoConnections(): ModelConnection[] {
   try {
     const storedFingerprints = JSON.parse(localStorage.getItem(FINGERPRINT_KEY) ?? '{}') as Record<string, string>
