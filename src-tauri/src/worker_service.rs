@@ -29,7 +29,7 @@ const MAX_MAP_CACHE_ENTRIES: usize = 1_024;
 const MAX_WORKER_EVENTS: usize = 1_000;
 const MAX_MODEL_ATTEMPTS: u32 = 3;
 const MIN_CHUNK_TOKENS: usize = 128;
-const VALIDATOR_VERSION: &str = "evidence-gate-3";
+const VALIDATOR_VERSION: &str = "evidence-gate-4";
 const NO_EVIDENCE: &str = "未找到与任务相关的证据。";
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -1456,12 +1456,29 @@ fn verify_evidence(
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
             {
-                if !lines[reference.line_start - 1..reference.line_end]
-                    .join("\n")
-                    .contains(quote)
-                {
-                    reference.verification_error = Some("引用原文与来源行不一致".into());
-                    return reference;
+                let source_range = &lines[reference.line_start - 1..reference.line_end];
+                let matches_source = if reference.line_start == reference.line_end {
+                    quote_matches_line(source_range[0], quote)
+                } else {
+                    source_range.join("\n").contains(quote)
+                };
+                if !matches_source {
+                    // Small local models occasionally return a correct short quote with a
+                    // one-based line offset. Repair only a unique single-line match; this
+                    // preserves the evidence contract while keeping multi-line concatenation
+                    // and paraphrases invalid.
+                    if reference.line_start == reference.line_end {
+                        if let Some(actual_line) = unique_quote_line(&lines, quote) {
+                            reference.line_start = actual_line;
+                            reference.line_end = actual_line;
+                        } else {
+                            reference.verification_error = Some("引用原文与来源行不一致".into());
+                            return reference;
+                        }
+                    } else {
+                        reference.verification_error = Some("引用原文与来源行不一致".into());
+                        return reference;
+                    }
                 }
             } else {
                 reference.verification_error = Some("来源引用缺少非空原文短引".into());
@@ -1472,6 +1489,51 @@ fn verify_evidence(
             reference
         })
         .collect()
+}
+
+fn normalized_single_line(value: &str) -> String {
+    value
+        .replace('\r', "")
+        .chars()
+        .filter(|character| !matches!(character, '\u{200b}' | '\u{feff}'))
+        .map(|character| match character {
+            '，' => ',',
+            '。' => '.',
+            '！' => '!',
+            '？' => '?',
+            '；' => ';',
+            '：' => ':',
+            '“' | '”' => '"',
+            '‘' | '’' => '\'',
+            '（' => '(',
+            '）' => ')',
+            '【' => '[',
+            '】' => ']',
+            character => character,
+        })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn quote_matches_line(line: &str, quote: &str) -> bool {
+    if line.contains(quote) {
+        return true;
+    }
+    let normalized_line = normalized_single_line(line);
+    let normalized_quote = normalized_single_line(quote);
+    !normalized_quote.is_empty() && normalized_line.contains(&normalized_quote)
+}
+
+fn unique_quote_line(lines: &[&str], quote: &str) -> Option<usize> {
+    let matches = lines
+        .iter()
+        .enumerate()
+        .filter(|(_, line)| quote_matches_line(line, quote))
+        .map(|(index, _)| index + 1)
+        .collect::<Vec<_>>();
+    (matches.len() == 1).then_some(matches[0])
 }
 
 fn deduplicate_evidence(references: Vec<EvidenceReference>) -> Vec<EvidenceReference> {
@@ -3349,6 +3411,33 @@ mod tests {
         assert!(verify_evidence(valid, &documents)[0].verified);
         let invalid = parse_evidence("[source: chapter.md chunk=c1 lines=1-1 quote=\"不存在\"]");
         assert!(!verify_evidence(invalid, &documents)[0].verified);
+    }
+
+    #[test]
+    fn repairs_a_unique_single_line_quote_when_the_model_offsets_its_line() {
+        let documents = HashMap::from([("chapter.md".into(), "标题\n关键证据\n结尾".into())]);
+        let references = parse_evidence(
+            "[source: chapter.md chunk=c1 lines=1-1 quote=\"关键证据\"]",
+        );
+        let verified = verify_evidence(references, &documents);
+        assert!(verified[0].verified);
+        assert_eq!(verified[0].line_start, 2);
+        assert_eq!(verified[0].line_end, 2);
+    }
+
+    #[test]
+    fn does_not_repair_ambiguous_or_paraphrased_quotes() {
+        let documents = HashMap::from([("chapter.md".into(), "重复\n重复\n结尾".into())]);
+        let ambiguous = verify_evidence(
+            parse_evidence("[source: chapter.md lines=1-1 quote=\"重复\"]"),
+            &documents,
+        );
+        assert!(!ambiguous[0].verified);
+        let paraphrase = verify_evidence(
+            parse_evidence("[source: chapter.md lines=1-1 quote=\"相近但不存在\"]"),
+            &documents,
+        );
+        assert!(!paraphrase[0].verified);
     }
 
     #[test]

@@ -48,19 +48,6 @@ import { buildDocumentIndexMessage } from './lib/documentMetadata'
 import { buildFocusedWorkspaceMessage } from './lib/focusedAnalysis'
 import { isLoopbackModelEndpoint } from './lib/modelPrivacy'
 
-function formatError(error: unknown): string {
-  if (error instanceof Error) return error.message
-  if (typeof error === 'string') return error
-  if (error && typeof error === 'object') {
-    try {
-      const value = JSON.stringify(error)
-      if (value && value !== '{}') return value
-    } catch {
-      // Fall through to String for unusual non-serializable error objects.
-    }
-  }
-  return String(error)
-}
 import {
   buildMultiFileRevisionContract, buildMultiFileRevisionTargets, buildSelectionRevisionContract,
   createDiffProposal, createMultiFileDiffProposals, fingerprintDocument,
@@ -69,6 +56,27 @@ import {
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { Menu, MenuItem, PredefinedMenuItem, Submenu } from '@tauri-apps/api/menu'
 import type { PredefinedMenuItemOptions } from '@tauri-apps/api/menu'
+
+function formatError(error: unknown): string {
+  return normalizeServiceError(error).message
+}
+
+async function appendMarkdownBatches(
+  conversationId: string,
+  content: string,
+  append: (conversationId: string, chunk: string) => void,
+  setStatus: (conversationId: string, status: ChatRunStatus, message?: string | null) => void,
+): Promise<void> {
+  const blocks = content.trim().split(/\n{2,}/u).filter(Boolean)
+  if (blocks.length === 0) return
+  for (const [index, block] of blocks.entries()) {
+    setStatus(conversationId, 'streaming', null)
+    append(conversationId, `${index === 0 ? '' : '\n\n'}${block}`)
+    // Yield between Markdown blocks so the message stream can paint progress without
+    // exposing hidden model reasoning or creating one activity row per token.
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 0))
+  }
+}
 
 type ContentPage = 'chat' | 'file' | 'logs'
 
@@ -344,10 +352,8 @@ function ChatMessageItem({ message, activity, onCopyError }: {
     month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
   })
 
-  return <article id={`message-${message.id}`} data-message-id={message.id} tabIndex={-1} className={`message ${message.role}`}>
-    {isAssistant && <div className="avatar" aria-hidden="true"><Bot /></div>}
+  return <article id={`message-${message.id}`} data-message-id={message.id} tabIndex={-1} aria-label={isAssistant ? '助手消息' : '用户消息'} className={`message ${message.role}`}>
     <div className="message-stack">
-      {isAssistant && <div className="message-author">Vinkey</div>}
       {isAssistant && <MessageActivity items={activityLog} active={Boolean(activity)} />}
       {!isAssistant && <TaskRequestSummary task={message.taskRef} />}
       <div className="message-bubble">
@@ -359,7 +365,6 @@ function ChatMessageItem({ message, activity, onCopyError }: {
         <time dateTime={timestamp.toISOString()}>{formattedTime}</time>
       </div>
     </div>
-    {!isAssistant && <div className="avatar user-avatar" aria-hidden="true">你</div>}
   </article>
 }
 
@@ -838,7 +843,8 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
         const evidenceNote = result.evidence.length > 0
           ? `\n\n> 证据校验：发现 ${result.evidence.length} 条来源引用，其中 ${result.evidence.filter((item) => item.verified).length} 条已通过行号和原文校验。`
           : '\n\n> 证据校验：最终回答没有生成可解析的来源引用。'
-        appendChatRunChunk(nextConversationId, `${result.content}${excludedNote}${evidenceNote}`)
+        await appendMarkdownBatches(nextConversationId, result.content, appendChatRunChunk, setChatRunStatus)
+        appendChatRunChunk(nextConversationId, `${excludedNote}${evidenceNote}`)
         const candidates = taskPlan.intent === 'continuity-review' || taskPlan.intent === 'document-revision'
           ? []
           : buildMemoryCandidates(result.content, requestContextDocuments.map((document) => document.path), value)

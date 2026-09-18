@@ -2,6 +2,7 @@ import { prepareLongTextWorker, probeModelContext, readAnalysisArtifact, streamC
 import { estimateTokens } from './context'
 import { buildDocumentIndexMessage, buildDocumentMetadataCards } from './documentMetadata'
 import { parseEvidenceReferences, verifyEvidenceReferences } from './workspaceAnalysis'
+import { formatServiceError } from './serviceError'
 import type { AnalysisJobManifest, ChatStreamEvent, ContextDocument, EvidenceReference, ModelProfile, TaskWorkerEvent, TextChunk, WorkspaceDocumentRef } from '../types'
 import type { TaskExecutionDispatch } from './taskRuntime'
 
@@ -466,7 +467,7 @@ export async function analyzeLongText(
       modelInvocationCount, mapCacheHits: 0, stageCacheHits: 0, jobCheckpointHits: 0,
     }
   } catch (error) {
-    const message = String(error)
+    const message = formatServiceError(error)
     const failed: AnalysisJobManifest = {
       jobId, workspaceId, instruction, status: message.includes('请求已停止') ? 'cancelled' : 'failed',
       createdAt: startedAt, updatedAt: Date.now(), documentCount: documents.length + excludedDocuments.length,

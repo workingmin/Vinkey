@@ -38,6 +38,20 @@ function parseCandidate(value: unknown): unknown {
   return message
 }
 
+function describeUnknown(value: unknown): string {
+  if (value instanceof Error) return value.message
+  if (typeof value === 'string') return value
+  if (value && typeof value === 'object') {
+    try {
+      const encoded = JSON.stringify(value)
+      if (encoded && encoded !== '{}') return encoded
+    } catch {
+      // Fall through for circular or host-provided error values.
+    }
+  }
+  return String(value)
+}
+
 export function normalizeServiceError(value: unknown): ServiceError {
   const candidate = parseCandidate(value)
   if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) {
@@ -54,7 +68,7 @@ export function normalizeServiceError(value: unknown): ServiceError {
       }
     }
   }
-  return inferredError(typeof candidate === 'string' ? candidate : String(value))
+  return inferredError(describeUnknown(candidate))
 }
 
 export function formatServiceError(value: unknown): string {
