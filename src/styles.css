@@ -360,6 +360,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 1px
 @keyframes pulse { 0%, 70%, 100% { opacity: .3 } 35% { opacity: 1 } }
 .composer-wrap { flex: 0 0 auto; padding: 0 20px 16px; background: linear-gradient(transparent, var(--bg-main) 18%); }
 .composer-wrap > .conversation-task-controls { width: min(760px, 100%); margin: 0 auto 8px; box-shadow: 0 -8px 24px color-mix(in srgb, var(--bg-main) 72%, transparent); }
+.chat-panel.new-conversation .composer-wrap { min-height: 0; flex: 1 1 auto; display: flex; flex-direction: column; justify-content: center; overflow-y: auto; padding: clamp(48px, 14vh, 132px) 20px clamp(24px, 6vh, 64px); background: var(--bg-main); }
+.new-conversation-prompt { width: min(760px, 100%); margin: 0 auto 20px; display: flex; align-items: center; gap: 12px; }
+.new-conversation-prompt-icon { width: 36px; height: 36px; flex: 0 0 36px; display: grid; place-items: center; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border)); border-radius: 7px; background: color-mix(in srgb, var(--accent) 10%, var(--bg-raised)); color: var(--accent); }
+.new-conversation-prompt-icon svg { width: 18px; height: 18px; }
+.new-conversation-prompt-copy { min-width: 0; display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+.new-conversation-prompt-copy strong { color: var(--text); font-size: 22px; line-height: 1.25; font-weight: 650; letter-spacing: 0; }
+.new-conversation-prompt-copy > span { color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
 .composer { position: relative; width: min(760px, 100%); margin: 0 auto; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--bg-raised); overflow: visible; }
 .composer:focus-within { border-color: #4d7378; }
 .composer-context-list { display: flex; flex-wrap: wrap; gap: 6px; padding: 9px 10px 5px; }
@@ -704,6 +711,7 @@ button.composer-model-indicator:hover { background: var(--bg-selected); color: v
 .secondary-button svg, .danger-button svg { width: 14px; }.danger-button { color: var(--danger); }.secondary-button:disabled, .primary-button:disabled { opacity: .5; cursor: default; }
 
 .app-shell[data-theme="light"] .composer-wrap { background: linear-gradient(transparent, var(--bg-main) 18%); }
+.app-shell[data-theme="light"] .chat-panel.new-conversation .composer-wrap { background: var(--bg-main); }
 .app-shell[data-theme="light"] .editor-status .saved { color: #277a54; }
 
 @media (max-width: 1180px) {
@@ -728,6 +736,10 @@ button.composer-model-indicator:hover { background: var(--bg-selected); color: v
   .message.user .message-stack { max-width: 90%; }
   .message-bubble { font-size: 14px; line-height: 1.78; }
   .composer-wrap { padding-inline: 12px; }
+  .chat-panel.new-conversation .composer-wrap { padding: clamp(32px, 10vh, 84px) 12px clamp(20px, 5vh, 44px); }
+  .new-conversation-prompt { margin-bottom: 16px; }
+  .new-conversation-prompt-copy { align-items: flex-start; flex-direction: column; gap: 2px; }
+  .new-conversation-prompt-copy strong { font-size: 19px; }
   .artifact-dialog { width: calc(100% - 20px); max-height: calc(100dvh - 20px); }
   .artifact-preview { max-height: calc(100dvh - 156px); padding: 14px; }
   .new-files-notice { width: calc(100% - 24px); align-items: flex-start; flex-direction: column; gap: 8px; }

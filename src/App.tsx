@@ -429,6 +429,7 @@ const ChatMessageStream = memo(function ChatMessageStream({
 function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: string) => Promise<void>; onReviewDiff: () => void }) {
   const workspace = useAppStore((state) => state.workspace)
   const projectTransition = useAppStore((state) => state.projectTransition)
+  const pendingChatRequests = useAppStore((state) => state.pendingChatRequests)
   const messages = useAppStore((state) => state.messages)
   const contextDocuments = useAppStore((state) => state.contextDocuments)
   const chatRuns = useAppStore((state) => state.chatRuns)
@@ -470,6 +471,9 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
   const activeChatRun = conversationId ? chatRuns[conversationId] : undefined
   const busy = Boolean(activeChatRun)
   const activeStatus = activeChatRun ? chatStatusMeta[activeChatRun.status] : null
+  const isNewConversation = conversationId === null
+    && pendingChatRequests === 0
+    && messages.every((message) => message.id === 'welcome')
 
   useEffect(() => {
     if (!pendingEditorRevision) return
@@ -1009,7 +1013,7 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
     } catch (error) { setError(`准备文档分析失败：${formatError(error)}`) }
   }
 
-  return <main className="chat-panel">
+  return <main className={`chat-panel${isNewConversation ? ' new-conversation' : ''}`}>
     {pendingNewFiles.length > 0 && <aside className="new-files-notice" role="status">
       <div className="new-files-notice-copy"><FileText /><span><strong>检测到 {pendingNewFiles.length} 个新增文本文件</strong><small>是否要让 AI 分析其中某个文件？</small></span></div>
       <div className="new-files-notice-actions">
@@ -1018,7 +1022,7 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
         <button className="notice-dismiss" aria-label="忽略新增文件提示" title="忽略" onClick={clearPendingNewFiles}><X /></button>
       </div>
     </aside>}
-    <ChatMessageStream
+    {!isNewConversation && <ChatMessageStream
       messages={messages}
       activeChatRun={activeChatRun}
       pendingDiffSourceMessageId={pendingDiffSourceMessageId}
@@ -1030,8 +1034,12 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
       onReviewDiff={onReviewDiff}
       onApprovePendingMemory={approvePendingMemoryAction}
       onRejectPendingMemory={rejectPendingMemoryAction}
-    />
+    />}
     <div className="composer-wrap">
+      {isNewConversation && <div className="new-conversation-prompt" aria-label="Vinkey 新会话">
+        <span className="new-conversation-prompt-icon" aria-hidden="true"><WandSparkles /></span>
+        <span className="new-conversation-prompt-copy"><strong>Vinkey</strong><span>今天想写些什么？</span></span>
+      </div>}
       <ConversationTaskControls conversationId={conversationId} />
       <div className="composer">
         {contextDocuments.length > 0 && <div className="composer-context-list" aria-label="已引用文档">
