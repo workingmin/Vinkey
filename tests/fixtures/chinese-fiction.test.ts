@@ -3,9 +3,9 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { INTENT_CLASSIFICATION_EVALUATION_CASES } from '../src/lib/intentModelEvaluation'
+import { INTENT_CLASSIFICATION_EVALUATION_CASES } from '../../src/lib/intentModelEvaluation'
 
-const fixtureRoot = fileURLToPath(new URL('../tests/fixtures/chinese-fiction/', import.meta.url))
+const fixtureRoot = fileURLToPath(new URL('./chinese-fiction/', import.meta.url))
 
 describe('Chinese fiction fixtures', () => {
   it('keeps every document target backed by a stable fixture', () => {

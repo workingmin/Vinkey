@@ -3,7 +3,7 @@
 - 状态：持续实施中
 - 适用版本：Vinkey 本地 AI 文学创作工作台
 - 目标：在现有 Tauri 2 + React + Rust + SQLite MVP 上，建立可审核、可恢复、适配本地模型能力的文学创作 Agent/Skill 系统。
-- 相关文档：[IntentRouter 专项设计](INTENT_ROUTER_DESIGN.md)、[IntentRouter 测试与验收](INTENT_ROUTER_TEST_ACCEPTANCE.md)、[Agent 流程模板](AGENT_FLOW_TEMPLATES.md)、[Agent 流程对比](AGENT_FLOW_COMPARISON.md)、[AI 业务链路架构与改造方案](../../architecture/AI_BUSINESS_CHAINS.md)、[开发框架与技术选型](../../architecture/DEVELOPMENT_FRAMEWORK.md)、[GitHub 同类项目调研与功能取舍](../../research/GITHUB_REFERENCE.md)、[对话页设计](../ui/UI_DESIGN_CHAT.md)、[文件与编辑器设计](../ui/UI_DESIGN_EDITOR.md)
+- 相关文档：[IntentRouter 专项设计](intent-router/)、[IntentRouter 三层架构与本地模型补强](intent-router/ARCHITECTURE.md)、[IntentRouter 测试与验收](intent-router/TEST_ACCEPTANCE.md)、[IntentRouter 候选路由测试计划](intent-router/TEST_PLAN.md)、[Agent 流程模板](AGENT_FLOW_TEMPLATES.md)、[Agent 流程对比](AGENT_FLOW_COMPARISON.md)、[AI 业务链路架构与改造方案](../../architecture/AI_BUSINESS_CHAINS.md)、[开发框架与技术选型](../../architecture/DEVELOPMENT_FRAMEWORK.md)、[GitHub 同类项目调研与功能取舍](../../research/GITHUB_REFERENCE.md)、[对话页设计](../ui/UI_DESIGN_CHAT.md)、[文件与编辑器设计](../ui/UI_DESIGN_EDITOR.md)
 
 业务链路采用确定性 Service、单次模型调用、固定 Workflow、自适应 Agent 或 Hybrid 的判定，以《AI 业务链路架构与改造方案》为实施基线。本文件继续维护领域 Agent、Skill、长文本和人物资产的详细计划。Codex、Claude 等 Agent 能力体系仅作为架构参考或由具体业务缺口驱动的内部原型。当前版本不提供外部 Agent Runtime 的用户选择入口，也不为此新增需要配置的商用付费 API。
 
@@ -105,7 +105,7 @@ AI 入口
 
 该设计与主流创作工作台的可观察交互一致：自由对话隐藏路由，明确的 Rewrite、Story Bible、场景或选区操作携带结构化上下文；复杂编排只在确有多步决策收益时使用 Agent。Vinkey 不以“所有消息都调用路由模型”换取形式上的统一。
 
-IntentRouter 的输入输出合同、文档数量语义、决策顺序、Agent/Skill 映射和代码索引统一维护在 [IntentRouter 专项设计](INTENT_ROUTER_DESIGN.md)。确定性测试矩阵、本地模型评测、SQLite 配置读取、macOS/Windows 执行命令和验收标准统一维护在 [IntentRouter 测试与验收](INTENT_ROUTER_TEST_ACCEPTANCE.md)。本计划不重复维护专项细节，避免实现与验收口径分叉。
+IntentRouter 的输入输出合同、文档数量语义、决策顺序、Agent/Skill 映射和代码索引统一维护在 [IntentRouter 专项设计](intent-router/)。本地模型不足时采用的三层候选式架构统一维护在 [IntentRouter 三层架构与本地模型补强](intent-router/ARCHITECTURE.md)。确定性测试矩阵、本地模型评测、SQLite 配置读取、macOS/Windows 执行命令和当前验收标准统一维护在 [IntentRouter 测试与验收](intent-router/TEST_ACCEPTANCE.md)；候选输出、澄清、拒答和降级测试统一维护在 [IntentRouter 候选路由测试计划](intent-router/TEST_PLAN.md)。本计划不重复维护专项细节，避免实现与验收口径分叉。
 
 ### 2.2 分析模式与项目锚定
 

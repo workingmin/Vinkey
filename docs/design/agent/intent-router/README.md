@@ -1,9 +1,11 @@
 # IntentRouter 专项设计
 
-- 状态：已实现确定性路由与专项模型评测入口
+- 状态：已实现确定性路由与专项模型评测入口；三层候选式路由方案进入设计阶段
 - 适用版本：Vinkey 本地 AI 文学创作工作台
-- 上位设计：[Agent 与 Skill 建设计划](AGENT_SKILL_PLAN.md)
-- 验收手册：[IntentRouter 测试与验收](INTENT_ROUTER_TEST_ACCEPTANCE.md)
+- 上位设计：[Agent 与 Skill 建设计划](../AGENT_SKILL_PLAN.md)
+- 验收手册：[IntentRouter 测试与验收](TEST_ACCEPTANCE.md)
+- 三层架构方案：[IntentRouter 三层架构与本地模型补强](ARCHITECTURE.md)
+- 候选式测试计划：[IntentRouter 候选路由测试计划](TEST_PLAN.md)
 
 ## 1. 职责与边界
 
@@ -29,8 +31,9 @@
 | 执行策略 | `src/lib/executionStrategy.ts` | 选择 deterministic/direct/fixed/hybrid 执行方式 |
 | Rust 准入 | `src-tauri/src/task_runtime.rs` | 反序列化并复验前端计划，签发 Service Dispatch |
 | 模型专项评测核心 | `src/lib/intentModelEvaluation.ts` | 版本化用例、严格输出合同和准确率统计 |
+| 候选输出合同 | `src/lib/intentCandidates.ts` | 1-3 候选解析、严格字段/分数校验和旧输出兼容基础 |
 | 桌面评测适配 | `src/lib/intentModelEvaluationDesktop.ts` | 使用 Tauri profile/connection/stream_chat 接口 |
-| 独立 CLI | `scripts/intent-model-eval.ts` | 只读 SQLite 并调用本机模型端点 |
+| 独立 CLI | `scripts/intent-router/intent-router-acceptance.ts` | 只读 SQLite 并调用本机模型端点 |
 
 ## 3. 输入合同
 
@@ -97,6 +100,7 @@ TypeScript 和 Rust 两端都必须接受并校验 `documentSelection`。Rust �
 | --- | --- | --- | ---: |
 | 人物关系 | 人物关系、角色冲突、角色关联 | `character-analysis` | 6 |
 | 人物命运 | 人物命运、角色成长、人物弧光 | `character-analysis` | 5 |
+| 复合人物分析 | 完整/全面分析人物命运和情节结构 | `character-analysis` | 4 |
 | 跨文档比较 | 比较文档的人物塑造、叙事视角 | `document-analysis` | 7 |
 | 故事结构 | 故事主线、情节结构、叙事视角 | `document-analysis` | 3 |
 
@@ -119,19 +123,25 @@ Registry 是 Agent/Skill 映射的权威来源。评测用例必须与 Registry 
 
 ## 8. 模型分类边界
 
-轻量分类模型只接收 `instruction` 和无正文 `targets`，输出严格 JSON：
+轻量分类模型只接收 `instruction` 和无正文 `targets`，输出严格的候选 JSON（合同版本 `intent-router-output-1`）：
 
 ```json
 {
-  "intent": "document-analysis",
-  "agent": "StoryDeconstruction",
-  "skill": "long-text-analysis",
-  "scope": "selected-documents",
-  "documentSelection": "single"
+  "candidates": [
+    {
+      "intent": "document-analysis",
+      "agent": "StoryDeconstruction",
+      "skill": "long-text-analysis",
+      "modelScore": 0.82,
+      "reasonCodes": ["story-structure"]
+    }
+  ],
+  "needsClarification": false,
+  "missingFacts": []
 }
 ```
 
-未知枚举、缺失/多余字段、Markdown 代码块或非 JSON 输出都判定失败。模型分类不能提升 `documentAccess`、`sourcePolicy`、副作用或 Tool allowlist。
+候选最多 3 个；`modelScore` 只表示排序信号，不是校准概率。未知枚举、重复候选、缺失/多余字段、越界分数、Markdown 代码块或非 JSON 输出都判定失败。旧模型的五字段单对象会作为 `legacy-single` 兼容解析，但不计入候选合同解析率。模型分类不能提升 `documentAccess`、`sourcePolicy`、副作用或 Tool allowlist；`scope` 和 `documentSelection` 由后置层根据事实重算。
 
 ## 9. 变更检查表
 
@@ -147,4 +157,4 @@ Registry 是 Agent/Skill 映射的权威来源。评测用例必须与 Registry 
 - 低置信正文请求是否仍在 Tool 调用前澄清。
 - 模型评测用例是否与确定性路由结果一致。
 
-具体命令和验收记录格式见 [IntentRouter 测试与验收](INTENT_ROUTER_TEST_ACCEPTANCE.md)。
+具体命令和验收记录格式见 [IntentRouter 测试与验收](TEST_ACCEPTANCE.md)。

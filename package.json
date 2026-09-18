@@ -10,14 +10,15 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:intent-model": "node scripts/run-intent-model-eval.mjs",
-    "fixtures:chinese-fiction": "node scripts/fetch-chinese-fiction-fixtures.mjs",
+    "test:intent-router-acceptance": "node scripts/intent-router/run-intent-router-acceptance.mjs",
+    "fixtures:chinese-fiction": "node scripts/fixtures/fetch-chinese-fiction.mjs",
     "tauri": "tauri",
     "desktop:dev": "tauri dev",
     "desktop:build": "tauri build",
     "desktop:build:win": "tauri build --bundles nsis",
     "desktop:build:mac": "tauri build --bundles app,dmg",
-    "package:win": "powershell -ExecutionPolicy Bypass -File scripts/build-windows.ps1",
-    "package:mac": "bash scripts/build-macos.sh"
+    "package:win": "powershell -ExecutionPolicy Bypass -File scripts/build/build-windows.ps1",
+    "package:mac": "bash scripts/build/build-macos.sh"
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.0",

@@ -2,7 +2,7 @@ import { existsSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import type { ChatRequest, ChatStreamEvent, ModelConnection, ModelProfile } from '../src/types'
+import type { ChatRequest, ChatStreamEvent, ModelConnection, ModelProfile } from '../../src/types'
 import {
   INTENT_CLASSIFICATION_EVALUATION_CASES,
   INTENT_CLASSIFICATION_JSON_SCHEMA,
@@ -13,7 +13,7 @@ import {
   type IntentClassificationEvaluationSummary,
   type IntentClassificationPrediction,
   type IntentModelEvaluationDependencies,
-} from '../src/lib/intentModelEvaluation'
+} from '../../src/lib/intentModelEvaluation'
 
 interface CliOptions {
   dbPath: string
@@ -73,7 +73,8 @@ function usage(): string {
   return `Vinkey IntentRouter 本地模型专项评测
 
 用法：
-  npm run test:intent-model -- [--profile-id <id>] [--db <path>] [--timeout-ms <ms>] [--log-file <path>] [--list-profiles] [--json]
+  npm run test:intent-router-acceptance -- [--profile-id <id>] [--db <path>] [--timeout-ms <ms>] [--log-file <path>] [--list-profiles] [--json]
+  兼容入口：npm run test:intent-model -- ...
 
 参数：
   --profile-id <id>   指定要验收的模型 profile；未传时读取 SQLite 当前值
@@ -125,23 +126,31 @@ export function parseArguments(values: string[]): CliOptions | null {
 function defaultLogFile(profileId: string): string {
   const safeProfileId = profileId.replace(/[^a-zA-Z0-9_-]/gu, '_')
   const directory = process.platform === 'win32' ? tmpdir() : '/tmp'
-  return join(directory, `vinkey-intent-model-eval-${safeProfileId}-${Date.now()}.json`)
+  return join(directory, `vinkey-intent-router-acceptance-${safeProfileId}-${Date.now()}.json`)
+}
+
+function mismatchFieldsForPrediction(prediction: IntentClassificationPrediction | null | undefined, expected: IntentClassificationPrediction | undefined): string[] {
+  if (!expected || !prediction) return []
+  return (['intent', 'agent', 'skill', 'scope', 'documentSelection'] as const)
+    .filter((field) => prediction[field] !== expected[field])
 }
 
 function mismatchFields(result: IntentClassificationCaseResult, expected: IntentClassificationPrediction | undefined): string[] {
-  if (!expected || !result.prediction) return []
-  return (['intent', 'agent', 'skill', 'scope', 'documentSelection'] as const)
-    .filter((field) => result.prediction?.[field] !== expected[field])
+  return mismatchFieldsForPrediction(result.prediction, expected)
 }
 
-function diagnoseMismatch(result: IntentClassificationCaseResult, expected: IntentClassificationPrediction | undefined): string {
-  if (!result.prediction) return 'format'
-  const fields = mismatchFields(result, expected)
+function diagnoseMismatchForPrediction(prediction: IntentClassificationPrediction | null | undefined, expected: IntentClassificationPrediction | undefined): string {
+  if (!prediction) return 'format'
+  const fields = mismatchFieldsForPrediction(prediction, expected)
   if (fields.length === 0) return 'none'
   if (fields.every((field) => field === 'documentSelection')) return 'selection-contract'
   if (fields.every((field) => field === 'scope' || field === 'documentSelection')) return 'scope-contract'
   if (fields.some((field) => field === 'intent' || field === 'agent' || field === 'skill')) return 'semantic-routing'
   return 'mixed'
+}
+
+function diagnoseMismatch(result: IntentClassificationCaseResult, expected: IntentClassificationPrediction | undefined): string {
+  return diagnoseMismatchForPrediction(result.prediction, expected)
 }
 
 function diagnoseMismatchLabel(diagnosis: string): string {
@@ -162,6 +171,7 @@ export function writeEvaluationLog(input: {
   connection: ModelConnection
   results: IntentClassificationCaseResult[]
   summary: IntentClassificationEvaluationSummary
+  effectiveSummary?: IntentClassificationEvaluationSummary
 }): void {
   const cases = input.results.map((result) => {
     const testCase = INTENT_CLASSIFICATION_EVALUATION_CASES.find((item) => item.id === result.caseId)
@@ -172,9 +182,20 @@ export function writeEvaluationLog(input: {
       targets: testCase?.targets ?? [],
       expected: expected ?? null,
       prediction: result.prediction,
+      effectivePrediction: result.effectivePrediction ?? result.prediction,
       matchedFields: result.matchedFields,
+      effectiveMatchedFields: result.effectiveMatchedFields ?? result.matchedFields,
       mismatchFields: mismatchFields(result, expected),
+      effectiveMismatchFields: mismatchFieldsForPrediction(result.effectivePrediction ?? result.prediction, expected),
+      effectiveExactMatch: result.effectiveExactMatch ?? result.exactMatch,
+      resolutionSource: result.resolutionSource ?? 'model',
+      resolutionEvidence: result.resolutionEvidence ?? [],
+      candidateOutput: result.candidateOutput ?? null,
+      candidateMode: result.candidateMode ?? null,
+      candidateDecision: result.candidateDecision ?? 'route',
+      candidateMargin: result.candidateMargin ?? null,
       diagnosis: diagnoseMismatch(result, expected),
+      effectiveDiagnosis: diagnoseMismatchForPrediction(result.effectivePrediction ?? result.prediction, expected),
       exactMatch: result.exactMatch,
       parseError: result.error,
       durationMs: result.durationMs ?? null,
@@ -189,6 +210,7 @@ export function writeEvaluationLog(input: {
     profile: input.profile,
     connection: { ...input.connection, hasApiKey: input.connection.hasApiKey },
     summary: input.summary,
+    effectiveSummary: input.effectiveSummary ?? input.summary,
     cases,
   }, null, 2), 'utf8')
 }
@@ -235,12 +257,16 @@ export function formatEvaluationReport(input: {
   connection: ModelConnection
   results: IntentClassificationCaseResult[]
   summary: IntentClassificationEvaluationSummary
+  effectiveSummary?: IntentClassificationEvaluationSummary
   logFile?: string
 }): string {
-  const { database, profile, connection, results, summary, logFile } = input
-  const passedCount = results.filter((result) => result.exactMatch).length
+  const { database, profile, connection, results, summary, effectiveSummary = summary, logFile } = input
+  const passedCount = results.filter((result) => result.effectiveExactMatch ?? result.exactMatch).length
+  const rawPassedCount = results.filter((result) => result.exactMatch).length
   const semanticExactCount = results.filter((result) => ['intent', 'agent', 'skill'].every((field) => result.matchedFields.includes(field as keyof IntentClassificationPrediction))).length
   const contextExactCount = results.filter((result) => ['scope', 'documentSelection'].every((field) => result.matchedFields.includes(field as keyof IntentClassificationPrediction))).length
+  const effectiveSemanticExactCount = results.filter((result) => ['intent', 'agent', 'skill'].every((field) => (result.effectiveMatchedFields ?? result.matchedFields).includes(field as keyof IntentClassificationPrediction))).length
+  const effectiveContextExactCount = results.filter((result) => ['scope', 'documentSelection'].every((field) => (result.effectiveMatchedFields ?? result.matchedFields).includes(field as keyof IntentClassificationPrediction))).length
   const lines = [
     'Vinkey IntentRouter 本地模型专项评测 - 验收结果',
     `数据库：${database}`,
@@ -250,23 +276,44 @@ export function formatEvaluationReport(input: {
     `模型：${profile.model}（contextWindow=${profile.contextWindow}）`,
     `连接：${connection.name}（${connection.kind}，${connection.baseUrl}）`,
     '',
-    `逐项结果（精确匹配 ${passedCount}/${summary.caseCount}）：`,
+    `逐项结果（工程化路由精确匹配 ${passedCount}/${effectiveSummary.caseCount}；模型原始 ${rawPassedCount}/${summary.caseCount}）：`,
   ]
   results.forEach((result, index) => {
     const prediction = result.prediction
+    const effectivePrediction = result.effectivePrediction ?? prediction
+    const rawExactMatch = result.exactMatch
+    const effectiveExactMatch = result.effectiveExactMatch ?? rawExactMatch
     const expected = INTENT_CLASSIFICATION_EVALUATION_CASES.find((testCase) => testCase.id === result.caseId)?.expected
     const detail = prediction
       ? `intent=${prediction.intent} | agent=${prediction.agent} | skill=${prediction.skill} | scope=${prediction.scope} | documentSelection=${prediction.documentSelection}`
       : `无法解析${result.error ? ` | ${result.error}` : ''}`
-    lines.push(`[${String(index + 1).padStart(2, '0')}/${summary.caseCount}] ${result.exactMatch ? 'PASS' : 'FAIL'} ${result.caseId}`)
+    lines.push(`[${String(index + 1).padStart(2, '0')}/${summary.caseCount}] ${effectiveExactMatch ? 'PASS' : 'FAIL'} ${result.caseId}（模型原始 ${rawExactMatch ? 'PASS' : 'FAIL'}）`)
     lines.push(`         ${detail}`)
-    if (!result.exactMatch && expected) {
+    if (result.candidateOutput) {
+      const candidates = [...result.candidateOutput.candidates]
+        .sort((left, right) => right.modelScore - left.modelScore)
+        .map((candidate) => `${candidate.intent}:${candidate.modelScore.toFixed(2)}`)
+        .join(' > ')
+      lines.push(`         候选排序：${candidates}`)
+      lines.push(`         候选决策：${result.candidateDecision ?? 'route'}${result.candidateMargin === null || result.candidateMargin === undefined ? '' : `（margin=${result.candidateMargin.toFixed(2)}）`}`)
+      if (result.candidateOutput.missingFacts.length > 0) lines.push(`         缺失事实：${result.candidateOutput.missingFacts.join('，')}`)
+    }
+    if (effectivePrediction && (result.resolutionSource ?? 'model') !== 'model') {
+      lines.push(`         工程化结果：intent=${effectivePrediction.intent} | agent=${effectivePrediction.agent} | skill=${effectivePrediction.skill} | scope=${effectivePrediction.scope} | documentSelection=${effectivePrediction.documentSelection}`)
+      lines.push(`         工程化修正来源：${result.resolutionSource ?? 'facts'}`)
+      if (result.resolutionEvidence?.length) {
+        lines.push(`         工程化词元证据：${result.resolutionEvidence.map((item) => `${item.token}=${item.match}`).join('，')}`)
+      }
+    }
+    if (!effectiveExactMatch && expected) {
       lines.push(`         期望：intent=${expected.intent} | agent=${expected.agent} | skill=${expected.skill} | scope=${expected.scope} | documentSelection=${expected.documentSelection}`)
-      const fields = mismatchFields(result, expected)
-      lines.push(`         归因：${diagnoseMismatchLabel(diagnoseMismatch(result, expected))}`)
+      const fields = mismatchFieldsForPrediction(effectivePrediction, expected)
+      lines.push(`         归因：${diagnoseMismatchLabel(diagnoseMismatchForPrediction(effectivePrediction, expected))}`)
       lines.push(`         差异字段：${fields.join(', ') || '无法解析'}`)
       lines.push(`         输入：${INTENT_CLASSIFICATION_EVALUATION_CASES.find((testCase) => testCase.id === result.caseId)?.instruction ?? '未知'}`)
       lines.push(`         原始输出：${result.output.trim() || '<空>'}`)
+    } else if (!rawExactMatch && expected) {
+      lines.push(`         模型原始差异字段：${mismatchFields(result, expected).join(', ') || '无法解析'}`)
     }
   })
   lines.push(
@@ -274,19 +321,32 @@ export function formatEvaluationReport(input: {
     '汇总指标：',
     `  执行完成：${results.length}/${summary.caseCount}`,
     `  JSON 解析：${summary.parsedCount}/${summary.caseCount}（${percentage(summary.parsedCount / summary.caseCount)}）`,
-    `  Intent 准确率：${percentage(summary.intentAccuracy)}`,
-    `  Agent 准确率：${percentage(summary.agentAccuracy)}`,
-    `  Skill 准确率：${percentage(summary.skillAccuracy)}`,
-    `  Scope 准确率：${percentage(summary.scopeAccuracy)}`,
-    `  DocumentSelection 准确率：${percentage(summary.documentSelectionAccuracy)}`,
-    `  语义路由精确匹配（Intent+Agent+Skill）：${semanticExactCount}/${summary.caseCount}`,
-    `  上下文合同精确匹配（Scope+DocumentSelection）：${contextExactCount}/${summary.caseCount}`,
-    `  全字段精确匹配率：${percentage(summary.exactMatchRate)}`,
+    `  模型原始 Intent 准确率：${percentage(summary.intentAccuracy)}`,
+    `  模型原始 Agent 准确率：${percentage(summary.agentAccuracy)}`,
+    `  模型原始 Skill 准确率：${percentage(summary.skillAccuracy)}`,
+    `  模型/事实原始 Scope 准确率：${percentage(summary.scopeAccuracy)}`,
+    `  模型/事实原始 DocumentSelection 准确率：${percentage(summary.documentSelectionAccuracy)}`,
+    `  模型原始语义路由精确匹配：${semanticExactCount}/${summary.caseCount}`,
+    `  模型原始上下文合同精确匹配：${contextExactCount}/${summary.caseCount}`,
+    `  模型原始全字段精确匹配率：${percentage(summary.exactMatchRate)}`,
+    `  候选合同解析率：${percentage(summary.candidateParseRate)}`,
+    `  候选 Top-2 召回率：${percentage(summary.candidateTop2Recall)}`,
+    `  澄清请求比例：${percentage(summary.clarificationRate)}`,
+    `  工程化路由语义精确匹配：${effectiveSemanticExactCount}/${effectiveSummary.caseCount}`,
+    `  工程化路由上下文合同精确匹配：${effectiveContextExactCount}/${effectiveSummary.caseCount}`,
+    `  工程化路由 Intent 准确率：${percentage(effectiveSummary.intentAccuracy)}`,
+    `  工程化路由 Agent 准确率：${percentage(effectiveSummary.agentAccuracy)}`,
+    `  工程化路由 Skill 准确率：${percentage(effectiveSummary.skillAccuracy)}`,
+    `  工程化路由 Scope 准确率：${percentage(effectiveSummary.scopeAccuracy)}`,
+    `  工程化路由 DocumentSelection 准确率：${percentage(effectiveSummary.documentSelectionAccuracy)}`,
+    `  工程化路由全字段精确匹配率：${percentage(effectiveSummary.exactMatchRate)}`,
     `  提示合同版本：${INTENT_ROUTER_PROMPT_VERSION}`,
     ...(logFile ? [`详细诊断日志：${logFile}`] : []),
-    summary.passed
-      ? `验收结论：通过，${summary.caseCount} 个版本化用例全部执行成功且精确匹配。`
-      : `验收结论：未通过，${passedCount}/${summary.caseCount} 个版本化用例精确匹配。`,
+    effectiveSummary.passed
+      ? summary.passed
+        ? `验收结论：通过，${summary.caseCount} 个版本化用例全部执行成功且精确匹配。`
+        : `验收结论：通过，工程化路由修正后 ${effectiveSummary.caseCount} 个版本化用例全部匹配；模型原始结果为 ${rawPassedCount}/${summary.caseCount}。`
+      : `验收结论：未通过，工程化路由后 ${passedCount}/${effectiveSummary.caseCount} 个版本化用例精确匹配。`,
   )
   return lines.join('\n')
 }
@@ -457,6 +517,7 @@ export async function main(): Promise<void> {
     connection: configured.connection,
     results: evaluation.results,
     summary: evaluation.summary,
+    effectiveSummary: evaluation.effectiveSummary,
   })
   if (options.json) {
     console.log(JSON.stringify({ database: options.dbPath, logFile, promptVersion: INTENT_ROUTER_PROMPT_VERSION, ...evaluation }, null, 2))
@@ -468,10 +529,11 @@ export async function main(): Promise<void> {
       connection: configured.connection,
       results: evaluation.results,
       summary: evaluation.summary,
+      effectiveSummary: evaluation.effectiveSummary,
       logFile,
     }))
   }
-  if (!evaluation.summary.passed) process.exitCode = 2
+  if (!evaluation.effectiveSummary.passed) process.exitCode = 2
 }
 
 if (process.env.VINKEY_INTENT_MODEL_EVAL_CLI === '1') {

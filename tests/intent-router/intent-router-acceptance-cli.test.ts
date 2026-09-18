@@ -4,8 +4,8 @@ import { join, resolve } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { spawnSync } from 'node:child_process'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ChatRequest, ModelConnection, ModelProfile } from '../src/types'
-import type { IntentClassificationCaseResult, IntentClassificationEvaluationSummary } from '../src/lib/intentModelEvaluation'
+import type { ChatRequest, ModelConnection, ModelProfile } from '../../src/types'
+import { evaluateIntentClassificationOutput, INTENT_CLASSIFICATION_EVALUATION_CASES, summarizeIntentClassificationEvaluation, type IntentClassificationCaseResult, type IntentClassificationEvaluationSummary } from '../../src/lib/intentModelEvaluation'
 import {
   formatEvaluationReport,
   formatProfileListReport,
@@ -14,9 +14,10 @@ import {
   loadConfiguredRows,
   parseArguments,
   writeEvaluationLog,
-} from './intent-model-eval'
+} from '../../scripts/intent-router/intent-router-acceptance'
 
 const temporaryDirectories: string[] = []
+const repositoryRoot = resolve(import.meta.dirname, '../..')
 
 function databaseFixture(): string {
   const directory = mkdtempSync(join(tmpdir(), 'vinkey-intent-cli-test-'))
@@ -53,14 +54,23 @@ afterEach(() => {
 
 describe('IntentRouter model evaluation CLI', () => {
   it('executes the bundled CLI entry point instead of exiting silently', () => {
-    const result = spawnSync(process.execPath, [resolve(import.meta.dirname, 'run-intent-model-eval.mjs'), '--help'], {
-      cwd: resolve(import.meta.dirname, '..'),
+    const result = spawnSync(process.execPath, [resolve(repositoryRoot, 'scripts/run-intent-model-eval.mjs'), '--help'], {
+      cwd: repositoryRoot,
       encoding: 'utf8',
     })
     expect(result.status).toBe(0)
     expect(result.stdout).toContain('Vinkey IntentRouter 本地模型专项评测')
     expect(result.stdout).toContain('--list-profiles')
     expect(result.stdout).toContain('--log-file')
+  })
+
+  it('exposes the renamed router acceptance entry point', () => {
+    const result = spawnSync(process.execPath, [resolve(repositoryRoot, 'scripts/intent-router/run-intent-router-acceptance.mjs'), '--help'], {
+      cwd: repositoryRoot,
+      encoding: 'utf8',
+    })
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain('test:intent-router-acceptance')
   })
 
   it('uses the SQLite active profile instead of the newest updated profile', () => {
@@ -92,7 +102,7 @@ describe('IntentRouter model evaluation CLI', () => {
       { id: 'router', name: 'Router', model: 'qwen3:8b', updatedAt: 2 },
       { id: 'older', name: 'Older', model: 'qwen3:4b', updatedAt: 1 },
     ], 'router')
-    expect(report).toContain('intent-model-eval-2（12 个版本化用例）')
+    expect(report).toContain('intent-router-eval-3（12 个版本化用例）')
     expect(report).toContain('[1] router（当前）')
     expect(report).not.toContain('默认候选')
     expect(report).toContain('12 个版本化用例尚未执行')
@@ -113,9 +123,11 @@ describe('IntentRouter model evaluation CLI', () => {
       error: null,
     }))
     const summary: IntentClassificationEvaluationSummary = {
-      suiteVersion: 'intent-model-eval-2', profileId: 'router', model: 'qwen3:8b', caseCount: 12,
+      suiteVersion: 'intent-router-eval-3', profileId: 'router', model: 'qwen3:8b', caseCount: 12,
       parsedCount: 12, exactMatchRate: 1, intentAccuracy: 1, agentAccuracy: 1,
-      skillAccuracy: 1, scopeAccuracy: 1, documentSelectionAccuracy: 1, passed: true,
+      skillAccuracy: 1, scopeAccuracy: 1, documentSelectionAccuracy: 1,
+      candidateParsedCount: 12, candidateParseRate: 1, candidateTop2Recall: 1, clarificationCount: 0, clarificationRate: 0,
+      passed: true,
     }
     const profile: ModelProfile = {
       id: 'router', connectionId: 'local', name: 'Router', kind: 'ollama', baseUrl: 'http://127.0.0.1:11434',
@@ -134,6 +146,22 @@ describe('IntentRouter model evaluation CLI', () => {
     expect(report).toContain('验收结论：通过，12 个版本化用例全部执行成功且精确匹配。')
   })
 
+  it('accepts the effective router result while preserving the raw model failure', () => {
+    const testCase = INTENT_CLASSIFICATION_EVALUATION_CASES.find((item) => item.id === 'single-long-file-analysis')!
+    const result = evaluateIntentClassificationOutput(testCase, JSON.stringify({
+      candidates: [{ intent: 'document-analysis', agent: 'StoryDeconstruction', skill: 'long-text-analysis', modelScore: 1, reasonCodes: ['story-structure'] }],
+      needsClarification: false,
+      missingFacts: [],
+    }))
+    const rawSummary = summarizeIntentClassificationEvaluation({ id: 'router', model: 'qwen3:8b' }, [result], [testCase])
+    const effectiveSummary = summarizeIntentClassificationEvaluation({ id: 'router', model: 'qwen3:8b' }, [result], [testCase], 'effective')
+    const report = formatEvaluationReport({ database: '/tmp/vinkey.sqlite3', profile: { id: 'router', connectionId: 'local', name: 'Router', kind: 'ollama', baseUrl: 'http://127.0.0.1:11434', model: 'qwen3:8b', contextWindow: 16_384, hasApiKey: false, updatedAt: 1 }, connection: { id: 'local', name: 'Local', kind: 'ollama', baseUrl: 'http://127.0.0.1:11434', hasApiKey: false, updatedAt: 1 }, results: [result], summary: rawSummary, effectiveSummary })
+    expect(rawSummary.passed).toBe(false)
+    expect(effectiveSummary.passed).toBe(true)
+    expect(report).toContain('工程化路由修正后 1 个版本化用例全部匹配')
+    expect(report).toContain('模型原始差异字段：intent, skill')
+  })
+
   it('writes a reproducible per-case diagnostic log', () => {
     const dbPath = databaseFixture()
     const logFile = join(resolve(dbPath, '..'), 'intent-eval-log.json')
@@ -147,13 +175,15 @@ describe('IntentRouter model evaluation CLI', () => {
       durationMs: 42,
     }
     const summary: IntentClassificationEvaluationSummary = {
-      suiteVersion: 'intent-model-eval-2', profileId: 'router', model: 'qwen3:8b', caseCount: 1,
+      suiteVersion: 'intent-router-eval-3', profileId: 'router', model: 'qwen3:8b', caseCount: 1,
       parsedCount: 1, exactMatchRate: 1, intentAccuracy: 1, agentAccuracy: 1,
-      skillAccuracy: 1, scopeAccuracy: 1, documentSelectionAccuracy: 1, passed: true,
+      skillAccuracy: 1, scopeAccuracy: 1, documentSelectionAccuracy: 1,
+      candidateParsedCount: 1, candidateParseRate: 1, candidateTop2Recall: 1, clarificationCount: 0, clarificationRate: 0,
+      passed: true,
     }
     writeEvaluationLog({ file: logFile, database: dbPath, profile: { id: 'router', connectionId: 'local', name: 'Router', kind: 'ollama', baseUrl: 'http://127.0.0.1:11434', model: 'qwen3:8b', contextWindow: 16_384, hasApiKey: false, updatedAt: 1 }, connection: { id: 'local', name: 'Local', kind: 'ollama', baseUrl: 'http://127.0.0.1:11434', hasApiKey: false, updatedAt: 1 }, results: [result], summary })
     const log = JSON.parse(readFileSync(logFile, 'utf8')) as { promptVersion: string; cases: Array<{ caseId: string; durationMs: number; rawOutput: string }> }
-    expect(log.promptVersion).toBe('intent-router-prompt-3')
+    expect(log.promptVersion).toBe('intent-router-prompt-4')
     expect(log.cases[0]).toMatchObject({ caseId: 'no-file-general-chat', durationMs: 42, rawOutput: JSON.stringify(prediction) })
   })
 
@@ -175,7 +205,11 @@ describe('IntentRouter model evaluation CLI', () => {
     expect(url).toBe('http://127.0.0.1:11434/api/chat')
     expect(JSON.parse(String(init.body))).toMatchObject({
       model: 'qwen3:8b', stream: false, think: false,
-      format: expect.objectContaining({ type: 'object', additionalProperties: false }),
+      format: expect.objectContaining({
+        type: 'object',
+        additionalProperties: false,
+        properties: expect.objectContaining({ candidates: expect.objectContaining({ type: 'array', maxItems: 3 }) }),
+      }),
     })
   })
 })

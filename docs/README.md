@@ -8,6 +8,7 @@
 | --- | --- | --- |
 | [`design/ui/`](design/ui/) | 页面、交互、视觉系统、入口、状态和 UI 现状基线 | [UI 设计总览](design/ui/UI_DESIGN.md) |
 | [`design/agent/`](design/agent/) | Agent/Skill 建设计划、流程模板和厂商流程对比 | [Agent 流程模板](design/agent/AGENT_FLOW_TEMPLATES.md) |
+| [`design/agent/intent-router/`](design/agent/intent-router/) | IntentRouter 架构、实现、测试计划与验收手册 | [IntentRouter 专项设计](design/agent/intent-router/) |
 | [`architecture/`](architecture/) | 技术选型、业务链路和 Runtime 分层 | [AI 业务链路架构](architecture/AI_BUSINESS_CHAINS.md) |
 | [`research/`](research/) | 外部项目调研和候选能力方案 | [GitHub 同类项目调研](research/GITHUB_REFERENCE.md) |
 | [`runtime/`](runtime/) | 模型、硬件和运行时准入基线 | [单模型准入与硬件基线](runtime/MODEL_ADMISSION.md) |
@@ -40,8 +41,10 @@
 ### Agent 与架构
 
 - [Agent 与 Skill 建设计划](design/agent/AGENT_SKILL_PLAN.md)
-- [IntentRouter 专项设计](design/agent/INTENT_ROUTER_DESIGN.md)
-- [IntentRouter 测试与验收](design/agent/INTENT_ROUTER_TEST_ACCEPTANCE.md)
+- [IntentRouter 专项设计](design/agent/intent-router/)
+- [IntentRouter 三层架构](design/agent/intent-router/ARCHITECTURE.md)
+- [IntentRouter 测试计划](design/agent/intent-router/TEST_PLAN.md)
+- [IntentRouter 测试与验收](design/agent/intent-router/TEST_ACCEPTANCE.md)
 - [Agent 流程模板](design/agent/AGENT_FLOW_TEMPLATES.md)
 - [Agent 流程模板对比](design/agent/AGENT_FLOW_COMPARISON.md)
 - [开发框架与技术选型](architecture/DEVELOPMENT_FRAMEWORK.md)

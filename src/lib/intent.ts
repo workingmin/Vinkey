@@ -49,6 +49,7 @@ interface IntentLexiconEntry {
 const INTENT_TOKEN_LEXICON: IntentLexiconEntry[] = [
   { token: 'character-relationship', intent: 'character-analysis', weight: 6, pattern: /(?:人物|角色)(?:关系|关联|联系|冲突|合作|感情|亲属关系)/u },
   { token: 'character-fate', intent: 'character-analysis', weight: 5, pattern: /(?:人物|角色)(?:命运|弧光|成长|变化|发展)|角色弧光/u },
+  { token: 'comprehensive-character-analysis', intent: 'character-analysis', weight: 4, pattern: /(?:完整|全面|系统|深入).{0,12}(?:人物|角色)(?:命运|弧光|成长|变化|发展).{0,16}(?:情节结构|故事主线|情节)/u },
   { token: 'character-extraction', intent: 'character-analysis', weight: 4, pattern: /(?:提取|分析|梳理)(?:主要|核心|关键)?人物/u },
   { token: 'cross-document-comparison', intent: 'document-analysis', weight: 7, pattern: /比较.{0,40}(?:人物塑造|叙事视角|故事结构|情节结构)/u },
   { token: 'story-structure', intent: 'document-analysis', weight: 3, pattern: /故事主线|情节结构|叙事视角|故事结构|情节推进|整体概览|通读分析/u },

@@ -3,7 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, relative, resolve } from 'node:path'
 import { JSDOM } from 'jsdom'
 
-const root = resolve(import.meta.dirname, '..', 'tests', 'fixtures', 'chinese-fiction')
+const root = resolve(import.meta.dirname, '../..', 'tests', 'fixtures', 'chinese-fiction')
 const works = [
   { sourceTitle: '孔乙己', title: '孔乙己', target: '短篇/孔乙己.txt', minimumCharacters: 2_000 },
   { sourceTitle: '狂人日記', title: '狂人日记', target: '短篇/狂人日记.txt', minimumCharacters: 4_000 },

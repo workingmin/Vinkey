@@ -29,8 +29,8 @@ SQLite 应作为跨进程、跨平台业务配置的权威来源；WebView `loca
 ## 验收检查
 
 ```bash
-./scripts/run-intent-model-eval.sh --list-profiles
-./scripts/run-intent-model-eval.sh --profile-id <profile-id>
+./scripts/intent-router/run-intent-router-acceptance.sh --list-profiles
+./scripts/intent-router/run-intent-router-acceptance.sh --profile-id <profile-id>
 ```
 
 列表中的 `（当前）` 标记来自 SQLite `app_preferences.activeModelId`。如果没有标记，先启动一次新版 Vinkey 或显式传入 profile ID；不要把列表第一项当作当前模型。

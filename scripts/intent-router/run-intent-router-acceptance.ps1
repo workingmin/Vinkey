@@ -10,7 +10,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$RootDirectory = Split-Path -Parent $PSScriptRoot
+$RootDirectory = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $CliArguments = @()
 if ($ProfileId) { $CliArguments += @("--profile-id", $ProfileId) }
 if ($Db) { $CliArguments += @("--db", $Db) }

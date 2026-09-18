@@ -2,7 +2,7 @@
 
 该目录是一组可复用的中文小说测试素材，可供 IntentRouter、Agent、Skill 和 Workflow 专项测试共同使用，也可作为独立 Vinkey 工作区打开。
 
-默认 `intent-model-eval-2` 套件包含 12 个输入用例，所有 `document` target 都引用本目录中的真实 `.txt` 文件。确定性路由和模型分类阶段只传相对路径，不传正文。
+当前 `intent-router-eval-3` 套件包含 12 个输入用例，所有 `document` target 都引用本目录中的真实 `.txt` 文件。确定性路由和模型分类阶段只传相对路径，不传正文。
 
 ## 素材
 

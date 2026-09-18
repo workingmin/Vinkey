@@ -1,23 +1,21 @@
+import { getTaskCapabilities } from './registry'
 import type { AgentId, SkillId } from './registry'
-import type { DocumentSelectionMode, TaskIntent, TaskScope } from './intent'
+import { scoreIntentLexicon } from './intent'
+import type { DocumentSelectionMode, IntentLexiconEvidence, TaskIntent, TaskScope } from './intent'
+import {
+  INTENT_ROUTER_CANDIDATE_JSON_SCHEMA,
+  parseIntentCandidateOutput,
+  type IntentCandidate,
+  type IntentCandidateOutput,
+} from './intentCandidates'
 import type { ChatRequest, ChatStreamEvent, ModelConnection, ModelProfile } from '../types'
 import { isLoopbackModelEndpoint } from './modelPrivacy'
 
-export const INTENT_MODEL_EVALUATION_SUITE_VERSION = 'intent-model-eval-2'
-export const INTENT_ROUTER_PROMPT_VERSION = 'intent-router-prompt-3'
+export const INTENT_MODEL_EVALUATION_SUITE_VERSION = 'intent-router-eval-3'
+export const INTENT_ROUTER_PROMPT_VERSION = 'intent-router-prompt-4'
+export const INTENT_CANDIDATE_MARGIN_THRESHOLD = 0.12
 
-export const INTENT_CLASSIFICATION_JSON_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    intent: { type: 'string', enum: ['structure-segmentation', 'structure-enhancement', 'document-analysis', 'document-revision', 'character-analysis', 'continuity-review', 'workspace-analysis', 'general-chat'] },
-    agent: { type: 'string', enum: ['GeneralConversation', 'StructureSegmentation', 'StoryDeconstruction', 'RevisionEditor', 'ContinuityReviewer'] },
-    skill: { type: 'string', enum: ['general-conversation', 'chapter-boundary-detect', 'structure-enhancement', 'long-text-analysis', 'character-arc-extraction', 'document-revision', 'continuity-review', 'document-overview', 'workspace-overview', 'workspace-focused-analysis', 'workspace-analysis'] },
-    scope: { type: 'string', enum: ['editor-selection', 'selected-documents', 'current-document', 'workspace', 'conversation'] },
-    documentSelection: { type: 'string', enum: ['none', 'single', 'multiple'] },
-  },
-  required: ['intent', 'agent', 'skill', 'scope', 'documentSelection'],
-} as const
+export const INTENT_CLASSIFICATION_JSON_SCHEMA = INTENT_ROUTER_CANDIDATE_JSON_SCHEMA
 
 export interface IntentClassificationPrediction {
   intent: TaskIntent
@@ -42,6 +40,15 @@ export interface IntentClassificationCaseResult {
   exactMatch: boolean
   error: string | null
   durationMs?: number
+  effectivePrediction?: IntentClassificationPrediction | null
+  effectiveMatchedFields?: Array<keyof IntentClassificationPrediction>
+  effectiveExactMatch?: boolean
+  resolutionSource?: 'model' | 'lexicon' | 'facts' | 'lexicon+facts' | 'registry' | 'candidate+lexicon' | 'invalid-model'
+  resolutionEvidence?: IntentLexiconEvidence[]
+  candidateOutput?: IntentCandidateOutput | null
+  candidateMode?: 'candidate' | 'legacy-single'
+  candidateDecision?: 'route' | 'clarify' | 'reject'
+  candidateMargin?: number | null
 }
 
 export interface IntentClassificationEvaluationSummary {
@@ -56,8 +63,15 @@ export interface IntentClassificationEvaluationSummary {
   skillAccuracy: number
   scopeAccuracy: number
   documentSelectionAccuracy: number
+  candidateParsedCount: number
+  candidateParseRate: number
+  candidateTop2Recall: number
+  clarificationCount: number
+  clarificationRate: number
   passed: boolean
 }
+
+export type IntentClassificationEvaluationMode = 'raw' | 'effective'
 
 export interface ConfiguredIntentModel {
   profile: ModelProfile
@@ -180,28 +194,27 @@ export function buildIntentClassificationMessages(testCase: IntentClassification
       role: 'user',
       content: [
         `你是 Vinkey IntentRouter 的轻量分类器（提示合同 ${INTENT_ROUTER_PROMPT_VERSION}）。只能根据指令和目标元数据分类，不得读取或假设文件正文。`,
-        '只返回一个 JSON 对象，不要 Markdown、解释、置信度或其他字段。字段必须为 intent、agent、skill、scope、documentSelection。',
+        '只返回一个 JSON 对象，不要 Markdown 或解释。输出 candidates（最多 3 个）及 needsClarification、missingFacts，不要输出其他字段。',
         `intent 可选值：${[...intents].join(', ')}`,
         `agent 可选值：${[...agents].join(', ')}`,
         `skill 可选值：${[...skills].join(', ')}`,
-        `scope 可选值：${[...scopes].join(', ')}`,
-        'documentSelection 可选值：none, single, multiple。',
+        '每个 candidate 必须包含 intent、agent、skill、modelScore（0 到 1 的排序分数）和 reasonCodes（词元或边界代码数组）。',
+        'modelScore 不是校准概率，只用于候选排序；不要伪造精确概率。',
         '',
         '请严格按以下顺序判断：',
-        '1. documentSelection 只由 targets 的数量决定：0=none，1=single，2 个及以上=multiple；不要因为语义改变这个字段。',
-        '2. targets 为空且指令提到项目、工作区或“当前项目”时，scope=workspace；targets 为空的普通闲聊时，scope=conversation。',
-        '3. targets 非空时，若指令明确要求分析、比较、检查、改写或拆分目标文件，scope=selected-documents；只有普通闲聊即使带有附件，scope=conversation。不要把 document 目标写成 current-document。',
-        '4. workspace-analysis 必须使用 scope=workspace；general-chat 必须使用 scope=conversation。',
-        '5. agent 必须与 skill 一致：general-conversation=>GeneralConversation；chapter-boundary-detect=>StructureSegmentation；long-text-analysis/character-arc-extraction/workspace-*=>StoryDeconstruction；document-revision=>RevisionEditor；continuity-review=>ContinuityReviewer。',
+        '1. 只能从给定枚举中选择，最多输出 3 个不同 Intent；无法区分时保留前两项并设置 needsClarification=true。',
+        '2. documentSelection 不需要输出，由后置层根据 targets 数量计算：0=none，1=single，2 个及以上=multiple。',
+        '3. scope 不需要输出，由后置层结合 Intent 和 targets 计算；普通闲聊即使带附件也不能读取正文；不要把 document 目标写成 current-document。',
+        '4. agent 必须与 skill 一致：general-conversation=>GeneralConversation；chapter-boundary-detect=>StructureSegmentation；long-text-analysis/character-arc-extraction/workspace-*=>StoryDeconstruction；document-revision=>RevisionEditor；continuity-review=>ContinuityReviewer。',
         '',
         '重点词元到分类的映射（仅作为边界提示，仍需结合完整指令）：',
         ...INTENT_ROUTER_TOKEN_HINTS,
         '',
-        '四个边界示例：',
-        '{"instruction":"分析这个文档的故事主线","targets":[{"id":"a.txt","kind":"document"}]} => document-analysis/StoryDeconstruction/long-text-analysis/selected-documents/single',
-        '{"instruction":"给我三个写作灵感","targets":[{"id":"a.txt","kind":"document"}]} => general-chat/GeneralConversation/general-conversation/conversation/single',
-        '{"instruction":"当前项目有哪些文件","targets":[]} => workspace-analysis/StoryDeconstruction/workspace-overview/workspace/none',
-        '{"instruction":"比较所选文档的人物塑造和叙事视角","targets":[{"id":"a.txt","kind":"document"},{"id":"b.txt","kind":"document"}]} => document-analysis/StoryDeconstruction/long-text-analysis/selected-documents/multiple',
+        '四个边界示例（只示意 candidates）：',
+        '{"instruction":"分析这个文档的故事主线","targets":[{"id":"a.txt","kind":"document"}]} => candidates:[{intent:"document-analysis",skill:"long-text-analysis"}]',
+        '{"instruction":"给我三个写作灵感","targets":[{"id":"a.txt","kind":"document"}]} => candidates:[{intent:"general-chat",skill:"general-conversation"}]',
+        '{"instruction":"当前项目有哪些文件","targets":[]} => candidates:[{intent:"workspace-analysis",skill:"workspace-overview"}]',
+        '{"instruction":"比较所选文档的人物塑造和叙事视角","targets":[{"id":"a.txt","kind":"document"},{"id":"b.txt","kind":"document"}]} => candidates:[{intent:"document-analysis",skill:"long-text-analysis"}]',
       ].join('\n'),
     },
     {
@@ -240,13 +253,122 @@ export function parseIntentClassificationPrediction(output: string): IntentClass
   }
 }
 
+function documentSelectionForTargets(targets: IntentClassificationEvaluationCase['targets']): DocumentSelectionMode {
+  const count = targets.length
+  return count > 1 ? 'multiple' : count === 1 ? 'single' : 'none'
+}
+
+function scopeForIntent(intent: TaskIntent, targets: IntentClassificationEvaluationCase['targets']): TaskScope {
+  if (intent === 'general-chat') return 'conversation'
+  if (intent === 'workspace-analysis') return 'workspace'
+  return targets.length > 0 ? 'selected-documents' : 'conversation'
+}
+
+function candidateToPrediction(candidate: IntentCandidate, testCase: IntentClassificationEvaluationCase, canonicalize = false): IntentClassificationPrediction {
+  const capabilities = getTaskCapabilities(candidate.intent)
+  const compatibleSkills: Partial<Record<TaskIntent, SkillId[]>> = {
+    'document-analysis': ['document-overview', 'long-text-analysis'],
+    'character-analysis': ['document-overview', 'character-arc-extraction'],
+    'workspace-analysis': ['workspace-overview', 'workspace-focused-analysis', 'workspace-analysis'],
+  }
+  const skill = canonicalize
+    ? compatibleSkills[candidate.intent]?.includes(candidate.skill) ? candidate.skill : capabilities.skill
+    : candidate.skill
+  return {
+    intent: candidate.intent,
+    agent: canonicalize ? capabilities.agent : candidate.agent,
+    skill,
+    scope: scopeForIntent(candidate.intent, testCase.targets),
+    documentSelection: documentSelectionForTargets(testCase.targets),
+  }
+}
+
+function parseEvaluationOutput(testCase: IntentClassificationEvaluationCase, output: string): {
+  prediction: IntentClassificationPrediction
+  candidateOutput: IntentCandidateOutput
+  legacy: boolean
+} {
+  try {
+    const candidateOutput = parseIntentCandidateOutput(output)
+    const sorted = [...candidateOutput.candidates].sort((left, right) => right.modelScore - left.modelScore)
+    return { prediction: candidateToPrediction(sorted[0], testCase), candidateOutput, legacy: false }
+  } catch (candidateError) {
+    try {
+      const prediction = parseIntentClassificationPrediction(output)
+      return {
+        prediction,
+        candidateOutput: {
+          candidates: [{ ...prediction, modelScore: 1, reasonCodes: ['legacy-single'] }],
+          needsClarification: false,
+          missingFacts: [],
+        },
+        legacy: true,
+      }
+    } catch (legacyError) {
+      throw legacyError instanceof Error ? legacyError : candidateError
+    }
+  }
+}
+
+function resolveIntentCandidateOutput(
+  testCase: IntentClassificationEvaluationCase,
+  candidateOutput: IntentCandidateOutput,
+): {
+  prediction: IntentClassificationPrediction
+  source: 'model' | 'lexicon' | 'facts' | 'lexicon+facts' | 'registry' | 'candidate+lexicon'
+  evidence: IntentLexiconEvidence[]
+  decision: 'route' | 'clarify' | 'reject'
+  margin: number | null
+} {
+  const sorted = [...candidateOutput.candidates].sort((left, right) => right.modelScore - left.modelScore)
+  const top = sorted[0]
+  const second = sorted[1]
+  const margin = second ? top.modelScore - second.modelScore : null
+  const lexical = scoreIntentLexicon(testCase.instruction)
+  const topPrediction = candidateToPrediction(top, testCase, true)
+  const lowMargin = margin !== null && margin < INTENT_CANDIDATE_MARGIN_THRESHOLD
+  if (candidateOutput.needsClarification || candidateOutput.missingFacts.length > 0 || lowMargin) {
+    return { prediction: topPrediction, source: 'model', evidence: lexical.evidence, decision: 'clarify', margin }
+  }
+
+  let selected = top
+  let source: 'model' | 'lexicon' | 'facts' | 'lexicon+facts' | 'registry' | 'candidate+lexicon' = 'model'
+  if (lexical.intent && lexical.confidence !== 'low' && (lexical.intent === 'character-analysis' || lexical.intent === 'document-analysis')) {
+    const lexicalCandidate = sorted.find((candidate) => candidate.intent === lexical.intent)
+    const lexicalCloseEnough = !lexicalCandidate || lexicalCandidate.modelScore >= top.modelScore - 0.25
+    if (lexicalCloseEnough && lexical.intent !== top.intent) {
+      selected = lexicalCandidate ?? {
+        intent: lexical.intent,
+        agent: getTaskCapabilities(lexical.intent).agent,
+        skill: getTaskCapabilities(lexical.intent).skill,
+        modelScore: top.modelScore,
+        reasonCodes: lexical.evidence.map((item) => item.token),
+      }
+      source = 'lexicon'
+    }
+  }
+  const rawSelectedPrediction = candidateToPrediction(selected, testCase)
+  const prediction = candidateToPrediction(selected, testCase, true)
+  const registryChanged = rawSelectedPrediction.agent !== prediction.agent || rawSelectedPrediction.skill !== prediction.skill
+  if (registryChanged) source = source === 'lexicon' ? 'candidate+lexicon' : 'registry'
+  const expectedSelection = documentSelectionForTargets(testCase.targets)
+  const expectedScope = scopeForIntent(prediction.intent, testCase.targets)
+  if (prediction.documentSelection !== expectedSelection || prediction.scope !== expectedScope) source = source === 'lexicon' ? 'lexicon+facts' : 'facts'
+  return { prediction, source, evidence: lexical.evidence, decision: 'route', margin }
+}
+
 export function evaluateIntentClassificationOutput(
   testCase: IntentClassificationEvaluationCase,
   output: string,
 ): IntentClassificationCaseResult {
   try {
-    const prediction = parseIntentClassificationPrediction(output)
+    const parsed = parseEvaluationOutput(testCase, output)
+    const prediction = parsed.prediction
     const matchedFields = predictionFields.filter((field) => prediction[field] === testCase.expected[field])
+    const resolution = parsed.legacy
+      ? { ...resolveIntentClassificationPrediction(testCase, prediction), decision: 'route' as const, margin: null }
+      : resolveIntentCandidateOutput(testCase, parsed.candidateOutput)
+    const effectiveMatchedFields = predictionFields.filter((field) => resolution.prediction[field] === testCase.expected[field])
     return {
       caseId: testCase.id,
       output,
@@ -254,6 +376,15 @@ export function evaluateIntentClassificationOutput(
       matchedFields,
       exactMatch: matchedFields.length === predictionFields.length,
       error: null,
+      effectivePrediction: resolution.prediction,
+      effectiveMatchedFields,
+      effectiveExactMatch: effectiveMatchedFields.length === predictionFields.length,
+      resolutionSource: resolution.source,
+      resolutionEvidence: resolution.evidence,
+      candidateOutput: parsed.candidateOutput,
+      candidateMode: parsed.legacy ? 'legacy-single' : 'candidate',
+      candidateDecision: resolution.decision,
+      candidateMargin: resolution.margin,
     }
   } catch (cause) {
     return {
@@ -263,22 +394,85 @@ export function evaluateIntentClassificationOutput(
       matchedFields: [],
       exactMatch: false,
       error: cause instanceof Error ? cause.message : String(cause),
+      effectivePrediction: null,
+      effectiveMatchedFields: [],
+      effectiveExactMatch: false,
+      resolutionSource: 'invalid-model',
+      resolutionEvidence: [],
+      candidateOutput: null,
+      candidateMode: undefined,
+      candidateDecision: 'reject',
+      candidateMargin: null,
     }
   }
+}
+
+export function resolveIntentClassificationPrediction(
+  testCase: IntentClassificationEvaluationCase,
+  prediction: IntentClassificationPrediction,
+): {
+  prediction: IntentClassificationPrediction
+  source: 'model' | 'lexicon' | 'facts' | 'lexicon+facts'
+  evidence: IntentLexiconEvidence[]
+} {
+  const resolved = { ...prediction }
+  const changedByLexicon: Array<keyof IntentClassificationPrediction> = []
+  const changedByFacts: Array<keyof IntentClassificationPrediction> = []
+  const lexical = scoreIntentLexicon(testCase.instruction)
+  if (lexical.intent && lexical.confidence !== 'low' && (lexical.intent === 'character-analysis' || lexical.intent === 'document-analysis')) {
+    const capabilities = getTaskCapabilities(lexical.intent)
+    if (resolved.intent !== lexical.intent) { resolved.intent = lexical.intent; changedByLexicon.push('intent') }
+    if (resolved.agent !== capabilities.agent) { resolved.agent = capabilities.agent; changedByLexicon.push('agent') }
+    if (resolved.skill !== capabilities.skill) { resolved.skill = capabilities.skill; changedByLexicon.push('skill') }
+  }
+
+  const targetCount = testCase.targets.length
+  const documentSelection: DocumentSelectionMode = targetCount > 1 ? 'multiple' : targetCount === 1 ? 'single' : 'none'
+  if (resolved.documentSelection !== documentSelection) {
+    resolved.documentSelection = documentSelection
+    changedByFacts.push('documentSelection')
+  }
+  const scope: TaskScope = resolved.intent === 'general-chat'
+    ? 'conversation'
+    : resolved.intent === 'workspace-analysis'
+      ? 'workspace'
+      : targetCount > 0 ? 'selected-documents' : resolved.scope
+  if (resolved.scope !== scope) {
+    resolved.scope = scope
+    changedByFacts.push('scope')
+  }
+  const source = changedByLexicon.length > 0 && changedByFacts.length > 0
+    ? 'lexicon+facts'
+    : changedByLexicon.length > 0
+      ? 'lexicon'
+      : changedByFacts.length > 0 ? 'facts' : 'model'
+  return { prediction: resolved, source, evidence: lexical.evidence }
 }
 
 export function summarizeIntentClassificationEvaluation(
   profile: Pick<ModelProfile, 'id' | 'model'>,
   results: IntentClassificationCaseResult[],
   cases: IntentClassificationEvaluationCase[] = INTENT_CLASSIFICATION_EVALUATION_CASES,
+  mode: IntentClassificationEvaluationMode = 'raw',
 ): IntentClassificationEvaluationSummary {
   const caseIds = new Set(cases.map((item) => item.id))
   if (cases.length === 0 || caseIds.size !== cases.length || results.length !== cases.length || results.some((item) => !caseIds.has(item.caseId))
     || new Set(results.map((item) => item.caseId)).size !== results.length) {
     throw new Error('IntentRouter 模型评测必须为每个版本化用例提供且只提供一条结果。')
   }
-  const ratio = (field: keyof IntentClassificationPrediction) => results.filter((item) => item.matchedFields.includes(field)).length / cases.length
-  const exactMatchRate = results.filter((item) => item.exactMatch).length / cases.length
+  const matchedFields = (item: IntentClassificationCaseResult) => mode === 'effective' ? item.effectiveMatchedFields ?? item.matchedFields : item.matchedFields
+  const exactMatch = (item: IntentClassificationCaseResult) => mode === 'effective' ? item.effectiveExactMatch ?? item.exactMatch : item.exactMatch
+  const ratio = (field: keyof IntentClassificationPrediction) => results.filter((item) => matchedFields(item).includes(field)).length / cases.length
+  const exactMatchRate = results.filter(exactMatch).length / cases.length
+  const candidateParsedCount = results.filter((item) => item.candidateMode === 'candidate').length
+  const candidateTop2Recall = results.filter((item) => {
+    if (item.candidateMode !== 'candidate') return false
+    const expected = cases.find((testCase) => testCase.id === item.caseId)?.expected.intent
+    return Boolean(expected && item.candidateOutput?.candidates
+      .slice().sort((left, right) => right.modelScore - left.modelScore).slice(0, 2)
+      .some((candidate) => candidate.intent === expected))
+  }).length / cases.length
+  const clarificationCount = results.filter((item) => item.candidateDecision === 'clarify').length
   return {
     suiteVersion: INTENT_MODEL_EVALUATION_SUITE_VERSION,
     profileId: profile.id,
@@ -291,7 +485,12 @@ export function summarizeIntentClassificationEvaluation(
     skillAccuracy: ratio('skill'),
     scopeAccuracy: ratio('scope'),
     documentSelectionAccuracy: ratio('documentSelection'),
-    passed: exactMatchRate === 1,
+    candidateParsedCount,
+    candidateParseRate: candidateParsedCount / cases.length,
+    candidateTop2Recall,
+    clarificationCount,
+    clarificationRate: clarificationCount / cases.length,
+    passed: exactMatchRate === 1 && (mode === 'raw' || candidateParsedCount === cases.length),
   }
 }
 
@@ -299,7 +498,7 @@ export async function runConfiguredIntentModelEvaluation(
   preferredProfileId: string | null | undefined,
   dependencies: IntentModelEvaluationDependencies,
   cases: IntentClassificationEvaluationCase[] = INTENT_CLASSIFICATION_EVALUATION_CASES,
-): Promise<{ model: ConfiguredIntentModel; results: IntentClassificationCaseResult[]; summary: IntentClassificationEvaluationSummary }> {
+): Promise<{ model: ConfiguredIntentModel; results: IntentClassificationCaseResult[]; summary: IntentClassificationEvaluationSummary; effectiveSummary: IntentClassificationEvaluationSummary }> {
   const model = await loadConfiguredIntentModel(preferredProfileId, dependencies)
   const results: IntentClassificationCaseResult[] = []
   for (const testCase of cases) {
@@ -320,5 +519,10 @@ export async function runConfiguredIntentModelEvaluation(
     result.durationMs = Date.now() - startedAt
     results.push(result)
   }
-  return { model, results, summary: summarizeIntentClassificationEvaluation(model.profile, results, cases) }
+  return {
+    model,
+    results,
+    summary: summarizeIntentClassificationEvaluation(model.profile, results, cases, 'raw'),
+    effectiveSummary: summarizeIntentClassificationEvaluation(model.profile, results, cases, 'effective'),
+  }
 }
