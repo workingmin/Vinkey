@@ -121,8 +121,6 @@ npm run test:intent-router-acceptance -- --profile-id <profile-id>
 npm run test:intent-router-acceptance -- --profile-id <profile-id> --json > intent-router-acceptance-result.json
 ```
 
-`npm run test:intent-model` 和 `run-intent-model-eval.sh` 仍保留为兼容别名，但新脚本名明确表示它验收的是完整 IntentRouter 链路，而不是只验收模型原始输出。
-
 `--list-profiles` 不会调用模型，也不会执行分类用例。它会显示数据库路径、评测套件、用例总数和全部 profile，并标记 SQLite 中的当前 profile。确认标记无误后，可以直接执行评测或显式传入对应 ID；只有不带 `--list-profiles` 的第三步才会逐项调用真实本地模型。
 
 每次真实评测默认会把诊断日志写入系统临时目录（macOS 通常是 `/tmp`，Windows 使用 `%TEMP%`），也可以显式指定路径：
@@ -187,7 +185,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\intent-router\run-intent-rout
 powershell -ExecutionPolicy Bypass -File .\scripts\intent-router\run-intent-router-acceptance.ps1 -ProfileId <profile-id>
 ```
 
-旧的 `run-intent-model-eval.ps1` 仍保留为兼容入口；两个 PowerShell 包装器都调用 `run-intent-router-acceptance.mjs`。也可以直接执行：
+也可以直接执行统一的 npm 入口：
 
 ```powershell
 npm run test:intent-router-acceptance -- --list-profiles

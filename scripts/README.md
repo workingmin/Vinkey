@@ -7,7 +7,6 @@
 | `build/` | macOS、Windows 桌面应用构建与打包 |
 | `fixtures/` | 生成或更新固定测试素材；生成结果写入 `tests/fixtures/` |
 | `intent-router/` | IntentRouter 本地模型验收实现及 macOS/Linux、Windows 入口 |
-| `run-intent-model-eval.*` | 旧命令兼容入口；新调用应使用 npm 命令或 `intent-router/` 下入口 |
 
 推荐从仓库根目录通过 `package.json` 中的 npm 命令执行脚本，例如：
 

@@ -9,7 +9,6 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:intent-model": "node scripts/run-intent-model-eval.mjs",
     "test:intent-router-acceptance": "node scripts/intent-router/run-intent-router-acceptance.mjs",
     "fixtures:chinese-fiction": "node scripts/fixtures/fetch-chinese-fiction.mjs",
     "tauri": "tauri",

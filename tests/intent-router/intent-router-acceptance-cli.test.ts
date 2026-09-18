@@ -52,25 +52,17 @@ afterEach(() => {
   while (temporaryDirectories.length > 0) rmSync(temporaryDirectories.pop()!, { recursive: true, force: true })
 })
 
-describe('IntentRouter model evaluation CLI', () => {
-  it('executes the bundled CLI entry point instead of exiting silently', () => {
-    const result = spawnSync(process.execPath, [resolve(repositoryRoot, 'scripts/run-intent-model-eval.mjs'), '--help'], {
-      cwd: repositoryRoot,
-      encoding: 'utf8',
-    })
-    expect(result.status).toBe(0)
-    expect(result.stdout).toContain('Vinkey IntentRouter 本地模型专项评测')
-    expect(result.stdout).toContain('--list-profiles')
-    expect(result.stdout).toContain('--log-file')
-  })
-
-  it('exposes the renamed router acceptance entry point', () => {
+describe('IntentRouter acceptance CLI', () => {
+  it('executes the bundled CLI entry point', () => {
     const result = spawnSync(process.execPath, [resolve(repositoryRoot, 'scripts/intent-router/run-intent-router-acceptance.mjs'), '--help'], {
       cwd: repositoryRoot,
       encoding: 'utf8',
     })
     expect(result.status).toBe(0)
+    expect(result.stdout).toContain('Vinkey IntentRouter 本地模型专项评测')
     expect(result.stdout).toContain('test:intent-router-acceptance')
+    expect(result.stdout).toContain('--list-profiles')
+    expect(result.stdout).toContain('--log-file')
   })
 
   it('uses the SQLite active profile instead of the newest updated profile', () => {

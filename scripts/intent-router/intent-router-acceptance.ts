@@ -74,7 +74,6 @@ function usage(): string {
 
 用法：
   npm run test:intent-router-acceptance -- [--profile-id <id>] [--db <path>] [--timeout-ms <ms>] [--log-file <path>] [--list-profiles] [--json]
-  兼容入口：npm run test:intent-model -- ...
 
 参数：
   --profile-id <id>   指定要验收的模型 profile；未传时读取 SQLite 当前值
