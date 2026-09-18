@@ -1,12 +1,12 @@
-import { Check, ChevronDown, ChevronRight, Copy, FileText, LoaderCircle, ShieldAlert, X } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, Copy, FileText, ShieldAlert, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { readAnalysisArtifact } from '../lib/desktop'
 import { workerStageLabel } from '../lib/chatActivity'
 import type { ChatActivity } from '../types'
 import { MarkdownContent } from './MarkdownContent'
 
-export function MessageActivity({ items, active = false }: { items: ChatActivity[]; active?: boolean }) {
-  const [expanded, setExpanded] = useState(false)
+export function MessageActivity({ items, active = false, taskDescription }: { items: ChatActivity[]; active?: boolean; taskDescription?: string | null }) {
+  const [expanded, setExpanded] = useState(active)
   const [selected, setSelected] = useState<{ jobId: string; name: string } | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -38,6 +38,10 @@ export function MessageActivity({ items, active = false }: { items: ChatActivity
     return () => { disposed = true }
   }, [selected])
 
+  useEffect(() => {
+    setExpanded(active)
+  }, [active])
+
   if (!items.length) return null
   const open = (jobId: string, name: string) => setSelected({ jobId, name })
   const close = () => {
@@ -48,48 +52,60 @@ export function MessageActivity({ items, active = false }: { items: ChatActivity
   const elapsedLabel = elapsedSeconds >= 60
     ? `${Math.floor(elapsedSeconds / 60)} 分 ${elapsedSeconds % 60} 秒`
     : `${elapsedSeconds} 秒`
-  const label = hasFailure ? '处理失败' : hasCancelled ? '已停止' : active ? '正在处理' : `共用时 ${elapsedLabel}`
+  const label = hasFailure ? '处理失败' : hasCancelled ? '已停止' : active ? '正在处理' : `已完成 · ${elapsedLabel}`
+  const currentLabel = last ? workerStageLabel(last.stage) : lastItem?.message ?? '正在准备请求'
+
   return <div className="execution-trace">
-    <button className="execution-toggle" type="button" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
-      {expanded ? <ChevronDown /> : <ChevronRight />}
-      {hasFailure ? <ShieldAlert /> : active ? <LoaderCircle className="spin" /> : <Check />}
-      <span>{label}</span><small>{workers.length || items.length} 个工序</small>
-    </button>
-    {active && !expanded && lastItem && <div className="execution-current" role="status">
-      {last ? workerStageLabel(last.stage) : lastItem.message ?? '正在准备请求'}
-      {last && <span>{last.message}</span>}
+    {taskDescription?.trim() && <div className="execution-prompt" aria-label="任务描述">
+      <span aria-hidden="true">&gt;</span><span>{taskDescription.trim()}</span>
     </div>}
-    {expanded && <ol className="execution-steps">
-      {items.map((item, index) => {
-        const worker = item.worker
-        const running = active && !item.completedAt && worker?.status !== 'paused'
-        const failed = worker?.status === 'failed' || worker?.cacheSource === 'quarantined'
-        return <li key={worker ? worker.jobId + worker.stage : item.timestamp + '-' + index}>
-          {failed ? <ShieldAlert className="warning" /> : running ? <LoaderCircle className="spin" /> : <Check />}
-          <div className="execution-step-content">
-            <div className="execution-step-title"><strong>{worker ? workerStageLabel(worker.stage) : item.message ?? '准备请求'}</strong>
-              {worker && worker.total > 0 && <span>{Math.min(worker.completed, worker.total)} / {worker.total}</span>}
-              {item.completedAt && <time>{Math.max(0, Math.round((item.completedAt - item.timestamp) / 1000))} 秒</time>}
-            </div>
-            {worker && <p>{worker.message}</p>}
-            {worker && worker.total > 0 && <progress aria-label={workerStageLabel(worker.stage)} max={worker.total} value={Math.min(worker.completed, worker.total)} />}
-            {(!!item.cacheHits || !!item.modelRequests) && <small>
-              {!!item.cacheHits && `已复用 ${item.cacheHits} 个结果`}
-              {!!item.cacheHits && !!item.modelRequests && ' · '}
-              {!!item.modelRequests && `模型请求 ${item.modelRequests} 次`}
-            </small>}
-            {item.artifacts?.map((name) => <button key={name} type="button" className="artifact-link" onClick={() => open(worker!.jobId, name)}>
-              <FileText /><span>{name}</span>
-            </button>)}
-          </div>
-        </li>
-      })}
-    </ol>}
-    {last && <div className="execution-artifacts">
-      <FileText /><span>中间产物保存在项目目录</span>
-      <button type="button" onClick={() => open(last.jobId, 'worker-checkpoints.json')}>查看产物清单</button>
-      <code>.vinkey/analysis/jobs/{last.jobId}/</code>
-    </div>}
+    <div className="execution-feedback">
+      <button className="execution-toggle" type="button" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
+        {expanded ? <ChevronDown /> : <ChevronRight />}
+        {hasFailure ? <ShieldAlert /> : active ? <span className="execution-live-dot" aria-hidden="true" /> : <Check />}
+        <span>任务反馈</span><small>{label} · {items.length} 条反馈</small>
+      </button>
+      {active && lastItem && <div className="execution-current" role="status">
+        <strong className={active ? 'execution-live-text' : undefined}>{currentLabel}</strong><span>{last?.message ?? lastItem.message ?? '正在准备请求'}</span>
+      </div>}
+    </div>
+    {expanded && <>
+      <ol className="execution-steps">
+        {items.map((item, index) => {
+          const worker = item.worker
+          const running = active && !item.completedAt && worker?.status !== 'paused'
+          const failed = worker?.status === 'failed' || worker?.cacheSource === 'quarantined'
+          return <li key={worker ? worker.jobId + worker.stage : item.timestamp + '-' + index}>
+            <details className="execution-step-disclosure" defaultOpen={!item.completedAt}>
+              <summary className="execution-step-summary">
+                {failed ? <ShieldAlert className="warning" /> : running ? <span className="execution-live-dot small" aria-hidden="true" /> : <Check />}
+                <div className="execution-step-title"><strong>{worker ? workerStageLabel(worker.stage) : item.message ?? '准备请求'}</strong>
+                  {worker && worker.total > 0 && <span>{Math.min(worker.completed, worker.total)} / {worker.total}</span>}
+                  {item.completedAt && <time>{Math.max(0, Math.round((item.completedAt - item.timestamp) / 1000))} 秒</time>}
+                </div>
+              </summary>
+              <div className="execution-step-content">
+                {worker && <p>{worker.message}</p>}
+                {worker && worker.total > 0 && <progress aria-label={workerStageLabel(worker.stage)} max={worker.total} value={Math.min(worker.completed, worker.total)} />}
+                {(!!item.cacheHits || !!item.modelRequests) && <small>
+                  {!!item.cacheHits && `已复用 ${item.cacheHits} 个结果`}
+                  {!!item.cacheHits && !!item.modelRequests && ' · '}
+                  {!!item.modelRequests && `模型请求 ${item.modelRequests} 次`}
+                </small>}
+                {item.artifacts?.map((name) => <button key={name} type="button" className="artifact-link" onClick={() => open(worker!.jobId, name)}>
+                  <FileText /><span>{name}</span>
+                </button>)}
+              </div>
+            </details>
+          </li>
+        })}
+      </ol>
+      {last && <div className="execution-artifacts">
+        <FileText /><span>中间产物保存在项目目录</span>
+        <button type="button" onClick={() => open(last.jobId, 'worker-checkpoints.json')}>查看产物清单</button>
+        <code>.vinkey/analysis/jobs/{last.jobId}/</code>
+      </div>}
+    </>}
     {selected && <dialog ref={dialog} className="artifact-dialog" onCancel={close} aria-label="分析产物预览">
       <header><FileText /><strong>{selected.name}</strong>
         <button type="button" aria-label="关闭产物预览" title="关闭" onClick={close}><X /></button>

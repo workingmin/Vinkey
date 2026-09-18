@@ -61,6 +61,8 @@ function formatError(error: unknown): string {
   return normalizeServiceError(error).message
 }
 
+const RESPONSE_BATCH_MARKER = '\n\n<!-- vinkey-response-batch -->\n\n'
+
 async function appendMarkdownBatches(
   conversationId: string,
   content: string,
@@ -70,8 +72,8 @@ async function appendMarkdownBatches(
   const blocks = content.trim().split(/\n{2,}/u).filter(Boolean)
   if (blocks.length === 0) return
   for (const [index, block] of blocks.entries()) {
-    setStatus(conversationId, 'streaming', null)
-    append(conversationId, `${index === 0 ? '' : '\n\n'}${block}`)
+    setStatus(conversationId, 'streaming', `已生成第 ${index + 1} / ${blocks.length} 段结果`)
+    append(conversationId, `${index === 0 ? '' : RESPONSE_BATCH_MARKER}${block}`)
     // Yield between Markdown blocks so the message stream can paint progress without
     // exposing hidden model reasoning or creating one activity row per token.
     await new Promise<void>((resolve) => window.setTimeout(resolve, 0))
@@ -313,9 +315,10 @@ function FileBrowserPanel({ onOpenDocument, onToggleContext, onOpenWorkspace, on
   </section>
 }
 
-function ChatMessageItem({ message, activity, onCopyError }: {
+function ChatMessageItem({ message, activity, taskDescription, onCopyError }: {
   message: ChatMessage
   activity?: { status: ChatRunStatus; statusMessage: string | null; activityLog: ChatActivity[] }
+  taskDescription?: string | null
   onCopyError: (message: string) => void
 }) {
   const [copied, setCopied] = useState(false)
@@ -337,7 +340,7 @@ function ChatMessageItem({ message, activity, onCopyError }: {
   const copyMessage = async () => {
     if (!message.content.trim()) return
     try {
-      await navigator.clipboard.writeText(message.content)
+      await navigator.clipboard.writeText(message.content.replaceAll(RESPONSE_BATCH_MARKER, '\n\n'))
       setCopied(true)
       if (copyTimer.current) window.clearTimeout(copyTimer.current)
       copyTimer.current = window.setTimeout(() => setCopied(false), 1600)
@@ -354,10 +357,11 @@ function ChatMessageItem({ message, activity, onCopyError }: {
 
   return <article id={`message-${message.id}`} data-message-id={message.id} tabIndex={-1} aria-label={isAssistant ? '助手消息' : '用户消息'} className={`message ${message.role}`}>
     <div className="message-stack">
-      {isAssistant && <MessageActivity items={activityLog} active={Boolean(activity)} />}
+      {isAssistant && <MessageActivity items={activityLog} active={Boolean(activity)} taskDescription={taskDescription} />}
       {!isAssistant && <TaskRequestSummary task={message.taskRef} />}
+      {isAssistant && taskDescription && activityLog.length > 0 && message.content && <div className="message-result-label">详细结果</div>}
       <div className="message-bubble">
-        {message.content ? <MarkdownContent content={message.content} />
+        {message.content ? message.content.split(RESPONSE_BATCH_MARKER).map((batch, index) => <section className="message-result-batch" key={`${message.id}-result-${index}`}><MarkdownContent content={batch} /></section>)
           : activity ? <div className="typing" aria-label={activity.statusMessage ?? chatStatusMeta[activity.status].label}><i /><i /><i /></div> : null}
       </div>
       <div className="message-actions">
@@ -399,10 +403,16 @@ const ChatMessageStream = memo(function ChatMessageStream({
 }: ChatMessageStreamProps) {
   return <div className="message-stream">
     <div className="message-inner">
-      {messages.map((message) => <Fragment key={message.id}>
+      {messages.map((message, index) => <Fragment key={message.id}>
         <ChatMessageItem
           message={message}
           activity={activeChatRun?.assistantMessage.id === message.id ? activeChatRun : undefined}
+          taskDescription={message.role === 'assistant'
+            && messages[index - 1]?.role === 'user'
+            && messages[index - 1]?.taskRef
+            && messages[index - 1]?.taskRef?.intent !== 'general-chat'
+            ? messages[index - 1]?.content
+            : null}
           onCopyError={onCopyError}
         />
         {message.role === 'assistant' && pendingDiffSourceMessageId === message.id && diffProposals.some((proposal) => proposal.status === 'proposed') && (() => {

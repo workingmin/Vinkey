@@ -315,16 +315,34 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 1px
 .message-table th, .message-table td { min-width: 100px; border-bottom: 1px solid var(--border); padding: 10px 12px; vertical-align: top; text-align: left; }
 .message-table th { background: var(--bg-rail); font-weight: 600; }
 .execution-trace { width: 100%; margin: 0 0 18px; color: var(--text-secondary); font-size: 12px; line-height: 1.6; }
-.execution-toggle { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; padding: 4px 0; border: 0; background: transparent; color: var(--text-secondary); cursor: pointer; }
+.execution-prompt { display: flex; align-items: flex-start; gap: 7px; margin: 0 0 8px; color: var(--text-muted); font-size: 11px; line-height: 1.55; }
+.execution-prompt > span:first-child { flex: 0 0 auto; color: var(--border-strong); font-weight: 650; }
+.execution-prompt > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.execution-feedback { min-width: 0; }
+.execution-toggle { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; padding: 4px 0; border: 0; background: transparent; color: var(--text-muted); cursor: pointer; font-size: 11px; }
 .execution-toggle svg { width: 14px; height: 14px; flex: 0 0 14px; }
-.execution-toggle small { color: var(--text-muted); font-size: 11px; }
-.execution-current { margin: 5px 0 8px 22px; color: var(--accent); }
+.execution-toggle > span:not(.execution-live-dot) { color: var(--text-secondary); }
+.execution-toggle small { color: var(--text-muted); font-size: 10px; }
+.execution-live-dot { width: 7px; height: 7px; flex: 0 0 7px; margin: 0 3px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 35%, transparent); animation: execution-pulse 1.35s ease-out infinite; }
+.execution-live-dot.small { width: 6px; height: 6px; flex-basis: 6px; margin: 4px 4px; }
+@keyframes execution-pulse { 0% { opacity: .45; box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 32%, transparent); } 55% { opacity: 1; box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 0%, transparent); } 100% { opacity: .45; box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent); } }
+.execution-current { display: flex; flex-direction: column; gap: 2px; margin: 2px 0 8px 22px; color: var(--accent); font-size: 11px; }
+.execution-current strong { font-weight: 550; }
+.execution-live-text { background: linear-gradient(90deg, var(--accent) 0%, var(--accent-hover) 45%, var(--accent) 85%); background-size: 220% 100%; background-clip: text; color: transparent; animation: execution-shimmer 1.8s linear infinite; }
+@keyframes execution-shimmer { to { background-position: -220% 0; } }
 .execution-current span { display: block; color: var(--text-muted); overflow-wrap: anywhere; }
 .execution-steps { list-style: none; margin: 8px 0 12px 6px; padding: 0 0 0 15px; border-left: 1px solid var(--border); }
-.execution-steps li { display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 9px 0; }
-.execution-steps li > svg { width: 14px; height: 14px; flex: 0 0 14px; margin-top: 3px; color: var(--accent); }
-.execution-steps li > svg.warning { color: var(--warning); }
+.execution-steps li { margin: 0; padding: 7px 0; }
+.execution-step-disclosure { min-width: 0; }
+.execution-step-summary { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; list-style: none; }
+.execution-step-summary::-webkit-details-marker { display: none; }
+.execution-step-summary > svg { width: 14px; height: 14px; flex: 0 0 14px; margin-top: 3px; color: var(--accent); }
+.execution-step-summary > svg.warning { color: var(--warning); }
+.execution-step-summary::before { content: '›'; width: 10px; flex: 0 0 10px; margin-top: 1px; color: var(--text-muted); font-size: 14px; line-height: 1; transition: transform .15s ease; }
+.execution-step-disclosure[open] > .execution-step-summary::before { transform: rotate(90deg); }
+.execution-step-summary > .execution-live-dot.small { margin-top: 5px; }
 .execution-step-content { flex: 1; min-width: 0; }
+.execution-step-disclosure > .execution-step-content { margin: 5px 0 0 34px; }
 .execution-step-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
 .execution-step-title strong { font-weight: 550; }
 .execution-step-title :is(span, time) { font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
@@ -338,6 +356,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 1px
 .execution-artifacts > svg { width: 13px; height: 13px; flex: 0 0 13px; }
 .execution-artifacts button { border: 0; background: transparent; padding: 2px; color: var(--accent); cursor: pointer; font-size: 11px; }
 .execution-artifacts code { display: block; width: 100%; font: 10px/1.7 ui-monospace, monospace; overflow-wrap: anywhere; }
+.message-result-label { margin: 0 0 7px; color: var(--text-muted); font-size: 11px; font-weight: 550; }
+.message-result-batch + .message-result-batch { margin-top: 18px; padding-top: 14px; border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent); }
 .artifact-dialog { width: min(840px, calc(100% - 32px)); max-height: calc(100dvh - 48px); padding: 0; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--bg-main); color: var(--text); }
 .artifact-dialog::backdrop { background: #0009; }
 .artifact-dialog header, .artifact-dialog footer { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 12px; }
@@ -358,6 +378,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 1px
 .typing i { width: 5px; height: 5px; border-radius: 50%; background: var(--text-muted); animation: pulse 1.1s infinite ease-in-out; }
 .typing i:nth-child(2) { animation-delay: .15s; }.typing i:nth-child(3) { animation-delay: .3s; }
 @keyframes pulse { 0%, 70%, 100% { opacity: .3 } 35% { opacity: 1 } }
+@media (prefers-reduced-motion: reduce) { .execution-live-dot, .execution-live-text, .typing i { animation: none; } }
 .composer-wrap { flex: 0 0 auto; padding: 0 20px 16px; background: linear-gradient(transparent, var(--bg-main) 18%); }
 .composer-wrap > .conversation-task-controls { width: min(760px, 100%); margin: 0 auto 8px; box-shadow: 0 -8px 24px color-mix(in srgb, var(--bg-main) 72%, transparent); }
 .chat-panel.new-conversation .composer-wrap { min-height: 0; flex: 1 1 auto; display: flex; flex-direction: column; justify-content: center; overflow-y: auto; padding: clamp(48px, 14vh, 132px) 20px clamp(24px, 6vh, 64px); background: var(--bg-main); }

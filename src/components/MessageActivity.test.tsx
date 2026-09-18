@@ -29,12 +29,15 @@ const activity: ChatActivity = {
 
 describe('MessageActivity', () => {
   it('shows a compact current stage and expands its persistent details', () => {
-    render(<MessageActivity items={[activity]} active />)
+    render(<MessageActivity items={[activity]} active taskDescription="@一个陌生男子的来信.txt 分析文档内容" />)
     expect(screen.getByText('正在处理')).toBeTruthy()
+    expect(screen.getByText('@一个陌生男子的来信.txt 分析文档内容')).toBeTruthy()
     expect(screen.getByText('章节汇总')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /chapter-a\.md/ })).toBeNull()
+    expect(screen.getByRole('button', { name: /chapter-a\.md/ })).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: /正在处理/ }))
+    fireEvent.click(screen.getByRole('button', { name: /任务反馈/ }))
+    expect(screen.queryByRole('button', { name: /chapter-a\.md/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /任务反馈/ }))
     expect(screen.getByRole('button', { name: /chapter-a\.md/ })).toBeTruthy()
     expect(screen.getByText('已复用 1 个结果')).toBeTruthy()
     expect(screen.getByText('.vinkey/analysis/jobs/job-1/')).toBeTruthy()
@@ -43,7 +46,7 @@ describe('MessageActivity', () => {
   it('loads an intermediate artifact into a read-only preview', async () => {
     vi.spyOn(desktop, 'readAnalysisArtifact').mockResolvedValue('# 章节摘要\n\n正文')
     render(<MessageActivity items={[activity]} />)
-    fireEvent.click(screen.getByRole('button', { name: /共用时/ }))
+    fireEvent.click(screen.getByRole('button', { name: /任务反馈/ }))
     fireEvent.click(screen.getByRole('button', { name: /chapter-a\.md/ }))
 
     expect(await screen.findByRole('dialog', { name: '分析产物预览' })).toBeTruthy()
