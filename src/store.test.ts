@@ -83,6 +83,16 @@ describe('conversation chat runs', () => {
     expect(useAppStore.getState().chatRuns.a.assistantMessage.content).toBe('第一段第二段')
   })
 
+  it('filters a legacy empty-session welcome message from a real conversation', () => {
+    const store = useAppStore.getState()
+    store.setConversation(conversation('a', [
+      message('welcome', 'assistant', '空会话提示', 1),
+      message('user-a', 'user', '你好', 2),
+    ]))
+
+    expect(useAppStore.getState().messages.map((item) => item.id)).toEqual(['user-a'])
+  })
+
   it('restores live output when returning to a running conversation', () => {
     const store = useAppStore.getState()
     const activeRun = run('a')

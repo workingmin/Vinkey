@@ -473,7 +473,7 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
   const activeStatus = activeChatRun ? chatStatusMeta[activeChatRun.status] : null
   const isNewConversation = conversationId === null
     && pendingChatRequests === 0
-    && messages.every((message) => message.id === 'welcome')
+    && messages.length === 0
 
   useEffect(() => {
     if (!pendingEditorRevision) return
@@ -859,7 +859,7 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
         }
       } else {
         if (!selectedModel) throw new Error('未配置模型')
-        const recent = selectRecentMessages([...messages.filter((message) => message.id !== 'welcome'), userMessage], [], contextDraft, selectedModel.contextWindow)
+        const recent = selectRecentMessages([...messages, userMessage], [], contextDraft, selectedModel.contextWindow)
         const context = [overviewContext, memoryContext, revisionContext, selectionContract, multiRevisionContract].filter(Boolean).join('\n\n') || null
         const modelMessages = [...(context ? [{ role: 'user' as const, content: context }] : []), ...recent.map(({ role, content }) => ({ role, content }))]
         const modelRequest = {
@@ -915,7 +915,7 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
             'context.recovery',
             `reason=model-context-refusal, documents=${recoveryDocuments.length}, sourcePolicy=metadata-only, estimatedTokens=${recoveryBudget.estimatedTokens}, limit=${recoveryBudget.limit}`,
           )
-          const recoveryRecent = selectRecentMessages([...messages.filter((message) => message.id !== 'welcome'), userMessage], [], [contextDraft, recoveryContext].filter(Boolean).join('\n\n'), selectedModel.contextWindow)
+          const recoveryRecent = selectRecentMessages([...messages, userMessage], [], [contextDraft, recoveryContext].filter(Boolean).join('\n\n'), selectedModel.contextWindow)
           const recoveryRequest = {
             requestId: nextRequestId,
             profileId: selectedModel.id,

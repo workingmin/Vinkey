@@ -87,12 +87,11 @@ export interface ChatRun {
   assistantMessage: ChatMessage
 }
 
-const initialMessages: ChatMessage[] = [
-  {
-    id: 'welcome', role: 'assistant', createdAt: Date.now(),
-    content: '晚上好。你可以从文件页选取文档作为上下文，然后让我续写、改稿，或者一起梳理人物和情节。',
-  },
-]
+const initialMessages: ChatMessage[] = []
+
+function removeWelcomeMessage(messages: ChatMessage[]): ChatMessage[] {
+  return messages.filter((message) => message.id !== 'welcome')
+}
 
 function mergeRunMessages(messages: ChatMessage[], run: ChatRun | undefined): ChatMessage[] {
   if (!run) return messages
@@ -271,7 +270,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     conversationId: conversation.id,
     conversationTitle: conversation.title,
     messages: mergeRunMessages(
-      conversation.messages.map((message) => state.completedChatMessages[conversation.id]?.id === message.id
+      removeWelcomeMessage(conversation.messages).map((message) => state.completedChatMessages[conversation.id]?.id === message.id
         ? state.completedChatMessages[conversation.id]
         : message),
       state.chatRuns[conversation.id],
