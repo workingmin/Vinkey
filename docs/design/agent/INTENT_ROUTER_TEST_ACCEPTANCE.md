@@ -121,6 +121,35 @@ npm run test:intent-model -- --profile-id <profile-id> --json > intent-model-eva
 
 `--list-profiles` 不会调用模型，也不会执行分类用例。它会显示数据库路径、评测套件、用例总数和全部 profile，并标记 SQLite 中的当前 profile。确认标记无误后，可以直接执行评测或显式传入对应 ID；只有不带 `--list-profiles` 的第三步才会逐项调用真实本地模型。
 
+每次真实评测默认会把诊断日志写入系统临时目录（macOS 通常是 `/tmp`，Windows 使用 `%TEMP%`），也可以显式指定路径：
+
+```bash
+./scripts/run-intent-model-eval.sh --log-file /tmp/vinkey-intent-qwen3-8b.json
+```
+
+日志包含提示合同版本、数据库/profile、每个用例的原始输入、目标元数据、模型原始 JSON、期望结果、匹配字段、差异字段、错误归因和请求耗时。归因值包括 `format`（输出合同）、`scope-contract`（作用域）、`semantic-routing`（Intent/Agent/Skill）和 `mixed`。终端输出只展开失败项，适合快速定位；日志适合归档和比较不同本地模型。
+
+macOS/Linux 可只查看失败摘要：
+
+```bash
+jq '.cases[] | select(.exactMatch == false) | {caseId, diagnosis, mismatchFields, prediction, expected, rawOutput}' /tmp/vinkey-intent-qwen3-8b.json
+```
+
+Windows PowerShell 可使用：
+
+```powershell
+(Get-Content $env:TEMP\vinkey-intent-qwen3-8b.json -Raw | ConvertFrom-Json).cases | Where-Object { -not $_.exactMatch } | Format-List caseId, diagnosis, mismatchFields, prediction, expected, rawOutput
+```
+
+### 如何解读失败
+
+- `documentSelection` 是由目标数量决定的事实字段：0/1/2+ 个目标对应 `none/single/multiple`，不应依赖模型自由发挥。
+- `scope` 仍需结合语义：目标文件被真正要求分析时是 `selected-documents`；附带文件但只要求灵感/闲聊时是 `conversation`；项目级请求是 `workspace`。
+- `intent`、`agent`、`skill` 是模型需要学习的语义分类。`故事主线/情节结构/叙事视角` 应偏向 `document-analysis + long-text-analysis`；`人物关系/人物命运` 应偏向 `character-analysis + character-arc-extraction`；“当前项目有哪些文件”和“项目级深度分析”分别对应 `workspace-overview` 与 `workspace-analysis`。
+- 验收输出新增“语义路由精确匹配”和“上下文合同精确匹配”两个汇总，前者衡量模型的 Intent/Agent/Skill 能力，后者衡量模型是否遵守目标数量和 scope 规则；两者都高于单一全字段精确率时，说明剩余问题主要是字段合同而非 Agent 能力。
+
+当前评测使用 `intent-router-prompt-3` 提示合同，采用显式词元边界和少量反例约束；Ollama 请求同时使用固定枚举的 JSON Schema，先消除格式噪声，再观察语义分类能力。不要在 CLI 中伪造 token attention 或修改模型权重：Ollama 的请求接口不提供可复现的逐 token 注意力控制，且这会掩盖模型实际分类能力。应优先比较日志中的原始输出、调整 prompt 合同，再通过固定版本的本地模型重新验收。
+
 ## 6. macOS 执行
 
 在仓库根目录：

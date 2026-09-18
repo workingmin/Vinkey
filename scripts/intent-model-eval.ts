@@ -1,14 +1,17 @@
-import { existsSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { existsSync, writeFileSync } from 'node:fs'
+import { homedir, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import type { ChatRequest, ChatStreamEvent, ModelConnection, ModelProfile } from '../src/types'
 import {
   INTENT_CLASSIFICATION_EVALUATION_CASES,
+  INTENT_CLASSIFICATION_JSON_SCHEMA,
+  INTENT_ROUTER_PROMPT_VERSION,
   INTENT_MODEL_EVALUATION_SUITE_VERSION,
   runConfiguredIntentModelEvaluation,
   type IntentClassificationCaseResult,
   type IntentClassificationEvaluationSummary,
+  type IntentClassificationPrediction,
   type IntentModelEvaluationDependencies,
 } from '../src/lib/intentModelEvaluation'
 
@@ -18,6 +21,7 @@ interface CliOptions {
   timeoutMs: number
   json: boolean
   listProfiles: boolean
+  logFile: string | null
 }
 
 export function readPersistedActiveProfileId(dbPath: string): string | null {
@@ -69,12 +73,13 @@ function usage(): string {
   return `Vinkey IntentRouter 本地模型专项评测
 
 用法：
-  npm run test:intent-model -- [--profile-id <id>] [--db <path>] [--timeout-ms <ms>] [--list-profiles] [--json]
+  npm run test:intent-model -- [--profile-id <id>] [--db <path>] [--timeout-ms <ms>] [--log-file <path>] [--list-profiles] [--json]
 
 参数：
   --profile-id <id>   指定要验收的模型 profile；未传时读取 SQLite 当前值
   --db <path>         指定 vinkey.sqlite3；默认使用当前系统的 Vinkey 应用数据目录
   --timeout-ms <ms>   每个用例的请求超时，默认 120000
+  --log-file <path>   写入逐用例 JSON 诊断日志；未指定时写入系统临时目录
   --list-profiles     只检查并列出 SQLite 模型配置，不执行 ${INTENT_CLASSIFICATION_EVALUATION_CASES.length} 个评测用例
   --json              输出完整 JSON 结果
   -h, --help          显示帮助
@@ -92,19 +97,21 @@ export function parseArguments(values: string[]): CliOptions | null {
     timeoutMs: 120_000,
     json: false,
     listProfiles: false,
+    logFile: null,
   }
   for (let index = 0; index < values.length; index += 1) {
     const value = values[index]
     if (value === '-h' || value === '--help') return null
     if (value === '--json') { options.json = true; continue }
     if (value === '--list-profiles') { options.listProfiles = true; continue }
-    if (value === '--db' || value === '--profile-id' || value === '--timeout-ms') {
+    if (value === '--db' || value === '--profile-id' || value === '--timeout-ms' || value === '--log-file') {
       const argument = values[index + 1]
       if (!argument) throw new Error(`参数 ${value} 缺少值。`)
       index += 1
       if (value === '--db') options.dbPath = resolve(argument)
       if (value === '--profile-id') options.profileId = argument.trim()
       if (value === '--timeout-ms') options.timeoutMs = Number(argument)
+      if (value === '--log-file') options.logFile = resolve(argument)
       continue
     }
     throw new Error(`未知参数 ${value}。`)
@@ -113,6 +120,77 @@ export function parseArguments(values: string[]): CliOptions | null {
     throw new Error('--timeout-ms 必须是 1000 到 900000 之间的整数。')
   }
   return options
+}
+
+function defaultLogFile(profileId: string): string {
+  const safeProfileId = profileId.replace(/[^a-zA-Z0-9_-]/gu, '_')
+  const directory = process.platform === 'win32' ? tmpdir() : '/tmp'
+  return join(directory, `vinkey-intent-model-eval-${safeProfileId}-${Date.now()}.json`)
+}
+
+function mismatchFields(result: IntentClassificationCaseResult, expected: IntentClassificationPrediction | undefined): string[] {
+  if (!expected || !result.prediction) return []
+  return (['intent', 'agent', 'skill', 'scope', 'documentSelection'] as const)
+    .filter((field) => result.prediction?.[field] !== expected[field])
+}
+
+function diagnoseMismatch(result: IntentClassificationCaseResult, expected: IntentClassificationPrediction | undefined): string {
+  if (!result.prediction) return 'format'
+  const fields = mismatchFields(result, expected)
+  if (fields.length === 0) return 'none'
+  if (fields.every((field) => field === 'documentSelection')) return 'selection-contract'
+  if (fields.every((field) => field === 'scope' || field === 'documentSelection')) return 'scope-contract'
+  if (fields.some((field) => field === 'intent' || field === 'agent' || field === 'skill')) return 'semantic-routing'
+  return 'mixed'
+}
+
+function diagnoseMismatchLabel(diagnosis: string): string {
+  return ({
+    format: '输出格式/枚举不符合合同',
+    'selection-contract': '目标数量推导错误',
+    'scope-contract': '作用域合同错误',
+    'semantic-routing': 'Intent/Agent/Skill 语义路由错误',
+    mixed: '混合字段错误',
+    none: '无差异',
+  } as Record<string, string>)[diagnosis] ?? diagnosis
+}
+
+export function writeEvaluationLog(input: {
+  file: string
+  database: string
+  profile: ModelProfile
+  connection: ModelConnection
+  results: IntentClassificationCaseResult[]
+  summary: IntentClassificationEvaluationSummary
+}): void {
+  const cases = input.results.map((result) => {
+    const testCase = INTENT_CLASSIFICATION_EVALUATION_CASES.find((item) => item.id === result.caseId)
+    const expected = testCase?.expected
+    return {
+      caseId: result.caseId,
+      instruction: testCase?.instruction ?? null,
+      targets: testCase?.targets ?? [],
+      expected: expected ?? null,
+      prediction: result.prediction,
+      matchedFields: result.matchedFields,
+      mismatchFields: mismatchFields(result, expected),
+      diagnosis: diagnoseMismatch(result, expected),
+      exactMatch: result.exactMatch,
+      parseError: result.error,
+      durationMs: result.durationMs ?? null,
+      rawOutput: result.output,
+    }
+  })
+  writeFileSync(input.file, JSON.stringify({
+    schemaVersion: 1,
+    generatedAt: new Date().toISOString(),
+    promptVersion: INTENT_ROUTER_PROMPT_VERSION,
+    database: input.database,
+    profile: input.profile,
+    connection: { ...input.connection, hasApiKey: input.connection.hasApiKey },
+    summary: input.summary,
+    cases,
+  }, null, 2), 'utf8')
 }
 
 export function listConfiguredProfiles(dbPath: string): ConfiguredProfileSummary[] {
@@ -157,9 +235,12 @@ export function formatEvaluationReport(input: {
   connection: ModelConnection
   results: IntentClassificationCaseResult[]
   summary: IntentClassificationEvaluationSummary
+  logFile?: string
 }): string {
-  const { database, profile, connection, results, summary } = input
+  const { database, profile, connection, results, summary, logFile } = input
   const passedCount = results.filter((result) => result.exactMatch).length
+  const semanticExactCount = results.filter((result) => ['intent', 'agent', 'skill'].every((field) => result.matchedFields.includes(field as keyof IntentClassificationPrediction))).length
+  const contextExactCount = results.filter((result) => ['scope', 'documentSelection'].every((field) => result.matchedFields.includes(field as keyof IntentClassificationPrediction))).length
   const lines = [
     'Vinkey IntentRouter 本地模型专项评测 - 验收结果',
     `数据库：${database}`,
@@ -181,6 +262,11 @@ export function formatEvaluationReport(input: {
     lines.push(`         ${detail}`)
     if (!result.exactMatch && expected) {
       lines.push(`         期望：intent=${expected.intent} | agent=${expected.agent} | skill=${expected.skill} | scope=${expected.scope} | documentSelection=${expected.documentSelection}`)
+      const fields = mismatchFields(result, expected)
+      lines.push(`         归因：${diagnoseMismatchLabel(diagnoseMismatch(result, expected))}`)
+      lines.push(`         差异字段：${fields.join(', ') || '无法解析'}`)
+      lines.push(`         输入：${INTENT_CLASSIFICATION_EVALUATION_CASES.find((testCase) => testCase.id === result.caseId)?.instruction ?? '未知'}`)
+      lines.push(`         原始输出：${result.output.trim() || '<空>'}`)
     }
   })
   lines.push(
@@ -193,7 +279,11 @@ export function formatEvaluationReport(input: {
     `  Skill 准确率：${percentage(summary.skillAccuracy)}`,
     `  Scope 准确率：${percentage(summary.scopeAccuracy)}`,
     `  DocumentSelection 准确率：${percentage(summary.documentSelectionAccuracy)}`,
+    `  语义路由精确匹配（Intent+Agent+Skill）：${semanticExactCount}/${summary.caseCount}`,
+    `  上下文合同精确匹配（Scope+DocumentSelection）：${contextExactCount}/${summary.caseCount}`,
     `  全字段精确匹配率：${percentage(summary.exactMatchRate)}`,
+    `  提示合同版本：${INTENT_ROUTER_PROMPT_VERSION}`,
+    ...(logFile ? [`详细诊断日志：${logFile}`] : []),
     summary.passed
       ? `验收结论：通过，${summary.caseCount} 个版本化用例全部执行成功且精确匹配。`
       : `验收结论：未通过，${passedCount}/${summary.caseCount} 个版本化用例精确匹配。`,
@@ -283,7 +373,7 @@ export async function invokeModel(profile: ModelProfile, connection: ModelConnec
         model: profile.model,
         messages: request.messages,
         stream: false,
-        format: 'json',
+        format: INTENT_CLASSIFICATION_JSON_SCHEMA,
         think: false,
         options: { temperature: 0, num_ctx: profile.contextWindow },
       }),
@@ -359,15 +449,26 @@ export async function main(): Promise<void> {
     dependencies(configured.profile, configured.connection, options.timeoutMs),
     INTENT_CLASSIFICATION_EVALUATION_CASES,
   )
+  const logFile = options.logFile ?? defaultLogFile(configured.profile.id)
+  writeEvaluationLog({
+    file: logFile,
+    database: options.dbPath,
+    profile: configured.profile,
+    connection: configured.connection,
+    results: evaluation.results,
+    summary: evaluation.summary,
+  })
   if (options.json) {
-    console.log(JSON.stringify({ database: options.dbPath, ...evaluation }, null, 2))
+    console.log(JSON.stringify({ database: options.dbPath, logFile, promptVersion: INTENT_ROUTER_PROMPT_VERSION, ...evaluation }, null, 2))
   } else {
+    console.log(`提示合同：${INTENT_ROUTER_PROMPT_VERSION}`)
     console.log(formatEvaluationReport({
       database: options.dbPath,
       profile: configured.profile,
       connection: configured.connection,
       results: evaluation.results,
       summary: evaluation.summary,
+      logFile,
     }))
   }
   if (!evaluation.summary.passed) process.exitCode = 2

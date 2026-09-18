@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
@@ -13,6 +13,7 @@ import {
   listConfiguredProfiles,
   loadConfiguredRows,
   parseArguments,
+  writeEvaluationLog,
 } from './intent-model-eval'
 
 const temporaryDirectories: string[] = []
@@ -59,6 +60,7 @@ describe('IntentRouter model evaluation CLI', () => {
     expect(result.status).toBe(0)
     expect(result.stdout).toContain('Vinkey IntentRouter 本地模型专项评测')
     expect(result.stdout).toContain('--list-profiles')
+    expect(result.stdout).toContain('--log-file')
   })
 
   it('uses the SQLite active profile instead of the newest updated profile', () => {
@@ -132,6 +134,29 @@ describe('IntentRouter model evaluation CLI', () => {
     expect(report).toContain('验收结论：通过，12 个版本化用例全部执行成功且精确匹配。')
   })
 
+  it('writes a reproducible per-case diagnostic log', () => {
+    const dbPath = databaseFixture()
+    const logFile = join(resolve(dbPath, '..'), 'intent-eval-log.json')
+    const prediction = {
+      intent: 'general-chat', agent: 'GeneralConversation', skill: 'general-conversation',
+      scope: 'conversation', documentSelection: 'none',
+    } as const
+    const result: IntentClassificationCaseResult = {
+      caseId: 'no-file-general-chat', output: JSON.stringify(prediction), prediction,
+      matchedFields: ['intent', 'agent', 'skill', 'scope', 'documentSelection'], exactMatch: true, error: null,
+      durationMs: 42,
+    }
+    const summary: IntentClassificationEvaluationSummary = {
+      suiteVersion: 'intent-model-eval-2', profileId: 'router', model: 'qwen3:8b', caseCount: 1,
+      parsedCount: 1, exactMatchRate: 1, intentAccuracy: 1, agentAccuracy: 1,
+      skillAccuracy: 1, scopeAccuracy: 1, documentSelectionAccuracy: 1, passed: true,
+    }
+    writeEvaluationLog({ file: logFile, database: dbPath, profile: { id: 'router', connectionId: 'local', name: 'Router', kind: 'ollama', baseUrl: 'http://127.0.0.1:11434', model: 'qwen3:8b', contextWindow: 16_384, hasApiKey: false, updatedAt: 1 }, connection: { id: 'local', name: 'Local', kind: 'ollama', baseUrl: 'http://127.0.0.1:11434', hasApiKey: false, updatedAt: 1 }, results: [result], summary })
+    const log = JSON.parse(readFileSync(logFile, 'utf8')) as { promptVersion: string; cases: Array<{ caseId: string; durationMs: number; rawOutput: string }> }
+    expect(log.promptVersion).toBe('intent-router-prompt-3')
+    expect(log.cases[0]).toMatchObject({ caseId: 'no-file-general-chat', durationMs: 42, rawOutput: JSON.stringify(prediction) })
+  })
+
   it('calls an Ollama endpoint with deterministic JSON settings', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ message: { content: '{"intent":"general-chat"}' } }), { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
@@ -148,6 +173,9 @@ describe('IntentRouter model evaluation CLI', () => {
     await expect(invokeModel(profile, connection, request, 3_000)).resolves.toBe('{"intent":"general-chat"}')
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(url).toBe('http://127.0.0.1:11434/api/chat')
-    expect(JSON.parse(String(init.body))).toMatchObject({ model: 'qwen3:8b', stream: false, format: 'json', think: false })
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      model: 'qwen3:8b', stream: false, think: false,
+      format: expect.objectContaining({ type: 'object', additionalProperties: false }),
+    })
   })
 })

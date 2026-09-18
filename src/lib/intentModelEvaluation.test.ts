@@ -111,6 +111,9 @@ describe('IntentRouter local model evaluation', () => {
 
   it('builds a body-free classification contract', () => {
     const messages = buildIntentClassificationMessages(INTENT_CLASSIFICATION_EVALUATION_CASES[1])
+    expect(messages[0]?.content).toContain('documentSelection 只由 targets 的数量决定')
+    expect(messages[0]?.content).toContain('故事主线、情节结构')
+    expect(messages[0]?.content).toContain('不要把 document 目标写成 current-document')
     expect(messages.at(-1)?.content).toContain('"instruction":"分析这个文档的故事主线"')
     expect(messages.at(-1)?.content).toContain('"id":"短篇/孔乙己.txt"')
     expect(messages.at(-1)?.content).not.toContain('caseId')

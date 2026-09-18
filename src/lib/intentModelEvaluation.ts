@@ -4,6 +4,20 @@ import type { ChatRequest, ChatStreamEvent, ModelConnection, ModelProfile } from
 import { isLoopbackModelEndpoint } from './modelPrivacy'
 
 export const INTENT_MODEL_EVALUATION_SUITE_VERSION = 'intent-model-eval-2'
+export const INTENT_ROUTER_PROMPT_VERSION = 'intent-router-prompt-3'
+
+export const INTENT_CLASSIFICATION_JSON_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    intent: { type: 'string', enum: ['structure-segmentation', 'structure-enhancement', 'document-analysis', 'document-revision', 'character-analysis', 'continuity-review', 'workspace-analysis', 'general-chat'] },
+    agent: { type: 'string', enum: ['GeneralConversation', 'StructureSegmentation', 'StoryDeconstruction', 'RevisionEditor', 'ContinuityReviewer'] },
+    skill: { type: 'string', enum: ['general-conversation', 'chapter-boundary-detect', 'structure-enhancement', 'long-text-analysis', 'character-arc-extraction', 'document-revision', 'continuity-review', 'document-overview', 'workspace-overview', 'workspace-focused-analysis', 'workspace-analysis'] },
+    scope: { type: 'string', enum: ['editor-selection', 'selected-documents', 'current-document', 'workspace', 'conversation'] },
+    documentSelection: { type: 'string', enum: ['none', 'single', 'multiple'] },
+  },
+  required: ['intent', 'agent', 'skill', 'scope', 'documentSelection'],
+} as const
 
 export interface IntentClassificationPrediction {
   intent: TaskIntent
@@ -27,6 +41,7 @@ export interface IntentClassificationCaseResult {
   matchedFields: Array<keyof IntentClassificationPrediction>
   exactMatch: boolean
   error: string | null
+  durationMs?: number
 }
 
 export interface IntentClassificationEvaluationSummary {
@@ -131,6 +146,15 @@ export const INTENT_CLASSIFICATION_EVALUATION_CASES: IntentClassificationEvaluat
   },
 ]
 
+export const INTENT_ROUTER_TOKEN_HINTS = [
+  '故事主线、情节结构、叙事视角、整体概览、通读分析 => intent=document-analysis, skill=long-text-analysis。',
+  '人物关系、人物命运、角色关系、角色弧光 => intent=character-analysis, skill=character-arc-extraction。',
+  '比较多份文档的叙事视角或人物塑造，若重点是跨文档整体比较而非单一人物关系 => intent=document-analysis, skill=long-text-analysis。',
+  '项目有哪些文件、工作区概览、列出项目内容 => intent=workspace-analysis, skill=workspace-overview。',
+  '详细分析项目人物关系、项目级深度分析 => intent=workspace-analysis, skill=workspace-analysis。',
+  '仅要求灵感、标题、闲聊，且没有要求使用目标文件 => intent=general-chat, skill=general-conversation。',
+]
+
 export async function loadConfiguredIntentModel(
   preferredProfileId: string | null | undefined,
   dependencies: Pick<IntentModelEvaluationDependencies, 'listProfiles' | 'listConnections' | 'getActiveProfileId'>,
@@ -155,13 +179,29 @@ export function buildIntentClassificationMessages(testCase: IntentClassification
     {
       role: 'user',
       content: [
-        '你是 Vinkey IntentRouter 的轻量分类器，只能根据指令和目标元数据分类，不得读取或假设文件正文。',
-        '只返回一个 JSON 对象，不要 Markdown。字段必须为 intent、agent、skill、scope、documentSelection。',
+        `你是 Vinkey IntentRouter 的轻量分类器（提示合同 ${INTENT_ROUTER_PROMPT_VERSION}）。只能根据指令和目标元数据分类，不得读取或假设文件正文。`,
+        '只返回一个 JSON 对象，不要 Markdown、解释、置信度或其他字段。字段必须为 intent、agent、skill、scope、documentSelection。',
         `intent 可选值：${[...intents].join(', ')}`,
         `agent 可选值：${[...agents].join(', ')}`,
         `skill 可选值：${[...skills].join(', ')}`,
         `scope 可选值：${[...scopes].join(', ')}`,
         'documentSelection 可选值：none, single, multiple。',
+        '',
+        '请严格按以下顺序判断：',
+        '1. documentSelection 只由 targets 的数量决定：0=none，1=single，2 个及以上=multiple；不要因为语义改变这个字段。',
+        '2. targets 为空且指令提到项目、工作区或“当前项目”时，scope=workspace；targets 为空的普通闲聊时，scope=conversation。',
+        '3. targets 非空时，若指令明确要求分析、比较、检查、改写或拆分目标文件，scope=selected-documents；只有普通闲聊即使带有附件，scope=conversation。不要把 document 目标写成 current-document。',
+        '4. workspace-analysis 必须使用 scope=workspace；general-chat 必须使用 scope=conversation。',
+        '5. agent 必须与 skill 一致：general-conversation=>GeneralConversation；chapter-boundary-detect=>StructureSegmentation；long-text-analysis/character-arc-extraction/workspace-*=>StoryDeconstruction；document-revision=>RevisionEditor；continuity-review=>ContinuityReviewer。',
+        '',
+        '重点词元到分类的映射（仅作为边界提示，仍需结合完整指令）：',
+        ...INTENT_ROUTER_TOKEN_HINTS,
+        '',
+        '四个边界示例：',
+        '{"instruction":"分析这个文档的故事主线","targets":[{"id":"a.txt","kind":"document"}]} => document-analysis/StoryDeconstruction/long-text-analysis/selected-documents/single',
+        '{"instruction":"给我三个写作灵感","targets":[{"id":"a.txt","kind":"document"}]} => general-chat/GeneralConversation/general-conversation/conversation/single',
+        '{"instruction":"当前项目有哪些文件","targets":[]} => workspace-analysis/StoryDeconstruction/workspace-overview/workspace/none',
+        '{"instruction":"比较所选文档的人物塑造和叙事视角","targets":[{"id":"a.txt","kind":"document"},{"id":"b.txt","kind":"document"}]} => document-analysis/StoryDeconstruction/long-text-analysis/selected-documents/multiple',
       ].join('\n'),
     },
     {
@@ -263,6 +303,7 @@ export async function runConfiguredIntentModelEvaluation(
   const model = await loadConfiguredIntentModel(preferredProfileId, dependencies)
   const results: IntentClassificationCaseResult[] = []
   for (const testCase of cases) {
+    const startedAt = Date.now()
     let output = ''
     let streamError: string | null = null
     await dependencies.stream({
@@ -275,7 +316,9 @@ export async function runConfiguredIntentModelEvaluation(
       if (event.type === 'error') streamError = event.message
     })
     if (streamError) throw new Error(`IntentRouter 模型评测 ${testCase.id} 调用失败：${streamError}`)
-    results.push(evaluateIntentClassificationOutput(testCase, output))
+    const result = evaluateIntentClassificationOutput(testCase, output)
+    result.durationMs = Date.now() - startedAt
+    results.push(result)
   }
   return { model, results, summary: summarizeIntentClassificationEvaluation(model.profile, results, cases) }
 }
