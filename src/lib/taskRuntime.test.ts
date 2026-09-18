@@ -155,6 +155,19 @@ describe('structured task runtime intake', () => {
     expect(dispatch.clarification?.question).toContain('分析所选文档正文')
   })
 
+  it('stops a close mixed character-and-plot request before body access', () => {
+    const request = createTaskRequest({
+      instruction: '人物命运和情节结构',
+      targets: [{ id: 'a.md', kind: 'document' }],
+    })
+    const plan = routeTask(request, true)
+    expect(plan.intent).toBe('character-analysis')
+    expect(plan.confidence).toBe('low')
+    const dispatch = createTaskExecutionDispatch({ taskId: 'task-mixed-intent', stage: 'preflight', resumeJobId: null, request, plan }, 'workspace-1')
+    expect(dispatch.executionPhase).toBe('clarification-required')
+    expect(dispatch.serviceId).toBeNull()
+  })
+
   it('dispatches final long text work with a stable job identity', () => {
     const request = createTaskRequest({
       actionId: 'document-analysis', instruction: '完整分析这个文档',

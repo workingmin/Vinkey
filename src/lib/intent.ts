@@ -23,6 +23,38 @@ export type DocumentAccess = 'none' | 'selected-metadata' | 'selected' | 'worksp
 export type DocumentSelectionMode = 'none' | 'single' | 'multiple'
 export type RevisionStrategy = 'direct' | 'bounded' | 'long' | null
 
+export const INTENT_TOKEN_DICTIONARY_VERSION = 'intent-token-dict-1'
+
+export interface IntentLexiconEvidence {
+  token: string
+  intent: TaskIntent
+  weight: number
+  match: string
+}
+
+export interface IntentLexiconScore {
+  intent: TaskIntent | null
+  confidence: 'high' | 'medium' | 'low'
+  scores: Partial<Record<TaskIntent, number>>
+  evidence: IntentLexiconEvidence[]
+}
+
+interface IntentLexiconEntry {
+  token: string
+  intent: TaskIntent
+  weight: number
+  pattern: RegExp
+}
+
+const INTENT_TOKEN_LEXICON: IntentLexiconEntry[] = [
+  { token: 'character-relationship', intent: 'character-analysis', weight: 6, pattern: /(?:人物|角色)(?:关系|关联|联系|冲突|合作|感情|亲属关系)/u },
+  { token: 'character-fate', intent: 'character-analysis', weight: 5, pattern: /(?:人物|角色)(?:命运|弧光|成长|变化|发展)|角色弧光/u },
+  { token: 'character-extraction', intent: 'character-analysis', weight: 4, pattern: /(?:提取|分析|梳理)(?:主要|核心|关键)?人物/u },
+  { token: 'cross-document-comparison', intent: 'document-analysis', weight: 7, pattern: /比较.{0,40}(?:人物塑造|叙事视角|故事结构|情节结构)/u },
+  { token: 'story-structure', intent: 'document-analysis', weight: 3, pattern: /故事主线|情节结构|叙事视角|故事结构|情节推进|整体概览|通读分析/u },
+  { token: 'document-overview', intent: 'document-analysis', weight: 2, pattern: /(?:文档|文件|文本|小说|故事)(?:内容|概要|梗概|摘要|概括|总结)/u },
+]
+
 export interface TaskRoutingContext {
   hasContextDocuments?: boolean
   targetDocumentCount?: number
@@ -131,9 +163,32 @@ function deepAnalysisPolicy(prompt: string): Pick<TaskPlan, 'analysisMode' | 'an
   return { analysisMode: 'deep', analysisCoverage: exhaustiveCoverage(prompt) ? 'exhaustive' : 'targeted', sourcePolicy: 'local-chunks' }
 }
 
+/** Score high-signal semantic tokens without allowing document paths to trigger routing. */
+export function scoreIntentLexicon(value: string): IntentLexiconScore {
+  const prompt = stripDocumentMentions(value)
+  const scores: Partial<Record<TaskIntent, number>> = {}
+  const evidence: IntentLexiconEvidence[] = []
+  for (const entry of INTENT_TOKEN_LEXICON) {
+    const match = prompt.match(entry.pattern)?.[0]
+    if (!match) continue
+    scores[entry.intent] = (scores[entry.intent] ?? 0) + entry.weight
+    evidence.push({ token: entry.token, intent: entry.intent, weight: entry.weight, match })
+  }
+  const ranked = Object.entries(scores)
+    .sort((left, right) => (right[1] ?? 0) - (left[1] ?? 0))
+    .map(([intent, score]) => ({ intent: intent as TaskIntent, score: score ?? 0 }))
+  const top = ranked[0]
+  const second = ranked[1]
+  if (!top) return { intent: null, confidence: 'low', scores, evidence }
+  const margin = top.score - (second?.score ?? 0)
+  const confidence = top.score >= 5 && margin >= 3 ? 'high' : margin >= 3 ? 'medium' : 'low'
+  return { intent: top.intent, confidence, scores, evidence }
+}
+
 /**
  * Route explicit document operations before assembling a model request.
- * This is deliberately deterministic: ambiguous prompts remain ordinary chat.
+ * This is deliberately deterministic: ambiguous prompts remain low-confidence and
+ * are subject to the existing clarification gate before body access.
  */
 export function classifyTask(value: string, context: boolean | TaskRoutingContext, actionId: string | null = null): TaskPlan {
   const prompt = stripDocumentMentions(value)
@@ -271,15 +326,16 @@ export function classifyTask(value: string, context: boolean | TaskRoutingContex
 
   if (/(?:分析(?:当前|这个|已选)?(?:文档|文件|文本|小说|故事)|(?:这|该|此|这个|这篇|所选)?(?:篇)?(?:小说|故事|文章|文本)(?:主要)?(?:说了什么|讲了什么|讲述了什么|内容是什么|写了什么)|(?:小说|故事|文章|文本)(?:内容|概要|梗概|摘要|概括|总结)|故事主线|人物线|提取人物|伏笔|情节结构)/u.test(prompt)) {
     const policy = deepAnalysisPolicy(prompt)
+    const lexical = scoreIntentLexicon(prompt)
     return route({
-      intent: prompt.includes('人物') ? 'character-analysis' : 'document-analysis',
+      intent: lexical.intent ?? (prompt.includes('人物') ? 'character-analysis' : 'document-analysis'),
       operation: 'analyze',
       scope: 'selected-documents',
       sideEffect: 'draft',
       documentAccess: 'selected',
       ...policy,
       requiresModel: true,
-      confidence: 'medium',
+      confidence: lexical.intent ? lexical.confidence : 'medium',
       revisionStrategy: null,
     })
   }

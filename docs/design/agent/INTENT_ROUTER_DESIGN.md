@@ -89,6 +89,19 @@ TypeScript 和 Rust 两端都必须接受并校验 `documentSelection`。Rust �
 
 路径 mention 在匹配关键词前必须移除，避免文件名中的“章节拆分”等词误触发路由。
 
+### 6.1 词元证据层
+
+文档语义分析分支使用版本化词元词典 `intent-token-dict-1`（见 `src/lib/intent.ts`），为高信号短语累加 Intent 分数，并保留可解释证据：
+
+| 词元类别 | 示例 | 默认 Intent | 权重 |
+| --- | --- | --- | ---: |
+| 人物关系 | 人物关系、角色冲突、角色关联 | `character-analysis` | 6 |
+| 人物命运 | 人物命运、角色成长、人物弧光 | `character-analysis` | 5 |
+| 跨文档比较 | 比较文档的人物塑造、叙事视角 | `document-analysis` | 7 |
+| 故事结构 | 故事主线、情节结构、叙事视角 | `document-analysis` | 3 |
+
+词典只在确定性文档分析分支内参与 Intent/Skill 选择，不改变 `documentSelection`、正文访问权限或 Tool allowlist。高置信证据用于确定路由，文档路径会先被移除，路径中的关键词不能产生证据。最高分与次高分差距不足时，计划降为 `low` 置信度，由现有调度层在正文读取前要求澄清；不得静默覆盖用户的复合意图。
+
 ## 7. Agent 与 Skill 分类
 
 | Intent | Agent | 主要 Skill |

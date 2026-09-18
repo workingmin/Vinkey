@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { classifyTask, extractDocumentMentionPaths, stripDocumentMentions } from './intent'
+import { classifyTask, extractDocumentMentionPaths, INTENT_TOKEN_DICTIONARY_VERSION, scoreIntentLexicon, stripDocumentMentions } from './intent'
 
 describe('task routing', () => {
   it('routes chapter segmentation without a model', () => {
@@ -162,5 +162,33 @@ describe('task routing', () => {
   it('does not confuse a request about file structure with semantic analysis', () => {
     expect(classifyTask('分析一下当前项目的目录结构', false).analysisMode).toBe('overview')
     expect(classifyTask('分析当前项目的故事结构', false).analysisMode).toBe('deep')
+  })
+
+  it.each([
+    ['分析这个文档的故事主线', 'document-analysis', 'story-structure'],
+    ['分析阿Q与赵太爷之间的人物关系', 'character-analysis', 'character-relationship'],
+    ['完整分析这篇小说的人物命运和情节结构，不要遗漏', 'character-analysis', 'character-fate'],
+    ['比较所选文档的人物塑造和叙事视角', 'document-analysis', 'cross-document-comparison'],
+  ] as const)('uses weighted intent tokens for %s', (prompt, expectedIntent, expectedToken) => {
+    const score = scoreIntentLexicon(prompt)
+    expect(score.intent).toBe(expectedIntent)
+    expect(score.evidence.map((item) => item.token)).toContain(expectedToken)
+    expect(classifyTask(prompt, true).intent).toBe(expectedIntent)
+  })
+
+  it('exposes a versioned evidence score and keeps path tokens out of the lexicon', () => {
+    const path = '人物关系/章节拆分.txt'
+    const score = scoreIntentLexicon(`@${path} 分析这个文件内容`)
+    expect(INTENT_TOKEN_DICTIONARY_VERSION).toBe('intent-token-dict-1')
+    expect(score.evidence.map((item) => item.token)).not.toContain('character-relationship')
+    expect(score.intent).toBe('document-analysis')
+    expect(stripDocumentMentions(`@${path} 分析这个文件内容`)).toBe('分析这个文件内容')
+  })
+
+  it('lowers confidence for a close mixed-intent lexical score', () => {
+    const score = scoreIntentLexicon('人物命运和情节结构')
+    expect(score.intent).toBe('character-analysis')
+    expect(score.confidence).toBe('low')
+    expect(score.scores['character-analysis']).toBeGreaterThan(score.scores['document-analysis'] ?? 0)
   })
 })
