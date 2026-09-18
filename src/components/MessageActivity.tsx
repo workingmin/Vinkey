@@ -63,9 +63,9 @@ export function MessageActivity({ items, active = false, taskDescription }: { it
       <button className="execution-toggle" type="button" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
         {expanded ? <ChevronDown /> : <ChevronRight />}
         {hasFailure ? <ShieldAlert /> : active ? <span className="execution-live-dot" aria-hidden="true" /> : <Check />}
-        <span>任务反馈</span><small>{label} · {items.length} 条反馈</small>
+        <span>任务反馈</span><small><span>{label}</span> · {items.length} 条反馈</small>
       </button>
-      {active && lastItem && <div className="execution-current" role="status">
+      {active && (!expanded || !last) && lastItem && <div className="execution-current" role="status">
         <strong className={active ? 'execution-live-text' : undefined}>{currentLabel}</strong><span>{last?.message ?? lastItem.message ?? '正在准备请求'}</span>
       </div>}
     </div>
@@ -76,7 +76,7 @@ export function MessageActivity({ items, active = false, taskDescription }: { it
           const running = active && !item.completedAt && worker?.status !== 'paused'
           const failed = worker?.status === 'failed' || worker?.cacheSource === 'quarantined'
           return <li key={worker ? worker.jobId + worker.stage : item.timestamp + '-' + index}>
-            <details className="execution-step-disclosure" defaultOpen={!item.completedAt}>
+            <details className="execution-step-disclosure" open={!item.completedAt}>
               <summary className="execution-step-summary">
                 {failed ? <ShieldAlert className="warning" /> : running ? <span className="execution-live-dot small" aria-hidden="true" /> : <Check />}
                 <div className="execution-step-title"><strong>{worker ? workerStageLabel(worker.stage) : item.message ?? '准备请求'}</strong>
