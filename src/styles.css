@@ -237,7 +237,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 1px
 .conversation-item:hover .conversation-item-age, .conversation-item:focus-within .conversation-item-age { opacity: 0; }
 .conversation-item:hover .conversation-item-delete, .conversation-item:focus-within .conversation-item-delete { opacity: 1; pointer-events: auto; }
 .conversation-item-delete:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 14%, transparent); }
-.conversation-item-delete:disabled { color: var(--text-muted); cursor: not-allowed; opacity: .55; }
+.conversation-item-delete:disabled { color: var(--text-muted); cursor: not-allowed; }
 .document-search-item { width: 100%; min-height: 48px; display: flex; align-items: flex-start; gap: 8px; padding: 7px 8px; border: 0; border-radius: 5px; background: transparent; color: var(--text-secondary); text-align: left; cursor: pointer; }
 .document-search-item:hover { background: var(--bg-selected); }
 .document-search-item > svg { width: 14px; height: 14px; flex: 0 0 auto; margin-top: 2px; color: var(--accent); }
