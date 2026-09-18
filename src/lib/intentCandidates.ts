@@ -1,7 +1,7 @@
 import type { AgentId, SkillId } from './registry'
 import type { TaskIntent } from './intent'
 
-export const INTENT_ROUTER_CANDIDATE_OUTPUT_VERSION = 'intent-router-output-1'
+export const INTENT_ROUTER_CANDIDATE_OUTPUT_VERSION = 'intent-router-output-2'
 
 export const INTENT_ROUTER_CANDIDATE_JSON_SCHEMA = {
   type: 'object',
@@ -78,7 +78,7 @@ export function parseIntentCandidateOutput(output: string): IntentCandidateOutpu
     throw new Error('模型候选 missingFacts 必须是非空字符串数组。')
   }
 
-  const seen = new Set<TaskIntent>()
+  const seen = new Set<string>()
   const candidates = record.candidates.map((item, index) => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) throw new Error(`模型候选 ${index + 1} 必须是对象。`)
     const candidate = item as Record<string, unknown>
@@ -86,8 +86,9 @@ export function parseIntentCandidateOutput(output: string): IntentCandidateOutpu
     if (!intents.has(candidate.intent as TaskIntent) || !agents.has(candidate.agent as AgentId) || !skills.has(candidate.skill as SkillId)) {
       throw new Error(`模型候选 ${index + 1} 包含未注册的分类值。`)
     }
-    if (seen.has(candidate.intent as TaskIntent)) throw new Error(`模型候选包含重复 Intent：${candidate.intent}。`)
-    seen.add(candidate.intent as TaskIntent)
+    const routeKey = `${candidate.intent}::${candidate.skill}`
+    if (seen.has(routeKey)) throw new Error(`模型候选包含重复 Intent/Skill 路由：${candidate.intent}/${candidate.skill}。`)
+    seen.add(routeKey)
     if (typeof candidate.modelScore !== 'number' || !Number.isFinite(candidate.modelScore) || candidate.modelScore < 0 || candidate.modelScore > 1) {
       throw new Error(`模型候选 ${index + 1} 的 modelScore 必须在 0 到 1 之间。`)
     }

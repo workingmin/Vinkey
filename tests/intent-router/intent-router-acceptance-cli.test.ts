@@ -9,6 +9,7 @@ import { evaluateIntentClassificationOutput, INTENT_CLASSIFICATION_EVALUATION_CA
 import {
   formatEvaluationReport,
   formatProfileListReport,
+  formatSelectedModelReport,
   invokeModel,
   listConfiguredProfiles,
   loadConfiguredRows,
@@ -119,6 +120,7 @@ describe('IntentRouter acceptance CLI', () => {
       parsedCount: 12, exactMatchRate: 1, intentAccuracy: 1, agentAccuracy: 1,
       skillAccuracy: 1, scopeAccuracy: 1, documentSelectionAccuracy: 1,
       candidateParsedCount: 12, candidateParseRate: 1, candidateTop2Recall: 1, clarificationCount: 0, clarificationRate: 0,
+      autoRouteCount: 12, autoRouteCoverage: 1, autoRouteExactMatchCount: 12, autoRouteExactMatchRate: 1, rejectCount: 0, rejectRate: 0,
       passed: true,
     }
     const profile: ModelProfile = {
@@ -134,8 +136,25 @@ describe('IntentRouter acceptance CLI', () => {
     expect(report).toContain('[12/12] PASS case-12')
     expect(report).toContain('执行完成：12/12')
     expect(report).toContain('Agent 准确率：100.0%')
+    expect(report).toContain('选中模型：qwen3:8b（contextWindow=16384）')
     expect(report).toContain('DocumentSelection 准确率：100.0%')
     expect(report).toContain('验收结论：通过，12 个版本化用例全部执行成功且精确匹配。')
+  })
+
+  it('prints the selected local model before running evaluation', () => {
+    const profile: ModelProfile = {
+      id: 'router', connectionId: 'local', name: 'Router', kind: 'ollama', baseUrl: 'http://127.0.0.1:11434',
+      model: 'qwen3:8b', contextWindow: 16_384, hasApiKey: false, updatedAt: 1,
+    }
+    const connection: ModelConnection = {
+      id: 'local', name: 'Local Ollama', kind: 'ollama', baseUrl: profile.baseUrl, hasApiKey: false, updatedAt: 1,
+    }
+    const report = formatSelectedModelReport(profile, connection)
+    expect(report).toContain('选中本地模型：')
+    expect(report).toContain('模型：qwen3:8b')
+    expect(report).toContain('Profile：Router（profileId=router）')
+    expect(report).toContain('连接：Local Ollama（ollama，http://127.0.0.1:11434）')
+    expect(report).toContain('上下文窗口：16384')
   })
 
   it('accepts the effective router result while preserving the raw model failure', () => {
@@ -171,11 +190,12 @@ describe('IntentRouter acceptance CLI', () => {
       parsedCount: 1, exactMatchRate: 1, intentAccuracy: 1, agentAccuracy: 1,
       skillAccuracy: 1, scopeAccuracy: 1, documentSelectionAccuracy: 1,
       candidateParsedCount: 1, candidateParseRate: 1, candidateTop2Recall: 1, clarificationCount: 0, clarificationRate: 0,
+      autoRouteCount: 1, autoRouteCoverage: 1, autoRouteExactMatchCount: 1, autoRouteExactMatchRate: 1, rejectCount: 0, rejectRate: 0,
       passed: true,
     }
     writeEvaluationLog({ file: logFile, database: dbPath, profile: { id: 'router', connectionId: 'local', name: 'Router', kind: 'ollama', baseUrl: 'http://127.0.0.1:11434', model: 'qwen3:8b', contextWindow: 16_384, hasApiKey: false, updatedAt: 1 }, connection: { id: 'local', name: 'Local', kind: 'ollama', baseUrl: 'http://127.0.0.1:11434', hasApiKey: false, updatedAt: 1 }, results: [result], summary })
     const log = JSON.parse(readFileSync(logFile, 'utf8')) as { promptVersion: string; cases: Array<{ caseId: string; durationMs: number; rawOutput: string }> }
-    expect(log.promptVersion).toBe('intent-router-prompt-4')
+    expect(log.promptVersion).toBe('intent-router-prompt-5')
     expect(log.cases[0]).toMatchObject({ caseId: 'no-file-general-chat', durationMs: 42, rawOutput: JSON.stringify(prediction) })
   })
 

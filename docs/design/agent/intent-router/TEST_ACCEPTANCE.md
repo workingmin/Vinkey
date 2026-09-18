@@ -16,7 +16,7 @@
 | Rust 调度测试 | 否 | `TaskPlan` 跨端字段、枚举和执行准入 |
 | macOS/Windows 本地验收 | 是 | 已安装配置和实际模型经工程化路由校验后能否完成版本化分类用例 |
 
-CI 的 mock 结果只能证明代码合同正确，不能证明某个本地模型具备分类能力。真实模型输入不包含 `caseId` 或期望分类名称，避免测试标签泄露答案。真实验收保留两套指标：`summary` 是模型原始 top-1 JSON 的能力指标，`effectiveSummary` 是经过候选排序、词元证据、目标数量和作用域事实校验后的 IntentRouter 有效指标；同时记录候选合同解析率、Top-2 召回率和澄清比例。只有后者决定脚本退出码。
+CI 的 mock 结果只能证明代码合同正确，不能证明某个本地模型具备分类能力。真实模型输入不包含 `caseId` 或期望分类名称，避免测试标签泄露答案。真实验收保留两套指标：`summary` 是模型原始 top-1 JSON 的能力指标，`effectiveSummary` 是经过候选排序、词元证据、目标数量和作用域事实校验后的 IntentRouter 有效指标；同时记录候选合同解析率、Top-2 召回率、澄清比例、自动路由覆盖率和自动路由精确率。只有有效结果真正全部 `route` 且精确匹配时才通过，正确但进入 `clarify` 的候选不再计为自动路由成功。
 
 ## 2. 确定性测试矩阵
 
@@ -150,7 +150,7 @@ Windows PowerShell 可使用：
 - `intent`、`agent`、`skill` 是模型需要学习的语义分类。`故事主线/情节结构/叙事视角` 应偏向 `document-analysis + long-text-analysis`；`人物关系/人物命运` 应偏向 `character-analysis + character-arc-extraction`；“当前项目有哪些文件”和“项目级深度分析”分别对应 `workspace-overview` 与 `workspace-analysis`。
 - 验收输出分别列出模型原始和工程化路由的“语义路由精确匹配”“上下文合同精确匹配”汇总，前者衡量 Intent/Agent/Skill，后者衡量目标数量和 scope 规则；工程化指标用于准入，原始指标用于观察模型能力和词元修正收益。
 
-当前评测使用 `intent-router-prompt-4` 提示合同，要求模型输出最多 3 个候选、排序分数、reasonCodes 和澄清状态；Ollama 请求同时使用固定枚举的候选 JSON Schema。`modelScore` 只表示排序信号，不等同于校准概率；候选 margin 不足时进入澄清。不要在 CLI 中伪造 token attention 或修改模型权重：Ollama 的请求接口不提供可复现的逐 token 注意力控制，且这会掩盖模型实际分类能力。应优先比较原始候选、词元证据和有效路由结果，再通过固定版本的本地模型重新验收。
+当前评测使用 `intent-router-prompt-5` 提示合同和 `intent-router-output-2` 候选合同，要求模型输出最多 3 个 `intent + skill` 路由组合、排序分数、reasonCodes 和澄清状态；Ollama 请求同时使用固定枚举的候选 JSON Schema。`modelScore` 只表示排序信号，不等同于校准概率；候选 margin 不足且没有强词元/事实证据时进入澄清。不要在 CLI 中伪造 token attention 或修改模型权重：Ollama 的请求接口不提供可复现的逐 token 注意力控制，且这会掩盖模型实际分类能力。应优先比较原始候选、词元证据和有效路由结果，再通过固定版本的本地模型重新验收。
 
 ## 6. macOS 执行
 
@@ -235,10 +235,20 @@ Vinkey IntentRouter 本地模型专项评测 - 配置检查
 
 ### 真实评测输出
 
-人类可读输出首先声明将执行 12 个用例，然后按 `[01/12]` 到 `[12/12]` 显示 `PASS/FAIL` 及模型返回的 Intent、Agent、Skill、Scope、DocumentSelection。成功结尾如下：
+人类可读输出首先打印本次实际选中的本地模型、profile ID、连接地址和上下文窗口，然后声明将执行 12 个用例，再按 `[01/12]` 到 `[12/12]` 显示 `PASS/FAIL` 及模型返回的 Intent、Agent、Skill、Scope、DocumentSelection。成功结尾如下：
 
 ```text
-逐项结果（工程化路由精确匹配 12/12；模型原始 11/12）：
+选中本地模型：
+  模型：qwen3:8b
+  Profile：Router（profileId=<profile-id>）
+  连接：Local Ollama（ollama，http://localhost:11434）
+  上下文窗口：16384
+```
+
+`--json` 输出中的 `selectedModel` 字段包含同一组配置，便于自动化日志确认实际调用的模型。
+
+```text
+逐项结果（工程化路由精确匹配 12/12；模型原始结果以本次模型输出为准）：
 ...
 [12/12] PASS workspace-deep-analysis
 
@@ -248,14 +258,18 @@ Vinkey IntentRouter 本地模型专项评测 - 配置检查
   候选合同解析率：100.0%
   候选 Top-2 召回率：100.0%
   澄清请求比例：0.0%
-  模型原始全字段精确匹配率：91.7%
+  自动路由执行：12/12
+  自动路由覆盖率：100.0%
+  自动路由精确率：100.0%
+  拒答比例：0.0%
+  模型原始全字段精确匹配率：<raw-exact-rate>
   工程化路由 Intent 准确率：100.0%
   工程化路由 Agent 准确率：100.0%
   工程化路由 Skill 准确率：100.0%
   工程化路由 Scope 准确率：100.0%
   工程化路由 DocumentSelection 准确率：100.0%
   工程化路由全字段精确匹配率：100.0%
-验收结论：通过，工程化路由修正后 12 个版本化用例全部匹配；模型原始结果为 11/12。
+验收结论：通过，工程化路由修正后 12 个版本化用例全部匹配；模型原始结果仅作能力观测。
 ```
 
 `--json` 模式保持纯 JSON 输出，不打印启动提示，适合重定向到验收记录文件。

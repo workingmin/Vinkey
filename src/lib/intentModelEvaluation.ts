@@ -12,8 +12,10 @@ import type { ChatRequest, ChatStreamEvent, ModelConnection, ModelProfile } from
 import { isLoopbackModelEndpoint } from './modelPrivacy'
 
 export const INTENT_MODEL_EVALUATION_SUITE_VERSION = 'intent-router-eval-3'
-export const INTENT_ROUTER_PROMPT_VERSION = 'intent-router-prompt-4'
+export const INTENT_ROUTER_PROMPT_VERSION = 'intent-router-prompt-5'
 export const INTENT_CANDIDATE_MARGIN_THRESHOLD = 0.12
+export const INTENT_STRONG_MODEL_SCORE_THRESHOLD = 0.9
+export const INTENT_STRONG_MODEL_MARGIN_THRESHOLD = 0.1
 
 export const INTENT_CLASSIFICATION_JSON_SCHEMA = INTENT_ROUTER_CANDIDATE_JSON_SCHEMA
 
@@ -68,6 +70,12 @@ export interface IntentClassificationEvaluationSummary {
   candidateTop2Recall: number
   clarificationCount: number
   clarificationRate: number
+  autoRouteCount: number
+  autoRouteCoverage: number
+  autoRouteExactMatchCount: number
+  autoRouteExactMatchRate: number
+  rejectCount: number
+  rejectRate: number
   passed: boolean
 }
 
@@ -202,7 +210,7 @@ export function buildIntentClassificationMessages(testCase: IntentClassification
         'modelScore 不是校准概率，只用于候选排序；不要伪造精确概率。',
         '',
         '请严格按以下顺序判断：',
-        '1. 只能从给定枚举中选择，最多输出 3 个不同 Intent；无法区分时保留前两项并设置 needsClarification=true。',
+        '1. 只能从给定枚举中选择，最多输出 3 个不同的 Intent/Skill 路由组合；同一 Intent 可以使用不同 Skill，但不得重复相同的 Intent + Skill。只有真正无法区分或缺少事实时才设置 needsClarification=true；候选数量大于 1 不等于需要澄清。',
         '2. documentSelection 不需要输出，由后置层根据 targets 数量计算：0=none，1=single，2 个及以上=multiple。',
         '3. scope 不需要输出，由后置层结合 Intent 和 targets 计算；普通闲聊即使带附件也不能读取正文；不要把 document 目标写成 current-document。',
         '4. agent 必须与 skill 一致：general-conversation=>GeneralConversation；chapter-boundary-detect=>StructureSegmentation；long-text-analysis/character-arc-extraction/workspace-*=>StoryDeconstruction；document-revision=>RevisionEditor；continuity-review=>ContinuityReviewer。',
@@ -326,16 +334,25 @@ function resolveIntentCandidateOutput(
   const margin = second ? top.modelScore - second.modelScore : null
   const lexical = scoreIntentLexicon(testCase.instruction)
   const topPrediction = candidateToPrediction(top, testCase, true)
+  const lexicalCandidate = lexical.intent ? sorted.find((candidate) => candidate.intent === lexical.intent) : undefined
+  const lexicalCloseEnough = !lexicalCandidate || lexicalCandidate.modelScore >= top.modelScore - 0.25
+  const strongLexicalEvidence = lexical.intent !== null
+    && lexical.confidence !== 'low'
+    && (lexical.intent === top.intent || lexicalCloseEnough)
+  const strongModelLead = top.modelScore >= INTENT_STRONG_MODEL_SCORE_THRESHOLD
+    && margin !== null
+    && margin + Number.EPSILON * 4 >= INTENT_STRONG_MODEL_MARGIN_THRESHOLD
   const lowMargin = margin !== null && margin < INTENT_CANDIDATE_MARGIN_THRESHOLD
-  if (candidateOutput.needsClarification || candidateOutput.missingFacts.length > 0 || lowMargin) {
+  const lexicalContradictsTop = lexical.intent !== null && lexical.intent !== top.intent
+  const lexicalCanResolve = strongLexicalEvidence && !(lowMargin && lexicalContradictsTop)
+  const requiresClarification = candidateOutput.needsClarification && !lexicalCanResolve && !strongModelLead
+  if (candidateOutput.missingFacts.length > 0 || requiresClarification || (lowMargin && !lexicalCanResolve && !strongModelLead)) {
     return { prediction: topPrediction, source: 'model', evidence: lexical.evidence, decision: 'clarify', margin }
   }
 
   let selected = top
   let source: 'model' | 'lexicon' | 'facts' | 'lexicon+facts' | 'registry' | 'candidate+lexicon' = 'model'
-  if (lexical.intent && lexical.confidence !== 'low' && (lexical.intent === 'character-analysis' || lexical.intent === 'document-analysis')) {
-    const lexicalCandidate = sorted.find((candidate) => candidate.intent === lexical.intent)
-    const lexicalCloseEnough = !lexicalCandidate || lexicalCandidate.modelScore >= top.modelScore - 0.25
+  if (lexical.intent && lexical.confidence !== 'low') {
     if (lexicalCloseEnough && lexical.intent !== top.intent) {
       selected = lexicalCandidate ?? {
         intent: lexical.intent,
@@ -473,6 +490,9 @@ export function summarizeIntentClassificationEvaluation(
       .some((candidate) => candidate.intent === expected))
   }).length / cases.length
   const clarificationCount = results.filter((item) => item.candidateDecision === 'clarify').length
+  const autoRouteCount = results.filter((item) => item.candidateDecision === 'route').length
+  const autoRouteExactMatchCount = results.filter((item) => item.candidateDecision === 'route' && exactMatch(item)).length
+  const rejectCount = results.filter((item) => item.candidateDecision === 'reject').length
   return {
     suiteVersion: INTENT_MODEL_EVALUATION_SUITE_VERSION,
     profileId: profile.id,
@@ -490,7 +510,14 @@ export function summarizeIntentClassificationEvaluation(
     candidateTop2Recall,
     clarificationCount,
     clarificationRate: clarificationCount / cases.length,
-    passed: exactMatchRate === 1 && (mode === 'raw' || candidateParsedCount === cases.length),
+    autoRouteCount,
+    autoRouteCoverage: autoRouteCount / cases.length,
+    autoRouteExactMatchCount,
+    autoRouteExactMatchRate: autoRouteCount === 0 ? 0 : autoRouteExactMatchCount / autoRouteCount,
+    rejectCount,
+    rejectRate: rejectCount / cases.length,
+    passed: exactMatchRate === 1
+      && (mode === 'raw' || (candidateParsedCount === cases.length && autoRouteCount === cases.length)),
   }
 }
 

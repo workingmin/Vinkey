@@ -132,7 +132,44 @@ describe('IntentRouter local model evaluation', () => {
         { intent: 'character-analysis', agent: 'StoryDeconstruction', skill: 'character-arc-extraction', modelScore: 0.5, reasonCodes: ['character-fate'] },
         { intent: 'character-analysis', agent: 'StoryDeconstruction', skill: 'character-arc-extraction', modelScore: 0.5, reasonCodes: ['character-fate'] },
       ], needsClarification: false, missingFacts: [],
-    }))).toThrow('重复 Intent')
+    }))).toThrow('重复 Intent/Skill 路由')
+  })
+
+  it('allows one Intent to expose distinct Skill routes', () => {
+    const output = JSON.stringify({
+      candidates: [
+        { intent: 'workspace-analysis', agent: 'StoryDeconstruction', skill: 'workspace-analysis', modelScore: 0.95, reasonCodes: ['deep-analysis'] },
+        { intent: 'workspace-analysis', agent: 'StoryDeconstruction', skill: 'workspace-overview', modelScore: 0.75, reasonCodes: ['workspace-files'] },
+      ], needsClarification: true, missingFacts: [],
+    })
+    expect(parseIntentCandidateOutput(output).candidates).toHaveLength(2)
+  })
+
+  it('accepts workspace overview and deep routes under the same Intent', () => {
+    const testCase = INTENT_CLASSIFICATION_EVALUATION_CASES.find((item) => item.id === 'workspace-deep-analysis')!
+    const result = evaluateIntentClassificationOutput(testCase, JSON.stringify({
+      candidates: [
+        { intent: 'workspace-analysis', agent: 'StoryDeconstruction', skill: 'workspace-analysis', modelScore: 0.95, reasonCodes: ['deep-analysis'] },
+        { intent: 'character-analysis', agent: 'StoryDeconstruction', skill: 'character-arc-extraction', modelScore: 0.85, reasonCodes: ['character-relationship'] },
+        { intent: 'workspace-analysis', agent: 'StoryDeconstruction', skill: 'workspace-overview', modelScore: 0.75, reasonCodes: ['workspace-files'] },
+      ], needsClarification: true, missingFacts: [],
+    }))
+    expect(result.candidateMode).toBe('candidate')
+    expect(result.candidateDecision).toBe('route')
+    expect(result.effectivePrediction).toMatchObject(testCase.expected)
+    expect(result.effectiveExactMatch).toBe(true)
+  })
+
+  it('keeps workspace evidence ahead of document character evidence', () => {
+    const testCase = INTENT_CLASSIFICATION_EVALUATION_CASES.find((item) => item.id === 'workspace-deep-analysis')!
+    const result = evaluateIntentClassificationOutput(testCase, JSON.stringify({
+      candidates: [
+        { intent: 'workspace-analysis', agent: 'StoryDeconstruction', skill: 'workspace-analysis', modelScore: 0.95, reasonCodes: ['deep-analysis'] },
+        { intent: 'character-analysis', agent: 'StoryDeconstruction', skill: 'character-arc-extraction', modelScore: 0.85, reasonCodes: ['character-relationship'] },
+      ], needsClarification: true, missingFacts: [],
+    }))
+    expect(result.effectivePrediction).toMatchObject(testCase.expected)
+    expect(result.resolutionEvidence?.map((item) => item.token)).toContain('workspace-deep-analysis')
   })
 
   it('uses lexical evidence to resolve a candidate conflict while retaining the raw top candidate', () => {
@@ -182,6 +219,31 @@ describe('IntentRouter local model evaluation', () => {
     expect(result.candidateDecision).toBe('clarify')
     expect(result.effectiveExactMatch).toBe(false)
     expect(result.resolutionSource).toBe('model')
+  })
+
+  it('routes a strong lexical candidate even when the model asks for clarification', () => {
+    const testCase = INTENT_CLASSIFICATION_EVALUATION_CASES.find((item) => item.id === 'single-file-character-analysis')!
+    const result = evaluateIntentClassificationOutput(testCase, JSON.stringify({
+      candidates: [
+        { intent: 'document-analysis', agent: 'StoryDeconstruction', skill: 'long-text-analysis', modelScore: 0.55, reasonCodes: ['document-analysis'] },
+        { intent: 'character-analysis', agent: 'StoryDeconstruction', skill: 'character-arc-extraction', modelScore: 0.39, reasonCodes: ['character-relationship'] },
+      ], needsClarification: true, missingFacts: [],
+    }))
+    expect(result.candidateDecision).toBe('route')
+    expect(result.effectiveExactMatch).toBe(true)
+    expect(result.resolutionSource).toBe('lexicon')
+  })
+
+  it('routes a clearly leading model candidate despite an over-conservative clarification flag', () => {
+    const testCase = INTENT_CLASSIFICATION_EVALUATION_CASES.find((item) => item.id === 'multi-file-continuity-review')!
+    const result = evaluateIntentClassificationOutput(testCase, JSON.stringify({
+      candidates: [
+        { intent: 'continuity-review', agent: 'ContinuityReviewer', skill: 'continuity-review', modelScore: 0.95, reasonCodes: ['continuity-review'] },
+        { intent: 'document-analysis', agent: 'StoryDeconstruction', skill: 'long-text-analysis', modelScore: 0.85, reasonCodes: ['long-text-analysis'] },
+      ], needsClarification: true, missingFacts: [],
+    }))
+    expect(result.candidateDecision).toBe('route')
+    expect(result.effectiveExactMatch).toBe(true)
   })
 
   it('adapts the legacy single-object model output into one candidate', () => {

@@ -22,7 +22,7 @@ TaskRequest
 当前 Vinkey 已具备：
 
 - `classifyTask` 的确定性路由、目标数量推导和低置信澄清门；
-- `intent-token-dict-1` 词元证据和注册表映射；
+- `intent-token-dict-2` 词元证据和注册表映射；
 - 本地模型严格 JSON Schema、SQLite 当前 profile 读取；
 - 评测层的 `summary`（模型原始 top-1）与 `effectiveSummary`（工程化结果）双层统计，并额外记录候选合同解析率、Top-2 召回率和澄清比例。
 
@@ -69,7 +69,7 @@ Prompt 必须要求：
 
 1. 只能从候选集选择，不得创建新值；
 2. 输出 1-3 个候选，按优先级排序，并给出 `reasonCodes`；
-3. 相近意图无法区分时输出 `needsClarification=true`，而不是强行选第一项；
+3. 只有缺少事实或第一、第二候选确实无法区分时输出 `needsClarification=true`；候选数量大于 1 不等于需要澄清；
 4. `documentSelection` 由 targets 数量决定，`scope` 和访问权限由事实合同决定；
 5. 不读取正文，不输出自由文本解释，不把概率当作校准后的数学事实。
 
@@ -77,7 +77,7 @@ Prompt 必须要求：
 
 ## 5. Layer 2：候选式结构化输出
 
-建议新增版本化合同 `intent-router-output-1`：
+当前使用版本化合同 `intent-router-output-2`：
 
 ```json
 {
@@ -104,10 +104,10 @@ Prompt 必须要求：
 
 合同规则：
 
-- `candidates` 长度为 1-3，重复 Intent、未知 Registry 值、越界分数、额外字段均拒绝；
+- `candidates` 长度为 1-3，重复 `intent + skill` 路由、未知 Registry 值、越界分数、额外字段均拒绝；同一 Intent 的不同 Skill 路由允许并存；
 - `modelScore` 只表示模型排序信号，不宣称校准概率；后置层可归一化，但不能把它当作统计置信度；
 - 候选必须携带 Agent/Skill，但后置层始终通过 Registry 重算映射；
-- `needsClarification=true` 或 `missingFacts` 非空时不得读取正文；
+- `missingFacts` 非空时不得读取正文；模型的 `needsClarification` 是后置层的输入信号，不得覆盖强词元证据或明显领先候选的工程化放行结果；
 - 旧模型只能输出单对象时，适配器把它转换为一个候选并标记 `legacy-single`，不伪造第二候选。
 
 ## 6. Layer 3：候选校正、拒答与 TaskPlan 签发
@@ -128,7 +128,7 @@ effectiveScore = modelScore
 2. 用 Registry 重算 Agent/Skill/Tool；模型不能覆盖注册映射；
 3. 用 targets 数量重算 `documentSelection`，用请求类型重算 `scope`；
 4. 对词元、embedding 和模型候选做加权合成，并记录证据来源；
-5. 第一名分数低于阈值，或与第二名的 margin 不足，进入 `clarify`；当前评测基线 margin 为 `0.12`，后续应通过固定验证集校准；
+5. 缺少事实、真实语义冲突且没有强词元证据，或与第二名的 margin 不足时进入 `clarify`；当前评测基线 margin 为 `0.12`，后置层允许强词元证据和明显领先候选覆盖模型的过度澄清标记；
 6. 只有通过 `TaskPolicy`、正文访问和副作用校验后才签发 `TaskPlan`。
 
 三种结果必须区分：
@@ -158,7 +158,7 @@ effectiveScore = modelScore
 
 ### Phase C：候选式模型评测（评测侧首轮已完成）
 
-- 使用 `intent-router-eval-3` 版本化套件和 `intent-router-output-1` 候选合同；
+- 使用 `intent-router-eval-3` 版本化套件、`intent-router-prompt-5` 提示合同和 `intent-router-output-2` 候选合同；
 - 同时统计 top-1、top-2 命中率、候选召回率、澄清准确率、事实合同准确率和越权拒绝率；
 - 把原始模型能力、候选 resolver 增益和最终 TaskPlan 结果分开报告。
 

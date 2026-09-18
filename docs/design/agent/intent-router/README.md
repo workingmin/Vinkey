@@ -94,7 +94,7 @@ TypeScript 和 Rust 两端都必须接受并校验 `documentSelection`。Rust �
 
 ### 6.1 词元证据层
 
-文档语义分析分支使用版本化词元词典 `intent-token-dict-1`（见 `src/lib/intent.ts`），为高信号短语累加 Intent 分数，并保留可解释证据：
+文档语义分析分支使用版本化词元词典 `intent-token-dict-2`（见 `src/lib/intent.ts`），为高信号短语累加 Intent 分数，并保留可解释证据：
 
 | 词元类别 | 示例 | 默认 Intent | 权重 |
 | --- | --- | --- | ---: |
@@ -103,6 +103,8 @@ TypeScript 和 Rust 两端都必须接受并校验 `documentSelection`。Rust �
 | 复合人物分析 | 完整/全面分析人物命运和情节结构 | `character-analysis` | 4 |
 | 跨文档比较 | 比较文档的人物塑造、叙事视角 | `document-analysis` | 7 |
 | 故事结构 | 故事主线、情节结构、叙事视角 | `document-analysis` | 3 |
+| 工作区概览 | 当前项目有哪些文件、目录结构 | `workspace-analysis` + `workspace-overview` | 10 |
+| 工作区深度分析 | 详细分析这个项目的人物关系、项目内容 | `workspace-analysis` + `workspace-analysis` | 10 |
 
 词典只在确定性文档分析分支内参与 Intent/Skill 选择，不改变 `documentSelection`、正文访问权限或 Tool allowlist。高置信证据用于确定路由，文档路径会先被移除，路径中的关键词不能产生证据。最高分与次高分差距不足时，计划降为 `low` 置信度，由现有调度层在正文读取前要求澄清；不得静默覆盖用户的复合意图。
 
@@ -123,7 +125,7 @@ Registry 是 Agent/Skill 映射的权威来源。评测用例必须与 Registry 
 
 ## 8. 模型分类边界
 
-轻量分类模型只接收 `instruction` 和无正文 `targets`，输出严格的候选 JSON（合同版本 `intent-router-output-1`）：
+轻量分类模型只接收 `instruction` 和无正文 `targets`，输出严格的候选 JSON（合同版本 `intent-router-output-2`）：
 
 ```json
 {
@@ -141,7 +143,7 @@ Registry 是 Agent/Skill 映射的权威来源。评测用例必须与 Registry 
 }
 ```
 
-候选最多 3 个；`modelScore` 只表示排序信号，不是校准概率。未知枚举、重复候选、缺失/多余字段、越界分数、Markdown 代码块或非 JSON 输出都判定失败。旧模型的五字段单对象会作为 `legacy-single` 兼容解析，但不计入候选合同解析率。模型分类不能提升 `documentAccess`、`sourcePolicy`、副作用或 Tool allowlist；`scope` 和 `documentSelection` 由后置层根据事实重算。
+候选最多 3 个；唯一性按 `intent + skill` 路由组合判断，同一 Intent 可以提供不同 Skill（例如 workspace overview/deep），但不能重复相同组合。`modelScore` 只表示排序信号，不是校准概率。未知枚举、重复路由、缺失/多余字段、越界分数、Markdown 代码块或非 JSON 输出都判定失败。只有缺少事实或真实语义冲突时才应设置 `needsClarification=true`；候选数量大于 1 不等于需要澄清。旧模型的五字段单对象会作为 `legacy-single` 兼容解析，但不计入候选合同解析率。模型分类不能提升 `documentAccess`、`sourcePolicy`、副作用或 Tool allowlist；`scope` 和 `documentSelection` 由后置层根据事实重算。
 
 ## 9. 变更检查表
 

@@ -176,10 +176,20 @@ describe('task routing', () => {
     expect(classifyTask(prompt, true).intent).toBe(expectedIntent)
   })
 
+  it.each([
+    ['当前项目有哪些文件', 'workspace-analysis', 'workspace-overview'],
+    ['详细分析这个项目的人物关系', 'workspace-analysis', 'workspace-deep-analysis'],
+  ] as const)('recognizes workspace evidence for %s', (prompt, expectedIntent, expectedToken) => {
+    const score = scoreIntentLexicon(prompt)
+    expect(score.intent).toBe(expectedIntent)
+    expect(score.confidence).toBe('high')
+    expect(score.evidence.map((item) => item.token)).toContain(expectedToken)
+  })
+
   it('exposes a versioned evidence score and keeps path tokens out of the lexicon', () => {
     const path = '人物关系/章节拆分.txt'
     const score = scoreIntentLexicon(`@${path} 分析这个文件内容`)
-    expect(INTENT_TOKEN_DICTIONARY_VERSION).toBe('intent-token-dict-1')
+    expect(INTENT_TOKEN_DICTIONARY_VERSION).toBe('intent-token-dict-2')
     expect(score.evidence.map((item) => item.token)).not.toContain('character-relationship')
     expect(score.intent).toBe('document-analysis')
     expect(stripDocumentMentions(`@${path} 分析这个文件内容`)).toBe('分析这个文件内容')

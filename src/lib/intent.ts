@@ -23,7 +23,7 @@ export type DocumentAccess = 'none' | 'selected-metadata' | 'selected' | 'worksp
 export type DocumentSelectionMode = 'none' | 'single' | 'multiple'
 export type RevisionStrategy = 'direct' | 'bounded' | 'long' | null
 
-export const INTENT_TOKEN_DICTIONARY_VERSION = 'intent-token-dict-1'
+export const INTENT_TOKEN_DICTIONARY_VERSION = 'intent-token-dict-2'
 
 export interface IntentLexiconEvidence {
   token: string
@@ -54,6 +54,8 @@ const INTENT_TOKEN_LEXICON: IntentLexiconEntry[] = [
   { token: 'cross-document-comparison', intent: 'document-analysis', weight: 7, pattern: /比较.{0,40}(?:人物塑造|叙事视角|故事结构|情节结构)/u },
   { token: 'story-structure', intent: 'document-analysis', weight: 3, pattern: /故事主线|情节结构|叙事视角|故事结构|情节推进|整体概览|通读分析/u },
   { token: 'document-overview', intent: 'document-analysis', weight: 2, pattern: /(?:文档|文件|文本|小说|故事)(?:内容|概要|梗概|摘要|概括|总结)/u },
+  { token: 'workspace-overview', intent: 'workspace-analysis', weight: 10, pattern: /(?:当前|这个|整个|本地|该|本)?项目(?:有哪些文件|文件清单|文件列表|目录结构|工作区概览)/u },
+  { token: 'workspace-deep-analysis', intent: 'workspace-analysis', weight: 10, pattern: /(?:详细|深入|深度|全面|系统)(?:地)?分析(?:这个|当前|整个|本地|该|本)?项目(?:的)?(?:人物|角色|关系|内容|正文|主题|情节|剧情|故事|结构)/u },
 ]
 
 export interface TaskRoutingContext {

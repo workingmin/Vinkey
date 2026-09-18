@@ -69,13 +69,13 @@ Prompt 合同测试应断言：候选集、反例、targets 数量规则、禁�
 | 类别 | 输入输出 | 预期行为 |
 | --- | --- | --- |
 | 合法单候选 | 1 个候选，分数 0-1 | 解析成功 |
-| 合法多候选 | 2-3 个不同 Intent | 保留排序和证据 |
+| 合法多候选 | 2-3 个不同的 Intent/Skill 路由组合 | 保留排序和证据 |
 | 候选过多 | 4 个以上 | 拒绝或截断前先记诊断；默认拒绝 |
-| 重复候选 | 同一 Intent 重复 | 拒绝，不静默合并 |
+| 重复候选 | 同一 Intent + Skill 路由重复 | 拒绝，不静默合并；同一 Intent 的不同 Skill 允许并存 |
 | 未知枚举 | 不存在的 Intent/Skill | `invalid-model` |
 | 越界分数 | `-0.1`、`1.1`、NaN 字符串 | `invalid-model` |
 | 非 JSON/Markdown | 代码块、解释文本 | `invalid-model` |
-| 澄清结果 | `needsClarification=true` | 不执行正文读取 |
+| 澄清结果 | `needsClarification=true` 且无强证据 | 不执行正文读取 |
 | 缺失事实 | `missingFacts=["target-purpose"]` | 进入澄清，不猜测 |
 | 旧单对象 | 旧模型五字段 JSON | 转为一个 `legacy-single` 候选并保留 raw |
 
@@ -116,6 +116,9 @@ Prompt 合同测试应断言：候选集、反例、targets 数量规则、禁�
 - `rawTop2Recall`：期望 Intent 是否出现在前两候选；
 - `candidateParseRate`：候选合同解析率；
 - `effectiveRouteAccuracy`：校正后的有效路由准确率；
+- `autoRouteCoverage`：未进入澄清或拒答、实际签发 route 的比例；
+- `autoRouteExactMatchRate`：实际自动 route 中的精确匹配率；
+- `rejectRate`：候选合同或安全校验拒答比例；
 - `clarificationPrecision/Recall`：需要澄清的请求是否被正确澄清；
 - `factContractAccuracy`：targets、scope、documentAccess、sourcePolicy 合同准确率；
 - `unsafeExecutionRate`：错误候选是否导致正文或 Tool 越权，必须为 0；

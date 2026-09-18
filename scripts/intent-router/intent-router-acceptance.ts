@@ -246,6 +246,16 @@ export function formatProfileListReport(dbPath: string, profiles: ConfiguredProf
   return lines.join('\n')
 }
 
+export function formatSelectedModelReport(profile: ModelProfile, connection: ModelConnection): string {
+  return [
+    '选中本地模型：',
+    `  模型：${profile.model}`,
+    `  Profile：${profile.name}（profileId=${profile.id}）`,
+    `  连接：${connection.name}（${connection.kind}，${connection.baseUrl}）`,
+    `  上下文窗口：${profile.contextWindow}`,
+  ].join('\n')
+}
+
 function percentage(value: number): string {
   return `${(value * 100).toFixed(1)}%`
 }
@@ -271,8 +281,8 @@ export function formatEvaluationReport(input: {
     `数据库：${database}`,
     `评测套件：${summary.suiteVersion}`,
     `版本化用例：${summary.caseCount} 个`,
-    `模型配置：${profile.name}（profileId=${profile.id}）`,
-    `模型：${profile.model}（contextWindow=${profile.contextWindow}）`,
+    `选中模型配置：${profile.name}（profileId=${profile.id}）`,
+    `选中模型：${profile.model}（contextWindow=${profile.contextWindow}）`,
     `连接：${connection.name}（${connection.kind}，${connection.baseUrl}）`,
     '',
     `逐项结果（工程化路由精确匹配 ${passedCount}/${effectiveSummary.caseCount}；模型原始 ${rawPassedCount}/${summary.caseCount}）：`,
@@ -331,6 +341,10 @@ export function formatEvaluationReport(input: {
     `  候选合同解析率：${percentage(summary.candidateParseRate)}`,
     `  候选 Top-2 召回率：${percentage(summary.candidateTop2Recall)}`,
     `  澄清请求比例：${percentage(summary.clarificationRate)}`,
+    `  自动路由执行：${effectiveSummary.autoRouteCount}/${effectiveSummary.caseCount}`,
+    `  自动路由覆盖率：${percentage(effectiveSummary.autoRouteCoverage)}`,
+    `  自动路由精确率：${percentage(effectiveSummary.autoRouteExactMatchRate)}`,
+    `  拒答比例：${percentage(effectiveSummary.rejectRate)}`,
     `  工程化路由语义精确匹配：${effectiveSemanticExactCount}/${effectiveSummary.caseCount}`,
     `  工程化路由上下文合同精确匹配：${effectiveContextExactCount}/${effectiveSummary.caseCount}`,
     `  工程化路由 Intent 准确率：${percentage(effectiveSummary.intentAccuracy)}`,
@@ -500,6 +514,7 @@ export async function main(): Promise<void> {
   }
   const configured = loadConfiguredRows(options)
   if (!options.json) {
+    console.log(formatSelectedModelReport(configured.profile, configured.connection))
     console.log(`开始评测：${INTENT_MODEL_EVALUATION_SUITE_VERSION}，共 ${INTENT_CLASSIFICATION_EVALUATION_CASES.length} 个版本化用例。`)
     console.log('正在逐项调用本地模型，请等待...\n')
   }
@@ -519,7 +534,21 @@ export async function main(): Promise<void> {
     effectiveSummary: evaluation.effectiveSummary,
   })
   if (options.json) {
-    console.log(JSON.stringify({ database: options.dbPath, logFile, promptVersion: INTENT_ROUTER_PROMPT_VERSION, ...evaluation }, null, 2))
+    console.log(JSON.stringify({
+      database: options.dbPath,
+      selectedModel: {
+        profileId: configured.profile.id,
+        profileName: configured.profile.name,
+        model: configured.profile.model,
+        contextWindow: configured.profile.contextWindow,
+        connectionName: configured.connection.name,
+        connectionKind: configured.connection.kind,
+        connectionBaseUrl: configured.connection.baseUrl,
+      },
+      logFile,
+      promptVersion: INTENT_ROUTER_PROMPT_VERSION,
+      ...evaluation,
+    }, null, 2))
   } else {
     console.log(`提示合同：${INTENT_ROUTER_PROMPT_VERSION}`)
     console.log(formatEvaluationReport({
