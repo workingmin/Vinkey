@@ -1,7 +1,8 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
+import { spawnSync } from 'node:child_process'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ChatRequest, ModelConnection, ModelProfile } from '../src/types'
 import type { IntentClassificationCaseResult, IntentClassificationEvaluationSummary } from '../src/lib/intentModelEvaluation'
@@ -48,6 +49,16 @@ afterEach(() => {
 })
 
 describe('IntentRouter model evaluation CLI', () => {
+  it('executes the bundled CLI entry point instead of exiting silently', () => {
+    const result = spawnSync(process.execPath, [resolve(import.meta.dirname, 'run-intent-model-eval.mjs'), '--help'], {
+      cwd: resolve(import.meta.dirname, '..'),
+      encoding: 'utf8',
+    })
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain('Vinkey IntentRouter 本地模型专项评测')
+    expect(result.stdout).toContain('--list-profiles')
+  })
+
   it('lists profiles and defaults to the most recently updated SQLite profile', () => {
     const dbPath = databaseFixture()
     expect(listConfiguredProfiles(dbPath).map((item) => item.id)).toEqual(['router', 'older'])
