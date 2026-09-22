@@ -14,8 +14,8 @@
 | `CF-003` | 上下文 | Copilot、Cursor、Aider、Continue | 先索引/结构定位，再按相关性和预算读取正文 | `overview / focused / deep` 与独立 coverage/source policy | `已参考` | [上下文设计](../architecture/DEVELOPMENT_FRAMEWORK.md#3-系统分层)；结果带范围和源指纹 |
 | `CF-004` | 编辑器 | MarkText、Typora、Obsidian | 低干扰编辑、预览、保存状态、快捷键和文件树 | 保留编辑/分栏/预览、原子保存和外部变化边界 | `部分参考` | [文件与编辑器](../design/ui/UI_DESIGN_EDITOR.md)；外部修改冲突仍待补齐 |
 | `CF-005` | AI 改稿 | Cursor、Aider、Knote（设计来源） | AI 修改以 diff/审阅呈现，而不是静默覆盖 | `DiffProposal` 逐块接受/拒绝，接受后仍未保存 | `已参考` | `src/lib/diffProposal.ts`、编辑器验收；源指纹变化拒绝应用 |
-| `CF-006` | 长任务 | OpenAI Codex、Claude Code、豆包样本 | 进度、后台执行、恢复、结果与过程分离 | `TaskJob + Step + Event + Checkpoint`；过程默认折叠 | `部分参考` | [Agent 流程对比](../design/agent/AGENT_FLOW_COMPARISON.md)；暂停/恢复必须校验快照 |
-| `CF-007` | Artifact | Claude Code、豆包样本、OpenAI Codex | 报告、图表、diff 独立于聊天正文 | 使用类型化 `Answer / Report / Artifact / Proposal`，不运行任意 HTML | `已参考` | [业务链路](../architecture/AI_BUSINESS_CHAINS.md)；产物只读预览和来源可追踪 |
+| `CF-006` | 长任务 | OpenAI Codex、Claude Code、豆包 | 进度、后台执行、恢复、结果与过程分离 | `TaskJob + Step + Event + Checkpoint`；过程默认折叠 | `部分参考` | [Agent 流程对比](../design/agent/AGENT_FLOW_COMPARISON.md)；暂停/恢复必须校验快照 |
+| `CF-007` | Artifact | Claude Code、豆包、OpenAI Codex | 报告、图表、diff 独立于聊天正文 | 使用类型化 `Answer / Report / Artifact / Proposal`，不运行任意 HTML | `已参考` | [业务链路](../architecture/AI_BUSINESS_CHAINS.md)；产物只读预览和来源可追踪 |
 | `CF-008` | Agent 路由 | OpenAI Codex、Claude Code、Cline | 小任务直接处理，广域任务才升级 Agent/子 Agent | 确定性服务、单次模型、固定 Workflow、Hybrid Agent 分层 | `已参考` | [Agent 模板](../design/agent/AGENT_FLOW_TEMPLATES.md)；路由不能静默扩大权限 |
 | `CF-009` | 项目记忆 | GitHub Copilot、Claude Code、Novelcrafter | 项目指令、记忆和当前上下文分层 | 仅保存已确认事实，按源版本可失效；审校疑点不入记忆 | `部分参考` | `projectMemory` 与长期记忆设计；记忆候选仍需确认 |
 | `CF-010` | 人物资产 | Novelcrafter、StorySphere（设计来源）、graphify-novel（设计来源） | 资产卡、别名、提及索引、关系图和增量更新 | 候选→消歧→关系判定→用户确认→正式图谱 | `部分参考` | [GitHub 调研](../research/GITHUB_REFERENCE.md#人物资产提取专项调研2026-09-04)；关系需保留证据 |

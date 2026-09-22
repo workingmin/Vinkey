@@ -16,7 +16,8 @@
 | [Novelcrafter](https://www.novelcrafter.com/features) | Codex、人物/地点/lore、写作协作 | 文学领域产品参考 | 已参考资产卡、别名和受控上下文；正式 canon 仍需用户确认 |
 | [Sudowrite](https://www.sudowrite.com/) | Story Bible、创意生成、续写和编辑协作 | 文学创作体验参考 | 观察创作流畅度；不让模型绕过证据写入事实 |
 | Claude 产品的 Research 能力 / [ChatGPT Deep Research](https://help.openai.com/en/articles/10500283-deep-research) | 搜索规划、来源、长时间研究结果 | 联网研究参考 | `待参考`；先完成授权、来源和隐私设计 |
-| 豆包等长文助手样本 | 附件、耗时入口、文档式长结果和可视化 | 结果展示参考 | 已参考结果排版；不把过程展示当作质量证明 |
+| 豆包、Kimi、元宝、千问、文心、讯飞星火、DeepSeek | 中文通用与长文本助手 | 附件、耗时入口、文档式长结果和可视化 | 已纳入正式竞品名录；结果展示参考，不把过程展示当作质量证明 |
+| WPS Office AI | 商业文档办公工作台 | 文档编辑、格式、导出、版本和办公 AI | 已纳入正式竞品名录；作为文档交付和编辑器参考 |
 | Notion/Google Docs | 云文档、协作、评论和分享 | 桌面编辑器边界参考 | 当前不采用云协作，避免改变本地优先威胁模型 |
 
 ## 2. Agent Runtime 共同模式
@@ -69,7 +70,7 @@ OpenAI Codex 的 sandbox/approval policy、Claude Code 的 permission mode、Ski
 
 ### 2.4 Artifact、diff 和最终结果
 
-Claude Code 的 Artifact、OpenAI Codex 的 diff/任务结果、豆包长文助手的文档式输出都说明：复杂结果不应挤在聊天气泡中，也不应把中间过程伪装成最终答案。
+Claude Code 的 Artifact、OpenAI Codex 的 diff/任务结果、豆包的文档式长文输出都说明：复杂结果不应挤在聊天气泡中，也不应把中间过程伪装成最终答案。
 
 **Vinkey 已参考：**
 
@@ -109,13 +110,15 @@ Codex cloud/Remote、Claude Code on the web/Remote 和长文助手产品把后�
 
 **Vinkey 不采用：** 模型生成的漂亮段落不等于已确认事实。续写、改写和创意均标记为草稿或 Proposal，不自动写回正文、canon 或记忆。
 
-### 3.3 豆包等长文助手：结果而不是过程
+### 3.3 中文长文本助手：结果而不是过程
+
+**参考对象：** 豆包、Kimi、元宝、千问、文心、讯飞星火和 DeepSeek；这些产品已经在[正式竞品名录](COMPETITOR_CATALOG.md)中按“商业中文通用与长文本助手”单独归类。
 
 **参考点：** 附件独立展示、耗时过程收拢为入口、最终结果采用适合长文阅读的标题/表格/列表和可视化。
 
 **Vinkey 采用：** 文件引用标签、可折叠活动轨迹、报告/Artifact 分层和来源收据。
 
-**Vinkey 有意不同：** 长任务结果不能以“共用时”替代覆盖率、失败块和证据。文学分析必须让用户区分事实、推断、疑点和草稿。
+**Vinkey 有意不同：** 长任务结果不能以“共用时”替代覆盖率、失败块和证据。文学分析必须让用户区分事实、推断、疑点和草稿。WPS Office AI 的文档编辑和格式交付另列为办公工作台能力，不与通用助手的对话体验混排。
 
 ## 4. 商业产品能力的决策边界
 

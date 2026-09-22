@@ -16,6 +16,14 @@
 | `Codex CLI` | OpenAI Codex 的命令行客户端 | `OpenAI CLI`、`Codex 命令行 Agent` | 首次出现写 `OpenAI Codex CLI（简称 Codex CLI）` |
 | `Codex SDK` | OpenAI Codex 的程序化控制 SDK | `Codex API` | 不与 OpenAI Responses API 混同 |
 | `CloudCLI` | `siteboon/claudecodeui` 的正式产品名称/当前品牌 | `ClaudeCodeUI`（作为产品名） | 首次出现写 `CloudCLI（仓库名 claudecodeui，原 Claude Code UI）` |
+| `豆包` | 字节跳动的中文通用 AI 助手产品 | 独立的“长文助手”产品名 | 功能场景可写“豆包的长文/附件能力” |
+| `千问` | 阿里巴巴中文通用 AI 助手产品 | `通义`（历史品牌） | 首次出现可写“千问（历史品牌：通义）” |
+| `Kimi` | 月之暗面中文长文本与研究助手产品 | `Kimi 助手`（除非描述 App） | 产品名统一写 `Kimi` |
+| `元宝` | 腾讯中文通用 AI 助手产品 | `腾讯元宝`（正文简称） | 首次出现可写“元宝（腾讯全能 AI 助手）” |
+| `文心` | 百度中文通用 AI 助手产品 | `文小言`（历史品牌） | 首次出现可写“文心（历史品牌：文小言）” |
+| `讯飞星火` | 科大讯飞中文通用 AI 助手产品 | `星火`（正式名录中不单独使用） | 统一写完整产品名 |
+| `DeepSeek` | DeepSeek 通用 AI 助手与模型产品体系 | `深度求索助手` | 模型名和 App/产品名需按上下文区分 |
+| `WPS Office AI` | 金山办公文档办公工作台中的 AI 能力 | `WPS AI`（能力简称，不作为正式产品名） | 与通用中文助手单独分类 |
 | `Opcode` | `winfunc/opcode` 的 Claude Code GUI/Toolkit | `ClaudeCodeUI`、`Claude CLI GUI` | 单 CLI 工作台，不是多 CLI 聚合器 |
 | `Claude Code Router` | `musistudio/claude-code-router` 的本地路由控制平面 | `Claude Router` | 不是 Claude Code 本身 |
 | `CLIProxyAPI` | `router-for-me/CLIProxyAPI` 的多模型 API 兼容代理 | `Agent CLI` | 主要是代理/兼容层，不是用户创作工作台 |
@@ -49,4 +57,3 @@
 推荐：
 
 > 本报告比较 OpenAI Codex、Claude Code 和 OpenCode 的 Agent 任务控制；需要讨论终端入口时，分别使用 Codex CLI、Claude Code 的命令行客户端和 OpenCode 的终端交互。
-

@@ -4,24 +4,25 @@
 - 日期：2026-09-17
 - Vinkey 模板：[Agent 流程模板](AGENT_FLOW_TEMPLATES.md)
 - 产品名称口径：[竞品术语规范](../../competitors/TERMINOLOGY.md)
+- 正式竞品名录：[竞品名录](../../competitors/COMPETITOR_CATALOG.md)
 
 ## 1. 对比口径
 
-本对比关注用户可观察的流程模板和 Runtime 合同，不比较模型回答质量，也不把厂商内部隐藏推理当作流程。OpenAI Codex 依据官方 OpenAI 长任务说明与仓库既有调研；Claude Code 依据仓库已有官方资料调研；豆包依据本次提供的文档分析交互样本。
+本对比关注用户可观察的流程模板和 Runtime 合同，不比较模型回答质量，也不把厂商内部隐藏推理当作流程。OpenAI Codex 依据官方 OpenAI 长任务说明与仓库既有调研；Claude Code 依据仓库已有官方资料调研；豆包依据本次提供的文档和公开产品信息分析交互能力。
 
 ## 2. 核心差异
 
-| 维度 | OpenAI Codex | Claude Code | 豆包样本 | Vinkey 模板 |
+| 维度 | OpenAI Codex | Claude Code | 豆包 | Vinkey 模板 |
 | --- | --- | --- | --- | --- |
 | 主要对象 | 代码仓库、任务和 diff | 代码/文件、工具和 Artifact | 附件、用户问题和长文回答 | 作品、文档、场景、canon、记忆和 Proposal |
 | 目标声明 | outcome、constraints、verification；Goal 可暂停/恢复/编辑 | 任务指令、计划、Tool 权限和完成结果 | 短指令，过程弱化，强调最终长文 | outcome、constraints、definition of done、领域 output contract |
-| 执行选择 | Agent 自主使用受控工具 | Agent Loop、工具、子 Agent/Skill | 样本中过程折叠为耗时入口 | 先判定 deterministic/direct/workflow/agent/hybrid，Agent 不是默认 |
+| 执行选择 | Agent 自主使用受控工具 | Agent Loop、工具、子 Agent/Skill | 可观察交互中过程折叠为耗时入口 | 先判定 deterministic/direct/workflow/agent/hybrid，Agent 不是默认 |
 | 上下文 | workspace/thread，运行中可追加约束 | session、文件、项目指令、memory | 附件独立成块 | 稳定 TargetRef + scope/coverage/sourcePolicy + 源指纹 |
 | 过程展示 | 进度行、状态更新、审批、最终 review | 工具调用、权限确认、Artifact、结果 | “共用时”入口 + 文档式结果 | 可验证 TaskEvent；默认折叠；不展示隐藏思维链 |
 | 产物 | 代码变更、测试结果、diff | 文件、Artifact、diff | Markdown、表格、代码/可视化内容 | Answer、Report、Artifact、DiffProposal、CanonProposal、MemoryProposal |
-| 审批粒度 | shell/network/file 等权限与变更 review | Tool 权限、文件修改和执行确认 | 样本中无显式领域审批 | 文档块、canon 项、记忆项、网络范围和正式写入 |
-| 恢复模型 | thread/goal/task 恢复 | session/checkpoint 恢复 | 样本未体现 | Task/Step/Event/Checkpoint，按源指纹和模板版本恢复 |
-| 安全边界 | 工作区、沙箱、approval policy | permission mode、allow/deny、sandbox | 产品内部边界不可从样本确认 | WorkspaceGuard + ToolGateway + 领域副作用等级 |
+| 审批粒度 | shell/network/file 等权限与变更 review | Tool 权限、文件修改和执行确认 | 当前资料未见显式领域审批 | 文档块、canon 项、记忆项、网络范围和正式写入 |
+| 恢复模型 | thread/goal/task 恢复 | session/checkpoint 恢复 | 当前资料未体现 | Task/Step/Event/Checkpoint，按源指纹和模板版本恢复 |
+| 安全边界 | 工作区、沙箱、approval policy | permission mode、allow/deny、sandbox | 当前资料无法确认产品内部边界 | WorkspaceGuard + ToolGateway + 领域副作用等级 |
 | 长文本 | 非文学领域专用 | 通用文件上下文 | 最终回答阅读体验强 | 结构分块、Map/Reduce/Synthesis、覆盖收据和来源校验 |
 
 ## 3. Vinkey 应采用的部分
@@ -39,7 +40,7 @@
 - Artifact 独立于聊天正文，适合报告、关系图、时间线和导出文件。
 - 结构化输出、审批和 checkpoint 属于 Runtime 合同，而不是提示词约定。
 
-来自豆包样本：
+来自豆包的可观察交互：
 
 - 附件在用户请求中独立展示，避免正文重复文件名。
 - 助手最终回答采用无气泡的文档式排版，适合标题、表格和长列表。
@@ -66,7 +67,7 @@ OpenAI Codex 风格
 Claude Code 风格
   计划 -> Tool 调用/权限 -> 分析 -> Artifact/修改建议 -> 用户审阅
 
-豆包样本风格
+豆包风格
   附件 + 短指令 -> 长时间处理 -> 共用时入口 -> 结构化长文结果/可视化
 
 Vinkey
