@@ -36,17 +36,37 @@
 
 ## 3. 当前版本工作计划表
 
-排序按用户影响和跨层风险：先验收设置与模型边界，再验收会话/文档主链路，最后验收长任务和低频边界。
+该表不是单一的“重要性排名”，而是按依赖关系组织验收波次，再在同一波次内参考用户影响和跨层风险。每个功能域拆成两个验收门槛：
 
-| 优先级 | 功能域 | 主要入口 | 竞品证据链 | 实现与测试范围 | 当前状态 | 产出 |
+- **可启动验收**：不等待完整业务依赖即可执行的静态 UI、入口、状态、窗口尺寸或 fixture 验收；结果只能证明该子范围。
+- **完整链路验收**：依赖真实桥接、SQLite/凭据库、模型或其他功能域的业务链路；前置域未完成时不得宣称该功能域完整通过。
+
+因此，“应用壳层与入口”应先于“模型设置”启动其静态 UI 验收；“模型设置”完成后才解锁对话、真实 IntentRouter、上下文分析和依赖模型的长任务验收。文件与编辑器的基础文件链路可以和模型设置并行，但 AI 改稿链路必须等待模型设置和对话链路。
+
+| 验收波次 | 优先级 | 功能域 | 前置依赖 | 可启动验收 | 完整链路解锁/依赖 | 主要入口与产出 |
 | --- | --- | --- | --- | --- | --- | --- |
-| P0 | 模型设置 | `EP-SETTINGS-001`、`EP-MODEL-001` 至 `EP-MODEL-005` | Cherry Studio、SoloMD 的提供商/模型/连接测试分离；CloudCLI、Claude Code Router、CLIProxyAPI 仅作控制面观察；复合身份、密钥边界为 Vinkey 原创安全约束 | `SettingsPage.tsx`、`desktop.ts`、`models.rs`、`hardware.rs`、`store.ts`；组件、隐私、准入、硬件测试 | 代码验收通过；桌面实机待执行 | [模型设置专项验收](./acceptance/UI_ACCEPTANCE_SETTINGS.md) |
-| P0 | 应用壳层与入口 | `EP-WORKSPACE-*`、`EP-NAV-*`、`EP-SETTINGS-001` | Cherry Studio、Obsidian、Typora 的设置/工作区职责边界；平台菜单为 Vinkey 适配 | `App.tsx`、`ProjectSessionSidebar.tsx`、`TitleBar`；导航、快捷键、窗口状态测试 | 待本轮执行 | `UI_ACCEPTANCE_SHELL.md` |
-| P0 | 对话与模型状态 | `EP-CONVERSATION-*`、`EP-MODEL-001` | OpenAI Codex、Claude Code、Cursor 的模型状态、任务入口和结果分层；消息活动与 Vinkey 任务状态组合改造 | `App.tsx`、`MessageActivity.tsx`、路由/运行时；组件和链路测试 | 部分覆盖 | `UI_ACCEPTANCE_CHAT.md` |
-| P1 | 文件与编辑器 | `EP-DOCUMENT-*` | MarkText、Typora、Obsidian 的编辑/预览/保存；DiffProposal 为 Vinkey 审阅原创约束 | `FileWorkspace`、`EditorPanel`、`CodeEditor`、文件 API；保存、冲突、越界、提案测试 | 部分实现 | `UI_ACCEPTANCE_EDITOR.md` |
-| P1 | 日志中心与长任务 | `EP-LOG-*`、`EP-TASK-*` | OpenAI Codex、Claude Code、豆包的进度、后台任务、Artifact 和恢复；源快照校验为 Vinkey 组合改造 | `LogCenter`、`ConversationTaskControls`、Worker/TaskJob；暂停、失败、恢复、结果测试 | 部分实现 | `UI_ACCEPTANCE_LOGS.md` |
-| P1 | 工作区上下文与分析 | `EP-CONTEXT-*`、`EP-ANALYSIS-*` | Aider、Continue、GitHub Copilot 的索引优先和预算控制；文学证据窗口为 Vinkey 原创领域适配 | Context/Workspace Analysis、权限策略、来源收据；召回、隐私、超限测试 | 部分实现 | `UI_ACCEPTANCE_CONTEXT.md` |
-| P2 | 主题与响应式 | `EP-SHELL-*`、页面内响应式入口 | 桌面编辑器通用布局经验；尺寸 token、断点和平台差异由 Vinkey 设计系统定义 | `UI_DESIGN_SYSTEM.md`、各页面 CSS；Windows/macOS/窄窗口手工验收 | 待集中执行 | `UI_ACCEPTANCE_RESPONSIVE.md` |
+| W0-A | P0 | 应用壳层与入口 | 无；仅需能启动应用或浏览器演示 | 标题栏、侧栏、导航、设置入口、快捷键、返回路径、窗口基础行为 | 为全部页面提供统一入口；设置页返回与跨页状态需在相关域联调后复核 | `EP-WORKSPACE-*`、`EP-NAV-*`、`EP-SETTINGS-001`；`UI_ACCEPTANCE_SHELL.md` |
+| W0-A | P0 | 主题与响应式基线 | 壳层布局和设计 token | 静态截图、窄窗口、焦点顺序、无重叠、平台菜单差异 | 全部页面完成后再做一次跨域回归；基线通过不等于各页面完整通过 | 页面内响应式入口；`UI_ACCEPTANCE_RESPONSIVE.md` |
+| W0-B | P1 | 文件与编辑器（基础链路） | 壳层、工作区/文件桥接 | 文件树、打开、编辑、保存、预览、Unicode 路径、保存错误和越界 | AI 改稿、DiffProposal 和模型辅助操作依赖模型设置与对话；冲突/提案需在 W3 复核 | `EP-DOCUMENT-*`；`UI_ACCEPTANCE_EDITOR.md` |
+| W1 | P0 | 模型设置 | 壳层入口；桌面桥接、SQLite、系统凭据库可用 | 浏览器演示和设置页 UI、表单状态、硬件提示、连接失败状态 | 解锁真实 Ollama/兼容服务、活动模型、对话、IntentRouter、上下文分析和长任务 | `EP-SETTINGS-001`、`EP-MODEL-001` 至 `EP-MODEL-005`；[模型设置专项验收](./acceptance/UI_ACCEPTANCE_SETTINGS.md) |
+| W2 | P0 | 对话与模型状态 | W0 壳层 + W1 模型设置 + 运行时 | fixture/mock 下的消息、加载、停止、错误和禁用状态 | 真实模型发送、流式完成、超时恢复和活动模型快照；依赖 W1 | `EP-CONVERSATION-*`、`EP-MODEL-001`；`UI_ACCEPTANCE_CHAT.md` |
+| W3 | P1 | 工作区上下文与分析 | W0 文件/工作区 + W1 模型设置 + W2 运行时 | 权限提示、文件选择、预算边界、来源收据和 fixture 召回 | 真实模型上下文调用、超限、隐私边界和分析结果；依赖 W1/W2 | `EP-CONTEXT-*`、`EP-ANALYSIS-*`；`UI_ACCEPTANCE_CONTEXT.md` |
+| W4 | P1 | 日志中心与长任务 | 壳层和任务记录模型；fixture 可先行 | 日志列表、空态、筛选、展开、失败和恢复 UI | 真实对话/分析任务、暂停/失败/恢复、产物和执行快照；依赖 W1/W2，分析任务还依赖 W3 | `EP-LOG-*`、`EP-TASK-*`；`UI_ACCEPTANCE_LOGS.md` |
+
+模型设置的竞品证据为 Cherry Studio、SoloMD 的提供商/模型/连接测试分离；CloudCLI、Claude Code Router、CLIProxyAPI 仅作控制面观察。复合身份、密钥边界为 Vinkey 原创安全约束。其他功能域的竞品证据、实现范围和当前状态仍以各专项报告为准。
+
+### 3.1 “应用壳层与入口”与“模型设置”的排序论证
+
+这两个域不能用一个简单的先后关系概括，应按验收范围拆成两道门：
+
+| 对比项 | 应用壳层与入口 | 模型设置 |
+| --- | --- | --- |
+| 可否先启动 | 可以。标题栏、侧栏、导航、窗口尺寸、设置入口和返回路径不需要真实模型 | 可以在壳层入口可达后启动，但桌面完整结论还需要桥接、SQLite 和系统凭据库 |
+| 可证明什么 | 证明用户能进入功能域、跨页结构稳定、窗口和键盘交互可用 | 证明服务、profile、活动模型、凭据边界和模型检查链路可用 |
+| 不能证明什么 | 不能证明设置保存、模型连接、对话或分析可用 | 不能替代壳层在各页面的导航、窗口和响应式验收 |
+| 对后续的作用 | 提供统一入口和承载页面 | 解锁真实对话、IntentRouter、上下文分析、AI 改稿和模型驱动长任务 |
+
+因此执行上是“壳层结构验收先行，模型设置业务验收紧随其后”，而不是把整个壳层域一次性排在模型设置之后。壳层报告应先记录 W0-A 的结构/UI 子结论；设置页返回、跨页状态保留等依赖设置实现的场景在 W1 联调后复核。只有两个子范围都完成，才能把“应用壳层与入口”标记为完整通过。
 
 文件名是计划产物约定；专项报告应在执行前创建，不能以空文件代表通过。
 
@@ -73,9 +93,10 @@
 
 ## 6. 执行顺序与复审
 
-1. 先完成 P0 模型设置专项，确认统一流程可用于后续功能域。
-2. 按 [UI_ACCEPTANCE_SCRIPT_SPEC.md](./UI_ACCEPTANCE_SCRIPT_SPEC.md) 编写脚本，并按 [UI_ACCEPTANCE_SCRIPT_PLAN.md](./UI_ACCEPTANCE_SCRIPT_PLAN.md) 排期。
-3. 测试人员完成本地 Ollama/桌面执行后，使用对应回填模板上传机器结果和人工观察；未回传不得把平台层标记为通过。
-4. 根据专项报告模板补齐应用壳层、对话、编辑器和日志中心。
-5. 每个功能域完成后更新 `UI_INVENTORY.md`、对应 `UI_DESIGN_*.md` 和 `FEATURE_DECISIONS.md` 的交叉链接。
-6. 正式竞品按 `docs/competitors/SELECTION_METHODOLOGY.md` 复审；竞品名称或产品层级变化先更新 `TERMINOLOGY.md`。
+1. W0-A 先启动应用壳层、入口和主题/响应式基线；这些验收不要求真实模型，但不得据此宣称设置或对话业务通过。
+2. W0-B 可与 W1 并行执行文件与编辑器基础链路；将 AI 改稿、提案和模型辅助功能留到 W3。
+3. W1 完成模型设置专项和本地真实模型准入，确认统一流程可用于依赖模型的后续功能域。
+4. W2 执行对话与模型状态，再在 W3 执行上下文/分析和编辑器 AI 改稿，最后在 W4 执行真实长任务与日志闭环。
+5. 每个波次都按 [UI_ACCEPTANCE_SCRIPT_SPEC.md](./UI_ACCEPTANCE_SCRIPT_SPEC.md) 编写或复用脚本；测试人员完成本地 Ollama/桌面执行后，使用对应回填模板上传机器结果和人工观察，未回传不得把平台层标记为通过。
+6. 每个功能域完成后更新 `UI_INVENTORY.md`、对应 `UI_DESIGN_*.md` 和 `FEATURE_DECISIONS.md` 的交叉链接。
+7. 正式竞品按 `docs/competitors/SELECTION_METHODOLOGY.md` 复审；竞品名称或产品层级变化先更新 `TERMINOLOGY.md`。
