@@ -78,4 +78,7 @@ npm run package:mac -- --open
 - [Agent 流程模板对比](docs/design/agent/AGENT_FLOW_COMPARISON.md)
 - [GitHub 同类项目调研与功能取舍](docs/research/GITHUB_REFERENCE.md)
 - [轻量级联网搜索设计](docs/research/LIGHTWEIGHT_WEB_RESEARCH.md)
+- [竞品分析总览与功能决策台账](docs/competitors/)
+- [开源项目分析报告](docs/competitors/OPEN_SOURCE_REPORT.md)
+- [商业与 Agent 产品分析报告](docs/competitors/COMMERCIAL_AGENT_REPORT.md)
 - [单模型准入与硬件基线](docs/runtime/MODEL_ADMISSION.md)

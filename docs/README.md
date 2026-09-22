@@ -11,6 +11,7 @@
 | [`design/agent/intent-router/`](design/agent/intent-router/) | IntentRouter 架构、实现、测试计划与验收手册 | [IntentRouter 专项设计](design/agent/intent-router/) |
 | [`architecture/`](architecture/) | 技术选型、业务链路和 Runtime 分层 | [AI 业务链路架构](architecture/AI_BUSINESS_CHAINS.md) |
 | [`research/`](research/) | 外部项目调研和候选能力方案 | [GitHub 同类项目调研](research/GITHUB_REFERENCE.md) |
+| [`competitors/`](competitors/) | 竞品分析报告、功能决策台账和验证模板 | [竞品分析总览](competitors/) |
 | [`runtime/`](runtime/) | 模型、硬件和运行时准入基线 | [单模型准入与硬件基线](runtime/MODEL_ADMISSION.md) |
 
 ## 维护约定
@@ -18,6 +19,7 @@
 - UI 页面或交互域变更写入 `design/ui/`；跨域入口、现状盘点和视觉 token 仍由 UI 总览文档索引。
 - Agent、Skill、Workflow 和消息流模板写入 `design/agent/`；业务链路的系统边界写入 `architecture/`。
 - 调研结论与待验证方案写入 `research/`，落地后的稳定运行约束迁移或同步到 `architecture/` 或 `runtime/`。
+- 竞品观察、跨项目功能比较和“已参考/待参考/不采用”决策写入 `competitors/`；原始仓库调研仍维护在 `research/`。
 - 从仓库根目录引用文档时使用完整路径，例如 `docs/design/ui/UI_DESIGN_CHAT.md`；文档内部优先使用相对于当前文件的链接。
 - 移动或重命名文档时必须同步更新本目录、根目录 `README.md` 和文档内链接，并执行链接检查。
 
@@ -54,4 +56,8 @@
 
 - [GitHub 同类项目调研](research/GITHUB_REFERENCE.md)
 - [轻量级联网搜索设计](research/LIGHTWEIGHT_WEB_RESEARCH.md)
+- [竞品分析总览](competitors/)
+- [竞品功能决策总表](competitors/FEATURE_DECISIONS.md)
+- [开源项目分析报告](competitors/OPEN_SOURCE_REPORT.md)
+- [商业与 Agent 产品分析报告](competitors/COMMERCIAL_AGENT_REPORT.md)
 - [单模型准入与硬件基线](runtime/MODEL_ADMISSION.md)
