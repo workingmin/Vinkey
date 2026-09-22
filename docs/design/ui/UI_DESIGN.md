@@ -18,6 +18,9 @@
 | [UI_DESIGN_SETTINGS.md](./UI_DESIGN_SETTINGS.md) | 设置页、模型配置、外观偏好 | 配置表单、连接状态、设置导航 |
 | [UI_DESIGN_SYSTEM.md](./UI_DESIGN_SYSTEM.md) | 色彩、字体、尺寸、控件和无障碍 | 视觉精调、组件一致性、键盘操作 |
 | [UI_DESIGN_STATES.md](./UI_DESIGN_STATES.md) | 首次打开、空态、错误、响应式和验收 | 边界状态、跨平台验收、发布门槛 |
+| [UI_ACCEPTANCE_PLAN.md](./UI_ACCEPTANCE_PLAN.md) | 跨功能域验收阶段、证据链和交付物 | 当前版本验收排期、责任和阻断项 |
+| [UI_ACCEPTANCE_SCRIPT_SPEC.md](./UI_ACCEPTANCE_SCRIPT_SPEC.md) | 本地验收脚本的参数、输出、退出码和脱敏规范 | 新增功能域脚本的实现合同 |
+| [UI_ACCEPTANCE_SCRIPT_PLAN.md](./UI_ACCEPTANCE_SCRIPT_PLAN.md) | 各功能域脚本建设、执行和归档排期 | 测试人员本地执行准备 |
 
 ## 设计结论
 
@@ -106,6 +109,12 @@ Vinkey 是深色、安静、AI 对话优先的本地文学创作工作台。主�
 4. 写入、删除、模型调用、任务控制等高影响操作是否登记确认、禁用、错误和恢复状态。
 5. 当前实现、部分实现和待实现标记是否与源码及页面设计说明一致。
 6. 删除组件时是否保留原 ID 并标记“已移除”，避免历史验收记录失去引用。
+
+## 统一验收生命周期
+
+所有功能域均按“功能域 → 竞品证据 → 设计决策 → 前后端实现 → 自动化测试代码 → 本地环境验收脚本 → 测试人员执行与证据回传 → 验收报告 → 遗留项复审”追踪。该扩展生命周期保留了原六阶段的设计追踪价值，并补上真实 Ollama、系统凭据库、平台窗口和人工观察所需的证据节点。跨域总计划见 [UI_ACCEPTANCE_PLAN.md](./UI_ACCEPTANCE_PLAN.md)，脚本契约见 [UI_ACCEPTANCE_SCRIPT_SPEC.md](./UI_ACCEPTANCE_SCRIPT_SPEC.md)；模型设置的首个实例见 [acceptance/UI_ACCEPTANCE_SETTINGS.md](./acceptance/UI_ACCEPTANCE_SETTINGS.md)，执行回填见 [acceptance/UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md](./acceptance/UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md)。
+
+竞品证据只能支持设计判断，不能替代 Vinkey 自身的可用性、隐私和业务验收。每个功能域必须把设计来源标记为“直接参考”“组合改造”“Vinkey 原创”或“暂不采用”，并为每条已参考决策关联正式竞品名录、功能决策编号、实现位置和测试证据。
 
 ### 维护规则
 

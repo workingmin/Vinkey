@@ -39,6 +39,11 @@
 - [视觉与组件系统](design/ui/UI_DESIGN_SYSTEM.md)
 - [状态、流程与验收](design/ui/UI_DESIGN_STATES.md)
 - [临时交互状态](design/ui/TEMPORARY_INTERACTION_STATES.md)
+- [UI 验收工作计划](design/ui/UI_ACCEPTANCE_PLAN.md)
+- [UI 验收脚本设计规范](design/ui/UI_ACCEPTANCE_SCRIPT_SPEC.md)
+- [UI 验收脚本编写计划](design/ui/UI_ACCEPTANCE_SCRIPT_PLAN.md)
+- [模型设置专项验收](design/ui/acceptance/UI_ACCEPTANCE_SETTINGS.md)
+- [模型设置本地验收回填模板](design/ui/acceptance/UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md)
 
 ### Agent 与架构
 
