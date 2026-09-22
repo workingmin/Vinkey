@@ -44,6 +44,8 @@
 - [UI 验收脚本编写计划](design/ui/UI_ACCEPTANCE_SCRIPT_PLAN.md)
 - [模型设置专项验收](design/ui/acceptance/UI_ACCEPTANCE_SETTINGS.md)
 - [模型设置本地验收回填模板](design/ui/acceptance/UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md)
+- [应用壳层与入口专项验收](design/ui/acceptance/UI_ACCEPTANCE_SHELL.md)
+- [应用壳层与入口本地验收回填模板](design/ui/acceptance/UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md)
 
 ### Agent 与架构
 

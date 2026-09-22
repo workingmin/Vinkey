@@ -3,6 +3,8 @@
 - 状态：当前实现基线
 - 日期：2026-09-15
 - 业务入口：[UI_ENTRY_POINTS.md](./UI_ENTRY_POINTS.md)
+- 专项验收：[应用壳层与入口验收报告](./acceptance/UI_ACCEPTANCE_SHELL.md)
+- 本地回填：[应用壳层与入口本地验收模板](./acceptance/UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md)
 
 ## 目标
 
