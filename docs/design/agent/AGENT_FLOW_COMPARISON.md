@@ -3,14 +3,15 @@
 - 状态：评审基线
 - 日期：2026-09-17
 - Vinkey 模板：[Agent 流程模板](AGENT_FLOW_TEMPLATES.md)
+- 产品名称口径：[竞品术语规范](../../competitors/TERMINOLOGY.md)
 
 ## 1. 对比口径
 
-本对比关注用户可观察的流程模板和 Runtime 合同，不比较模型回答质量，也不把厂商内部隐藏推理当作流程。Codex 依据官方 OpenAI 长任务说明与仓库既有调研；Claude 依据仓库已有官方资料调研；豆包依据本次提供的文档分析交互样本。
+本对比关注用户可观察的流程模板和 Runtime 合同，不比较模型回答质量，也不把厂商内部隐藏推理当作流程。OpenAI Codex 依据官方 OpenAI 长任务说明与仓库既有调研；Claude Code 依据仓库已有官方资料调研；豆包依据本次提供的文档分析交互样本。
 
 ## 2. 核心差异
 
-| 维度 | Codex | Claude | 豆包样本 | Vinkey 模板 |
+| 维度 | OpenAI Codex | Claude Code | 豆包样本 | Vinkey 模板 |
 | --- | --- | --- | --- | --- |
 | 主要对象 | 代码仓库、任务和 diff | 代码/文件、工具和 Artifact | 附件、用户问题和长文回答 | 作品、文档、场景、canon、记忆和 Proposal |
 | 目标声明 | outcome、constraints、verification；Goal 可暂停/恢复/编辑 | 任务指令、计划、Tool 权限和完成结果 | 短指令，过程弱化，强调最终长文 | outcome、constraints、definition of done、领域 output contract |
@@ -25,14 +26,14 @@
 
 ## 3. Vinkey 应采用的部分
 
-来自 Codex：
+来自 OpenAI Codex：
 
 - 用“结果、约束、验证”定义长任务完成条件。
 - 输入区上方放置紧凑进度控制，支持暂停、恢复和停止。
 - 同一会话保留相关上下文，运行中追加约束不隐式扩大权限。
 - 任务完成后把结果交给用户审阅，而不是把执行成功等同于业务接受。
 
-来自 Claude：
+来自 Claude Code：
 
 - Tool 调用与最终回答分层，过程默认折叠。
 - Artifact 独立于聊天正文，适合报告、关系图、时间线和导出文件。
@@ -59,10 +60,10 @@
 任务：“检查整部小说的人物关系是否前后矛盾，并给出可修改建议。”
 
 ```text
-Codex 风格
+OpenAI Codex 风格
   目标/约束/验证 -> 搜索与读取 -> 多步执行 -> 状态更新 -> 最终摘要 + diff review
 
-Claude 风格
+Claude Code 风格
   计划 -> Tool 调用/权限 -> 分析 -> Artifact/修改建议 -> 用户审阅
 
 豆包样本风格
@@ -85,7 +86,7 @@ Vinkey 比通用 Agent 多出的关键边界，是“审校”和“修改”必
 ```yaml
 comparison_run:
   scenario_id: string
-  product: vinkey | codex | claude | doubao
+  product: vinkey | openai-codex | claude-code | doubao
   product_version_or_date: string
   prompt: string
   attachments: string[]

@@ -5,6 +5,7 @@
 - 适用范围：Vinkey 本地 AI 文学创作工作台
 - 目标：以受控的 `Service/Tool + Workflow/Agent/Skill` 组合处理用户请求，并保持业务合同、Agent Runtime 与模型提供商相互独立。
 - 相关文档：[开发框架与技术选型](DEVELOPMENT_FRAMEWORK.md)、[Agent 与 Skill 建设计划](../design/agent/AGENT_SKILL_PLAN.md)、[对话页设计](../design/ui/UI_DESIGN_CHAT.md)
+- 外部产品名称口径：[竞品术语规范](../competitors/TERMINOLOGY.md)
 
 ## 1. 产品定位
 
@@ -25,7 +26,7 @@ Vinkey 不是通用 Agent 客户端，也不是某一家模型或 Agent SDK 的�
   → Evidence Validation / User Approval / Commit
 ```
 
-Codex、Claude 及其他 Agent 系统只作为 Runtime 能力、Tool 协议、Skill 组织和交互模型的参考对象，是否集成必须由 Vinkey 的具体业务链路需求决定。当前版本不把它们设计成用户可选择、启用或配置的 Adapter，也不引入任何额外需要用户配置的商用付费 API。业务链路不得依赖特定厂商的 thread、message、tool-call、凭据或文件格式。
+OpenAI Codex、Claude Code 及其他 Agent 系统只作为 Runtime 能力、Tool 协议、Skill 组织和交互模型的参考对象，是否集成必须由 Vinkey 的具体业务链路需求决定。当前版本不把它们设计成用户可选择、启用或配置的 Adapter，也不引入任何额外需要用户配置的商用付费 API。业务链路不得依赖特定厂商的 thread、message、tool-call、凭据或文件格式。
 
 ## 2. 四类执行模式
 
@@ -118,7 +119,7 @@ TaskResult
   output / evidence / coverage / proposals / warnings
 ```
 
-任何候选 Runtime 实现都只能实现上述合同。Codex thread、Claude session、模型 message 和 provider-specific tool use 必须在内部边界转换，不得进入作品、人物、记忆、分析任务等领域数据表。
+任何候选 Runtime 实现都只能实现上述合同。OpenAI Codex thread、Claude Code session、模型 message 和 provider-specific tool use 必须在内部边界转换，不得进入作品、人物、记忆、分析任务等领域数据表。
 
 ### 5.2 ToolGateway
 
@@ -145,23 +146,23 @@ Production runtime
   VinkeyNativeRuntime
 
 Agent architecture references / internal prototypes
-  Codex
-  Claude
+  OpenAI Codex
+  Claude Code
   Other agent systems
 ```
 
-当前版本唯一的产品级 Runtime 是 `VinkeyNativeRuntime`。Codex、Claude 或其他 Agent 系统不形成用户可见的 Provider/Adapter 选项；内部原型也必须通过相同业务评测，不能因为提供现成 Agent Loop 就获得更宽权限。
+当前版本唯一的产品级 Runtime 是 `VinkeyNativeRuntime`。OpenAI Codex、Claude Code 或其他 Agent 系统不形成用户可见的 Provider/Adapter 选项；内部原型也必须通过相同业务评测，不能因为提供现成 Agent Loop 就获得更宽权限。
 
 ### 5.4 当前版本依赖与认证硬边界
 
-- Vinkey 不提供 Codex、Claude 或其他 Agent Runtime 的选择、启用、登录和凭据配置入口。
+- Vinkey 不提供 OpenAI Codex、Claude Code 或其他 Agent Runtime 的选择、启用、登录和凭据配置入口。
 - 当前版本不得为了 Agent 能力新增 OpenAI、Anthropic 或其他商用平台的付费 API Key、API 额度或计费账户依赖；需要这类配置的集成方案直接判定为超出版本范围。
 - Vinkey 启动、工作区管理、确定性 Service 和业务链路编排只依赖 `VinkeyNativeRuntime`，不得探测到某个 CLI 后静默切换执行器。
 - Ollama 和用户已有的 OpenAI-compatible 模型配置属于 Vinkey 的 Model Provider 层，不代表用户选择了某个 Agent Runtime，也不得被内部原型转交给外部 CLI 或服务。
-- Codex、Claude 等 Agent 能力体系作为架构参考或开发期内部原型。只有某条业务链路存在可量化缺口，并且候选实现不新增上述付费 API 配置、不削弱本地数据边界时，才进入集成评审。
-- 即使未来通过评审，具体 Runtime 仍由业务链路内部调度，不向用户暴露 Codex/Claude Adapter 概念，且不能成为 Vinkey 基础功能的运行前提。
+- OpenAI Codex、Claude Code 等 Agent 能力体系作为架构参考或开发期内部原型。只有某条业务链路存在可量化缺口，并且候选实现不新增上述付费 API 配置、不削弱本地数据边界时，才进入集成评审。
+- 即使未来通过评审，具体 Runtime 仍由业务链路内部调度，不向用户暴露 OpenAI Codex/Claude Code Adapter 概念，且不能成为 Vinkey 基础功能的运行前提。
 
-## 6. Codex、Claude 与 Vinkey Native Agent 参考取舍
+## 6. OpenAI Codex、Claude Code 与 Vinkey Native Agent 参考取舍
 
 ### 6.1 比较口径
 
@@ -175,7 +176,7 @@ Agent architecture references / internal prototypes
 因此，本章采用以下对齐关系：
 
 - `Codex SDK` 与 `Claude Agent SDK` 都是编程控制完整 Agent Runtime 的高层 SDK，可直接比较。
-- `Codex CLI / IDE extension / ChatGPT desktop app 中的 Codex / Codex cloud` 与 `Claude Code terminal / IDE / desktop / web` 都属于用户直接使用的 Agent 产品表面，可按交互位置、执行位置和审核体验比较。
+- `Codex CLI / IDE extension / ChatGPT desktop app 中的 OpenAI Codex / Codex cloud` 与 `Claude Code 的命令行客户端 / IDE / desktop / web` 都属于用户直接使用的 Agent 产品表面，可按交互位置、执行位置和审核体验比较。
 - `codex exec / Codex GitHub Action` 与 Claude Code 的 headless CLI、GitHub Actions / GitLab CI/CD 都属于非交互自动化入口。
 - `Codex app-server` 是富客户端控制协议。Claude 体系的相关能力分布在 Claude Agent SDK 的会话/流式控制 API，以及宿主与 Claude Code 子进程之间的 stdio 通道；两者的封装边界和宿主方式不同。
 - OpenAI `Responses API / Agents SDK` 与 `Claude API / Anthropic SDK Tool Use / Tool Runner` 属于通用 Agent API 层；`Codex SDK / Claude Agent SDK` 属于 Agent Runtime 集成层。
@@ -187,7 +188,7 @@ Agent architecture references / internal prototypes
 
 | 能力层 | Codex 体系 | Claude 体系 | 对齐结论 |
 | --- | --- | --- | --- |
-| 本地终端 Agent | Codex CLI：交互式读取、编辑、命令执行、审查、会话恢复 | Claude Code CLI：交互式代码 Agent、文件和命令 Tool、会话管理 | 同层产品，可比较本地 Agent Loop、权限和恢复体验 |
+| 本地终端 Agent | Codex CLI：交互式读取、编辑、命令执行、审查、会话恢复 | Claude Code 的命令行客户端：交互式代码 Agent、文件和命令 Tool、会话管理 | 同层产品，可比较本地 Agent Loop、权限和恢复体验 |
 | IDE Agent | Codex IDE extension：编辑器上下文、内联 diff、本地执行与 cloud handoff | Claude Code VS Code / JetBrains：选择上下文、内联 diff、计划审阅 | 同层产品，可比较编辑器上下文和审核交互 |
 | 桌面与 Web 表面 | ChatGPT desktop app 中的 Codex；浏览器中的 Codex cloud | Claude Code Desktop、Claude Code on the web 和移动端 | 同属用户表面，但支持范围、执行位置和账号体系不同；不据此推导可嵌入 Runtime |
 | 云端后台任务 | Codex cloud：隔离环境、并行任务、环境配置、结果/diff 审阅 | Claude Code on the web：云端长任务和并行执行 | 产品体验可比较；均不适合作为 Vinkey 当前本地正文默认执行路径 |
@@ -259,7 +260,7 @@ Agent architecture references / internal prototypes
 
 #### 6.4.3 Claude API Tool 层与托管 Runtime
 
-- **Claude Client SDK + Tool Use** 属于模型 API 层，应用自行执行 Tool 并维护循环。
+- **Anthropic Claude API Client SDK + Tool Use** 属于 Claude 模型 API 层，应用自行执行 Tool 并维护循环。
 - **Tool Runner** 是 Anthropic Client SDK 中的 beta helper，自动处理 Tool 调用、结果回传、会话状态、类型和错误；需要复杂人工审批或条件执行时仍应使用手动 Loop。它应与 OpenAI Responses/Agents SDK 的 Tool Loop 能力比较，而不是与 Codex app-server 比较。
 - **Claude Managed Agents** 是独立的托管 Agent Runtime API，提供 Agent、Environment、Session、Event，支持 cloud/self-hosted sandbox、SSE、持久会话、steer/interrupt 和定时执行。该产品当前为 beta，要求 Claude API Key，并持久化服务端会话/沙箱状态，明确超出 Vinkey 当前版本边界。
 
@@ -279,14 +280,14 @@ Agent architecture references / internal prototypes
 | Codex SDK / Claude Agent SDK | 当前不集成 | 二者都携带工程 Agent、进程、shell、认证和厂商运行假设，引入成本超过当前业务收益 |
 | 富客户端会话控制 | 仅作控制面参考 | Codex app-server 提供独立 JSON-RPC 控制面；Claude Agent SDK 通过应用 API 和 stdio 宿主机制提供相关能力。Vinkey 借鉴会话、流式事件、steer、interrupt 和 approval 模型 |
 | OpenAI Responses API / Agents SDK；Claude API / Tool Runner / Managed Agents | 仅借鉴通用 Loop、handoff、guardrail、类型化 Tool 和托管状态模型 | 当前版本不新增商用付费 API 配置；Vinkey 需保持 Ollama/OpenAI-compatible Provider 可用，且不引入外部数据面 |
-| Codex/Claude Skills | 借鉴目录、元数据和渐进披露 | Skill 可兼容类似组织方式，但权限、输入输出和副作用由 Vinkey Registry/ToolGateway 强制执行 |
+| OpenAI Codex Skills / Claude Code Skills | 借鉴目录、元数据和渐进披露 | Skill 可兼容类似组织方式，但权限、输入输出和副作用由 Vinkey Registry/ToolGateway 强制执行 |
 | MCP / plugins | 暂不作为核心依赖 | 本地文学业务 Tool 优先；外部连接需单独的数据、网络和权限设计 |
 | 通用 shell、文件编辑 Tool | 排除 | 与文学创作资产权限不匹配，扩大正文和文件系统风险面 |
 | 云端/Managed Agent Runtime | 当前排除 | 引入付费 API、外部数据面、账号和托管状态，不符合本地工作台当前边界 |
 | subagents / multi-agent | 延后验证 | 仅在上下文隔离、并行校验或角色分工带来可量化收益时采用 |
 | sandbox、approval、checkpoint、tracing | 在 Native Runtime 内实现 | 属于 Vinkey 所有 Agent 链路共同需要的基础能力，不应依赖某个外部 Agent 产品 |
 
-最终结论：Vinkey 当前不在 Codex 与 Claude 之间选择一个集成目标，而是从二者完整 Agent 能力体系中提取经过业务验证的 Runtime 模式。所有生产链路仍由 `VinkeyNativeRuntime + ToolGateway + SkillRegistry + Rust Services + Model Providers` 执行；任何外部产品只有在解决明确业务缺口、通过领域评测且不新增商用付费 API 配置时，才有资格进入内部集成评审。
+最终结论：Vinkey 当前不在 OpenAI Codex 与 Claude Code 之间选择一个集成目标，而是从二者完整 Agent 能力体系中提取经过业务验证的 Runtime 模式。所有生产链路仍由 `VinkeyNativeRuntime + ToolGateway + SkillRegistry + Rust Services + Model Providers` 执行；任何外部产品只有在解决明确业务缺口、通过领域评测且不新增商用付费 API 配置时，才有资格进入内部集成评审。
 
 ### 6.6 官方资料
 
@@ -348,7 +349,7 @@ Agent architecture references / internal prototypes
 1. `ContinuityReviewer`：只读、跨章节、证据驱动，输出 `ReviewReport`。
 2. `CanonIngestion`：输出 `CanonProposal`，必须人工确认，不直接写正式资产。
 
-两个试点均以 `VinkeyNativeRuntime` 完成产品实现和验收。Codex/Claude 只用于设计对照、离线事件回放或不需要新增付费 API 配置的开发期原型，不作为试点完成条件。
+两个试点均以 `VinkeyNativeRuntime` 完成产品实现和验收。OpenAI Codex/Claude Code 只用于设计对照、离线事件回放或不需要新增付费 API 配置的开发期原型，不作为试点完成条件。
 
 当前进度：`ContinuityReviewer` 已完成独立意图、可选文档/工作区作用域、执行策略和证据优先的长文本报告提示；`RevisionEditor` 已支持最多 8 个文档的逐块 `DiffProposal`，本地锁定路径、范围、原文和 baseline，模型只能提供 `targetId + replacementText`，应用前再次检测冲突且不会自动保存。二者当前仍由 Fixed Workflow 执行，目标形态标记为 `hybrid-agent-workflow`，且审校报告和改写提案都不会自动进入项目记忆。正式 Agent Tool Loop、结构化 `ReviewReport`、Proposal 持久化/撤销和真实模型对照跑批尚未实施。
 
@@ -362,7 +363,7 @@ Agent architecture references / internal prototypes
 
 ### 阶段 5：Agent Harness 集成评审
 
-只有业务链路评测证明 `VinkeyNativeRuntime` 存在明确缺口，候选 Agent Harness 明显改善结果，并且满足无需新增商用付费 API 配置、本地正文授权、可观测、版本固定和跨平台打包要求，才讨论内部集成。集成后仍不提供 Codex/Claude Adapter 选择项；不满足任一条件则停留在架构参考或开发实验。
+只有业务链路评测证明 `VinkeyNativeRuntime` 存在明确缺口，候选 Agent Harness 明显改善结果，并且满足无需新增商用付费 API 配置、本地正文授权、可观测、版本固定和跨平台打包要求，才讨论内部集成。集成后仍不提供 OpenAI Codex/Claude Code Adapter 选择项；不满足任一条件则停留在架构参考或开发实验。
 
 ### 阶段 6：下一阶段业务链路优化计划
 
@@ -424,7 +425,7 @@ TaskIntake / IntentRouter
   → Outline / Scene / Draft 多阶段创作
 ```
 
-本阶段暂不推进外部研究、托管 Agent 或 Codex/Claude Harness 集成；这些工作必须等待本地 Runtime、权限边界和评测数据稳定后再进入阶段 5 的集成评审。
+本阶段暂不推进外部研究、托管 Agent 或 OpenAI Codex/Claude Code Harness 集成；这些工作必须等待本地 Runtime、权限边界和评测数据稳定后再进入阶段 5 的集成评审。
 
 #### 6.6 2026-09-07 实施状态
 
@@ -461,7 +462,7 @@ TaskIntake / IntentRouter
 | P1 | Canon/人物关系 Proposal 链路 | 已有 SQLite 图底座，可形成候选、证据、确认闭环 |
 | P1 | DiffProposal 审核持久化与撤销 | 多文件逐块生成、冲突检查和审核已完成；下一步补跨会话恢复、撤销和审计记录 |
 | P2 | Outline/Scene/Draft 多阶段创作 | 依赖 Proposal、记忆、任务恢复和模型能力路由 |
-| P2 | Codex/Claude Agent Harness 内部原型 | 仅验证具体业务缺口；无需新增付费 API 配置，不形成用户选项 |
+| P2 | OpenAI Codex/Claude Code Agent Harness 内部原型 | 仅验证具体业务缺口；无需新增付费 API 配置，不形成用户选项 |
 | P2 | [轻量级外部研究与联网 Skill](../research/LIGHTWEIGHT_WEB_RESEARCH.md) | 下一版本候选；先验证可信来源、事实收益、隐私和来源治理成本 |
 
 ## 9. 全局不变量

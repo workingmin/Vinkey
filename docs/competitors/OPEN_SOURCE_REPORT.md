@@ -3,23 +3,36 @@
 - 观察日期：2026-09-22
 - 观察范围：公开仓库、公开文档和可观察的产品交互；不以代码复制为目的。
 - 许可证原则：GPL/AGPL 项目只参考行为和公开架构，具体实现、资源和提示词仍需独立开发与许可证审查。
+- 筛选口径：[竞品筛选方法论](SELECTION_METHODOLOGY.md)；正式名单：[正式竞品名录](COMPETITOR_CATALOG.md)。
+
+本报告的正式开源竞品必须同时出现在[正式竞品名录](COMPETITOR_CATALOG.md)中。`SoloMD` 当前保留为设计来源/观察对象，尚未满足本轮市场认可充分条件；`Obsidian` 和 `Typora` 是非开源的本地工作台，只作为边界参考，不改变本报告的开源筛选口径。
 
 ## 1. 项目地图
 
-| 项目 | 主要价值 | 对 Vinkey 的相关度 | 当前结论 |
+| 规范名称 | 主要价值 | 对 Vinkey 的相关度 | 当前结论 |
 | --- | --- | --- | --- |
 | [NoteGen](https://github.com/codexu/note-gen) | Tauri、本地 Markdown、AI 对话和知识内容 | 高 | 已参考本地优先、内容/会话/模型分层；不复制 GPL 代码 |
-| [SoloMD](https://github.com/zhitongblog/solomd) | Tauri、本地 Markdown、BYOK、本地模型 | 高 | 已参考提供商配置、模型探测和密钥边界 |
+| [SoloMD](https://github.com/zhitongblog/solomd) | Tauri、本地 Markdown、BYOK、本地模型 | 高 | 设计来源/观察对象；已参考提供商配置、模型探测和密钥边界，但暂不列为正式竞品 |
 | [Cherry Studio](https://github.com/CherryHQ/cherry-studio) | 多提供商、多模型 AI 工作台 | 中高 | 已参考连接测试和当前模型分离；不引入其多模型复杂度 |
-| [Knote](https://github.com/1661169091kiwi/Knote) | 可审阅的 AI 编辑器 | 高 | 已参考 AI 修改提案和人工接受；保留 Vinkey 的源指纹约束 |
 | [MarkText](https://github.com/marktext/marktext) | 跨平台 Markdown 编辑器 | 高 | 已参考编辑、预览、保存和文件状态；外部变更仍待补齐 |
-| [Obsidian](https://obsidian.md/) | 本地知识库、链接和插件工作区 | 中高 | 已参考工作区和文档导航；不采用插件市场/知识图谱作为首版主流程 |
-| [Typora](https://typora.io/) | 低干扰 Markdown 写作 | 中 | 观察其沉浸式编辑和快捷键；不替代多文档/AI 工作区 |
+| [Obsidian](https://obsidian.md/) | 非开源本地知识库、链接和插件工作区 | 中高 | 非开源边界参考；已参考工作区和文档导航，不采用插件市场/知识图谱作为首版主流程 |
+| [Typora](https://typora.io/) | 非开源本地 Markdown 编辑器 | 中 | 非开源边界参考；观察沉浸式编辑和快捷键，不替代多文档/AI 工作区 |
 | [Aider](https://github.com/Aider-AI/aider) | 代码库地图、有限上下文、可审改工作流 | 高 | 已参考 repo map 和 token 预算思想；领域对象改为文学文档和 Proposal |
 | [Continue](https://github.com/continuedev/continue) | 检索、模型、上下文 Provider 可组合 | 中高 | 已参考有界检索和无结果降级；不引入 IDE 插件作为入口 |
 | [Cline](https://github.com/cline/cline) | Tool/子 Agent/审批驱动的 Agent | 中 | 观察广域探索升级条件；不开放 shell 和任意写权限 |
-| [StorySphere](https://github.com/willim9313/storysphere) | 人物、关系、事件抽取和图分析 | 高 | 已参考分阶段 ETL、缓存和增量思路；首版使用 SQLite/内存图 |
-| [graphify-novel](https://github.com/Anshler/graphify-novel) | 小说章节批处理、缓存、review、图导出 | 高 | 已参考批处理和人工审核；不使用单一 JSON blob 作为正式数据 |
+| [OpenCode](https://github.com/anomalyco/opencode) | 开源终端编码 Agent | 高 | 已参考多模型 Agent CLI、会话和终端工作流；不把代码工具直接暴露给文学正文 |
+| [OpenHands](https://github.com/OpenHands/OpenHands) | 开源 Agent 平台和开发环境 | 中高 | 已参考任务、沙箱、后台执行和恢复；不引入其代码开发默认边界 |
+
+### 多 Agent CLI 集成与代理工作台
+
+这类项目是上一版遗漏的正式生态参考。它们不是单一模型产品，而是把多个 Agent CLI、会话、项目、远程控制或模型连接放在同一个控制面中。
+
+| 规范名称 | 类型 | 主要观察点 | Vinkey 取舍 |
+| --- | --- | --- | --- |
+| [CloudCLI](https://github.com/siteboon/claudecodeui)（仓库名 `claudecodeui`，原 Claude Code UI） | 多 Agent CLI Web/移动工作台 | 统一管理 Claude Code、OpenCode、Cursor CLI、Codex 的项目与会话；适合观察远程控制和多 CLI 适配 | 正式生态参考；借鉴统一会话、任务状态和适配层，不复制 AGPL 实现 |
+| [Opcode](https://github.com/winfunc/opcode) | Claude Code GUI/Toolkit | 自定义 Agent、交互会话、安全后台 Agent 和桌面控制 | 正式生态参考；属于单 CLI GUI，不与 CloudCLI 混为多 CLI 聚合器 |
+| [Claude Code Router](https://github.com/musistudio/claude-code-router) | 模型路由控制平面 | 在多个 Provider/模型间路由 Claude Code 请求 | 正式生态参考；借鉴 Provider 抽象和本地控制面，不采用其认证假设 |
+| [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) | API 兼容代理 | 将多个模型/CLI 服务包装成 OpenAI/Gemini/Claude/Codex 兼容接口 | 正式生态参考但安全风险高；只研究协议隔离，不复用第三方账号凭据 |
 
 ## 2. 重点功能分析
 
@@ -68,7 +81,7 @@
 
 ### 2.4 AI 修改与审阅
 
-**观察。** Knote、Aider、Cursor 等产品都把 AI 修改与原文编辑区分开，用户需要看到变更范围，才能避免模型误删、越界或改变事实。
+**观察。** Aider、Cursor 等成熟产品都把 AI 修改与原文编辑区分开；Knote 作为设计来源也提供了类似启发，但尚未满足正式竞品的市场认可门槛。
 
 **Vinkey 已参考。**
 
@@ -81,7 +94,7 @@
 
 ### 2.5 人物、关系与创作资产
 
-**观察。** StorySphere、graphify-novel 等开源实现通常采用“候选抽取→规范化→关系/事件→图分析”的分阶段流水线；Novelcrafter Codex 则强调人物/地点/lore 卡片、别名和正文 mentions。
+**观察。** StorySphere、graphify-novel 等设计来源通常采用“候选抽取→规范化→关系/事件→图分析”的分阶段流水线；Novelcrafter Codex 则强调人物/地点/lore 卡片、别名和正文 mentions。
 
 **Vinkey 已参考。**
 
@@ -109,9 +122,11 @@
 | --- | --- | --- | --- |
 | 外部文件变化和冲突处理 | MarkText、Obsidian、桌面编辑器 | 有监听、差异预览、重新加载/另存为测试 | 编辑器底座 |
 | 混合项目检索 | Aider、Continue、Copilot | 与显式文件选择相比召回提升且不扩大隐私范围 | Context/Workspace Intelligence |
-| 人物资产增量更新 | StorySphere、graphify-novel、Novelcrafter | 真实长篇样本中局部失效可解释 | Canon/Memory |
+| 人物资产增量更新 | StorySphere、graphify-novel（设计来源）、Novelcrafter | 真实长篇样本中局部失效可解释 | Canon/Memory |
 | 可审阅的资产图和时间线 | Novelcrafter、图分析项目 | Artifact 只读、证据可定位、导出可复现 | Artifact |
 | 子 Agent 隔离探索 | Cline | 单一 Workflow 无法满足的广域任务，并有质量对照 | Agent Runtime |
+| 多 CLI 会话控制面 | CloudCLI、Opcode | 多 CLI 会话/项目状态能与 Vinkey TaskJob 清晰映射 | Agent Runtime |
+| Provider 路由和兼容层 | Claude Code Router、CLIProxyAPI | 无凭据越界、可追踪路由和失败隔离 | Model Provider |
 
 ## 4. 来源与补充阅读
 
@@ -119,4 +134,3 @@
 - [轻量级联网搜索设计](../research/LIGHTWEIGHT_WEB_RESEARCH.md)
 - [Agent 流程模板对比](../design/agent/AGENT_FLOW_COMPARISON.md)
 - [Agent 与 Skill 建设计划](../design/agent/AGENT_SKILL_PLAN.md)
-

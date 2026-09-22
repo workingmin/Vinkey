@@ -11,6 +11,9 @@
 | 文档 | 范围 | 适合回答的问题 |
 | --- | --- | --- |
 | [竞品功能决策总表](FEATURE_DECISIONS.md) | 跨项目、跨功能 | 某个能力是谁启发的，当前状态是什么，下一步怎么验收 |
+| [竞品筛选方法论](SELECTION_METHODOLOGY.md) | 市场认可充分条件、证据等级和复审规则 | 为什么一个项目能进入正式竞品列表 |
+| [正式竞品名录](COMPETITOR_CATALOG.md) | 通过筛选的核心竞品、生态参考和设计来源 | 当前应该比较哪些项目，哪些只能作为设计来源 |
+| [竞品术语规范](TERMINOLOGY.md) | 产品、CLI、SDK、路由器和代理层的规范名称 | 如何避免把不同层级的 Agent 产品混写 |
 | [开源项目分析报告](OPEN_SOURCE_REPORT.md) | GitHub 与开源桌面/编辑器项目 | 哪些本地优先、编辑器、知识组织和上下文设计可借鉴 |
 | [商业与 Agent 产品分析报告](COMMERCIAL_AGENT_REPORT.md) | 商业写作产品、Coding Agent、通用 Agent | 哪些任务编排、审批、Artifact、长任务和创作体验可借鉴 |
 | [单个竞品报告模板](COMPETITOR_REPORT_TEMPLATE.md) | 新增竞品 | 如何记录证据、已参考功能、待验证功能和不采用项 |
@@ -18,9 +21,11 @@
 已有的原始资料仍保留在以下文档中，本目录不复制其全部内容：
 
 - [GitHub 同类项目调研](../research/GITHUB_REFERENCE.md)：仓库、许可证和历史调研结论。
-- [Agent 流程模板对比](../design/agent/AGENT_FLOW_COMPARISON.md)：Codex、Claude、豆包与 Vinkey 的流程合同对照。
-- [AI 业务链路架构](../architecture/AI_BUSINESS_CHAINS.md)：Codex/Claude 产品体系、Runtime 边界和不集成决策。
+- [Agent 流程模板对比](../design/agent/AGENT_FLOW_COMPARISON.md)：OpenAI Codex、Claude Code、豆包与 Vinkey 的流程合同对照。
+- [AI 业务链路架构](../architecture/AI_BUSINESS_CHAINS.md)：OpenAI Codex/Claude Code 产品体系、Runtime 边界和不集成决策。
 - [标题栏与功能菜单设计](../design/ui/TITLE_BAR_DESIGN.md)：桌面编辑器和知识工作台的 UI 观察。
+
+正式竞品名单、类别和名称以[正式竞品名录](COMPETITOR_CATALOG.md)与[竞品术语规范](TERMINOLOGY.md)为准；其他文档中的历史调研不能单独证明市场认可。
 
 ## 统一口径
 
@@ -54,10 +59,9 @@
 
 ## 评审原则
 
-竞品的成熟度不是采用理由。优先级按 Vinkey 的隐私、可解释性、文学创作闭环、本地模型可用性和实现成本判断。尤其要区分：
+竞品的市场成熟度是进入正式名录的门槛，但不是 Vinkey 采用功能的理由。功能优先级仍按 Vinkey 的隐私、可解释性、文学创作闭环、本地模型可用性和实现成本判断。尤其要区分：
 
 - **发现**：候选实体、关系、结构或检索结果，可以不准确。
 - **建议**：模型生成的草稿、修改或规划，必须可审阅。
 - **确认事实**：用户认可后才能进入 canon 或项目记忆。
 - **正式写入**：必须经过范围锁定、源指纹检查和明确提交。
-

@@ -3,6 +3,7 @@
 - 调研日期：2026-08-27
 - 目的：为 Vinkey 的本地 AI 创作工作台补全真实可用闭环
 - 原则：只参考公开架构与交互模式，不复制 GPL/AGPL 项目源码
+- 竞品名称口径：[竞品术语规范](../competitors/TERMINOLOGY.md)；正式竞品筛选：[竞品筛选方法论](../competitors/SELECTION_METHODOLOGY.md)
 
 ## 参考项目
 

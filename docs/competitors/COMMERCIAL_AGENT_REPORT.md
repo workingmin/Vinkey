@@ -3,18 +3,19 @@
 - 观察日期：2026-09-22
 - 目标：分析可观察的任务编排、上下文、审批、长任务和创作交互，不把商业产品 SDK 作为 Vinkey 的默认依赖。
 - 适用边界：功能、流程和结果形态可借鉴；账号、计费、云端数据面和厂商认证必须单独评估。
+- 名称口径：[竞品术语规范](TERMINOLOGY.md)；正式名单：[正式竞品名录](COMPETITOR_CATALOG.md)。
 
 ## 1. 产品分组
 
 | 产品/体系 | 主要观察对象 | 与 Vinkey 的关系 | 当前结论 |
 | --- | --- | --- | --- |
-| [Codex](https://learn.chatgpt.com/docs/overview) | 任务目标、审批、后台执行、事件、diff 和恢复 | Agent Runtime 交互参考 | 已参考流程合同；不作为用户可选 Runtime 集成 |
+| [OpenAI Codex](https://learn.chatgpt.com/docs/overview) | 任务目标、审批、后台执行、事件、diff 和恢复 | Agent Runtime 交互参考 | 已参考流程合同；不作为用户可选 Runtime 集成 |
 | [Claude Code](https://code.claude.com/docs/en/overview) | Tool Loop、权限模式、Artifacts、Skills、子 Agent | Agent Runtime 交互参考 | 已参考权限、Artifact、会话控制；不复用其账号/SDK |
 | [Cursor](https://cursor.com/) | 代码库检索、Agent/Ask、编辑器上下文和 diff | 上下文与改稿参考 | 已参考相关性检索和修改审阅；文学对象需重新建模 |
 | [GitHub Copilot](https://github.com/features/copilot) | Repository indexing、Ask/Research、代码上下文 | 检索和深度分层参考 | 已参考索引优先；不采用云端仓库默认授权 |
 | [Novelcrafter](https://www.novelcrafter.com/features) | Codex、人物/地点/lore、写作协作 | 文学领域产品参考 | 已参考资产卡、别名和受控上下文；正式 canon 仍需用户确认 |
 | [Sudowrite](https://www.sudowrite.com/) | Story Bible、创意生成、续写和编辑协作 | 文学创作体验参考 | 观察创作流畅度；不让模型绕过证据写入事实 |
-| Claude/ChatGPT Research | 搜索规划、来源、长时间研究结果 | 联网研究参考 | `待参考`；先完成授权、来源和隐私设计 |
+| Claude 产品的 Research 能力 / [ChatGPT Deep Research](https://help.openai.com/en/articles/10500283-deep-research) | 搜索规划、来源、长时间研究结果 | 联网研究参考 | `待参考`；先完成授权、来源和隐私设计 |
 | 豆包等长文助手样本 | 附件、耗时入口、文档式长结果和可视化 | 结果展示参考 | 已参考结果排版；不把过程展示当作质量证明 |
 | Notion/Google Docs | 云文档、协作、评论和分享 | 桌面编辑器边界参考 | 当前不采用云协作，避免改变本地优先威胁模型 |
 
@@ -22,7 +23,7 @@
 
 ### 2.1 目标、约束和完成定义
 
-Codex 的长任务说明、Claude Code 的计划/权限/工具循环和其他 Agent 产品的任务入口有一个共同点：复杂任务需要可观察的目标和完成条件。只显示“正在思考”不能让用户判断是否完成。
+OpenAI Codex 的长任务说明、Claude Code 的计划/权限/工具循环和其他 Agent 产品的任务入口有一个共同点：复杂任务需要可观察的目标和完成条件。只显示“正在思考”不能让用户判断是否完成。
 
 **Vinkey 已参考：**
 
@@ -33,7 +34,7 @@ Codex 的长任务说明、Claude Code 的计划/权限/工具循环和其他 Ag
 
 **Vinkey 有意不同：**
 
-- Codex/Claude 的默认对象是代码仓库和 shell 工具；Vinkey 的权限对象是文档正文、分析范围、DiffProposal、canon、记忆和联网范围。
+- OpenAI Codex/Claude Code 的默认对象是代码仓库和 shell 工具；Vinkey 的权限对象是文档正文、分析范围、DiffProposal、canon、记忆和联网范围。
 - Vinkey 不允许 Agent 通过自然语言把普通草稿升级为写入或网络权限。
 - 业务结果必须附带来源、覆盖收据和源指纹，不能只返回“任务成功”。
 
@@ -55,7 +56,7 @@ Cursor、Copilot、Claude Code 等产品都把“相关上下文”作为能力�
 
 ### 2.3 工具、审批和安全
 
-Codex 的 sandbox/approval policy、Claude Code 的 permission mode、Skills/MCP/Hook 组合，证明工具能力必须有宿主控制面。工具越通用，越难解释业务副作用。
+OpenAI Codex 的 sandbox/approval policy、Claude Code 的 permission mode、Skills/MCP/Hook 组合，证明工具能力必须有宿主控制面。工具越通用，越难解释业务副作用。
 
 **Vinkey 已参考：**
 
@@ -68,7 +69,7 @@ Codex 的 sandbox/approval policy、Claude Code 的 permission mode、Skills/MCP
 
 ### 2.4 Artifact、diff 和最终结果
 
-Claude 的 Artifact、Codex 的 diff/任务结果、豆包长文助手的文档式输出都说明：复杂结果不应挤在聊天气泡中，也不应把中间过程伪装成最终答案。
+Claude Code 的 Artifact、OpenAI Codex 的 diff/任务结果、豆包长文助手的文档式输出都说明：复杂结果不应挤在聊天气泡中，也不应把中间过程伪装成最终答案。
 
 **Vinkey 已参考：**
 
@@ -80,7 +81,7 @@ Claude 的 Artifact、Codex 的 diff/任务结果、豆包长文助手的文档�
 
 ### 2.5 长任务、暂停和恢复
 
-Codex cloud/Remote、Claude Code web/Remote 和长文助手产品把后台任务、耗时入口和恢复作为独立体验。对 Vinkey 来说，恢复的关键不是继续生成，而是确认输入仍然有效。
+Codex cloud/Remote、Claude Code on the web/Remote 和长文助手产品把后台任务、耗时入口和恢复作为独立体验。对 Vinkey 来说，恢复的关键不是继续生成，而是确认输入仍然有效。
 
 **Vinkey 已参考：**
 
@@ -120,7 +121,7 @@ Codex cloud/Remote、Claude Code web/Remote 和长文助手产品把后台任务
 
 | 能力 | 借鉴 | 当前不做的部分 | 原因 |
 | --- | --- | --- | --- |
-| Agent Loop | 计划、Tool、事件、审批、恢复 | 直接嵌入 Codex/Claude Runtime | 厂商认证、数据面、成本和工程边界不匹配 |
+| Agent Loop | 计划、Tool、事件、审批、恢复 | 直接嵌入 OpenAI Codex/Claude Code Runtime | 厂商认证、数据面、成本和工程边界不匹配 |
 | 云端后台任务 | 独立任务状态、进度、结果审阅 | 把作品正文上传托管执行 | 与本地隐私和离线模型定位冲突 |
 | 联网研究 | 搜索计划、来源卡、交叉核验 | 默认联网或自动写入 canon | 来源治理和外发授权尚未完成 |
 | 多 Agent | 独立上下文、并行验证 | 为展示复杂度而默认并行 | 结果合并、成本和证据归属更难验证 |
@@ -134,9 +135,9 @@ Codex cloud/Remote、Claude Code web/Remote 和长文助手产品把后台任务
 | 场景 | 对比对象 | 关键指标 |
 | --- | --- | --- |
 | “找出人物关系冲突并给证据” | Vinkey / Cursor / Claude Code / 长文助手 | 关键冲突召回率、证据准确率、人工修正分钟数 |
-| “按要求改写三个段落” | Vinkey / Knote / Cursor / Sudowrite | 越界修改率、审阅时间、接受后保存安全性 |
+| “按要求改写三个段落” | Vinkey / Cursor / Sudowrite / Knote（设计来源） | 越界修改率、审阅时间、接受后保存安全性 |
 | “整理一份研究简报” | Vinkey / Research 产品 | 来源可核验率、来源重复率、外发数据范围 |
-| “中断后继续长文分析” | Vinkey / Codex/Claude 长任务体验 | 恢复成功率、源变化提示、失败块重试时间 |
+| “中断后继续长文分析” | Vinkey / OpenAI Codex / Claude Code 长任务体验 | 恢复成功率、源变化提示、失败块重试时间 |
 | “从正文建立人物资产” | Vinkey / Novelcrafter / 图谱项目 | 候选精度、确认负担、局部失效可解释性 |
 
 ## 6. 来源
@@ -148,4 +149,3 @@ Codex cloud/Remote、Claude Code web/Remote 和长文助手产品把后台任务
 - [Codex 长任务与控制面资料](https://learn.chatgpt.com/docs/long-running-work)、[Codex app-server](https://learn.chatgpt.com/docs/app-server)
 - [Claude Code 工作方式](https://code.claude.com/docs/en/how-claude-code-works)、[Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk/overview)
 - [GitHub Copilot repository indexing](https://docs.github.com/en/copilot/concepts/context/repository-indexing)、[Cursor agent search](https://cursor.com/docs/agent/tools/search)
-
