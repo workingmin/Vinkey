@@ -72,3 +72,6 @@ dev-debug.log
 # Task files
 # tasks.json
 # tasks/
+
+# Acceptance/verification run output (generated, never committed)
+artifacts/

@@ -169,7 +169,7 @@ on run argv
             set candidateDescription to description of candidate
             if candidateDescription contains "close" or candidateDescription contains "关闭" then set closeButton to candidate
             if candidateDescription contains "miniatur" or candidateDescription contains "minimize" or candidateDescription contains "最小化" then set minimizeButton to candidate
-            if candidateDescription contains "zoom" or candidateDescription contains "缩放" then set zoomButton to candidate
+            if candidateDescription contains "zoom" or candidateDescription contains "缩放" or candidateDescription contains "full screen" or candidateDescription contains "全屏" then set zoomButton to candidate
           end try
         end repeat
         if closeButton is missing value or minimizeButton is missing value or zoomButton is missing value then error "无法通过 Accessibility 找到完整的红黄绿交通灯按钮"
@@ -220,16 +220,17 @@ on run argv
           end if
         end repeat
 
-        click zoomButton
-        delay 0.8
+        set frontmost to true
+        click menu item "缩放窗口" of menu 1 of menu bar item "窗口" of menu bar 1
+        delay 0.9
         set zoomedSize to size of mainWindow
-        click zoomButton
-        delay 0.8
+        click menu item "缩放窗口" of menu 1 of menu bar item "窗口" of menu bar 1
+        delay 0.9
         set restoredSize to size of mainWindow
         if zoomedSize is not restoredSize then
-          set end of reportLines to "PASS|SHELL-NATIVE-MAC-WINDOW-ZOOM|最大化/还原窗口|zoomed=" & my pairText(zoomedSize) & ";restored=" & my pairText(restoredSize)
+          set end of reportLines to "PASS|SHELL-NATIVE-MAC-WINDOW-ZOOM|最大化/还原窗口(缩放窗口命令)|zoomed=" & my pairText(zoomedSize) & ";restored=" & my pairText(restoredSize)
         else
-          set end of reportLines to "FAIL|SHELL-NATIVE-MAC-WINDOW-ZOOM|最大化/还原窗口|窗口尺寸未发生变化"
+          set end of reportLines to "FAIL|SHELL-NATIVE-MAC-WINDOW-ZOOM|最大化/还原窗口(缩放窗口命令)|窗口尺寸未发生变化"
         end if
 
         click minimizeButton
