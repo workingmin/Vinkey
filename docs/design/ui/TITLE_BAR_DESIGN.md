@@ -1,10 +1,10 @@
 # Vinkey 系统标题栏与功能菜单设计
 
 - 状态：实现基线
-- 日期：2026-09-15
+- 日期：2026-09-23
 - 适用端：Tauri 2 Windows / macOS 桌面应用
 - 业务入口：[UI_ENTRY_POINTS.md](./UI_ENTRY_POINTS.md)
-- 组件映射：[UI_DESIGN_SHELL.md](./UI_DESIGN_SHELL.md#组件与业务功能映射)
+- 组件映射：[UI_DESIGN_SHELL.md](./UI_DESIGN_SHELL.md#壳层组件与实现追踪)
 
 ## 1. 目标
 

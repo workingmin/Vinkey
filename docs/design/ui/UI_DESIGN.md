@@ -1,7 +1,7 @@
 # Vinkey UI 设计文档
 
 - 状态：首版 UI 基线，按域拆分维护
-- 日期：2026-09-15
+- 日期：2026-09-23
 - 适用端：Windows、macOS 桌面应用
 - 当前实现盘点：[UI_INVENTORY.md](./UI_INVENTORY.md)
 
@@ -9,7 +9,8 @@
 
 | 文档 | 负责的问题 | 下一步适合调整的范围 |
 | --- | --- | --- |
-| [UI_DESIGN_SHELL.md](./UI_DESIGN_SHELL.md) | 窗口、平台差异、会话栏、内容区信息架构 | 主窗口布局、导航、窗口级命令 |
+| [UI_DESIGN_SHELL.md](./UI_DESIGN_SHELL.md) | 窗口、平台差异、侧栏容器、内容区信息架构 | 主窗口布局、平台入口、窗口级命令 |
+| [UI_DESIGN_NAVIGATION.md](./UI_DESIGN_NAVIGATION.md) | 工作区、项目、会话、标题生命周期、搜索和导航状态 | 多项目/多会话、搜索结果、切换与删除边界 |
 | [UI_ENTRY_POINTS.md](./UI_ENTRY_POINTS.md) | 跨页面业务功能入口、前置条件、跳转目标和实现状态 | 入口新增、入口文案、跨域流程 |
 | [TITLE_BAR_DESIGN.md](./TITLE_BAR_DESIGN.md) | 标题栏、平台菜单、快捷键和窗口诊断的实现基线 | 标题栏/菜单专项调整 |
 | [UI_DESIGN_CHAT.md](./UI_DESIGN_CHAT.md) | 对话页、消息、输入区、上下文和流式生成 | 对话效率、消息审核、输入体验 |
@@ -24,7 +25,7 @@
 
 ## 设计结论
 
-Vinkey 是深色、安静、AI 对话优先的本地文学创作工作台。主窗口由左侧项目/会话栏和右侧统一内容区组成；右侧默认进入“对话”，需要查看或编辑文稿时切换到“文件”，需要管理长耗时后台分析时进入“任务”。不引入通用 IDE 的 Shell、Git、Browser 或插件入口；日志中心仅服务应用自己的后台分析任务。
+Vinkey 是深色、安静、AI 对话优先的本地文学创作工作台。主窗口由应用壳层承载的左侧导航区和右侧统一内容区组成；右侧默认进入“对话”，需要查看或编辑文稿时切换到“文件”，需要管理长耗时后台分析时进入“日志”。不引入通用 IDE 的 Shell、Git、Browser 或插件入口；日志中心仅服务应用自己的后台分析任务。
 
 设计目标是让本地状态始终可见，让 AI 产出可审核，并让工具栏、输入区和状态栏保持稳定尺寸。平台菜单和标题栏可以不同，但命令能力、内容区布局和状态语义保持一致。
 
@@ -68,7 +69,7 @@ Vinkey 是深色、安静、AI 对话优先的本地文学创作工作台。主�
 
 ## 组件登记规则
 
-组件映射按页面或交互域维护，不再设置独立总表。应用壳层、对话、编辑器、任务、设置和跨域状态分别由对应的 `UI_DESIGN_*.md` 负责，页面评审时在同一文档内检查布局、流程、组件和验收条件。
+组件映射按页面或交互域维护，不再设置独立总表。应用壳层、导航、对话、编辑器、日志/长任务、设置和跨域状态分别由对应的 `UI_DESIGN_*.md` 负责，页面评审时在同一文档内检查布局、流程、组件和验收条件。
 
 这里的“组件”是稳定的产品语义单元，不等同于每个 React 函数或 DOM 节点。动态列表中的会话行、文件行和任务行按组件模式登记一次。
 
@@ -112,7 +113,7 @@ Vinkey 是深色、安静、AI 对话优先的本地文学创作工作台。主�
 
 ## 统一验收生命周期
 
-所有功能域均按“功能域 → 竞品证据 → 设计决策 → 前后端实现 → 自动化测试代码 → 本地环境验收脚本 → 测试人员执行与证据回传 → 验收报告 → 遗留项复审”追踪。该扩展生命周期保留了原六阶段的设计追踪价值，并补上真实 Ollama、系统凭据库、平台窗口和人工观察所需的证据节点。跨域总计划见 [UI_ACCEPTANCE_PLAN.md](./UI_ACCEPTANCE_PLAN.md)，脚本契约见 [UI_ACCEPTANCE_SCRIPT_SPEC.md](./UI_ACCEPTANCE_SCRIPT_SPEC.md)；模型设置的首个实例见 [acceptance/UI_ACCEPTANCE_SETTINGS.md](./acceptance/UI_ACCEPTANCE_SETTINGS.md)，执行回填见 [acceptance/UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md](./acceptance/UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md)。
+所有功能域均按“功能域 → 竞品证据 → 设计决策 → 前后端实现 → 自动化测试代码 → 本地环境验收脚本 → 测试人员执行与证据回传 → 验收报告 → 遗留项复审”追踪。该生命周期保留设计追踪价值，并补上真实 Ollama、系统凭据库、平台窗口和人工观察所需的证据节点。跨域总计划见 [UI_ACCEPTANCE_PLAN.md](./UI_ACCEPTANCE_PLAN.md)，脚本契约见 [UI_ACCEPTANCE_SCRIPT_SPEC.md](./UI_ACCEPTANCE_SCRIPT_SPEC.md)；模型设置的首个实例见 [acceptance/UI_ACCEPTANCE_SETTINGS.md](./acceptance/UI_ACCEPTANCE_SETTINGS.md)，执行回填见 [acceptance/UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md](./acceptance/UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md)。
 
 竞品证据只能支持设计判断，不能替代 Vinkey 自身的可用性、隐私和业务验收。每个功能域必须把设计来源标记为“直接参考”“组合改造”“Vinkey 原创”或“暂不采用”，并为每条已参考决策关联正式竞品名录、功能决策编号、实现位置和测试证据。
 
@@ -127,7 +128,7 @@ Vinkey 是深色、安静、AI 对话优先的本地文学创作工作台。主�
 ## 首版范围
 
 - 工作区选择、刷新、文件树、新建文档/文件夹
-- 会话新建、历史恢复、统一搜索和流式 AI 对话
+- 会话新建、历史恢复、侧栏搜索和流式 AI 对话；目标态全局搜索入口见导航域
 - 长文本后台任务查看、步骤状态、失败重试和分析产物查看
 - Markdown、TXT、代码和配置文本编辑；Markdown 分栏预览；图片/PDF/音视频预览；二进制下载
 - Ollama/OpenAI 兼容模型配置、连接测试和本机主题切换

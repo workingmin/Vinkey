@@ -1,6 +1,6 @@
 # 竞品启发的功能决策总表
 
-- 版本：`2026-09-22`
+- 版本：`2026-09-23`
 - 用途：把竞品观察转换成 Vinkey 可追踪的功能决策；本表不是产品路线图的替代品。
 - 状态说明：详见 [竞品分析目录说明](README.md#状态标签)。
 - 竞品名称和类别：以[正式竞品名录](COMPETITOR_CATALOG.md)和[术语规范](TERMINOLOGY.md)为准。
@@ -27,9 +27,11 @@
 | `CF-016` | 商业 API/SDK | Codex SDK、Claude Agent SDK、OpenAI Agents SDK、Anthropic API | 直接复用成熟 Runtime、认证和托管执行 | 当前不集成，不新增商用付费 API 配置 | `不采用` | [AI 业务链路](../architecture/AI_BUSINESS_CHAINS.md#6-codexclaude-与-vinkey-native-agent-参考取舍) |
 | `CF-017` | 多 CLI 控制面 | CloudCLI、Opcode | 多 CLI 项目、会话、任务和远程控制统一管理 | 观察统一会话控制面；不让外部 CLI 绕过 Vinkey 权限 | `观察` | 先验证 `TaskJob` 与多 CLI 会话的映射和恢复边界 |
 | `CF-018` | 模型路由/代理 | Claude Code Router、CLIProxyAPI | Provider 路由、兼容协议和多模型代理 | 仅参考协议抽象；凭据、正文和第三方账号不得被代理层隐式接管 | `观察` | 模型设置和 `ToolGateway`；需要单独安全评审 |
-| `CF-019` | 应用壳层与入口 | Obsidian、Cursor、Typora、Scrivener、Cherry Studio、ChatGPT Desktop | 工作区、文档、会话和 AI 状态由稳定的桌面壳层承载；平台窗口和菜单遵循系统习惯 | Windows 使用自绘标题栏和中文应用菜单，macOS 使用 Overlay/原生菜单；侧栏统一承载项目、会话和设置，内容区只切换对话/文件/日志；入口必须保留状态并可解释失败 | `已参考` | `UI_DESIGN_SHELL.md`、`TITLE_BAR_DESIGN.md`、`UI_ACCEPTANCE_SHELL.md`；不采用账号、云同步、插件市场和面向代码的终端/调试入口 |
-| `CF-020` | 多项目与会话导航 | Obsidian、Notion Desktop、CloudCLI、Cherry Studio | 工作区/项目、搜索、会话和返回路径集中在稳定导航区；多 CLI 工作台将项目和会话作为控制面对象 | 项目记录、会话记录和文档搜索共用侧栏，但数据仍按本地工作区隔离；删除只删除应用记录，不删除用户目录；不复制 CloudCLI 的远程控制面 | `组合改造` | `ProjectSessionSidebar.tsx`、`store.ts`、`UI_ENTRY_POINTS.md`、`UI_ACCEPTANCE_SHELL.md`；运行任务和未保存文档时禁止静默切换 |
+| `CF-019` | 应用壳层与入口 | Obsidian、Cursor、Typora、Scrivener、Cherry Studio、ChatGPT Desktop | 工作区、文档、会话和 AI 状态由稳定的桌面壳层承载；平台窗口和菜单遵循系统习惯 | Windows 使用自绘标题栏和中文应用菜单，macOS 使用 Overlay/原生菜单；侧栏提供导航承载，内容区只切换对话/文件/日志；入口必须保留状态并可解释失败 | `已参考` | `UI_DESIGN_SHELL.md`、`TITLE_BAR_DESIGN.md`、`UI_ACCEPTANCE_SHELL.md`；不采用账号、云同步、插件市场和面向代码的终端/调试入口 |
+| `CF-020` | 多项目与会话导航 | Obsidian、Notion Desktop、CloudCLI、Cherry Studio | 工作区/项目、搜索、会话和返回路径集中在稳定导航区；多 CLI 工作台将项目和会话作为控制面对象 | 项目记录、会话记录和文档搜索共用导航区，但数据仍按本地工作区隔离；删除只删除应用记录，不删除用户目录；不复制 CloudCLI 的远程控制面 | `组合改造` | `ProjectSessionSidebar.tsx`、`store.ts`、`UI_DESIGN_NAVIGATION.md`、`UI_ACCEPTANCE_NAVIGATION.md`；运行任务和未保存文档时禁止静默切换 |
 | `CF-021` | 平台窗口与可访问入口 | Cursor、Ulysses、豆包桌面端、WorkBuddy | Windows/macOS 对窗口装饰、菜单承载和快捷键有不同平台习惯；图标入口需要可发现性和状态反馈 | 保持同一业务语义，按平台切换标题栏承载；图标按钮统一 `title`、`aria-label`、焦点路径和 Escape 关闭；窗口诊断作为帮助入口 | `组合改造` | `src/App.tsx`、`src/lib/nativeWindowControls.ts`、`src-tauri/src/window_controls.rs`、`UI_ACCEPTANCE_SHELL.md`；不采用消费型增长入口、全局悬浮入口和不可审计的隐藏快捷操作 |
+| `CF-022` | 会话标题生命周期 | 待完成正式竞品证据卡；候选观察范围以正式名录和术语规范为准 | 会话标题需要稳定主标题而不是持续覆盖最后一轮问题；临时标题应在无模型时可用，语义升级、手动命名和失败回退需有清晰生命周期 | 首次有效用户输入生成确定性临时标题；第一轮完成或累计 2 至 3 条输入后至多升级一次；手动标题优先；模型不可用时保留临时标题 | `待参考` | `UI_DESIGN_NAVIGATION.md` 第 4.3 节、`UI_ACCEPTANCE_NAVIGATION.md` 的 `W2-NAV-E`；正式证据和实现完成前不得标记已参考 |
+| `CF-023` | 全局搜索入口与结果面板 | 待完成正式竞品证据卡；不把外部产品局部 DOM/SVG 作为证据 | 搜索入口、范围提示、分组结果和跳转返回必须统一；当前侧栏输入框与目标全局搜索需避免同名歧义 | 目标态提供标题栏/侧栏/键盘共用入口，结果按项目、会话、当前项目文档分组；正文遵守授权工作区边界；当前内联搜索只作为过渡实现 | `待参考` | `UI_DESIGN_NAVIGATION.md` 第 5 节、`UI_ACCEPTANCE_NAVIGATION.md` 的 `W2-NAV-E`；入口和面板未实现前保持 BLOCKED |
 
 ## 优先级规则
 

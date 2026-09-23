@@ -17,6 +17,7 @@
 ## 维护约定
 
 - UI 页面或交互域变更写入 `design/ui/`；跨域入口、现状盘点和视觉 token 仍由 UI 总览文档索引。
+- UI 功能域使用 `D-*` 分类；验收标识使用“波次-功能域-门槛”（`P/F/E/R`），不要把功能域名称和验收波次混用。
 - Agent、Skill、Workflow 和消息流模板写入 `design/agent/`；业务链路的系统边界写入 `architecture/`。
 - 调研结论与待验证方案写入 `research/`，落地后的稳定运行约束迁移或同步到 `architecture/` 或 `runtime/`。
 - 竞品观察、跨项目功能比较和“已参考/待参考/不采用”决策写入 `competitors/`；原始仓库调研仍维护在 `research/`。
@@ -31,6 +32,7 @@
 - [UI 功能入口](design/ui/UI_ENTRY_POINTS.md)
 - [UI 现状盘点](design/ui/UI_INVENTORY.md)
 - [应用壳层](design/ui/UI_DESIGN_SHELL.md)
+- [项目与会话导航](design/ui/UI_DESIGN_NAVIGATION.md)
 - [标题栏与功能菜单](design/ui/TITLE_BAR_DESIGN.md)
 - [对话页](design/ui/UI_DESIGN_CHAT.md)
 - [文件与编辑器](design/ui/UI_DESIGN_EDITOR.md)
@@ -46,6 +48,8 @@
 - [模型设置本地验收回填模板](design/ui/acceptance/UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md)
 - [应用壳层与入口专项验收](design/ui/acceptance/UI_ACCEPTANCE_SHELL.md)
 - [应用壳层与入口本地验收回填模板](design/ui/acceptance/UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md)
+- [项目与会话导航专项验收](design/ui/acceptance/UI_ACCEPTANCE_NAVIGATION.md)
+- [项目与会话导航本地验收回填模板](design/ui/acceptance/UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md)
 
 ### Agent 与架构
 

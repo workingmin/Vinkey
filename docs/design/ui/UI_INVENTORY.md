@@ -1,6 +1,6 @@
 # Vinkey UI 现状盘点
 
-- 盘点日期：2026-09-15
+- 盘点日期：2026-09-23
 - 对比基线：2026-09-02 盘点；重点核对 2026-09-03 至 `a5e882b` 的实现提交
 - 依据：`src/App.tsx`、`src/components/*`、`src/store.ts`、`src/styles.css`、`src/lib/desktop.ts`、[UI_ENTRY_POINTS.md](./UI_ENTRY_POINTS.md) 和各 `UI_DESIGN_*.md` 的组件映射
 - 目的：为 UI 精细化调整提供可追踪的现状基线
@@ -8,7 +8,7 @@
 ## 0. 统计结论
 
 - **13 类 UI 界面/表面**：Windows 标题栏、macOS 原生窗口区、项目与会话侧栏、对话页、文件列表页、文件编辑页、日志中心、设置页、AI 修改提案条、分析产物预览、删除确认、应用诊断日志、全局错误/状态反馈。
-- **6 个交互域**：应用壳层、项目与文件、AI 对话、文档编辑、后台任务、设置与反馈。
+- **8 个功能域 + 1 个质量基线**：`D-SHELL` 应用壳层、`D-NAV` 项目与会话导航、`D-EDITOR` 文件与编辑器、`D-MODEL` 模型设置、`D-INTENT` IntentRouter、`D-CHAT` 对话、`D-CONTEXT` 上下文分析、`D-REVISION` AI 改稿、`D-TASK-LOG` 日志与长任务，以及 `Q-RESP` 响应式/主题/焦点回归。
 - **22 个源码组件/组件函数**：`App`、`TitleBar`、`IconButton`、`ContentPanel`、`ProjectSessionSidebar`、`FileBrowserPanel`、`WorkspaceTree`、`TreeItem`、`FileWorkspace`、`EditorPanel`、`CodeEditor`、`ChatPanel`、`ChatMessageItem`、`MarkdownContent`、`MessageActivity`、`LogCenter`、`ConversationTaskControls`、`SettingsPage`、`ModelPicker`、`FilePreview`、`RecordDeletionDialog`、`CodeBlock`。
 - **83 类业务语义 UI 组件模式**：包含入口、操作、输入、确认、状态和结果组件，关联 50 个稳定业务功能点；按页面或交互域登记在对应 `UI_DESIGN_*.md`。
 - **5 类跨域状态**：本机工作区/多项目与会话状态、文档编辑与修改提案、模型连接/活动模型状态、流式对话/分析活动状态、可恢复后台任务状态。
@@ -42,11 +42,19 @@
 | `IconButton` | `src/App.tsx` | 统一图标按钮、tooltip、禁用和选中态 |
 | `ContentPanel` | `src/App.tsx` | 对话/文件/日志 tab、页面摘要、工作区与当前模型摘要 |
 
+### 项目与会话导航
+
+| 组件 | 文件 | 关键交互 |
+| --- | --- | --- |
+| `ProjectSessionSidebar` | `src/components/ProjectSessionSidebar.tsx` | 项目添加/刷新/切换、当前侧栏搜索、会话选择/新建/删除、折叠和设置入口 |
+| `RecordDeletionDialog` | `src/components/RecordDeletionDialog.tsx` | 项目/会话记录删除确认、错误留在对话框内重试 |
+
+当前会话标题由首次有效用户输入合并空白并截取 28 个字符生成；语义标题升级、手动重命名和统一全局搜索属于目标态，详见 [UI_DESIGN_NAVIGATION.md](./UI_DESIGN_NAVIGATION.md)。
+
 ### 项目与文件
 
 | 组件 | 文件 | 关键交互 |
 | --- | --- | --- |
-| `ProjectSessionSidebar` | `src/components/ProjectSessionSidebar.tsx` | 工作区入口、刷新、搜索会话/正文、会话选择、新建会话、折叠、设置 |
 | `FileBrowserPanel` | `src/App.tsx` | 文件筛选、文件树动作、新建文档/文件夹、刷新、打开文档、添加上下文 |
 | `WorkspaceTree` / `TreeItem` | `src/components/WorkspaceTree.tsx` | 目录展开收起、文件选中、左键打开、右键添加上下文 |
 | `FileWorkspace` | `src/App.tsx` | 列表态和列表+编辑器双栏布局 |
@@ -75,7 +83,6 @@
 | --- | --- | --- |
 | `LogCenter` | `src/components/LogCenter.tsx` | 合并对话与后台任务运行记录、状态筛选、失败详情、诊断复制和来源导航 |
 | `ConversationTaskControls` | `src/components/ConversationTaskControls.tsx` | 在任务来源会话暂停、继续、取消或重试任务 |
-| `RecordDeletionDialog` | `src/components/RecordDeletionDialog.tsx` | 项目/会话记录删除确认、错误留在对话框内重试 |
 | 应用诊断日志 | `src/App.tsx` | 运行事件、平台/版本元数据、复制和刷新 |
 
 ## 3. 当前可见交互清单
@@ -119,7 +126,7 @@
 
 ### 日志中心
 
-- “任务”页显示运行、完成和失败计数，按任务展开步骤与检查点。
+- “日志中心”显示运行、完成和失败计数，按记录展开步骤与检查点。
 - 日志中心只读展示失败原因和业务事件；失败重试由任务来源会话处理。
 - 展开已完成任务时自动按需读取分析产物，显示模型调用、缓存命中、耗时和产物路径；读取失败可在详情内重新加载。
 - 右上角提供“历史记录清除 / 刷新”；历史记录清除需要确认，只清除当前项目终态任务记录，不删除分析产物。

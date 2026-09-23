@@ -1,9 +1,9 @@
 # Vinkey UI 功能入口设计
 
 - 状态：当前实现入口基线，目标态入口明确标注
-- 日期：2026-09-15
+- 日期：2026-09-23
 - 适用端：Windows、macOS 桌面应用；浏览器模式仅提供有限演示能力
-- 关联文档：[UI_DESIGN.md](./UI_DESIGN.md)、[UI_INVENTORY.md](./UI_INVENTORY.md)、[UI_DESIGN_SHELL.md](./UI_DESIGN_SHELL.md)、[UI_DESIGN_CHAT.md](./UI_DESIGN_CHAT.md)、[UI_DESIGN_EDITOR.md](./UI_DESIGN_EDITOR.md)、[UI_DESIGN_LOGS.md](./UI_DESIGN_LOGS.md)、[UI_DESIGN_SETTINGS.md](./UI_DESIGN_SETTINGS.md)、[UI_DESIGN_STATES.md](./UI_DESIGN_STATES.md)
+- 关联文档：[UI_DESIGN.md](./UI_DESIGN.md)、[UI_INVENTORY.md](./UI_INVENTORY.md)、[UI_DESIGN_SHELL.md](./UI_DESIGN_SHELL.md)、[UI_DESIGN_NAVIGATION.md](./UI_DESIGN_NAVIGATION.md)、[UI_DESIGN_CHAT.md](./UI_DESIGN_CHAT.md)、[UI_DESIGN_EDITOR.md](./UI_DESIGN_EDITOR.md)、[UI_DESIGN_LOGS.md](./UI_DESIGN_LOGS.md)、[UI_DESIGN_SETTINGS.md](./UI_DESIGN_SETTINGS.md)、[UI_DESIGN_STATES.md](./UI_DESIGN_STATES.md)
 
 ## 文档职责
 
@@ -43,14 +43,16 @@
 
 | 功能点 ID | 入口 ID | 功能 | 入口与文案 | 前置条件 | 目标与状态保持 | 实现状态 | 详细设计 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `BF-WORKSPACE-001` | `EP-WORKSPACE-001` | 添加或打开工作区 | 标题栏“打开工作区”、侧栏“添加项目”、文件空态“打开文件夹” | 无 | 加载工作区；失败保留当前工作区 | 已实现 | [应用壳层](./UI_DESIGN_SHELL.md) |
-| `BF-WORKSPACE-002` | `EP-WORKSPACE-002` | 切换已登记项目 | 侧栏项目名称 | 目标项目已登记 | 检查运行任务和未保存文档后切换并清理旧项目编辑状态 | 已实现 | [应用壳层](./UI_DESIGN_SHELL.md) |
+| `BF-WORKSPACE-001` | `EP-WORKSPACE-001` | 添加或打开工作区 | 标题栏“打开工作区”、侧栏“添加项目”、文件空态“打开文件夹” | 无 | 加载工作区；失败保留当前工作区 | 已实现 | [项目与会话导航](./UI_DESIGN_NAVIGATION.md) |
+| `BF-WORKSPACE-002` | `EP-WORKSPACE-002` | 切换已登记项目 | 侧栏项目名称 | 目标项目已登记 | 检查运行任务和未保存文档后切换并清理旧项目编辑状态 | 已实现 | [项目与会话导航](./UI_DESIGN_NAVIGATION.md) |
 | `BF-WORKSPACE-003` | `EP-WORKSPACE-003` | 刷新工作区 | 标题栏、侧栏和文件页“刷新” | 已打开工作区 | 更新项目、会话和文件树；保留当前页面和编辑状态 | 已实现 | [应用壳层](./UI_DESIGN_SHELL.md)、[文件与编辑器](./UI_DESIGN_EDITOR.md) |
-| `BF-WORKSPACE-004` | `EP-WORKSPACE-004` | 搜索项目、会话和文档 | 侧栏“搜索项目或会话” | 文档正文搜索需要当前工作区 | 显示项目、会话和当前项目文档结果；不改变选择 | 已实现 | [应用壳层](./UI_DESIGN_SHELL.md) |
-| `BF-WORKSPACE-005` | `EP-WORKSPACE-005` | 删除项目记录 | 项目行“删除项目记录” | 无运行任务；当前项目无未保存文档 | 两步确认后删除应用记录，不删除项目目录 | 已实现 | [应用壳层](./UI_DESIGN_SHELL.md) |
-| `BF-CONVERSATION-001` | `EP-CONVERSATION-001` | 新建会话 | 标题栏和项目行“新建会话” | 无 | 打开目标项目的对话页空白会话；保留模型 | 已实现 | [对话页](./UI_DESIGN_CHAT.md) |
-| `BF-CONVERSATION-002` | `EP-CONVERSATION-002` | 恢复历史会话 | 侧栏会话标题 | 会话记录存在 | 必要时先切换项目，再恢复消息和会话标题 | 已实现 | [应用壳层](./UI_DESIGN_SHELL.md)、[对话页](./UI_DESIGN_CHAT.md) |
-| `BF-CONVERSATION-003` | `EP-CONVERSATION-003` | 删除会话记录 | 会话行“删除会话记录” | 会话未运行 | 确认后删除应用记录，不删除项目文件 | 已实现 | [应用壳层](./UI_DESIGN_SHELL.md) |
+| `BF-WORKSPACE-004` | `EP-WORKSPACE-004` | 搜索项目、会话和文档（当前侧栏实现） | 侧栏“搜索项目或会话” | 文档正文搜索需要当前工作区 | 显示项目、会话和当前项目文档结果；不改变选择 | 部分实现 | [项目与会话导航](./UI_DESIGN_NAVIGATION.md) |
+| `BF-WORKSPACE-005` | `EP-WORKSPACE-005` | 删除项目记录 | 项目行“删除项目记录” | 无运行任务；当前项目无未保存文档 | 两步确认后删除应用记录，不删除项目目录 | 已实现 | [项目与会话导航](./UI_DESIGN_NAVIGATION.md) |
+| `BF-CONVERSATION-001` | `EP-CONVERSATION-001` | 新建会话 | 标题栏和项目行“新建会话” | 无 | 打开目标项目的对话页空白会话；保留模型 | 已实现 | [项目与会话导航](./UI_DESIGN_NAVIGATION.md)、[对话页](./UI_DESIGN_CHAT.md) |
+| `BF-CONVERSATION-002` | `EP-CONVERSATION-002` | 恢复历史会话 | 侧栏会话标题 | 会话记录存在 | 必要时先切换项目，再恢复消息和会话标题 | 已实现 | [项目与会话导航](./UI_DESIGN_NAVIGATION.md)、[对话页](./UI_DESIGN_CHAT.md) |
+| `BF-CONVERSATION-003` | `EP-CONVERSATION-003` | 删除会话记录 | 会话行“删除会话记录” | 会话未运行 | 确认后删除应用记录，不删除项目文件 | 已实现 | [项目与会话导航](./UI_DESIGN_NAVIGATION.md) |
+| `BF-CONVERSATION-004` | `EP-CONVERSATION-004` | 手动重命名会话并锁定用户标题 | 会话行或会话标题“重命名” | 会话记录存在 | 保存用户标题；后续自动标题升级不得覆盖 | 待实现 | [项目与会话导航](./UI_DESIGN_NAVIGATION.md) |
+| `BF-SEARCH-001` | `EP-SEARCH-001` | 打开全局搜索并跳转结果 | 标题栏/侧栏搜索图标、统一键盘命令 | 应用已启动；正文结果需要授权工作区 | 在统一面板中按项目、会话、当前项目文档分组；Enter 跳转，Escape 返回 | 待实现 | [项目与会话导航](./UI_DESIGN_NAVIGATION.md) |
 | `BF-SHELL-001` | `EP-SHELL-001` | 折叠或展开会话栏 | 侧栏折叠按钮 | 无 | 改变侧栏宽度；保留页面和业务状态 | 已实现 | [应用壳层](./UI_DESIGN_SHELL.md) |
 | `BF-SHELL-002` | `EP-SHELL-002` | 切换主题 | 侧栏、标题栏“切换浅色/深色主题” | 无 | 更新当前窗口主题；保留业务状态 | 已实现 | [应用壳层](./UI_DESIGN_SHELL.md)、[视觉系统](./UI_DESIGN_SYSTEM.md) |
 | `BF-SHELL-003` | `EP-SHELL-003` | 控制窗口 | 标题栏或原生菜单“最小化、最大化/还原、关闭” | 桌面端 | 改变窗口状态；关闭前遵循平台行为 | 已实现 | [标题栏设计](./TITLE_BAR_DESIGN.md) |
@@ -64,7 +66,7 @@
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `BF-NAV-001` | `EP-NAV-001` | 进入对话页 | 内容区“对话”、标题栏“对话页” | 无 | 显示当前会话；保留上下文和生成状态 | 已实现 | [应用壳层](./UI_DESIGN_SHELL.md)、[对话页](./UI_DESIGN_CHAT.md) |
 | `BF-NAV-002` | `EP-NAV-002` | 进入文件页 | 内容区“文件”、标题栏“文件页” | 无 | 显示文件列表；保留会话和编辑草稿 | 已实现 | [应用壳层](./UI_DESIGN_SHELL.md)、[文件与编辑器](./UI_DESIGN_EDITOR.md) |
-| `BF-NAV-003` | `EP-NAV-003` | 进入日志中心 | 内容区“日志”、标题栏“日志中心” | 无；无工作区时显示空态 | 显示当前工作区任务；不改变会话 | 已实现 | [应用壳层](./UI_DESIGN_SHELL.md)、[日志中心](./UI_DESIGN_LOGS.md) |
+| `BF-NAV-003` | `EP-NAV-003` | 进入日志中心 | 内容区“日志”、标题栏“日志中心” | 无；无工作区时显示空态 | 显示当前工作区日志记录与后台任务；不改变会话 | 已实现 | [应用壳层](./UI_DESIGN_SHELL.md)、[日志中心](./UI_DESIGN_LOGS.md) |
 | `BF-SETTINGS-001` | `EP-SETTINGS-001` | 进入或退出模型设置 | 标题栏/侧栏“模型与应用设置”、设置页“返回工作区” | 无 | 设置页临时覆盖内容区；返回时恢复进入前页面 | 已实现 | [模型设置](./UI_DESIGN_SETTINGS.md) |
 
 ## 对话、分析与审核

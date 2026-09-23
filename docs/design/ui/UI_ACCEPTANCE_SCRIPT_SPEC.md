@@ -1,9 +1,10 @@
 # UI 测试验收脚本设计规范
 
 - 状态：当前版本验收规范
+- 更新日期：2026-09-23
 - 适用端：Windows、macOS；Linux 仅用于开发机或 CI 的代码层验证
 - 关联计划：[UI_ACCEPTANCE_SCRIPT_PLAN.md](./UI_ACCEPTANCE_SCRIPT_PLAN.md)
-- 关联回填模板：[UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md](./acceptance/UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md)
+- 关联回填模板：[UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md](./acceptance/UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md)、[UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md](./acceptance/UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md)、[UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md](./acceptance/UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md)
 
 ## 1. 目的与适用范围
 
@@ -33,7 +34,9 @@
 → 遗留项复审
 ```
 
-原来的六个节点仍然合理，但无法单独表达真实 Ollama、操作系统凭据库、窗口行为和人工观察。因此“本地环境脚本”和“证据回传”是当前版本的必选控制点；没有这两项时，报告最多只能给出代码层通过或条件通过。
+原有设计追踪节点仍然合理，但无法单独表达真实 Ollama、操作系统凭据库、窗口行为和人工观察。因此“本地环境脚本”和“证据回传”是当前版本的必选控制点；没有这两项时，报告最多只能给出代码层通过或条件通过。
+
+脚本结果还必须标明验收门槛：`P` 表示平台/结构、`F` 表示 fixture/合同、`E` 表示真实端到端、`R` 表示跨域回归。例如 `W0-NAV-F` 中的 `F` 不要求 Ollama，`W2-NAV-E` 中的 `E` 必须记录真实模型/profile，`W4-NAV-R` 中的 `R` 必须记录跨域前置状态。`W0` 至 `W4` 是排期阶段，`D-*` 才是功能域身份。
 
 ## 3. 目录与职责边界
 
@@ -89,6 +92,11 @@ JSON 顶层字段保持稳定，新增字段只能向后兼容地追加：
 {
   "schemaVersion": 1,
   "generatedAt": "<ISO-8601>",
+  "acceptance": {
+    "id": "<W0-NAV-F>",
+    "domainId": "<D-NAV>",
+    "gate": "<P|F|E|R>"
+  },
   "suite": { "id": "<SUITE_ID>", "version": "<SUITE_VERSION>" },
   "repository": { "version": "<VINKEY_VERSION>", "gitSha": "<GIT_SHA>" },
   "environment": {
@@ -113,7 +121,7 @@ JSON 顶层字段保持稳定，新增字段只能向后兼容地追加：
 }
 ```
 
-每个 `cases[]` 元素至少包含 `caseId`、`title`、`status`、`durationMs`、`error`（无错误时为 `null`）。真实模型用例还应记录模型原始结果、工程化结果、提示/套件版本和失败归因。字段名称沿用 IntentRouter 的 `schemaVersion`、`selectedModel`、`summary`、`logFile` 和 `cases`，避免不同功能域出现 `model`/`modelName` 等同义字段。
+每个 `cases[]` 元素至少包含 `caseId`、`title`、`status`、`durationMs`、`error`（无错误时为 `null`）。真实模型用例还应记录模型原始结果、工程化结果、提示/套件版本和失败归因。字段名称沿用 IntentRouter 的 `schemaVersion`、`selectedModel`、`summary`、`logFile` 和 `cases`，避免不同功能域出现 `model`/`modelName` 等同义字段。新增脚本不得省略 `acceptance.id`、`acceptance.domainId` 或 `acceptance.gate`；旧脚本迁移期间可由报告适配器根据命令参数补齐，但不能猜测门槛。
 
 **现有脚本迁移说明**：当前 IntentRouter 的 `--json` 输出已经提供 `selectedModel`、`logFile`、评测 `summary` 和逐用例结果；其诊断日志也有 `schemaVersion`。但它尚未把 `repository`、`environment`、`artifacts` 和顶层 `conclusion` 放入同一个 JSON 外层。新功能域应直接使用本节完整结构；IntentRouter 后续按兼容方式补齐字段，在迁移完成前由验收报告适配器根据退出码和 `effectiveSummary.passed` 推导 `conclusion`，不得把缺少元数据误写成“规范已完全实现”。
 
@@ -171,6 +179,6 @@ JSON 顶层字段保持稳定，新增字段只能向后兼容地追加：
 └── screenshots/
 ```
 
-回传给验收报告的最小集合是：`result.json`、退出码、执行命令、人工 UI 观察表、截图/录屏索引和 `SHA256SUMS`。报告使用 [`UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md`](./acceptance/UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md) 的占位符回填；未提供原始 JSON 或人工观察时，结论保持“待回填”或“条件通过”。
+回传给验收报告的最小集合是：`result.json`、退出码、执行命令、人工 UI 观察表、截图/录屏索引和 `SHA256SUMS`。报告按功能域使用对应模板回填：模型设置使用 [`UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md`](./acceptance/UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md)，壳层使用 [`UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md`](./acceptance/UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md)，项目/会话导航使用 [`UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md`](./acceptance/UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md)。未提供原始 JSON 或人工观察时，结论保持“待回填”或“条件通过”。
 
 测试人员可以上传完整附件，也可以在协作平台只粘贴脱敏摘要并提供文件 SHA-256。任何上传前必须检查 API Key、正文、用户目录和系统凭据是否已脱敏。
