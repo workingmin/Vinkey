@@ -105,6 +105,7 @@ mkdir -p "$OUTPUT_DIR/screenshots"
 DEV_LOG="$OUTPUT_DIR/tauri-dev.log"
 AUTOMATION_STDERR="$OUTPUT_DIR/automation-stderr.txt"
 EVENTS_FILE="$OUTPUT_DIR/events.txt"
+APPLE_SCRIPT_FILE="$OUTPUT_DIR/native-automation.applescript"
 
 cleanup() {
   if [[ -n "$DEV_PID" ]] && kill -0 "$DEV_PID" 2>/dev/null; then
@@ -141,8 +142,7 @@ if ! process_exists; then
   printf '未找到 Tauri 进程“%s”。请检查 %s\n' "$PROCESS_NAME" "$DEV_LOG" >&2
   printf '%s\n' 'BLOCKED|SHELL-NATIVE-MAC-LAUNCH|启动 Tauri 桌面应用|Accessibility 进程不可见' >"$EVENTS_FILE"
 else
-  set +e
-  AUTOMATION_OUTPUT="$(osascript - "$OUTPUT_DIR" "$PROCESS_NAME" <<'APPLESCRIPT' 2>"$AUTOMATION_STDERR"
+  cat >"$APPLE_SCRIPT_FILE" <<'APPLESCRIPT'
 on run argv
   set reportDir to item 1 of argv
   set appName to item 2 of argv
@@ -301,10 +301,10 @@ on capture(reportDir, relativePath)
   do shell script "/usr/sbin/screencapture -x " & quoted form of destination
 end capture
 APPLESCRIPT
-  )"
+  set +e
+  osascript "$APPLE_SCRIPT_FILE" "$OUTPUT_DIR" "$PROCESS_NAME" >"$EVENTS_FILE" 2>"$AUTOMATION_STDERR"
   AUTOMATION_EXIT=$?
   set -e
-  printf '%s\n' "$AUTOMATION_OUTPUT" >"$EVENTS_FILE"
   if ((AUTOMATION_EXIT != 0)); then
     printf '%s\n' "BLOCKED|SHELL-NATIVE-MAC-AUTOMATION|osascript 执行失败|exit=$AUTOMATION_EXIT" >>"$EVENTS_FILE"
   fi
