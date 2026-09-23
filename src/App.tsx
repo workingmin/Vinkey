@@ -1430,6 +1430,16 @@ export function App() {
     void recordRuntimeEvent('frontend.error', error).catch(() => undefined)
   }, [error])
 
+  useEffect(() => {
+    if (import.meta.env.VITE_UI_ACCEPTANCE !== '1') return
+    const injectError = (event: Event) => {
+      const message = (event as CustomEvent<string>).detail
+      if (typeof message === 'string' && message.trim()) setError(message)
+    }
+    window.addEventListener('vinkey:ui-acceptance-error', injectError)
+    return () => window.removeEventListener('vinkey:ui-acceptance-error', injectError)
+  }, [setError])
+
   const refreshWorkspaceFromMenu = useCallback(async () => {
     if (useAppStore.getState().projectTransition) return
     setProjectTransition(true)

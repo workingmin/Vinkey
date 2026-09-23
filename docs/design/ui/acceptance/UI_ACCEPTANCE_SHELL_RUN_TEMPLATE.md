@@ -35,6 +35,8 @@
 <COMMAND_USED>
 ```
 
+推荐浏览器自动化命令：`npm run test:ui-shell-acceptance -- --output <ARCHIVE_ROOT>`。脚本在归档根目录下创建带时间戳的单次运行目录。Playwright 只证明浏览器/WebView DOM 层；请把 Windows/macOS 桌面窗口结果单独填入下表，不能把浏览器截图当作原生菜单或交通灯证据。
+
 - 退出码：`<EXIT_CODE>`
 - stdout/stderr：`<STDOUT_FILE> / <STDERR_FILE>`
 - JSON 结果：`<RESULT_JSON_FILE_OR_NA>`
@@ -53,6 +55,18 @@
 | `SHELL-P-006` 诊断/错误 | `<STEPS>` | 脱敏、只读、可刷新/复制/关闭 | `<FILL_IN>` | `<ATTACHMENT>` | `<PASS/FAIL/BLOCKED>` |
 | `SHELL-P-007` 响应式基线 | `<STEPS>` | 目标尺寸无重叠、遮挡或跳动 | `<FILL_IN>` | `<ATTACHMENT>` | `<PASS/FAIL/BLOCKED>` |
 | `SHELL-P-008` 键盘与主题 | `<STEPS>` | 焦点可见、Escape 返回、主题不丢状态 | `<FILL_IN>` | `<ATTACHMENT>` | `<PASS/FAIL/BLOCKED>` |
+
+### 4.1 Playwright 结果映射
+
+| 报告场景 | 自动化用例/截图 | 仍需人工/平台证据 |
+| --- | --- | --- |
+| Windows 标题栏、菜单和按钮 | `SHELL-P-001-WIN-DOM`、`01-win-*-web.png` | Tauri 实际窗口按钮最小化/最大化/关闭；自绘标题栏拖动与双击 |
+| macOS Overlay、菜单和交通灯 | `SHELL-P-001-MAC-LAYOUT`、`01-mac-overlay-layout-simulation.png` | 原生菜单项操作；交通灯位置、可用性和点击行为 |
+| 侧栏、设置开关及状态恢复 | `SHELL-P-003-SETTINGS-*`、`02-*.png` | 真实窗口宽度和 macOS Overlay 避让观感 |
+| 内容切换、空态、错误条 | `SHELL-P-004-CONTENT-*`、`SHELL-P-006-ERROR-*`、`03-*.png` | 只需核实桌面 WebView 无平台差异时注明观察结果 |
+| 主题、Escape、焦点、尺寸 | `SHELL-P-008-THEME-FOCUS-*`、`SHELL-P-007-*`、`04-*.png`/`05-*.png` | 实机窗口尺寸、DPI/缩放值及物理像素截图 |
+
+`result.json` 的 `platformEvidence` 标记 `NOT_COVERED_BY_PLAYWRIGHT` 或 `REQUIRES_DESKTOP_DIAGNOSTICS` 时，不得把整份 `W0-SHELL-P` 标为通过。
 
 ## 5. 问题与证据
 

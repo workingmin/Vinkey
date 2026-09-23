@@ -8,6 +8,8 @@
 | `intent-router/` | IntentRouter CLI、SQLite 配置读取和跨模块验收合同测试 |
 | `worker-harness/` | Rust worker 独立测试 harness |
 
+Playwright 端到端验收入口位于 `scripts/ui-shell/`，其应用壳层交互和截图结果属于本地验收证据，不在普通 Vitest 测试中隐式运行。命令与平台限制见 [`scripts/README.md`](../scripts/README.md)。
+
 边界约定：
 
 - `tests/` 下的代码由测试运行器执行，不作为人工命令入口。

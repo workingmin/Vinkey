@@ -5,7 +5,8 @@
 - 关联设计：[UI_DESIGN_SHELL.md](../UI_DESIGN_SHELL.md)、[TITLE_BAR_DESIGN.md](../TITLE_BAR_DESIGN.md)
 - 导航业务报告：[UI_ACCEPTANCE_NAVIGATION.md](./UI_ACCEPTANCE_NAVIGATION.md)
 - 回填模板：[UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md](./UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md)
-- 报告状态：代码层证据已登记；目标平台人工材料待补
+- 自动化入口：[Playwright 脚本](../../../../scripts/ui-shell/run-ui-shell-acceptance.mjs)，命令为 `npm run test:ui-shell-acceptance`
+- 报告状态：Playwright 浏览器层自动化已实现；Tauri 目标平台原生材料待补
 - 更新日期：`2026-09-23`
 
 ## 1. 验收边界
@@ -29,13 +30,16 @@
 
 ## 3. 当前代码与自动化证据
 
+Playwright 自动化入口以隔离浏览器上下文预置无项目状态，可自动执行自绘标题栏 DOM、侧栏与设置状态、对话/文件/日志切换、空态/错误条、主题/键盘焦点，以及三个目标视口的结构断言和截图。macOS 布局通过浏览器平台标识模拟，不代表 Tauri 原生系统行为；原生菜单、窗口按钮、交通灯和实际 DPI 必须在目标桌面应用另行回填。
+
 | 证据 | 覆盖 | 结果/限制 |
 | --- | --- | --- |
 | `src/store.test.ts` | 主题、活动会话、设置打开/关闭、运行状态和状态恢复 | 可支持代码层结论；不能替代窗口/菜单渲染 |
 | `src/lib/nativeWindowControls.test.ts` | 侧栏宽度、ResizeObserver 合并更新、失败回调和清理 | 可支持桥接层结论；需目标平台确认 |
 | `src/lib/desktop.test.ts` | 浏览器演示和桥接分流 | 不替代 Tauri 实机 |
 | `src/components/SettingsPage.test.tsx` | 设置页状态和连接失败 | 归属 `D-MODEL`，不替代壳层返回验收 |
-| `src/App.tsx`、`src/styles.css` | 页面组装、断点、标题栏和内容容器源码 | 当前缺完整 App/TitleBar/ContentPanel 直接渲染矩阵 |
+| `src/App.tsx`、`src/styles.css` | 页面组装、断点、标题栏和内容容器源码 | Playwright 覆盖仍不等价于 Tauri 桌面壳层 |
+| `scripts/ui-shell/run-ui-shell-acceptance.mjs` | Playwright WebView 层自动操作、截图、尺寸断言和 JSON | 不驱动 Tauri 原生菜单/窗口控件；原生平台用例保持阻断 |
 
 历史执行记录（继承前一轮基线，需在本版本重新执行或注明 SHA）：`NODE_ENV=test npm test` 曾通过 37 个测试文件/249 个测试；`npm run build` 曾通过。Linux Rust/GTK 环境缺失不能替代 Windows/macOS 桌面证据。
 

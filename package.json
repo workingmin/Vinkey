@@ -9,6 +9,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:ui-shell-acceptance": "node scripts/ui-shell/run-ui-shell-acceptance.mjs",
+    "test:ui-shell-acceptance:win": "powershell -ExecutionPolicy Bypass -File scripts/ui-shell/run-ui-shell-acceptance.ps1",
+    "test:ui-shell-acceptance:sh": "bash scripts/ui-shell/run-ui-shell-acceptance.sh",
     "test:intent-router-acceptance": "node scripts/intent-router/run-intent-router-acceptance.mjs",
     "fixtures:chinese-fiction": "node scripts/fixtures/fetch-chinese-fiction.mjs",
     "tauri": "tauri",
@@ -52,6 +55,7 @@
     "@vitejs/plugin-react": "^6.1.0",
     "esbuild": "^0.28.2",
     "jsdom": "^30.0.1",
+    "playwright": "^1.63.0",
     "typescript": "^7.0.2",
     "vite": "^8.2.2",
     "vitest": "^4.1.11"

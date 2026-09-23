@@ -3,6 +3,7 @@
 - 状态：当前版本验收规范
 - 更新日期：2026-09-23
 - 适用端：Windows、macOS；Linux 仅用于开发机或 CI 的代码层验证
+- 应用壳层浏览器实现：[Playwright 验收脚本](../../../scripts/ui-shell/run-ui-shell-acceptance.mjs)
 - 关联计划：[UI_ACCEPTANCE_SCRIPT_PLAN.md](./UI_ACCEPTANCE_SCRIPT_PLAN.md)
 - 关联回填模板：[UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md](./acceptance/UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md)、[UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md](./acceptance/UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md)、[UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md](./acceptance/UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md)
 
