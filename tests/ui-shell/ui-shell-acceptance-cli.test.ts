@@ -30,6 +30,8 @@ describe('UI shell acceptance CLI', () => {
     })
     expect(result.status).toBe(0)
     expect(result.stdout).toContain('--app')
+    expect(result.stdout).toContain('/Applications/Vinkey.app')
+    expect(result.stdout).toContain('--dev')
     expect(result.stdout).toContain('--process-name')
     expect(result.stdout).toContain('辅助功能')
   })

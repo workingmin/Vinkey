@@ -35,7 +35,7 @@
 npm run test:ui-shell-native-mac -- --output <ARCHIVE_ROOT> [--app /path/to/Vinkey.app]
 ```
 
-该入口默认启动 `npm run desktop:dev`；传入 `--app` 时启动指定已构建应用。执行前须授予运行终端的 macOS“辅助功能”和“屏幕与系统音频录制”权限。它会在最后一个窗口用例点击关闭交通灯，请使用专用测试实例。
+该入口默认启动 `/Applications/Vinkey.app`；传入 `--app` 时启动其他已构建应用，传入 `--dev` 时启动 `npm run desktop:dev`。`npm run test:ui-shell-acceptance:sh` 在 macOS 采用相同默认值，加 `--browser` 可仅执行 Playwright。执行前须授予运行终端的 macOS“辅助功能”和“屏幕与系统音频录制”权限。它会在最后一个窗口用例点击关闭交通灯，请使用专用测试实例。
 
 ### Windows PowerShell
 

@@ -3,10 +3,12 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DEFAULT_OUTPUT="$ROOT_DIR/artifacts/ui-shell-native-macos"
+DEFAULT_APP_PATH="/Applications/Vinkey.app"
 OUTPUT_ROOT="$DEFAULT_OUTPUT"
-APP_PATH=""
+APP_PATH="$DEFAULT_APP_PATH"
 PROCESS_NAME=""
 NO_LAUNCH=0
+DEV_MODE=0
 DEV_PID=""
 RUN_ID="$(date -u +%Y-%m-%dT%H%M%SZ)"
 
@@ -18,7 +20,8 @@ macOS Tauri 原生壳层验收
 
 选项：
   --output <目录>          证据归档根目录（默认：artifacts/ui-shell-native-macos）
-  --app <Vinkey.app>       启动已构建的 macOS .app；不传时启动 npm run desktop:dev
+  --app <Vinkey.app>       指定 macOS .app（默认：/Applications/Vinkey.app）
+  --dev                    不使用已安装应用，改为启动 npm run desktop:dev
   --process-name <名称>    Accessibility 进程名（开发模式默认 vinkey，.app 默认取包名）
   --no-launch              不启动应用，使用已运行的 Tauri 进程
   --help                   显示帮助
@@ -42,7 +45,13 @@ while (($# > 0)); do
     --app)
       [[ $# -ge 2 ]] || { printf '%s\n' '--app 需要 .app 路径' >&2; exit 2; }
       APP_PATH="$2"
+      DEV_MODE=0
       shift 2
+      ;;
+    --dev)
+      APP_PATH=""
+      DEV_MODE=1
+      shift
       ;;
     --process-name)
       [[ $# -ge 2 ]] || { printf '%s\n' '--process-name 需要进程名' >&2; exit 2; }
@@ -74,11 +83,15 @@ command -v osascript >/dev/null || { printf '%s\n' '缺少 osascript' >&2; exit 
 command -v screencapture >/dev/null || { printf '%s\n' '缺少 screencapture' >&2; exit 1; }
 command -v shasum >/dev/null || { printf '%s\n' '缺少 shasum' >&2; exit 1; }
 
-if [[ -n "$APP_PATH" ]]; then
+if [[ -n "$APP_PATH" && "$NO_LAUNCH" -eq 0 ]]; then
   [[ -d "$APP_PATH" && "$APP_PATH" == *.app ]] || {
-    printf '不是有效的 macOS .app：%s\n' "$APP_PATH" >&2
+    printf '未找到有效的 macOS 应用：%s\n' "$APP_PATH" >&2
+    printf '%s\n' '请先安装 Vinkey、用 --app 指定其他路径，或用 --dev 启动源码开发版。' >&2
     exit 2
   }
+fi
+
+if [[ -n "$APP_PATH" ]]; then
   [[ -n "$PROCESS_NAME" ]] || PROCESS_NAME="$(basename "$APP_PATH" .app)"
 else
   [[ -n "$PROCESS_NAME" ]] || PROCESS_NAME="vinkey"
@@ -102,7 +115,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 if ((NO_LAUNCH == 0)); then
-  if [[ -n "$APP_PATH" ]]; then
+  if ((DEV_MODE == 0)); then
     open "$APP_PATH" >/dev/null || true
   else
     (
