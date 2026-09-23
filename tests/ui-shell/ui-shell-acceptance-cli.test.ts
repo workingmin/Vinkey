@@ -23,6 +23,17 @@ describe('UI shell acceptance CLI', () => {
     expect(result.stdout).toContain('--base-url')
   })
 
+  it('documents the macOS native accessibility runner without launching a desktop app', () => {
+    const result = spawnSync('bash', [resolve(repositoryRoot, 'scripts/ui-shell/run-ui-shell-native-macos.sh'), '--help'], {
+      cwd: tmpdir(),
+      encoding: 'utf8',
+    })
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain('--app')
+    expect(result.stdout).toContain('--process-name')
+    expect(result.stdout).toContain('辅助功能')
+  })
+
   it('writes a blocked result for an invalid server instead of reporting a pass', () => {
     const output = mkdtempSync(join(tmpdir(), 'vinkey-shell-acceptance-'))
     temporaryDirectories.push(output)

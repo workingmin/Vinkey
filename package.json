@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui-shell-acceptance": "node scripts/ui-shell/run-ui-shell-acceptance.mjs",
+    "test:ui-shell-native-mac": "bash scripts/ui-shell/run-ui-shell-native-macos.sh",
     "test:ui-shell-acceptance:win": "powershell -ExecutionPolicy Bypass -File scripts/ui-shell/run-ui-shell-acceptance.ps1",
     "test:ui-shell-acceptance:sh": "bash scripts/ui-shell/run-ui-shell-acceptance.sh",
     "test:intent-router-acceptance": "node scripts/intent-router/run-intent-router-acceptance.mjs",

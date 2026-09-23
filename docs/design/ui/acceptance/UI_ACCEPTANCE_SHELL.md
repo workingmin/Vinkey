@@ -6,7 +6,8 @@
 - 导航业务报告：[UI_ACCEPTANCE_NAVIGATION.md](./UI_ACCEPTANCE_NAVIGATION.md)
 - 回填模板：[UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md](./UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md)
 - 自动化入口：[Playwright 脚本](../../../../scripts/ui-shell/run-ui-shell-acceptance.mjs)，命令为 `npm run test:ui-shell-acceptance`
-- 报告状态：Playwright 浏览器层自动化已实现；Tauri 目标平台原生材料待补
+- macOS 原生入口：[Accessibility/System Events 脚本](../../../../scripts/ui-shell/run-ui-shell-native-macos.sh)，命令为 `npm run test:ui-shell-native-mac`
+- 报告状态：Playwright 浏览器层自动化已实现；macOS Tauri 原生脚本已提供，需在有 Accessibility 权限的目标桌面执行
 - 更新日期：`2026-09-23`
 
 ## 1. 验收边界
@@ -30,7 +31,7 @@
 
 ## 3. 当前代码与自动化证据
 
-Playwright 自动化入口以隔离浏览器上下文预置无项目状态，可自动执行自绘标题栏 DOM、侧栏与设置状态、对话/文件/日志切换、空态/错误条、主题/键盘焦点，以及三个目标视口的结构断言和截图。macOS 布局通过浏览器平台标识模拟，不代表 Tauri 原生系统行为；原生菜单、窗口按钮、交通灯和实际 DPI 必须在目标桌面应用另行回填。
+Playwright 自动化入口以隔离浏览器上下文预置无项目状态，可自动执行自绘标题栏 DOM、侧栏与设置状态、对话/文件/日志切换、空态/错误条、主题/键盘焦点，以及三个目标视口的结构断言和截图。macOS 原生入口启动 Tauri 应用后，通过 Accessibility/System Events 执行原生菜单、菜单项、Escape/外部点击、交通灯、窗口缩放/最小化/关闭和截图；显示器原始信息写入 `display-info.txt`，点坐标与截图像素写入 `result.json`。Windows 原生窗口和真实 DPI 仍需 Windows UI Automation 入口或人工材料。
 
 | 证据 | 覆盖 | 结果/限制 |
 | --- | --- | --- |
@@ -40,6 +41,7 @@ Playwright 自动化入口以隔离浏览器上下文预置无项目状态，可
 | `src/components/SettingsPage.test.tsx` | 设置页状态和连接失败 | 归属 `D-MODEL`，不替代壳层返回验收 |
 | `src/App.tsx`、`src/styles.css` | 页面组装、断点、标题栏和内容容器源码 | Playwright 覆盖仍不等价于 Tauri 桌面壳层 |
 | `scripts/ui-shell/run-ui-shell-acceptance.mjs` | Playwright WebView 层自动操作、截图、尺寸断言和 JSON | 不驱动 Tauri 原生菜单/窗口控件；原生平台用例保持阻断 |
+| `scripts/ui-shell/run-ui-shell-native-macos.sh` | macOS Accessibility/System Events 原生操作、截图、窗口尺寸和 JSON | 需要辅助功能/屏幕录制权限；无法在 Linux/CI 替代执行 |
 
 历史执行记录（继承前一轮基线，需在本版本重新执行或注明 SHA）：`NODE_ENV=test npm test` 曾通过 37 个测试文件/249 个测试；`npm run build` 曾通过。Linux Rust/GTK 环境缺失不能替代 Windows/macOS 桌面证据。
 

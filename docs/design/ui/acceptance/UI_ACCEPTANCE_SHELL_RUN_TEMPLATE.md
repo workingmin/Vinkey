@@ -29,6 +29,14 @@
 <COMMAND_USED>
 ```
 
+### macOS Tauri 原生 shell
+
+```bash
+npm run test:ui-shell-native-mac -- --output <ARCHIVE_ROOT> [--app /path/to/Vinkey.app]
+```
+
+该入口默认启动 `npm run desktop:dev`；传入 `--app` 时启动指定已构建应用。执行前须授予运行终端的 macOS“辅助功能”和“屏幕与系统音频录制”权限。它会在最后一个窗口用例点击关闭交通灯，请使用专用测试实例。
+
 ### Windows PowerShell
 
 ```powershell
@@ -36,6 +44,8 @@
 ```
 
 推荐浏览器自动化命令：`npm run test:ui-shell-acceptance -- --output <ARCHIVE_ROOT>`。脚本在归档根目录下创建带时间戳的单次运行目录。Playwright 只证明浏览器/WebView DOM 层；请把 Windows/macOS 桌面窗口结果单独填入下表，不能把浏览器截图当作原生菜单或交通灯证据。
+
+macOS 原生脚本的 `result.json` 可直接作为 macOS 桌面层证据；`display-info.txt` 保存 `system_profiler SPDisplaysDataType` 原始信息，`result.json` 保存 Accessibility 桌面点坐标和截图像素。多显示器、系统缩放和物理 DPI 仍需测试人员在回填表中确认。
 
 - 退出码：`<EXIT_CODE>`
 - stdout/stderr：`<STDOUT_FILE> / <STDERR_FILE>`
@@ -61,12 +71,12 @@
 | 报告场景 | 自动化用例/截图 | 仍需人工/平台证据 |
 | --- | --- | --- |
 | Windows 标题栏、菜单和按钮 | `SHELL-P-001-WIN-DOM`、`01-win-*-web.png` | Tauri 实际窗口按钮最小化/最大化/关闭；自绘标题栏拖动与双击 |
-| macOS Overlay、菜单和交通灯 | `SHELL-P-001-MAC-LAYOUT`、`01-mac-overlay-layout-simulation.png` | 原生菜单项操作；交通灯位置、可用性和点击行为 |
+| macOS Overlay、菜单和交通灯 | `SHELL-P-001-MAC-LAYOUT`、`01-mac-overlay-layout-simulation.png`；原生脚本 `SHELL-NATIVE-MAC-*`、`01/02-mac-*.png` | 原生脚本需权限；多显示器/物理 DPI 需人工确认 |
 | 侧栏、设置开关及状态恢复 | `SHELL-P-003-SETTINGS-*`、`02-*.png` | 真实窗口宽度和 macOS Overlay 避让观感 |
 | 内容切换、空态、错误条 | `SHELL-P-004-CONTENT-*`、`SHELL-P-006-ERROR-*`、`03-*.png` | 只需核实桌面 WebView 无平台差异时注明观察结果 |
 | 主题、Escape、焦点、尺寸 | `SHELL-P-008-THEME-FOCUS-*`、`SHELL-P-007-*`、`04-*.png`/`05-*.png` | 实机窗口尺寸、DPI/缩放值及物理像素截图 |
 
-`result.json` 的 `platformEvidence` 标记 `NOT_COVERED_BY_PLAYWRIGHT` 或 `REQUIRES_DESKTOP_DIAGNOSTICS` 时，不得把整份 `W0-SHELL-P` 标为通过。
+Playwright `result.json` 的 `platformEvidence` 标记 `NOT_COVERED_BY_PLAYWRIGHT` 时，不得单独把整份 `W0-SHELL-P` 标为通过；macOS 原生脚本的 `W0-SHELL-P-NATIVE-MAC` 结果和人工 DPI 回填均需齐全。
 
 ## 5. 问题与证据
 

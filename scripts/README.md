@@ -16,9 +16,12 @@ npm run test:intent-router-acceptance -- --list-profiles
 npm run fixtures:chinese-fiction
 npm run package:mac -- --no-install
 npm run test:ui-shell-acceptance -- --output /path/to/shell-evidence
+npm run test:ui-shell-native-mac -- --output /path/to/native-shell-evidence
 ```
 
 `test:ui-shell-acceptance` 会启动临时 Vite 演示实例，使用隔离浏览器上下文，默认将证据写入 `artifacts/ui-shell-acceptance/run-<timestamp>/`。该 Playwright 层可在 macOS/Windows/Linux 执行 DOM 交互和视口验收，但不能代替 Tauri 原生菜单、窗口控制、macOS 交通灯或物理 DPI 验收。
+
+`test:ui-shell-native-mac` 只在 macOS 执行真实 Tauri 原生验收：默认启动 `npm run desktop:dev`，也可用 `--app /path/to/Vinkey.app` 指定已构建应用。脚本通过 macOS Accessibility/System Events 操作原生菜单、Escape/外部点击、交通灯、缩放、最小化、关闭和目标窗口尺寸，并写入截图、显示器元数据、`result.json` 与 `SHA256SUMS`。首次运行必须在系统设置中授予 Terminal/IDE“辅助功能”和“屏幕与系统音频录制”权限；若权限、应用或目标尺寸不可用，结果为 `BLOCKED`。
 
 Windows 可使用 `npm run test:ui-shell-acceptance:win -- -Output C:\\vinkey-evidence`；macOS/Linux 可使用 `npm run test:ui-shell-acceptance:sh -- --output /tmp/vinkey-evidence`。首次安装 Playwright 后需执行 `npx playwright install chromium` 安装浏览器。
 
