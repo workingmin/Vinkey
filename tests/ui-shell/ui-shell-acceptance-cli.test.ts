@@ -21,6 +21,9 @@ describe('UI shell acceptance CLI', () => {
     expect(result.stdout).toContain('test:ui-shell-acceptance')
     expect(result.stdout).toContain('--output')
     expect(result.stdout).toContain('--base-url')
+    expect(result.stdout).toContain('--platform')
+    expect(result.stdout).toContain('--skip-native-evidence')
+    expect(result.stdout).toContain('--output-exact')
   })
 
   it('documents the macOS native accessibility runner without launching a desktop app', () => {
@@ -34,6 +37,30 @@ describe('UI shell acceptance CLI', () => {
     expect(result.stdout).toContain('--dev')
     expect(result.stdout).toContain('--process-name')
     expect(result.stdout).toContain('辅助功能')
+    const script = readFileSync(resolve(repositoryRoot, 'scripts/ui-shell/run-ui-shell-native-macos.sh'), 'utf8')
+    expect(script).toContain('SHELL-P-BUILD-PROVENANCE')
+    expect(script).toContain('--skip-native-evidence')
+    expect(script).toContain('NATIVE_APP_BUILD_NUMBER')
+    expect(script).toContain('tauriFramework')
+    expect(script).toContain('OUT_OF_SCOPE:W0-SHELL-MENU-P')
+    expect(script).not.toContain('SHELL-NATIVE-MAC-MENU-OPEN')
+    expect(script).not.toContain('menu item "日志中心"')
+  })
+
+  it('keeps title-bar menu interaction outside the W0-SHELL-P browser runner', () => {
+    const script = readFileSync(resolve(repositoryRoot, 'scripts/ui-shell/run-ui-shell-acceptance.mjs'), 'utf8')
+    expect(script).toContain('OUT_OF_SCOPE:W0-SHELL-MENU-P')
+    expect(script).not.toContain("getByRole('button', { name: '文件', exact: true }).click()")
+    expect(script).not.toContain("getByRole('menu').waitFor()")
+  })
+
+  it('does not allow the native evidence gate to be skipped outside a platform companion run', () => {
+    const result = spawnSync(process.execPath, [
+      resolve(repositoryRoot, 'scripts/ui-shell/run-ui-shell-acceptance.mjs'),
+      '--skip-native-evidence',
+    ], { cwd: tmpdir(), encoding: 'utf8' })
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('只能与 --platform 一起')
   })
 
   it('writes a blocked result for an invalid server instead of reporting a pass', () => {

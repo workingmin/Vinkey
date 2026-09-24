@@ -18,19 +18,35 @@ const sizes = [
 ]
 
 function parseArgs(argv) {
-  const options = { output: defaultOutput, baseUrl: null, help: false }
+  const options = {
+    output: defaultOutput,
+    baseUrl: null,
+    help: false,
+    platform: null,
+    skipNativeEvidence: false,
+    outputExact: false,
+  }
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index]
     if (value === '--help' || value === '-h') options.help = true
     else if (value === '--output') options.output = path.resolve(argv[++index] ?? '')
     else if (value === '--base-url') options.baseUrl = argv[++index] ?? null
+    else if (value === '--platform') {
+      options.platform = argv[++index] ?? null
+      if (!['win32', 'darwin'].includes(options.platform)) throw new Error(`不支持的平台：${options.platform}`)
+    }
+    else if (value === '--skip-native-evidence') options.skipNativeEvidence = true
+    else if (value === '--output-exact') options.outputExact = true
     else throw new Error(`未知参数：${value}`)
+  }
+  if (options.skipNativeEvidence && !options.platform) {
+    throw new Error('--skip-native-evidence 只能与 --platform 一起用于原生验收 companion')
   }
   return options
 }
 
 function printHelp() {
-  process.stdout.write(`应用壳层 Playwright 验收\n\n用法：npm run test:ui-shell-acceptance -- [选项]\n\n选项：\n  --output <目录>    证据归档目录（默认：artifacts/ui-shell-acceptance）\n  --base-url <URL>   使用已运行的 Vite 服务，不启动/停止服务\n  --help             显示帮助\n`)
+  process.stdout.write(`应用壳层 Playwright 验收\n\n用法：npm run test:ui-shell-acceptance -- [选项]\n\n选项：\n  --output <目录>    证据归档目录（默认：artifacts/ui-shell-acceptance）\n  --base-url <URL>   使用已运行的 Vite 服务，不启动/停止服务\n  --platform <平台>  只执行 win32 或 darwin 交互用例\n  --skip-native-evidence 与 --platform 配合，作为原生验收 companion 时省略原生阻断项\n  --output-exact     将 --output 作为本次批次目录，不追加 run-*\n  --help             显示帮助\n`)
 }
 
 async function freePort() {
@@ -113,7 +129,7 @@ async function main() {
   const options = parseArgs(process.argv.slice(2))
   if (options.help) { printHelp(); return 0 }
   const runId = new Date().toISOString().replaceAll(':', '').replaceAll('.', '-')
-  options.output = path.join(options.output, `run-${runId}`)
+  if (!options.outputExact) options.output = path.join(options.output, `run-${runId}`)
   await mkdir(options.output, { recursive: true })
 
   let viteProcess = null
@@ -140,7 +156,8 @@ async function main() {
     }
 
     browser = await chromium.launch({ headless: true })
-    for (const platform of ['win32', 'darwin']) {
+    const platforms = options.platform ? [options.platform] : ['win32', 'darwin']
+    for (const platform of platforms) {
       const platformContext = await browser.newContext({ viewport: sizes[0], deviceScaleFactor: 1, reducedMotion: 'reduce' })
       await platformContext.addInitScript((platformName) => {
         Object.defineProperty(navigator, 'platform', { configurable: true, value: platformName === 'darwin' ? 'MacIntel' : 'Win32' })
@@ -153,19 +170,15 @@ async function main() {
       await page.getByRole('tab', { name: '对话' }).waitFor()
 
       if (platform === 'win32') {
-        await runCase(cases, 'SHELL-P-001-WIN-DOM', 'Windows 自绘标题栏/菜单/按钮 DOM 布局', async () => {
+        await runCase(cases, 'SHELL-P-001-WIN-FRAME', 'Windows 自绘标题栏与窗口按钮 DOM 布局', async () => {
           await page.locator('.title-bar').waitFor()
           await page.getByRole('button', { name: '最小化窗口' }).waitFor()
           await page.getByRole('button', { name: '最大化窗口' }).waitFor()
           await page.getByRole('button', { name: '关闭窗口' }).waitFor()
-          await page.getByRole('button', { name: '文件', exact: true }).click()
-          await page.getByRole('menu').waitFor()
-          await capture(page, options.output, '01-win-titlebar-menu-buttons-web')
-          await page.keyboard.press('Escape')
-          await capture(page, options.output, '01-win-menu-closed-web')
+          await capture(page, options.output, '01-win-titlebar-window-buttons-web')
         })
       } else {
-        await runCase(cases, 'SHELL-P-001-MAC-LAYOUT', 'macOS Overlay 内容区避让布局模拟', async () => {
+        await runCase(cases, 'SHELL-P-001-MAC-FRAME', 'macOS Overlay 内容区避让布局模拟', async () => {
           await page.locator('.title-bar').waitFor({ state: 'detached' })
           await page.locator('.app-frame[data-platform="mac"] .session-sidebar-header').waitFor()
           const paddingTop = await page.locator('.session-sidebar-header').evaluate((node) => getComputedStyle(node).paddingTop)
@@ -239,10 +252,12 @@ async function main() {
       await platformContext.close()
     }
 
-    await runCase(cases, 'SHELL-P-001-PLATFORM', 'macOS 原生菜单/交通灯及 Windows 窗口按钮声明', async () => {
-      throw new Error(`本次套件是 Playwright 浏览器层（运行平台 ${process.platform}），不能验证 Tauri 原生菜单、交通灯、系统窗口按钮或物理 DPI；需桌面应用平台执行记录`)
-    })
-    cases.at(-1).status = 'BLOCKED'
+    if (!options.skipNativeEvidence) {
+      await runCase(cases, 'SHELL-P-002-PLATFORM', 'macOS 交通灯及 Windows 窗口按钮声明', async () => {
+        throw new Error(`本次套件是 Playwright 浏览器层（运行平台 ${process.platform}），不能验证 Tauri 交通灯、系统窗口按钮或物理 DPI；需桌面应用平台执行记录`)
+      })
+      cases.at(-1).status = 'BLOCKED'
+    }
 
     if (consoleErrors.length > 0) {
       cases.push({ caseId: 'SHELL-P-CONSOLE', title: '浏览器控制台无错误', status: 'FAIL', durationMs: 0, error: [...new Set(consoleErrors)].join('\n') })
@@ -265,11 +280,16 @@ async function main() {
     const result = {
       schemaVersion: 1,
       generatedAt: new Date().toISOString(),
-      acceptance: { id: 'W0-SHELL-P', domainId: 'D-SHELL', gate: 'P' },
-      suite: { id: 'ui-shell-playwright', version: '1.0.0' },
+      acceptance: { id: options.skipNativeEvidence ? 'W0-SHELL-P-WEBVIEW' : 'W0-SHELL-P', domainId: 'D-SHELL', gate: 'P' },
+      suite: { id: 'ui-shell-playwright', version: '1.1.0' },
       repository: { version, gitSha: repositorySha },
-      environment: { os: `${os.platform()} ${os.release()}`, osVersion: os.version(), arch: os.arch(), node: process.version, browser: `Chromium ${browser.version()}`, deviceScaleFactor: 1, viewportSizes: sizes, simulatedPlatforms: ['win32', 'darwin'] },
-      platformEvidence: { nativeMenu: 'NOT_COVERED_BY_PLAYWRIGHT', titlebarControls: 'NOT_COVERED_BY_PLAYWRIGHT', macTrafficLights: 'NOT_COVERED_BY_PLAYWRIGHT', physicalDpi: 'REQUIRES_DESKTOP_DIAGNOSTICS' },
+      environment: { os: `${os.platform()} ${os.release()}`, osVersion: os.version(), arch: os.arch(), node: process.version, browser: `Chromium ${browser.version()}`, deviceScaleFactor: 1, viewportSizes: sizes, simulatedPlatforms: platforms },
+      platformEvidence: {
+        titlebarMenus: 'OUT_OF_SCOPE:W0-SHELL-MENU-P',
+        titlebarControls: 'NOT_COVERED_BY_PLAYWRIGHT',
+        macTrafficLights: 'NOT_COVERED_BY_PLAYWRIGHT',
+        physicalDpi: 'REQUIRES_DESKTOP_DIAGNOSTICS',
+      },
       cases,
       summary,
       exitCode,
@@ -290,8 +310,8 @@ async function main() {
     const result = {
       schemaVersion: 1,
       generatedAt: new Date().toISOString(),
-      acceptance: { id: 'W0-SHELL-P', domainId: 'D-SHELL', gate: 'P' },
-      suite: { id: 'ui-shell-playwright', version: '1.0.0' },
+      acceptance: { id: options.skipNativeEvidence ? 'W0-SHELL-P-WEBVIEW' : 'W0-SHELL-P', domainId: 'D-SHELL', gate: 'P' },
+      suite: { id: 'ui-shell-playwright', version: '1.1.0' },
       cases,
       summary: { caseCount: cases.length, passed: 0, failed: 0, blocked: 1 },
       exitCode,

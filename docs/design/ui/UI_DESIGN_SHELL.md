@@ -1,8 +1,8 @@
 # UI 设计：应用壳层与入口
 
-- 状态：`D-SHELL` 当前实现基线与目标约束
+- 状态：`D-SHELL` 当前实现基线与目标约束；标题栏目标菜单待实现对齐
 - 版本：`0.1.0`
-- 更新日期：`2026-09-23`
+- 更新日期：`2026-09-24`
 - 适用端：Windows、macOS 桌面应用；浏览器仅用于演示和代码层验证
 - 功能域：`D-SHELL` 应用壳层与入口
 - 业务入口：[UI_ENTRY_POINTS.md](./UI_ENTRY_POINTS.md)
@@ -51,8 +51,9 @@
 
 | 设计事项 | 证据性质 | Vinkey 决策 | 追踪 |
 | --- | --- | --- | --- |
-| 本地工作区与 AI/文档共存壳层 | Obsidian、Cursor、Cherry Studio、Typora 等正式名录产品的长期界面和公开资料 | 左侧稳定导航容器，右侧统一内容工作面；不引入账号、云同步和通用 IDE 入口 | `CF-019`，已参考/组合改造 |
-| 平台窗口与菜单习惯 | Cursor、Ulysses、ChatGPT Desktop 等平台观察对象 | Windows 自绘标题栏；macOS 原生菜单/Overlay；核心命令语义一致 | `CF-021`，组合改造 |
+| 本地工作区与 AI/文档共存壳层 | Obsidian、Cursor、Cherry Studio、NoteGen、Typora 等正式名录产品的公开资料 | 左侧稳定导航容器，右侧统一内容工作面；不引入账号、云同步和通用 IDE 入口 | `CF-019`，已参考/组合改造 |
+| 项目、会话与文件边界 | CloudCLI、Cherry Studio、NoteGen、Obsidian、Typora；逐项证据见 [TITLE_BAR_DESIGN.md](./TITLE_BAR_DESIGN.md#21-逐项证据卡) | 全局菜单表达项目和会话；文件编辑回到项目文件页局部入口 | `CF-024`，设计已决策、实现待对齐 |
+| 平台窗口与菜单习惯 | Cursor、Obsidian、Typora 等正式名录产品及 Tauri 平台约束 | Windows 自绘标题栏；macOS 原生菜单/Overlay；核心命令语义一致 | `CF-021`/`CF-024`，组合改造 |
 | 项目/会话/搜索业务 | 详见导航域，不在本表重复作为壳层证据 | 侧栏只规定位置、宽度和折叠承载；业务行为由 `D-NAV` 决定 | `CF-020`，见 [UI_DESIGN_NAVIGATION.md](./UI_DESIGN_NAVIGATION.md) |
 | Vinkey 原创安全约束 | 无单一竞品可直接证明 | 诊断脱敏、焦点恢复、入口失败保留上下文；危险操作不由壳层静默放行 | `CF-019`/`CF-021` |
 
@@ -87,7 +88,7 @@
 以下示意只表达壳层区域关系，不定义颜色；实际 Token 以 [UI_DESIGN_SYSTEM.md](./UI_DESIGN_SYSTEM.md) 为准。
 
 <table border="1" cellpadding="8" cellspacing="0" width="100%">
-  <tr><td colspan="2"><strong>Windows 自绘标题栏 / macOS Overlay 标题区</strong>　品牌　工作区 · 模型　文件　编辑　查看　窗口　帮助　窗口控制</td></tr>
+  <tr><td colspan="2"><strong>Windows 自绘标题栏 / macOS Overlay 标题区</strong>　品牌　项目　会话　编辑　查看　窗口　帮助　窗口控制</td></tr>
   <tr>
     <td width="28%" height="230" valign="top"><strong>侧栏容器</strong><br>品牌　主题　折叠<br>导航业务承载区<br>添加/刷新/全局入口承载<br><strong>设置入口</strong></td>
     <td valign="top"><strong>内容区顶栏</strong>　页面标题　工作区 · 模型　　<strong>对话</strong>　|　<strong>文件</strong>　|　<strong>日志</strong><br><br><div align="center"><strong>稳定内容工作面</strong><br>由对话、文件、日志域分别实现</div></td>
@@ -110,9 +111,11 @@
 
 ### 5.1 标题栏、菜单与窗口控制
 
-Windows 自绘标题栏显示品牌、当前工作区/模型、文件/编辑/查看/窗口/帮助菜单及窗口控制；空白区域可拖动，双击切换最大化。macOS 使用系统全局菜单、Overlay 标题区和红黄绿交通灯。
+Windows 自绘标题栏显示品牌、当前项目/模型、“项目/会话/编辑/查看/窗口/帮助”菜单及窗口控制；空白区域可拖动，双击切换最大化。macOS 使用系统全局菜单、Overlay 标题区和红黄绿交通灯。
 
-应用级命令包括新建会话、打开工作区、新建文档、刷新、保存、关闭文档、通用编辑命令、对话/文件/日志切换、主题、设置、快捷键、窗口诊断、应用诊断日志和关于。命令的项目/会话业务前置条件以 [UI_DESIGN_NAVIGATION.md](./UI_DESIGN_NAVIGATION.md) 为准。
+应用级命令包括添加/刷新项目、新建/搜索/停止会话、通用编辑命令、对话/项目文件/任务与日志切换、主题、快捷键、窗口诊断、应用诊断日志和关于。新建文档、保存当前文档、关闭文档由项目文件页工具栏、文档标签和 `Ctrl/Cmd+S` 承担；设置由侧栏或平台应用菜单进入。命令的项目/会话业务前置条件以 [UI_DESIGN_NAVIGATION.md](./UI_DESIGN_NAVIGATION.md) 为准。
+
+编辑菜单按当前焦点对象分派给对话输入框、CodeMirror 文件编辑器、搜索框或设置表单；无有效编辑目标时禁用。Windows 不得用无上下文的 `document.execCommand` 代替焦点命令桥接。完整菜单逐项规范、竞品证据和实现缺口见 [TITLE_BAR_DESIGN.md](./TITLE_BAR_DESIGN.md)。
 
 菜单一次只展开一个；点击外部区域或按 `Escape` 关闭。按钮、菜单项和窗口控制必须有可读名称，图标不能成为唯一语义来源。详细菜单和快捷键见 [TITLE_BAR_DESIGN.md](./TITLE_BAR_DESIGN.md)。
 
@@ -156,7 +159,7 @@ Windows 自绘标题栏显示品牌、当前工作区/模型、文件/编辑/查
 | 能力 | Windows | macOS | 共同语义 |
 | --- | --- | --- | --- |
 | 标题栏 | 自绘 36px 标题栏和窗口控制 | Overlay 标题区和原生交通灯 | 品牌、工作区/模型摘要和核心命令一致 |
-| 菜单 | 窗口内文件/编辑/查看/窗口/帮助 | 系统全局菜单 | 命令文字、快捷键和前置条件一致 |
+| 菜单 | 窗口内项目/会话/编辑/查看/窗口/帮助 | 系统全局菜单（Vinkey/项目/会话/编辑/查看/窗口/帮助） | 命令文字、快捷键和前置条件一致 |
 | 侧栏 | 默认展开，可折叠至 52px | 默认展开，Overlay 安全区随宽度同步 | 导航业务承载位置一致 |
 | 诊断 | 应用诊断日志弹窗 | 应用诊断日志弹窗和窗口诊断 | 只读、可刷新、可复制，不改业务状态 |
 
@@ -181,7 +184,7 @@ Windows 自绘标题栏显示品牌、当前工作区/模型、文件/编辑/查
 
 | 组件 ID | 类型 | 功能点 / 入口 | 行为或结果 | 实现位置 | 状态 |
 | --- | --- | --- | --- | --- | --- |
-| `UI-SHELL-APP-MENUS` | 入口 | `BF-SHELL-*`、`BF-NAV-*`、文档和诊断入口 | 汇集应用级命令；平台承载不同但语义一致 | `src/App.tsx`、`installMacMenu` | 已实现 |
+| `UI-SHELL-APP-MENUS` | 入口 | `BF-SHELL-*`、`BF-NAV-*`、文档和诊断入口 | 汇集应用级命令；平台承载不同但语义一致 | `src/App.tsx`、`installMacMenu` | 部分实现：旧“文件”菜单存在，目标“项目/会话”菜单待对齐 |
 | `UI-SHELL-MENU-TRIGGER` | 操作 | `EP-SHELL-*` | 一次展开一个菜单；外部点击/Escape 关闭 | `src/App.tsx` | 已实现 |
 | `UI-SHELL-WINDOW-CONTROLS` | 操作 | `BF-SHELL-003` / `EP-SHELL-003` | 最小化、最大化/还原、关闭和状态同步 | `src/App.tsx`、Tauri bridge | 已实现 |
 | `UI-SHELL-CONTENT-SWITCHER` | 入口 | `BF-NAV-001..003` / `EP-NAV-001..003` | 互斥切换三类内容页，不改变承载状态 | `src/App.tsx` `ContentPanel` | 已实现 |
@@ -225,9 +228,9 @@ Windows 自绘标题栏显示品牌、当前工作区/模型、文件/编辑/查
 | --- | --- |
 | 功能入口 | [UI_ENTRY_POINTS.md](./UI_ENTRY_POINTS.md) |
 | 导航设计 | [UI_DESIGN_NAVIGATION.md](./UI_DESIGN_NAVIGATION.md) |
-| 竞品与决策 | [COMPETITOR_CATALOG.md](../../competitors/COMPETITOR_CATALOG.md)、[FEATURE_DECISIONS.md](../../competitors/FEATURE_DECISIONS.md)，`CF-019` 至 `CF-023` |
+| 竞品与决策 | [COMPETITOR_CATALOG.md](../../competitors/COMPETITOR_CATALOG.md)、[FEATURE_DECISIONS.md](../../competitors/FEATURE_DECISIONS.md)，`CF-019` 至 `CF-024`；标题栏证据卡见 [TITLE_BAR_DESIGN.md](./TITLE_BAR_DESIGN.md#21-逐项证据卡) |
 | 设计系统 | [UI_DESIGN_SYSTEM.md](./UI_DESIGN_SYSTEM.md) |
-| 壳层验收 | [UI_ACCEPTANCE_SHELL.md](./acceptance/UI_ACCEPTANCE_SHELL.md) |
+| 壳层验收 | [UI_ACCEPTANCE_SHELL.md](./acceptance/UI_ACCEPTANCE_SHELL.md)；标题栏菜单专项：[UI_ACCEPTANCE_TITLE_BAR_PLAN.md](./acceptance/UI_ACCEPTANCE_TITLE_BAR_PLAN.md) |
 
 ## 变更记录
 
@@ -236,3 +239,4 @@ Windows 自绘标题栏显示品牌、当前工作区/模型、文件/编辑/查
 | `2026-09-15` | 建立应用壳层当前实现基线 |
 | `2026-09-22` | 补充竞品决策、页面流转、平台断点和设计验收边界 |
 | `2026-09-23` | 收窄为 `D-SHELL`；项目/会话/搜索业务迁移至 `D-NAV`，壳层验收改为 `W0-SHELL-P` |
+| `2026-09-24` | 对齐标题栏目标菜单：全局“文件”调整为“项目”，新增“会话”；文档操作局部化，编辑命令按焦点分派，设置移出“查看”；当前旧菜单保留为实现缺口 |

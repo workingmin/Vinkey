@@ -1,7 +1,7 @@
 # Vinkey 当前版本 UI 功能域验收工作计划
 
 - 版本：`0.1.0`
-- 更新日期：`2026-09-23`
+- 更新日期：`2026-09-24`
 - 适用环境：Windows/macOS 桌面环境；真实模型验收使用本地 Ollama 或已批准的兼容服务
 - 统一生命周期：[UI_DESIGN.md](./UI_DESIGN.md) 的“统一验收生命周期”
 - 脚本规范：[UI_ACCEPTANCE_SCRIPT_SPEC.md](./UI_ACCEPTANCE_SCRIPT_SPEC.md)
@@ -22,7 +22,7 @@
 3. **跨层风险**：涉及窗口、桌面桥接、SQLite、凭据、真实模型和异步回写的域需要更高门槛。
 4. **可独立执行性**：不依赖模型、可使用隔离 fixture 或纯 UI 的内容允许提前验收，但结论只能覆盖该门槛。
 
-因此，“应用壳层与入口”可以先做 `W0-SHELL-P`，而项目/会话导航的真实业务必须等待 `D-CHAT` 形成数据后做 `W2-NAV-E`；两者不再被一个合并波次标识混为一次验收。
+因此，“应用壳层与入口”可以先做 `W0-SHELL-P`，标题栏菜单也应进入 W0，但需要按依赖拆成两个子门槛：`W0-SHELL-MENU-P` 只验收菜单树、平台承载、窗口动作、主题、菜单关闭和无业务页面切换；`W0-SHELL-MENU-F` 验收项目/会话/编辑/设置入口与隔离 fixture 的实际交互链路。两者都属于 W0 大批次，但不能把 fixture 链路误报为纯平台通过；真实模型、多轮会话、语义标题和全局搜索仍分别等待 W1/W2。
 
 ## 2. 功能域分类
 
@@ -43,10 +43,12 @@
 
 | 验收标识 | 功能域 | 门槛含义 | 前置依赖 | 可证明范围 | 主要产出与报告 |
 | --- | --- | --- | --- | --- | --- |
-| `W0-SHELL-P` | `D-SHELL` | 平台/结构 | 无；能启动桌面或浏览器演示 | 标题栏、菜单、窗口控制、侧栏容器、内容页切换、设置/诊断承载 | `UI_ACCEPTANCE_SHELL.md` |
+| `W0-SHELL-P` | `D-SHELL` | 平台/结构 | 无；能启动桌面或浏览器演示 | 应用窗口/Overlay、窗口控制、侧栏容器、内容页切换、设置/诊断承载、主题/焦点和响应式结构；不判定菜单树或菜单命令 | `UI_ACCEPTANCE_SHELL.md` |
+| `W0-SHELL-MENU-P` | `D-SHELL` | 平台/结构 | `W0-SHELL-P`；目标桌面包和平台权限 | 目标一级菜单树、平台菜单承载、窗口动作、主题、Escape/外部点击、中文审计；不证明业务数据链路 | `UI_ACCEPTANCE_TITLE_BAR_PLAN.md`（P 子集） |
 | `W0-RESP-P` | `Q-RESP` | 平台/结构 | `D-SHELL` 布局和 Token | `1440x900`、`1280x800`、`1024x680`、窄窗口、焦点、主题和无重叠基线 | 响应式专项记录（待建立） |
 | `W0-NAV-F` | `D-NAV` | fixture/合同 | 桌面桥接、SQLite、隔离临时目录 | 多项目、多会话、切换、删除边界、当前侧栏搜索和错误重试；不要求 Ollama | `UI_ACCEPTANCE_NAVIGATION.md` |
 | `W0-EDITOR-F` | `D-EDITOR` | fixture/合同 | 工作区/文件桥接 | 文件树、打开、编辑、保存、Unicode 路径、保存错误和越界 | `UI_ACCEPTANCE_EDITOR.md` |
+| `W0-SHELL-MENU-F` | `D-SHELL` + 入口 fixture | fixture/合同 | `W0-SHELL-MENU-P`、`W0-NAV-F`、`W0-EDITOR-F`；设置入口使用可控 UI fixture | 项目添加/刷新、新建会话、查看页面状态保持、编辑焦点命令、设置打开/返回；不要求 Ollama 或真实多轮会话 | `UI_ACCEPTANCE_TITLE_BAR_PLAN.md`（F 子集） |
 | `W1-MODEL-E` | `D-MODEL` | 真实端到端 | `D-SHELL`、桌面桥接、SQLite、系统凭据库 | profile、服务、连接测试、活动模型、凭据边界、硬件提示和真实 Ollama | `UI_ACCEPTANCE_SETTINGS.md` |
 | `W1-INTENT-E` | `D-INTENT` | 真实端到端 | `D-MODEL` 与真实模型 | IntentRouter 真实输出、schema、失败归因和准入日志 | `design/agent/intent-router/TEST_ACCEPTANCE.md` |
 | `W2-CHAT-E` | `D-CHAT` | 真实端到端 | `D-SHELL`、`D-MODEL`、`D-INTENT` | 多轮发送、流式完成、停止、超时、失败恢复和活动模型快照 | 对话专项报告（待建立） |
@@ -91,8 +93,8 @@
 
 ## 6. 执行顺序与复审
 
-1. 先执行 `W0-SHELL-P` 和 `W0-RESP-P`，确认所有后续功能域有稳定承载；不配置模型。
-2. 并行执行 `W0-NAV-F` 和 `W0-EDITOR-F`，只使用隔离 fixture/临时工作区；基础合同通过不等于真实链路通过。
+1. 先执行 `W0-SHELL-P`、`W0-SHELL-MENU-P` 和 `W0-RESP-P`，确认所有后续功能域有稳定承载；不配置模型。
+2. 并行执行 `W0-NAV-F` 和 `W0-EDITOR-F`，只使用隔离 fixture/临时工作区；依赖就绪后执行同一 W0 大批次内的 `W0-SHELL-MENU-F`。基础合同通过不等于真实链路通过。
 3. 执行 `W1-MODEL-E`，再执行 `W1-INTENT-E`，确认真实 Ollama/profile 可准入。
 4. 执行 `W2-CHAT-E`；完成真实消息数据后执行 `W2-NAV-E`，验证标题生命周期和搜索跳转。
 5. 执行 `W3-CONTEXT-E`、`W3-REVISION-E`，将 AI 改稿与基础编辑器结论分开。
@@ -116,5 +118,6 @@
 - [应用壳层设计](./UI_DESIGN_SHELL.md)
 - [项目与会话导航设计](./UI_DESIGN_NAVIGATION.md)
 - [项目与会话导航验收](./acceptance/UI_ACCEPTANCE_NAVIGATION.md)
+- [标题栏菜单专项验收](./acceptance/UI_ACCEPTANCE_TITLE_BAR_PLAN.md)
 - [模型设置验收](./acceptance/UI_ACCEPTANCE_SETTINGS.md)
 - [验收脚本设计规范](./UI_ACCEPTANCE_SCRIPT_SPEC.md)

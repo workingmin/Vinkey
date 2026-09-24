@@ -1,7 +1,7 @@
 # Vinkey UI 设计文档
 
 - 状态：首版 UI 基线，按域拆分维护
-- 日期：2026-09-23
+- 日期：2026-09-24
 - 适用端：Windows、macOS 桌面应用
 - 当前实现盘点：[UI_INVENTORY.md](./UI_INVENTORY.md)
 
@@ -35,7 +35,7 @@ Vinkey 是深色、安静、AI 对话优先的本地文学创作工作台。主�
 
 <table border="1" cellpadding="8" cellspacing="0" width="100%">
   <tr>
-    <td colspan="2" bgcolor="#F1F3F5"><strong>标题栏</strong>　品牌 / 工作区 / 当前模型　　文件　编辑　查看　窗口　帮助　　窗口控制</td>
+      <td colspan="2" bgcolor="#F1F3F5"><strong>标题栏</strong>　品牌 / 当前项目 / 当前模型　　项目　会话　编辑　查看　窗口　帮助　　窗口控制</td>
   </tr>
   <tr>
     <td width="28%" bgcolor="#F8F9FA" valign="top">

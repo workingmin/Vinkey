@@ -1,7 +1,7 @@
 # UI 测试验收脚本编写工作计划
 
 - 计划基线：当前版本 `0.1.0`
-- 更新日期：`2026-09-23`
+- 更新日期：`2026-09-24`
 - 脚本规范：[UI_ACCEPTANCE_SCRIPT_SPEC.md](./UI_ACCEPTANCE_SCRIPT_SPEC.md)
 - 总验收计划：[UI_ACCEPTANCE_PLAN.md](./UI_ACCEPTANCE_PLAN.md)
 
@@ -38,10 +38,12 @@
 
 | 验收标识 | 功能域 | 前置依赖 | 脚本 ID | 自动化证据 | 本地环境入口/计划 | 人工 UI | 当前状态 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `W0-SHELL-P` | `D-SHELL` 应用壳层 | 无 | `UI-ACC-SHELL-001` | store、原生窗口宽度同步已有；Playwright 新增 App/WebView 交互覆盖 | `npm run test:ui-shell-acceptance`；Playwright 浏览器证据与 Tauri 原生平台证据分层 | DOM 菜单、侧栏/设置、内容承载、错误/空态、主题/焦点、三种视口 | 浏览器脚本已实现；原生窗口菜单、按钮、交通灯和 DPI 待桌面执行 |
+| `W0-SHELL-P` | `D-SHELL` 应用壳层 | 无 | `UI-ACC-SHELL-001` | store、原生窗口宽度同步已有；Playwright 只覆盖壳层容器/状态，不执行菜单命令 | `npm run test:ui-shell-acceptance`；Playwright 浏览器证据与 Tauri 原生窗口证据分层 | Overlay/自绘窗口承载、侧栏/设置、内容容器、错误/空态、主题/焦点、三种视口 | 浏览器脚本已实现；原生窗口控制、交通灯和 DPI 待桌面执行；菜单移交 `W0-SHELL-MENU-P/F` |
+| `W0-SHELL-MENU-P` | `D-SHELL` 标题栏与功能菜单 | `W0-SHELL-P` 的桌面启动和平台权限 | `UI-ACC-TITLE-BAR-001` | Playwright/WebView companion 只覆盖 DOM 菜单、窗口/菜单关闭、主题和无业务页面切换；原生菜单另行取证 | `docs/design/ui/acceptance/UI_ACCEPTANCE_TITLE_BAR_PLAN.md`；Windows UI Automation/macOS Accessibility | 一级菜单树、平台窗口动作、主题、中文审计、菜单关闭 | 计划已建立；当前源码仍存在 `TB-GAP-001`、`TB-GAP-003`、`TB-GAP-004`，不得假定通过 |
 | `W0-RESP-P` | `Q-RESP` 响应式/主题 | 壳层 Token | `UI-ACC-RESPONSIVE-001` | 与壳层共用 Playwright 三种视口/主题/焦点场景 | 当前由 `test:ui-shell-acceptance` 提供结构截图；窄窗口专项仍待扩展 | 三种目标尺寸、主题、焦点、无横向溢出 | 部分自动化可执行，目标桌面 DPI 待回填 |
 | `W0-NAV-F` | `D-NAV` 项目/会话导航 | 桌面桥接、SQLite、隔离 fixture | `UI-ACC-NAV-FIXTURE-001` | store、删除对话框和搜索单元证据；组件直测仍需补 | 临时目录、多项目、多会话、删除边界和当前搜索；不调用 Ollama | 切换、恢复、确认、错误重试、结果范围 | 待编写，可先行 |
 | `W0-EDITOR-F` | `D-EDITOR` 基础编辑器 | 工作区/文件桥接 | `UI-ACC-EDITOR-001` | 文件 API、保存、越界测试 | 临时工作区、保存冲突和 Unicode 路径；不得覆盖用户文件 | 文件树、打开、编辑、保存、预览 | 待编写，可并行 |
+| `W0-SHELL-MENU-F` | `D-SHELL` + 入口 fixture | `W0-SHELL-MENU-P`、`W0-NAV-F`、`W0-EDITOR-F`；设置使用可控 UI fixture | `UI-ACC-TITLE-BAR-FIXTURE-001` | 通过隔离项目/文档 fixture 验证菜单动作到页面和状态保持；不调用 Ollama | 同一标题栏专项计划的 F 子集；临时目录和结果 JSON 必须独立记录 | 添加/刷新项目、新建会话、页面状态、编辑焦点、设置打开/返回 | 计划已建立；需等待关联 fixture 门槛，不得与 P 子集混报 |
 | `W1-MODEL-E` | `D-MODEL` 模型设置 | 桌面桥接、SQLite、系统凭据库 | `UI-ACC-SETTINGS-001` | `SettingsPage.test.tsx`、硬件和隐私测试 | 设置连接/凭据冒烟脚本；确认 profile 后再执行真实模型 | 设置入口、保存、切换、删除、键盘导航 | 自动化已有；脚本待编写 |
 | `W1-INTENT-E` | `D-INTENT` IntentRouter | 模型 profile 和真实模型 | `AGENT-ACC-INTENT-001` | `intent-router-acceptance-cli.test.ts` | `npm run test:intent-router-acceptance -- --profile-id <id> --json`；统一 JSON 外层字段待核对 | profile、日志、失败恢复 | 脚本已有；真实 Ollama 待执行 |
 | `W2-CHAT-E` | `D-CHAT` 对话 | W0 壳层、W1 模型/IntentRouter | `UI-ACC-CHAT-001` | 消息、流式、停止和运行锁定测试 | 真实短对话、停止、超时和错误恢复脚本 | 发送/停止、流式完成、模型状态、失败重试 | 待编写，依赖 W1 |

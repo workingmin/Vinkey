@@ -10,6 +10,7 @@
 本文件是业务功能点和跨页面入口的唯一设计索引，回答“用户从哪里开始一项业务操作、需要什么前置条件、操作后到哪里”。它不替代页面设计文档中的组件登记和验收内容：
 
 - `UI_INVENTORY.md` 记录当前已有的页面、源码组件和交互事实。
+- `acceptance/UI_ACCEPTANCE_TITLE_BAR_PLAN.md` 记录标题栏菜单逐项验收用例、平台证据和结果输出边界。
 - `UI_ENTRY_POINTS.md` 为业务功能点分配稳定的 `BF-*` 编号，为业务入口分配稳定的 `EP-*` 编号。
 - `UI_DESIGN_*.md` 记录对应页面或交互域的布局、详细步骤、组件映射、状态、隐私边界和验收标准，并为组件分配 `UI-*` 编号。
 - `UI_DESIGN.md` 只维护信息架构、跨域原则和文档索引。
@@ -43,21 +44,21 @@
 
 | 功能点 ID | 入口 ID | 功能 | 入口与文案 | 前置条件 | 目标与状态保持 | 实现状态 | 详细设计 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `BF-WORKSPACE-001` | `EP-WORKSPACE-001` | 添加或打开工作区 | 标题栏“打开工作区”、侧栏“添加项目”、文件空态“打开文件夹” | 无 | 加载工作区；失败保留当前工作区 | 已实现 | [项目与会话导航](./UI_DESIGN_NAVIGATION.md) |
+| `BF-WORKSPACE-001` | `EP-WORKSPACE-001` | 添加或打开项目 | 菜单“项目 > 添加本地项目…”、侧栏“添加项目”、文件空态“打开文件夹” | 无 | 加载项目对应的本地工作区；失败保留当前项目 | 部分实现：旧菜单仍显示“打开工作区” | [项目与会话导航](./UI_DESIGN_NAVIGATION.md)、[标题栏设计](./TITLE_BAR_DESIGN.md) |
 | `BF-WORKSPACE-002` | `EP-WORKSPACE-002` | 切换已登记项目 | 侧栏项目名称 | 目标项目已登记 | 检查运行任务和未保存文档后切换并清理旧项目编辑状态 | 已实现 | [项目与会话导航](./UI_DESIGN_NAVIGATION.md) |
-| `BF-WORKSPACE-003` | `EP-WORKSPACE-003` | 刷新工作区 | 标题栏、侧栏和文件页“刷新” | 已打开工作区 | 更新项目、会话和文件树；保留当前页面和编辑状态 | 已实现 | [应用壳层](./UI_DESIGN_SHELL.md)、[文件与编辑器](./UI_DESIGN_EDITOR.md) |
+| `BF-WORKSPACE-003` | `EP-WORKSPACE-003` | 刷新当前项目 | 菜单“项目 > 刷新当前项目”、侧栏和文件页“刷新” | 已打开项目 | 更新项目、会话和文件树；保留当前页面和编辑状态 | 部分实现：旧菜单仍显示“刷新工作区” | [应用壳层](./UI_DESIGN_SHELL.md)、[文件与编辑器](./UI_DESIGN_EDITOR.md)、[标题栏设计](./TITLE_BAR_DESIGN.md) |
 | `BF-WORKSPACE-004` | `EP-WORKSPACE-004` | 搜索项目、会话和文档（当前侧栏实现） | 侧栏“搜索项目或会话” | 文档正文搜索需要当前工作区 | 显示项目、会话和当前项目文档结果；不改变选择 | 部分实现 | [项目与会话导航](./UI_DESIGN_NAVIGATION.md) |
 | `BF-WORKSPACE-005` | `EP-WORKSPACE-005` | 删除项目记录 | 项目行“删除项目记录” | 无运行任务；当前项目无未保存文档 | 两步确认后删除应用记录，不删除项目目录 | 已实现 | [项目与会话导航](./UI_DESIGN_NAVIGATION.md) |
-| `BF-CONVERSATION-001` | `EP-CONVERSATION-001` | 新建会话 | 标题栏和项目行“新建会话” | 无 | 打开目标项目的对话页空白会话；保留模型 | 已实现 | [项目与会话导航](./UI_DESIGN_NAVIGATION.md)、[对话页](./UI_DESIGN_CHAT.md) |
+| `BF-CONVERSATION-001` | `EP-CONVERSATION-001` | 新建会话 | 菜单“会话 > 新建会话”和项目行“新建会话” | 无 | 打开目标项目的对话页空白会话；保留模型 | 部分实现：功能可用，菜单仍挂在旧“文件”菜单 | [项目与会话导航](./UI_DESIGN_NAVIGATION.md)、[对话页](./UI_DESIGN_CHAT.md)、[标题栏设计](./TITLE_BAR_DESIGN.md) |
 | `BF-CONVERSATION-002` | `EP-CONVERSATION-002` | 恢复历史会话 | 侧栏会话标题 | 会话记录存在 | 必要时先切换项目，再恢复消息和会话标题 | 已实现 | [项目与会话导航](./UI_DESIGN_NAVIGATION.md)、[对话页](./UI_DESIGN_CHAT.md) |
 | `BF-CONVERSATION-003` | `EP-CONVERSATION-003` | 删除会话记录 | 会话行“删除会话记录” | 会话未运行 | 确认后删除应用记录，不删除项目文件 | 已实现 | [项目与会话导航](./UI_DESIGN_NAVIGATION.md) |
 | `BF-CONVERSATION-004` | `EP-CONVERSATION-004` | 手动重命名会话并锁定用户标题 | 会话行或会话标题“重命名” | 会话记录存在 | 保存用户标题；后续自动标题升级不得覆盖 | 待实现 | [项目与会话导航](./UI_DESIGN_NAVIGATION.md) |
-| `BF-SEARCH-001` | `EP-SEARCH-001` | 打开全局搜索并跳转结果 | 标题栏/侧栏搜索图标、统一键盘命令 | 应用已启动；正文结果需要授权工作区 | 在统一面板中按项目、会话、当前项目文档分组；Enter 跳转，Escape 返回 | 待实现 | [项目与会话导航](./UI_DESIGN_NAVIGATION.md) |
+| `BF-SEARCH-001` | `EP-SEARCH-001` | 打开全局搜索并跳转结果 | 菜单“会话 > 搜索项目与会话”、侧栏搜索图标、`Ctrl/Cmd+K` | 应用已启动；正文结果需要授权工作区 | 在统一面板中按项目、会话、当前项目文档分组；Enter 跳转，Escape 返回 | 待实现 | [项目与会话导航](./UI_DESIGN_NAVIGATION.md)、[标题栏设计](./TITLE_BAR_DESIGN.md) |
 | `BF-SHELL-001` | `EP-SHELL-001` | 折叠或展开会话栏 | 侧栏折叠按钮 | 无 | 改变侧栏宽度；保留页面和业务状态 | 已实现 | [应用壳层](./UI_DESIGN_SHELL.md) |
-| `BF-SHELL-002` | `EP-SHELL-002` | 切换主题 | 侧栏、标题栏“切换浅色/深色主题” | 无 | 更新当前窗口主题；保留业务状态 | 已实现 | [应用壳层](./UI_DESIGN_SHELL.md)、[视觉系统](./UI_DESIGN_SYSTEM.md) |
+| `BF-SHELL-002` | `EP-SHELL-002` | 切换主题 | 侧栏、菜单“查看 > 切换浅色/深色主题” | 无 | 更新当前窗口主题；保留业务状态 | 部分实现：功能可用，目标菜单语义待对齐 | [应用壳层](./UI_DESIGN_SHELL.md)、[视觉系统](./UI_DESIGN_SYSTEM.md) |
 | `BF-SHELL-003` | `EP-SHELL-003` | 控制窗口 | 标题栏或原生菜单“最小化、最大化/还原、关闭” | 桌面端 | 改变窗口状态；关闭前遵循平台行为 | 已实现 | [标题栏设计](./TITLE_BAR_DESIGN.md) |
-| `BF-SHELL-004` | `EP-SHELL-004` | 执行通用编辑命令 | 标题栏“撤销、重做、剪切、复制、粘贴、全选” | 当前焦点支持命令 | 在当前焦点原位执行，不切换页面 | 已实现 | [标题栏设计](./TITLE_BAR_DESIGN.md) |
-| `BF-DIAGNOSTICS-001` | `EP-DIAGNOSTICS-001` | 查看帮助和诊断 | 标题栏“查看快捷键、窗口诊断信息、应用诊断日志、关于 Vinkey” | 无 | 打开原生提示或应用诊断日志弹窗；不改变会话 | 已实现 | [标题栏设计](./TITLE_BAR_DESIGN.md) |
+| `BF-SHELL-004` | `EP-SHELL-004` | 执行通用编辑命令 | 菜单“编辑 > 撤销、重做、剪切、复制、粘贴、全选” | 当前焦点支持命令 | 在当前焦点原位执行，不切换页面；无目标时禁用 | 部分实现：Windows 仍使用 `document.execCommand`，焦点分派待实现 | [标题栏设计](./TITLE_BAR_DESIGN.md) |
+| `BF-DIAGNOSTICS-001` | `EP-DIAGNOSTICS-001` | 查看帮助和诊断 | 菜单“帮助 > 查看快捷键/窗口诊断信息/应用诊断日志”；Windows 的“关于 Vinkey”也在“帮助”，macOS 位于 `Vinkey` 应用菜单 | 无 | 打开原生提示或应用诊断日志弹窗；不改变会话 | 部分实现：当前源码仍按旧菜单归属，目标平台归属待对齐 | [标题栏设计](./TITLE_BAR_DESIGN.md) |
 | `BF-FEEDBACK-001` | `EP-FEEDBACK-001` | 查看并关闭全局错误反馈 | 内容区顶部错误条及关闭按钮 | 跨域操作产生全局错误 | 展示可读错误且保留当前业务状态；关闭后仅移除提示 | 已实现 | [交互状态](./UI_DESIGN_STATES.md) |
 
 ## 页面导航
@@ -67,7 +68,7 @@
 | `BF-NAV-001` | `EP-NAV-001` | 进入对话页 | 内容区“对话”、标题栏“对话页” | 无 | 显示当前会话；保留上下文和生成状态 | 已实现 | [应用壳层](./UI_DESIGN_SHELL.md)、[对话页](./UI_DESIGN_CHAT.md) |
 | `BF-NAV-002` | `EP-NAV-002` | 进入文件页 | 内容区“文件”、标题栏“文件页” | 无 | 显示文件列表；保留会话和编辑草稿 | 已实现 | [应用壳层](./UI_DESIGN_SHELL.md)、[文件与编辑器](./UI_DESIGN_EDITOR.md) |
 | `BF-NAV-003` | `EP-NAV-003` | 进入日志中心 | 内容区“日志”、标题栏“日志中心” | 无；无工作区时显示空态 | 显示当前工作区日志记录与后台任务；不改变会话 | 已实现 | [应用壳层](./UI_DESIGN_SHELL.md)、[日志中心](./UI_DESIGN_LOGS.md) |
-| `BF-SETTINGS-001` | `EP-SETTINGS-001` | 进入或退出模型设置 | 标题栏/侧栏“模型与应用设置”、设置页“返回工作区” | 无 | 设置页临时覆盖内容区；返回时恢复进入前页面 | 已实现 | [模型设置](./UI_DESIGN_SETTINGS.md) |
+| `BF-SETTINGS-001` | `EP-SETTINGS-001` | 进入或退出模型设置 | 侧栏“模型与应用设置”、macOS `Vinkey > 设置…`、`Ctrl/Cmd+,`、设置页“返回工作区” | 无 | 设置页临时覆盖内容区；返回时恢复进入前页面 | 部分实现：侧栏可用，旧“查看”菜单入口待移除 | [模型设置](./UI_DESIGN_SETTINGS.md)、[标题栏设计](./TITLE_BAR_DESIGN.md) |
 
 ## 对话、分析与审核
 
@@ -90,12 +91,12 @@
 
 | 功能点 ID | 入口 ID | 功能 | 入口与文案 | 前置条件 | 目标与状态保持 | 实现状态 | 详细设计 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `BF-DOCUMENT-001` | `EP-DOCUMENT-001` | 新建文档 | 标题栏和文件页“新建文档” | 已打开工作区 | 创建并打开文档；保留当前会话 | 已实现 | [文件与编辑器](./UI_DESIGN_EDITOR.md) |
+| `BF-DOCUMENT-001` | `EP-DOCUMENT-001` | 新建文档 | 项目文件页“新建文档” | 已打开项目 | 创建并打开文档；保留当前会话 | 部分实现：文件页可用，旧全局菜单入口待移除 | [文件与编辑器](./UI_DESIGN_EDITOR.md) |
 | `BF-DOCUMENT-002` | `EP-DOCUMENT-002` | 新建文件夹 | 文件页“新建文件夹” | 已打开工作区 | 创建目录并刷新文件树 | 已实现 | [文件与编辑器](./UI_DESIGN_EDITOR.md) |
 | `BF-DOCUMENT-003` | `EP-DOCUMENT-003` | 筛选和浏览文件 | 文件名筛选、目录展开、文件行 | 已打开工作区 | 原位过滤文件树或打开文档；保留会话 | 已实现 | [文件与编辑器](./UI_DESIGN_EDITOR.md) |
 | `BF-DOCUMENT-004` | `EP-DOCUMENT-004` | 编辑文档 | CodeMirror 编辑区 | 文档类型可编辑 | 更新内存草稿并显示未保存状态 | 已实现 | [文件与编辑器](./UI_DESIGN_EDITOR.md) |
-| `BF-DOCUMENT-005` | `EP-DOCUMENT-005` | 保存文档 | 标题栏、工具栏、`Ctrl/Cmd+S` | 当前文档有未保存修改 | 原位保存并更新文档状态 | 已实现 | [文件与编辑器](./UI_DESIGN_EDITOR.md) |
-| `BF-DOCUMENT-006` | `EP-DOCUMENT-006` | 关闭文档或收起编辑器 | 标题栏“关闭文档”、文档标签关闭、工具栏“收起编辑器” | 文档已打开 | 关闭标签或返回完整文件列表；不丢失已保留草稿 | 已实现 | [文件与编辑器](./UI_DESIGN_EDITOR.md) |
+| `BF-DOCUMENT-005` | `EP-DOCUMENT-005` | 保存文档 | 文件页工具栏、文档编辑器、`Ctrl/Cmd+S` | 当前文档有未保存修改 | 原位保存并更新文档状态；不再依赖全局“文件”菜单 | 部分实现：工具栏和快捷键可用，旧菜单入口待移除 | [文件与编辑器](./UI_DESIGN_EDITOR.md) |
+| `BF-DOCUMENT-006` | `EP-DOCUMENT-006` | 关闭文档或收起编辑器 | 文档标签关闭、工具栏“收起编辑器” | 文档已打开 | 关闭标签或返回完整文件列表；不丢失已保留草稿 | 部分实现：局部入口可用，旧全局菜单入口待移除 | [文件与编辑器](./UI_DESIGN_EDITOR.md) |
 | `BF-DOCUMENT-007` | `EP-DOCUMENT-007` | 切换编辑视图 | “编辑、分栏、预览” | Markdown 文档 | 切换当前文档视图；保留内容和保存状态 | 已实现 | [文件与编辑器](./UI_DESIGN_EDITOR.md) |
 | `BF-DOCUMENT-008` | `EP-DOCUMENT-008` | 预览或下载文件 | 文件打开、工具栏“下载文件、在新窗口预览 HTML” | 文件类型支持对应能力 | 显示媒体/PDF/HTML 或触发下载；不修改文件 | 已实现 | [文件与编辑器](./UI_DESIGN_EDITOR.md) |
 

@@ -14,7 +14,7 @@ RUN_ID="$(date -u +%Y-%m-%dT%H%M%SZ)"
 
 print_help() {
   cat <<'HELP'
-macOS Tauri 原生壳层验收
+macOS Tauri 原生壳层验收（W0-SHELL-P）
 
 用法：bash scripts/ui-shell/run-ui-shell-native-macos.sh [选项]
 
@@ -30,6 +30,8 @@ macOS Tauri 原生壳层验收
   1. 在“系统设置 → 隐私与安全性 → 辅助功能”允许 Terminal/终端（或运行本脚本的 IDE）控制电脑。
   2. 若需要屏幕截图权限，在“屏幕与系统音频录制”中允许相同的应用。
   3. 运行 `npm install --include=dev`，并准备 Rust/Tauri 开发环境。
+  4. 默认模式执行前完全退出已有 Vinkey 进程，以便本批次绑定新的 app.start 构建记录。
+  5. 安装包应由当前干净 Git HEAD 构建；版本或 Git SHA 不一致时 provenance 用例失败。
 
 脚本会点击关闭按钮作为最后一个原生窗口用例；不要把未保存的重要桌面会话作为测试目标。
 HELP
@@ -106,6 +108,47 @@ DEV_LOG="$OUTPUT_DIR/tauri-dev.log"
 AUTOMATION_STDERR="$OUTPUT_DIR/automation-stderr.txt"
 EVENTS_FILE="$OUTPUT_DIR/events.txt"
 APPLE_SCRIPT_FILE="$OUTPUT_DIR/native-automation.applescript"
+WEBVIEW_DIR="$OUTPUT_DIR/webview"
+WEBVIEW_STDOUT="$OUTPUT_DIR/webview-stdout.txt"
+WEBVIEW_STDERR="$OUTPUT_DIR/webview-stderr.txt"
+COMPANION_EXIT=1
+RUN_STARTED_EPOCH_MS="$(node -e 'console.log(Date.now())')"
+
+plist_value() {
+  local key="$1"
+  if [[ -n "$APP_PATH" && -f "$APP_PATH/Contents/Info.plist" ]]; then
+    /usr/bin/plutil -extract "$key" raw -o - "$APP_PATH/Contents/Info.plist" 2>/dev/null || true
+  fi
+}
+
+APP_BUNDLE_ID="$(plist_value CFBundleIdentifier)"
+APP_BUNDLE_VERSION="$(plist_value CFBundleShortVersionString)"
+APP_BUILD_NUMBER="$(plist_value CFBundleVersion)"
+APP_EXECUTABLE="$(plist_value CFBundleExecutable)"
+APP_ARCHITECTURES=""
+if [[ -n "$APP_PATH" && -n "$APP_EXECUTABLE" && -f "$APP_PATH/Contents/MacOS/$APP_EXECUTABLE" ]]; then
+  APP_ARCHITECTURES="$(/usr/bin/lipo -archs "$APP_PATH/Contents/MacOS/$APP_EXECUTABLE" 2>/dev/null || true)"
+fi
+REPOSITORY_VERSION="$(node -e "const fs=require('node:fs'); console.log(JSON.parse(fs.readFileSync(process.argv[1], 'utf8')).version)" "$ROOT_DIR/package.json" 2>/dev/null || true)"
+REPOSITORY_SHA="$(git -C "$ROOT_DIR" rev-parse HEAD 2>/dev/null || true)"
+REPOSITORY_DIRTY="false"
+if [[ -n "$(git -C "$ROOT_DIR" status --porcelain 2>/dev/null)" ]]; then REPOSITORY_DIRTY="true"; fi
+REPOSITORY_COMMITTER="$(git -C "$ROOT_DIR" log -1 --format='%an <%ae>' 2>/dev/null || true)"
+MACHINE_ARCH="$(uname -m 2>/dev/null || true)"
+RUST_VERSION="$(rustc --version 2>/dev/null || true)"
+TAURI_CLI_VERSION=""
+if [[ -x "$ROOT_DIR/node_modules/.bin/tauri" ]]; then
+  TAURI_CLI_VERSION="$($ROOT_DIR/node_modules/.bin/tauri --version 2>/dev/null || true)"
+fi
+TAURI_FRAMEWORK_VERSION=""
+if command -v cargo >/dev/null 2>&1; then
+  TAURI_FRAMEWORK_VERSION="$(cargo tree --manifest-path "$ROOT_DIR/src-tauri/Cargo.toml" -p tauri --depth 0 2>/dev/null | sed -n 's/^tauri v//p' | head -1 || true)"
+fi
+if [[ -n "$APP_BUNDLE_ID" ]]; then
+  RUNTIME_LOG="$HOME/Library/Application Support/$APP_BUNDLE_ID/vinkey-runtime.jsonl"
+else
+  RUNTIME_LOG="$HOME/Library/Application Support/com.vinkey.desktop/vinkey-runtime.jsonl"
+fi
 
 cleanup() {
   if [[ -n "$DEV_PID" ]] && kill -0 "$DEV_PID" 2>/dev/null; then
@@ -180,31 +223,6 @@ on run argv
         my capture(reportDir, "screenshots/01-mac-traffic-lights.png")
         set end of reportLines to "PASS|SHELL-NATIVE-MAC-TRAFFIC-LIGHTS|发现并截图红黄绿交通灯|close=" & my pairText(closePosition) & ";minimize=" & my pairText(minimizePosition) & ";zoom=" & my pairText(zoomPosition)
 
-        set viewMenuItem to menu bar item "查看" of menu bar 1
-        click viewMenuItem
-        delay 0.4
-        my capture(reportDir, "screenshots/02-mac-native-menu-open.png")
-        set end of reportLines to "PASS|SHELL-NATIVE-MAC-MENU-OPEN|展开 macOS 原生查看菜单|菜单项可访问"
-        key code 53
-        delay 0.3
-        my capture(reportDir, "screenshots/02-mac-native-menu-escape.png")
-        set end of reportLines to "PASS|SHELL-NATIVE-MAC-MENU-ESCAPE|Escape 关闭原生菜单|已发送 Escape"
-
-        click viewMenuItem
-        delay 0.3
-        click menu item "日志中心" of menu 1 of viewMenuItem
-        delay 0.7
-        my capture(reportDir, "screenshots/02-mac-native-menu-action.png")
-        set end of reportLines to "PASS|SHELL-NATIVE-MAC-MENU-ACTION|执行查看菜单中的日志中心|菜单回调已执行"
-
-        click viewMenuItem
-        delay 0.3
-        set windowPosition to position of mainWindow
-        click at {((item 1 of windowPosition) + 420), ((item 2 of windowPosition) + 320)}
-        delay 0.3
-        my capture(reportDir, "screenshots/02-mac-native-menu-outside-click.png")
-        set end of reportLines to "PASS|SHELL-NATIVE-MAC-MENU-OUTSIDE|外部点击关闭原生菜单|已点击内容区"
-
         set desiredSizes to {{1440, 900}, {1280, 800}, {1024, 680}}
         repeat with desiredSize in desiredSizes
           set requestedSize to contents of desiredSize
@@ -212,7 +230,7 @@ on run argv
           delay 0.5
           set actualSize to size of mainWindow
           set sizeName to (item 1 of requestedSize as text) & "x" & (item 2 of requestedSize as text)
-          my capture(reportDir, "screenshots/03-mac-window-" & sizeName & ".png")
+          my capture(reportDir, "screenshots/02-mac-window-" & sizeName & ".png")
           if actualSize = requestedSize then
             set end of reportLines to "PASS|SHELL-NATIVE-MAC-WINDOW-SIZE-" & sizeName & "|设置并读取实际窗口尺寸|actual=" & my pairText(actualSize)
           else
@@ -221,10 +239,10 @@ on run argv
         end repeat
 
         set frontmost to true
-        click menu item "缩放窗口" of menu 1 of menu bar item "窗口" of menu bar 1
+        click zoomButton
         delay 0.9
         set zoomedSize to size of mainWindow
-        click menu item "缩放窗口" of menu 1 of menu bar item "窗口" of menu bar 1
+        click zoomButton
         delay 0.9
         set restoredSize to size of mainWindow
         if zoomedSize is not restoredSize then
@@ -261,7 +279,7 @@ on run argv
           set end of reportLines to "BLOCKED|SHELL-NATIVE-MAC-DISPLAY-BOUNDS|记录桌面点坐标范围|Finder 桌面边界不可访问"
         end if
 
-        my capture(reportDir, "screenshots/04-mac-before-close.png")
+        my capture(reportDir, "screenshots/03-mac-before-close.png")
         click closeButton
         delay 1
         if exists front window then
@@ -311,6 +329,22 @@ APPLESCRIPT
   fi
 fi
 
+# The native batch also carries the same-version WebView interaction evidence.
+# Keep it in a child directory so its own result/manifest remain independently inspectable.
+mkdir -p "$WEBVIEW_DIR"
+set +e
+node "$ROOT_DIR/scripts/ui-shell/run-ui-shell-acceptance.mjs" \
+  --platform darwin \
+  --skip-native-evidence \
+  --output "$WEBVIEW_DIR" \
+  --output-exact \
+  >"$WEBVIEW_STDOUT" 2>"$WEBVIEW_STDERR"
+COMPANION_EXIT=$?
+set -e
+if ((COMPANION_EXIT != 0)); then
+  printf 'WebView companion exited with code %s\n' "$COMPANION_EXIT" >>"$WEBVIEW_STDERR"
+fi
+
 DISPLAY_INFO="$OUTPUT_DIR/display-info.txt"
 system_profiler SPDisplaysDataType >"$DISPLAY_INFO" 2>&1 || true
 DESKTOP_BOUNDS="$(osascript -e 'tell application "Finder" to get bounds of window of desktop' 2>/dev/null || true)"
@@ -327,7 +361,25 @@ NATIVE_PROCESS_NAME="$PROCESS_NAME" \
 NATIVE_DESKTOP_BOUNDS="$DESKTOP_BOUNDS" \
 NATIVE_SCREENSHOT_SIZE="$SCREENSHOT_SIZE" \
 NATIVE_OS_VERSION="$OS_VERSION" \
-NATIVE_DISPLAY_INFO="$DISPLAY_INFO" \
+NATIVE_APP_PATH="$APP_PATH" \
+NATIVE_APP_BUNDLE_ID="$APP_BUNDLE_ID" \
+NATIVE_APP_VERSION="$APP_BUNDLE_VERSION" \
+NATIVE_APP_BUILD_NUMBER="$APP_BUILD_NUMBER" \
+NATIVE_APP_EXECUTABLE="$APP_EXECUTABLE" \
+NATIVE_APP_ARCHITECTURES="$APP_ARCHITECTURES" \
+NATIVE_RUNTIME_LOG="$RUNTIME_LOG" \
+NATIVE_REPOSITORY_VERSION="$REPOSITORY_VERSION" \
+NATIVE_REPOSITORY_SHA="$REPOSITORY_SHA" \
+NATIVE_REPOSITORY_DIRTY="$REPOSITORY_DIRTY" \
+NATIVE_REPOSITORY_COMMITTER="$REPOSITORY_COMMITTER" \
+NATIVE_MACHINE_ARCH="$MACHINE_ARCH" \
+NATIVE_RUST_VERSION="$RUST_VERSION" \
+NATIVE_TAURI_CLI_VERSION="$TAURI_CLI_VERSION" \
+NATIVE_TAURI_FRAMEWORK_VERSION="$TAURI_FRAMEWORK_VERSION" \
+NATIVE_COMPANION_EXIT="$COMPANION_EXIT" \
+NATIVE_WEBVIEW_RESULT="$WEBVIEW_DIR/result.json" \
+NATIVE_RUN_STARTED_EPOCH_MS="$RUN_STARTED_EPOCH_MS" \
+NATIVE_NO_LAUNCH="$NO_LAUNCH" \
 node --input-type=module <<'NODE'
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
@@ -338,12 +390,98 @@ const eventsPath = process.env.NATIVE_EVENTS_FILE
 const rawEvents = readFileSync(eventsPath, 'utf8').split(/\r?\n/u).filter(Boolean)
 const cases = rawEvents.map((line) => {
   const [status, caseId, title, ...detailParts] = line.split('|')
-  return { caseId, title, status, detail: detailParts.join('|') || null }
+  return { caseId, title, status, source: 'native-accessibility', detail: detailParts.join('|') || null }
 }).filter((item) => item.caseId && ['PASS', 'FAIL', 'BLOCKED'].includes(item.status))
 if (cases.length === 0) cases.push({ caseId: 'SHELL-NATIVE-MAC-AUTOMATION', title: 'macOS 原生壳层自动化', status: 'BLOCKED', detail: '未产生可解析的 System Events 结果' })
 
+const companionResultPath = process.env.NATIVE_WEBVIEW_RESULT
+let companionResult = null
+if (companionResultPath && existsSync(companionResultPath)) {
+  try {
+    companionResult = JSON.parse(readFileSync(companionResultPath, 'utf8'))
+    for (const item of companionResult.cases ?? []) cases.push({ ...item, source: 'playwright-webview' })
+  } catch (error) {
+    cases.push({ caseId: 'SHELL-WEBVIEW-COMPANION', title: 'Playwright WebView 交互伴随套件', status: 'BLOCKED', source: 'playwright-webview', detail: `无法读取伴随结果：${String(error)}` })
+  }
+} else {
+  cases.push({ caseId: 'SHELL-WEBVIEW-COMPANION', title: 'Playwright WebView 交互伴随套件', status: 'BLOCKED', source: 'playwright-webview', detail: `未生成 webview/result.json（exit=${process.env.NATIVE_COMPANION_EXIT || 'unknown'}）` })
+}
+
 const screenshots = readdirSync(join(outputDir, 'screenshots')).filter((name) => name.endsWith('.png')).sort()
 const screenshotHashes = Object.fromEntries(screenshots.map((name) => [name, createHash('sha256').update(readFileSync(join(outputDir, 'screenshots', name))).digest('hex')]))
+const readRuntimeStart = () => {
+  const runtimePath = process.env.NATIVE_RUNTIME_LOG
+  if (!runtimePath || !existsSync(runtimePath)) return null
+  const minimumTimestamp = Number(process.env.NATIVE_RUN_STARTED_EPOCH_MS || 0) - 5_000
+  const requireCurrentRun = process.env.NATIVE_NO_LAUNCH !== '1'
+  const lines = readFileSync(runtimePath, 'utf8').split(/\r?\n/u).reverse()
+  for (const line of lines) {
+    if (!line.trim()) continue
+    try {
+      const entry = JSON.parse(line)
+      if (entry.event === 'app.start' && (!requireCurrentRun || Number(entry.timestamp) >= minimumTimestamp)) return entry
+    } catch { /* ignore an incomplete trailing log line */ }
+  }
+  return null
+}
+const runtimeStart = readRuntimeStart()
+const runtimeFields = runtimeStart?.fields ?? {}
+const applicationGitSha = typeof runtimeFields.commitSha === 'string' ? runtimeFields.commitSha : null
+const applicationBuildTime = runtimeFields.buildTime ?? null
+const applicationDirty = typeof runtimeFields.workingTreeDirty === 'boolean' ? runtimeFields.workingTreeDirty : null
+const application = {
+  path: process.env.NATIVE_APP_PATH || null,
+  bundleIdentifier: process.env.NATIVE_APP_BUNDLE_ID || null,
+  version: process.env.NATIVE_APP_VERSION || null,
+  buildNumber: process.env.NATIVE_APP_BUILD_NUMBER || null,
+  executable: process.env.NATIVE_APP_EXECUTABLE || null,
+  architectures: process.env.NATIVE_APP_ARCHITECTURES?.split(/\s+/u).filter(Boolean) ?? [],
+  gitSha: applicationGitSha,
+  gitShaEvidence: applicationGitSha ? 'app.start runtime log (VINKEY_COMMIT_SHA)' : 'UNAVAILABLE: installed app runtime log did not expose VINKEY_COMMIT_SHA',
+  buildTimeEpochMs: applicationBuildTime,
+  workingTreeDirtyAtBuild: applicationDirty,
+  runtimeLog: existsSync(process.env.NATIVE_RUNTIME_LOG || '') ? 'runtime log observed locally; path omitted from report' : null,
+}
+const repository = {
+  version: process.env.NATIVE_REPOSITORY_VERSION || null,
+  gitSha: process.env.NATIVE_REPOSITORY_SHA || null,
+  dirty: process.env.NATIVE_REPOSITORY_DIRTY === 'true',
+  lastCommitter: process.env.NATIVE_REPOSITORY_COMMITTER || null,
+}
+const applicationShaAvailable = typeof application.gitSha === 'string' && /^[0-9a-f]{7,40}$/iu.test(application.gitSha)
+const repositoryShaAvailable = typeof repository.gitSha === 'string' && /^[0-9a-f]{7,40}$/iu.test(repository.gitSha)
+const versionsMatch = application.version && repository.version && application.version === repository.version
+const commitsMatch = applicationShaAvailable && repositoryShaAvailable && (
+  application.gitSha === repository.gitSha
+  || application.gitSha.startsWith(repository.gitSha)
+  || repository.gitSha.startsWith(application.gitSha)
+)
+let provenanceStatus = 'PASS'
+let provenanceDetail = `version=${application.version};gitSha=${application.gitSha}`
+if (!application.version || !applicationShaAvailable || !repositoryShaAvailable) {
+  provenanceStatus = 'BLOCKED'
+  provenanceDetail = '安装应用未暴露版本或 VINKEY_COMMIT_SHA，无法证明 WebView companion 与安装包同版本'
+} else if (!versionsMatch || !commitsMatch) {
+  provenanceStatus = 'FAIL'
+  provenanceDetail = `安装应用与仓库不一致：appVersion=${application.version};repositoryVersion=${repository.version};appSha=${application.gitSha};repositorySha=${repository.gitSha}`
+} else if (repository.dirty) {
+  provenanceStatus = 'BLOCKED'
+  provenanceDetail = '仓库工作区存在未提交修改，Git SHA 不能完整代表 Playwright companion 源码'
+}
+cases.push({
+  caseId: 'SHELL-P-BUILD-PROVENANCE',
+  title: '安装应用与 WebView companion 构建来源一致',
+  status: provenanceStatus,
+  source: 'build-provenance',
+  detail: provenanceDetail,
+})
+const provenance = {
+  status: provenanceStatus,
+  versionMatch: Boolean(versionsMatch),
+  gitShaMatch: Boolean(commitsMatch),
+  repositoryClean: !repository.dirty,
+  detail: provenanceDetail,
+}
 const summary = {
   caseCount: cases.length,
   passed: cases.filter((item) => item.status === 'PASS').length,
@@ -356,11 +494,23 @@ const result = {
   schemaVersion: 1,
   generatedAt: new Date().toISOString(),
   acceptance: { id: 'W0-SHELL-P-NATIVE-MAC', domainId: 'D-SHELL', gate: 'P' },
-  suite: { id: 'ui-shell-native-macos', version: '1.0.0' },
+  suite: { id: 'ui-shell-native-macos', version: '1.2.0' },
+  repository,
+  application,
+  provenance,
+  execution: {
+    executor: repository.lastCommitter,
+    executorBasis: 'Git HEAD committer (temporary acceptance convention)',
+  },
   environment: {
+    os: 'macOS',
     platform: 'darwin',
     osVersion: process.env.NATIVE_OS_VERSION || 'unknown',
     node: process.version,
+    arch: process.env.NATIVE_MACHINE_ARCH || null,
+    rust: process.env.NATIVE_RUST_VERSION || 'UNAVAILABLE',
+    tauriCli: process.env.NATIVE_TAURI_CLI_VERSION || 'UNAVAILABLE',
+    tauriFramework: process.env.NATIVE_TAURI_FRAMEWORK_VERSION || 'UNAVAILABLE',
     processName: process.env.NATIVE_PROCESS_NAME,
     desktopBoundsPoints: process.env.NATIVE_DESKTOP_BOUNDS || null,
     firstScreenshotPixels: process.env.NATIVE_SCREENSHOT_SIZE || null,
@@ -373,7 +523,7 @@ const result = {
     dpiNote: '截图像素与 Accessibility 桌面点坐标已记录；系统缩放与多显示器配置以 display-info.txt 和人工观察为准。',
   },
   platformEvidence: {
-    nativeMenu: 'COVERED_BY_ACCESSIBILITY',
+    titlebarMenus: 'OUT_OF_SCOPE:W0-SHELL-MENU-P',
     macTrafficLights: 'COVERED_BY_ACCESSIBILITY',
     windowControls: 'COVERED_BY_ACCESSIBILITY',
     physicalDpi: 'RECORDED_WITH_DISPLAY_METADATA_AND_SCREENSHOT_PIXELS',
@@ -391,20 +541,25 @@ const result = {
     displayInfo: 'display-info.txt',
     automationStderr: existsSync(join(outputDir, 'automation-stderr.txt')) ? 'automation-stderr.txt' : null,
     devLog: existsSync(join(outputDir, 'tauri-dev.log')) ? 'tauri-dev.log' : null,
+    webview: companionResult ? {
+      directory: 'webview',
+      result: 'webview/result.json',
+      manifest: 'webview/SHA256SUMS',
+      stdout: 'webview-stdout.txt',
+      stderr: 'webview-stderr.txt',
+      exitCode: Number(process.env.NATIVE_COMPANION_EXIT || 1),
+    } : null,
   },
 }
 writeFileSync(join(outputDir, 'result.json'), `${JSON.stringify(result, null, 2)}\n`)
 NODE
 
-{
-  shasum -a 256 "$OUTPUT_DIR/result.json"
-  while IFS= read -r screenshot; do
-    shasum -a 256 "$screenshot"
-  done < <(find "$OUTPUT_DIR/screenshots" -type f -name '*.png' -print | LC_ALL=C sort)
-  for evidence_file in "$DISPLAY_INFO" "$AUTOMATION_STDERR" "$EVENTS_FILE" "$APPLE_SCRIPT_FILE" "$DEV_LOG"; do
-    if [[ -f "$evidence_file" ]]; then shasum -a 256 "$evidence_file"; fi
+(
+  cd "$OUTPUT_DIR"
+  find . -type f ! -path './SHA256SUMS' -print | LC_ALL=C sort | while IFS= read -r relative_file; do
+    shasum -a 256 "$relative_file"
   done
-} >"$OUTPUT_DIR/SHA256SUMS"
+) | sed 's#  \./#  #' >"$OUTPUT_DIR/SHA256SUMS"
 
 node --input-type=module - "$OUTPUT_DIR/result.json" <<'NODE'
 import { readFileSync } from 'node:fs'

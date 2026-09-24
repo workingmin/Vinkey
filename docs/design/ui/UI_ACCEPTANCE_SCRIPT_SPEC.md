@@ -1,12 +1,13 @@
 # UI 测试验收脚本设计规范
 
 - 状态：当前版本验收规范
-- 更新日期：2026-09-23
+- 更新日期：2026-09-24
 - 适用端：Windows、macOS；Linux 仅用于开发机或 CI 的代码层验证
 - 应用壳层浏览器实现：[Playwright 验收脚本](../../../scripts/ui-shell/run-ui-shell-acceptance.mjs)
 - macOS 原生实现：[Accessibility/System Events 验收脚本](../../../scripts/ui-shell/run-ui-shell-native-macos.sh)
 - 关联计划：[UI_ACCEPTANCE_SCRIPT_PLAN.md](./UI_ACCEPTANCE_SCRIPT_PLAN.md)
 - 关联回填模板：[UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md](./acceptance/UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md)、[UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md](./acceptance/UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md)、[UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md](./acceptance/UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md)
+- 标题栏菜单专项：[UI_ACCEPTANCE_TITLE_BAR_PLAN.md](./acceptance/UI_ACCEPTANCE_TITLE_BAR_PLAN.md)
 
 ## 1. 目的与适用范围
 
@@ -39,6 +40,8 @@
 原有设计追踪节点仍然合理，但无法单独表达真实 Ollama、操作系统凭据库、窗口行为和人工观察。因此“本地环境脚本”和“证据回传”是当前版本的必选控制点；没有这两项时，报告最多只能给出代码层通过或条件通过。
 
 脚本结果还必须标明验收门槛：`P` 表示平台/结构、`F` 表示 fixture/合同、`E` 表示真实端到端、`R` 表示跨域回归。例如 `W0-NAV-F` 中的 `F` 不要求 Ollama，`W2-NAV-E` 中的 `E` 必须记录真实模型/profile，`W4-NAV-R` 中的 `R` 必须记录跨域前置状态。`W0` 至 `W4` 是排期阶段，`D-*` 才是功能域身份。
+
+应用壳层的 `W0-SHELL-P` 只覆盖窗口/Overlay、窗口控制、侧栏与内容容器、设置替换、诊断/错误承载、主题/焦点和响应式基线。标题栏菜单树、菜单项动作、中文审计、菜单 Escape/外部点击和编辑命令焦点分派属于 `W0-SHELL-MENU-P/F`，壳层脚本不得通过菜单选择器或旧菜单结果扩大 `W0-SHELL-P` 的结论范围。
 
 ## 3. 目录与职责边界
 
@@ -100,13 +103,36 @@ JSON 顶层字段保持稳定，新增字段只能向后兼容地追加：
     "gate": "<P|F|E|R>"
   },
   "suite": { "id": "<SUITE_ID>", "version": "<SUITE_VERSION>" },
-  "repository": { "version": "<VINKEY_VERSION>", "gitSha": "<GIT_SHA>" },
+  "repository": {
+    "version": "<VINKEY_VERSION>",
+    "gitSha": "<GIT_SHA>",
+    "dirty": false,
+    "lastCommitter": "<GIT_COMMITTER>"
+  },
+  "application": {
+    "version": "<INSTALLED_APP_VERSION>",
+    "buildNumber": "<BUNDLE_BUILD_NUMBER>",
+    "gitSha": "<EMBEDDED_GIT_SHA_OR_NULL>",
+    "architectures": ["<arm64|x86_64>"]
+  },
+  "provenance": {
+    "status": "<PASS|FAIL|BLOCKED>",
+    "versionMatch": true,
+    "gitShaMatch": true,
+    "repositoryClean": true
+  },
+  "execution": {
+    "executor": "<TESTER_OR_GIT_COMMITTER>",
+    "executorBasis": "<IDENTITY_SOURCE>"
+  },
   "environment": {
     "os": "<macOS|Windows>",
     "osVersion": "<OS_VERSION>",
     "arch": "<arm64|x64>",
     "node": "<NODE_VERSION>",
     "rust": "<RUST_VERSION_OR_NA>",
+    "tauriCli": "<TAURI_CLI_VERSION_OR_NA>",
+    "tauriFramework": "<TAURI_FRAMEWORK_VERSION_OR_NA>",
     "ollama": "<OLLAMA_VERSION_OR_NA>"
   },
   "selectedModel": {
@@ -124,7 +150,7 @@ JSON 顶层字段保持稳定，新增字段只能向后兼容地追加：
 }
 ```
 
-每个 `cases[]` 元素至少包含 `caseId`、`title`、`status`、`durationMs`、`error`（无错误时为 `null`）。真实模型用例还应记录模型原始结果、工程化结果、提示/套件版本和失败归因。字段名称沿用 IntentRouter 的 `schemaVersion`、`selectedModel`、`summary`、`logFile` 和 `cases`，避免不同功能域出现 `model`/`modelName` 等同义字段。新增脚本不得省略 `acceptance.id`、`acceptance.domainId` 或 `acceptance.gate`；旧脚本迁移期间可由报告适配器根据命令参数补齐，但不能猜测门槛。
+每个 `cases[]` 元素至少包含 `caseId`、`title`、`status`；自动计时用例还应包含 `durationMs` 和 `error`（无错误时为 `null`），平台原始事件可使用 `detail` 和 `source`。真实模型用例还应记录模型原始结果、工程化结果、提示/套件版本和失败归因。桌面安装包验收必须区分 `application.gitSha` 与 `repository.gitSha`，不能用当前仓库 SHA 推定安装包来源；无法取得嵌入 SHA 时将 provenance 标为 `BLOCKED`。字段名称沿用 IntentRouter 的 `schemaVersion`、`selectedModel`、`summary`、`logFile` 和 `cases`，避免不同功能域出现 `model`/`modelName` 等同义字段。新增脚本不得省略 `acceptance.id`、`acceptance.domainId` 或 `acceptance.gate`；旧脚本迁移期间可由报告适配器根据命令参数补齐，但不能猜测门槛。
 
 **现有脚本迁移说明**：当前 IntentRouter 的 `--json` 输出已经提供 `selectedModel`、`logFile`、评测 `summary` 和逐用例结果；其诊断日志也有 `schemaVersion`。但它尚未把 `repository`、`environment`、`artifacts` 和顶层 `conclusion` 放入同一个 JSON 外层。新功能域应直接使用本节完整结构；IntentRouter 后续按兼容方式补齐字段，在迁移完成前由验收报告适配器根据退出码和 `effectiveSummary.passed` 推导 `conclusion`，不得把缺少元数据误写成“规范已完全实现”。
 
@@ -195,6 +221,9 @@ exit=<exitCode>
 | `automation-stderr.txt` | macOS 原生脚本 | `osascript` 原始 stderr | 不代表整个 shell 进程 stderr |
 | `native-automation.applescript` | macOS 原生脚本 | 本批次实际执行的自动化输入 | 不代表应用源码版本 |
 | `tauri-dev.log` | macOS `--dev` 时 | 桌面开发进程启动/运行日志 | 不替代用例结果 |
+| `webview/` | 原生批次包含 Playwright companion 时 | companion 自身的 `result.json`、截图和子清单，便于独立复核 | 不替代顶层统一结论或原生平台证据 |
+| `webview-stdout.txt` | 原生批次包含 companion 时 | 隔离内部子进程固定四行输出，防止污染顶层 stdout | 不作为第二份结果源 |
+| `webview-stderr.txt` | 原生批次包含 companion 时 | Vite/Playwright 逐用例和异常诊断 | 不作为顶层结论 |
 
 每次执行以以下目录结构归档（目录可位于本地或测试附件系统，不要求提交原始日志到 Git）：
 
@@ -207,7 +236,10 @@ exit=<exitCode>
 ├── events.txt                          # macOS 原生可选：Accessibility 事件结果
 ├── automation-stderr.txt              # macOS 原生可选：osascript 原始 stderr
 ├── native-automation.applescript      # macOS 原生可选：本批次生成的自动化输入
-└── tauri-dev.log                       # macOS --dev 可选：开发应用启动日志
+├── tauri-dev.log                       # macOS --dev 可选：开发应用启动日志
+├── webview-stdout.txt                  # macOS companion：内部子进程 stdout
+├── webview-stderr.txt                  # macOS companion：内部子进程 stderr
+└── webview/                            # macOS companion：独立结果、清单和截图
 ```
 
 回传给验收报告的最小集合是：`result.json`、`SHA256SUMS`、执行命令、人工 UI 观察表、截图/录屏索引和该平台实际产生的原始诊断文件。报告按功能域使用对应模板回填：模型设置使用 [`UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md`](./acceptance/UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md)，壳层使用 [`UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md`](./acceptance/UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md)，项目/会话导航使用 [`UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md`](./acceptance/UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md)。未提供原始 JSON 或人工观察时，结论保持“待回填”或“条件通过”。
