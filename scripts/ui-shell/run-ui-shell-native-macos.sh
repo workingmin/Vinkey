@@ -204,6 +204,29 @@ on run argv
         set initialSize to size of mainWindow
         set end of reportLines to "PASS|SHELL-NATIVE-MAC-LAUNCH|Tauri 桌面窗口可访问|position=" & my pairText(initialPosition) & ";size=" & my pairText(initialSize)
 
+        set expectedMenuNames to {"Vinkey", "项目", "会话", "编辑", "查看", "窗口", "帮助"}
+        set menuNames to {}
+        set menuContractMatches to false
+        repeat 10 times
+          set menuNames to name of every menu bar item of menu bar 1
+          set allExpectedMenusPresent to true
+          repeat with expectedName in expectedMenuNames
+            if menuNames does not contain (expectedName as text) then set allExpectedMenusPresent to false
+          end repeat
+          if allExpectedMenusPresent is true then
+            if menuNames does not contain "文件" then
+              set menuContractMatches to true
+              exit repeat
+            end if
+          end if
+          delay 0.3
+        end repeat
+        if menuContractMatches then
+          set end of reportLines to "PASS|SHELL-NATIVE-MAC-MENU-CONTRACT-GUARD|截图前核对目标菜单合同|menus=" & my pairText(menuNames) & ";scope=guard-only"
+        else
+          set end of reportLines to "FAIL|SHELL-NATIVE-MAC-MENU-CONTRACT-GUARD|截图前核对目标菜单合同|menus=" & my pairText(menuNames) & ";expected=Vinkey,项目,会话,编辑,查看,窗口,帮助;scope=guard-only"
+        end if
+
         set closeButton to missing value
         set minimizeButton to missing value
         set zoomButton to missing value
@@ -523,7 +546,7 @@ const result = {
     dpiNote: '截图像素与 Accessibility 桌面点坐标已记录；系统缩放与多显示器配置以 display-info.txt 和人工观察为准。',
   },
   platformEvidence: {
-    titlebarMenus: 'OUT_OF_SCOPE:W0-SHELL-MENU-P',
+    titlebarMenus: 'CONTRACT_GUARD_ONLY:OUT_OF_SCOPE:W0-SHELL-MENU-P',
     macTrafficLights: 'COVERED_BY_ACCESSIBILITY',
     windowControls: 'COVERED_BY_ACCESSIBILITY',
     physicalDpi: 'RECORDED_WITH_DISPLAY_METADATA_AND_SCREENSHOT_PIXELS',

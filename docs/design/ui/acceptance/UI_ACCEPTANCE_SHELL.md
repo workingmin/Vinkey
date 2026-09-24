@@ -18,7 +18,7 @@
 
 `W0-SHELL-P` 不要求 Ollama。浏览器演示只能支持结构观察，不能替代 Windows/macOS Tauri 窗口控制、DPI 和真实尺寸证据；原生菜单不在本门槛范围内。
 
-标题栏菜单的目标语义和缺口以 [TITLE_BAR_DESIGN.md](../TITLE_BAR_DESIGN.md) 为准，但不属于本报告的 `SHELL-P-*` 用例。此前批次中“文件 / 编辑 / 查看 / 窗口 / 帮助”的机器 PASS 只证明旧菜单行为；菜单迁移和命令焦点分派应在 `W0-SHELL-MENU-P/F` 中复测。
+标题栏菜单的目标语义和缺口以 [TITLE_BAR_DESIGN.md](../TITLE_BAR_DESIGN.md) 为准，但不属于本报告的 `SHELL-P-*` 用例。此前批次中“文件 / 编辑 / 查看 / 窗口 / 帮助”的机器 PASS 只证明旧菜单行为；新版壳层脚本只在截图前核对目标一级菜单，菜单动作和命令焦点分派仍应在 `W0-SHELL-MENU-P/F` 中复测。
 
 ## 2. 设计断言矩阵
 
@@ -49,7 +49,7 @@ Playwright 自动化入口支持按平台运行。macOS 原生入口将同版本
 
 壳层脚本不得通过菜单选择器断言标题栏设计已完成；菜单名称、菜单动作和编辑焦点命令使用 [UI_ACCEPTANCE_TITLE_BAR_PLAN.md](./UI_ACCEPTANCE_TITLE_BAR_PLAN.md) 的专项脚本和人工证据。壳层脚本只验证菜单无关的窗口、容器和页面状态。
 
-当前工作树已执行 `npm test`，通过 38 个测试文件/254 个测试；`npm run build` 通过。本次旧批次尚未记录安装包版本、构建号和应用 Git SHA。新脚本会从 `.app/Contents/Info.plist` 和应用启动日志中的 `VINKEY_COMMIT_SHA` 记录这些字段，并同时记录仓库 SHA、架构、Rust、Tauri CLI/框架版本；若安装包日志未暴露应用 SHA，将明确写为 `UNAVAILABLE`，不会用仓库 SHA 冒充安装包来源。
+当前工作树已执行 `npm test`，通过 41 个测试文件/267 个测试；`npm run build` 通过。本次旧批次尚未记录安装包版本、构建号和应用 Git SHA。新脚本会从 `.app/Contents/Info.plist` 和应用启动日志中的 `VINKEY_COMMIT_SHA` 记录这些字段，并同时记录仓库 SHA、架构、Rust、Tauri CLI/框架版本；若安装包日志未暴露应用 SHA，将明确写为 `UNAVAILABLE`，不会用仓库 SHA 冒充安装包来源。
 
 ## 4. 2026-09-24 macOS 原生执行结果
 
@@ -127,7 +127,7 @@ Playwright 自动化入口支持按平台运行。macOS 原生入口将同版本
 
 ## 7. 测试人员回填区
 
-- 自动化层：`PASS（当前工作树：38 个测试文件/254 个测试；build 通过）`
+- 自动化层：`PASS（当前工作树：41 个测试文件/267 个测试；build 通过）`
 - Windows 桌面层：`待回填`
 - macOS 桌面层：`旧批次混合菜单证据，不作为新版 W0-SHELL-P 结论；新版脚本待复测`
 - 人工 UI 层：`旧批次已核验交通灯；菜单和尺寸材料移交标题栏专项，新版壳层批次待回填`

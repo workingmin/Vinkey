@@ -56,6 +56,23 @@ import {
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { Menu, MenuItem, PredefinedMenuItem, Submenu } from '@tauri-apps/api/menu'
 import type { PredefinedMenuItemOptions } from '@tauri-apps/api/menu'
+import {
+  TITLE_BAR_MENU_CONTRACT_VERSION,
+  TITLE_BAR_MENU_ITEM_LABELS,
+  TITLE_BAR_MENU_LABELS,
+  type TitleBarMenuId,
+  type TitleBarMenuItemId,
+} from './lib/titleBarMenu'
+import {
+  canExecuteEditCommand,
+  EDIT_STATE_CHANGE_EVENT,
+  executeEditCommand,
+  recordEditTarget,
+  rememberEditTarget,
+  resolveEditCommandTarget,
+  type EditCommand,
+  type EditCommandTarget,
+} from './lib/editCommands'
 
 function formatError(error: unknown): string {
   return normalizeServiceError(error).message
@@ -87,76 +104,83 @@ const isMacPlatform = () => typeof navigator !== 'undefined' && /mac/i.test(navi
 async function installMacMenu(callbacks: {
   newConversation: () => void
   openWorkspace: () => void
-  newDocument: () => void
   refreshWorkspace: () => void
-  closeDocument: () => void
-  save: () => void
   changePage: (page: ContentPage) => void
   toggleTheme: () => void
   openSettings: () => void
   showShortcuts: () => void
   showWindowDiagnostics: () => void
   showRuntimeDiagnostics: () => void
-}) {
-  const menuItem = (text: string, action: () => void, accelerator?: string) => MenuItem.new({ text, accelerator, action: () => action() })
+}, hasWorkspace: boolean) {
+  const menuItem = (text: string, action: () => void, accelerator?: string, enabled = true) => MenuItem.new({ text, accelerator, enabled, action: () => action() })
   const nativeItem = (item: PredefinedMenuItemOptions['item'], text: string) => PredefinedMenuItem.new({ item, text })
-  const file = await Submenu.new({ text: '文件', items: [
-    await menuItem('新建会话', callbacks.newConversation, 'CmdOrCtrl+N'),
-    await menuItem('打开工作区…', callbacks.openWorkspace, 'CmdOrCtrl+O'),
-    await menuItem('新建文档…', callbacks.newDocument),
-    await menuItem('刷新工作区', callbacks.refreshWorkspace, 'CmdOrCtrl+R'),
-    await menuItem('保存文档', callbacks.save, 'CmdOrCtrl+S'),
-    await menuItem('关闭文档', callbacks.closeDocument),
+  const refreshProjectItem = await menuItem(TITLE_BAR_MENU_ITEM_LABELS.refreshProject, callbacks.refreshWorkspace, 'CmdOrCtrl+R', hasWorkspace)
+  const project = await Submenu.new({ text: TITLE_BAR_MENU_LABELS.project, items: [
+    await menuItem(TITLE_BAR_MENU_ITEM_LABELS.addProject, callbacks.openWorkspace, 'CmdOrCtrl+O'),
+    refreshProjectItem,
   ] })
-  const edit = await Submenu.new({ text: '编辑', items: [
-    await nativeItem('Undo', '撤销'),
-    await nativeItem('Redo', '重做'),
-    await nativeItem('Cut', '剪切'),
-    await nativeItem('Copy', '复制'),
-    await nativeItem('Paste', '粘贴'),
-    await nativeItem('SelectAll', '全选'),
+  const conversation = await Submenu.new({ text: TITLE_BAR_MENU_LABELS.conversation, items: [
+    await menuItem(TITLE_BAR_MENU_ITEM_LABELS.newConversation, callbacks.newConversation, 'CmdOrCtrl+N'),
   ] })
-  const view = await Submenu.new({ text: '查看', items: [
-    await menuItem('对话页', () => callbacks.changePage('chat')),
-    await menuItem('文件页', () => callbacks.changePage('file')),
-    await menuItem('日志中心', () => callbacks.changePage('logs')),
-    await menuItem('切换浅色/深色主题', callbacks.toggleTheme),
-    await menuItem('模型与应用设置', callbacks.openSettings),
+  const edit = await Submenu.new({ text: TITLE_BAR_MENU_LABELS.edit, items: [
+    await nativeItem('Undo', TITLE_BAR_MENU_ITEM_LABELS.undo),
+    await nativeItem('Redo', TITLE_BAR_MENU_ITEM_LABELS.redo),
+    await nativeItem('Cut', TITLE_BAR_MENU_ITEM_LABELS.cut),
+    await nativeItem('Copy', TITLE_BAR_MENU_ITEM_LABELS.copy),
+    await nativeItem('Paste', TITLE_BAR_MENU_ITEM_LABELS.paste),
+    await nativeItem('SelectAll', TITLE_BAR_MENU_ITEM_LABELS.selectAll),
   ] })
-  const windowMenu = await Submenu.new({ text: '窗口', items: [
-    await nativeItem('Minimize', '最小化'),
-    await nativeItem('Maximize', '缩放窗口'),
-    await nativeItem('Fullscreen', '进入全屏'),
-    await nativeItem('CloseWindow', '关闭窗口'),
+  const view = await Submenu.new({ text: TITLE_BAR_MENU_LABELS.view, items: [
+    await menuItem(TITLE_BAR_MENU_ITEM_LABELS.chat, () => callbacks.changePage('chat')),
+    await menuItem(TITLE_BAR_MENU_ITEM_LABELS.files, () => callbacks.changePage('file')),
+    await menuItem(TITLE_BAR_MENU_ITEM_LABELS.logs, () => callbacks.changePage('logs')),
+    await menuItem(TITLE_BAR_MENU_ITEM_LABELS.toggleTheme, callbacks.toggleTheme),
   ] })
-  const help = await Submenu.new({ text: '帮助', items: [
-    await menuItem('查看快捷键', callbacks.showShortcuts),
-    await menuItem('窗口诊断信息', callbacks.showWindowDiagnostics),
-    await menuItem('应用诊断日志', callbacks.showRuntimeDiagnostics),
+  const windowMenu = await Submenu.new({ text: TITLE_BAR_MENU_LABELS.window, items: [
+    await nativeItem('Minimize', TITLE_BAR_MENU_ITEM_LABELS.minimize),
+    await nativeItem('Maximize', TITLE_BAR_MENU_ITEM_LABELS.zoom),
+    await nativeItem('Fullscreen', TITLE_BAR_MENU_ITEM_LABELS.fullscreen),
+    await nativeItem('CloseWindow', TITLE_BAR_MENU_ITEM_LABELS.closeWindow),
   ] })
+  const help = await Submenu.new({ text: TITLE_BAR_MENU_LABELS.help, items: [
+    await menuItem(TITLE_BAR_MENU_ITEM_LABELS.shortcuts, callbacks.showShortcuts),
+    await menuItem(TITLE_BAR_MENU_ITEM_LABELS.windowDiagnostics, callbacks.showWindowDiagnostics),
+    await menuItem(TITLE_BAR_MENU_ITEM_LABELS.runtimeDiagnostics, callbacks.showRuntimeDiagnostics),
+  ] })
+  let version = '0.1.0'
+  try { version = (await getRuntimeDiagnostics()).version } catch { /* package metadata remains the fallback */ }
   const appMenu = await Submenu.new({ text: 'Vinkey', items: [
-    await PredefinedMenuItem.new({ item: { About: { name: 'Vinkey', version: '0.1.0', comments: '本地优先的 AI 文学创作工作台' } }, text: '关于 Vinkey' }),
+    await PredefinedMenuItem.new({ item: { About: { name: 'Vinkey', version, comments: '本地优先的 AI 文学创作工作台' } }, text: TITLE_BAR_MENU_ITEM_LABELS.about }),
+    await menuItem(TITLE_BAR_MENU_ITEM_LABELS.settings, callbacks.openSettings, 'CmdOrCtrl+,'),
     await nativeItem('Services', '服务'),
     await nativeItem('Hide', '隐藏 Vinkey'),
     await nativeItem('HideOthers', '隐藏其他'),
     await nativeItem('ShowAll', '显示全部'),
     await nativeItem('Quit', '退出 Vinkey'),
   ] })
-  const menu = await Menu.new({ items: [appMenu, file, edit, view, windowMenu, help] })
+  const menu = await Menu.new({ items: [appMenu, project, conversation, edit, view, windowMenu, help] })
   await menu.setAsAppMenu()
   await windowMenu.setAsWindowsMenuForNSApp()
   await help.setAsHelpMenuForNSApp()
+  return { refreshProjectItem }
 }
 
-type AppMenuItem = { label: string; shortcut?: string; icon?: React.ComponentType<{ size?: number }>; disabled?: boolean; action: () => void }
+type AppMenuItem = {
+  id: TitleBarMenuItemId
+  label: string
+  shortcut?: string
+  icon?: React.ComponentType<{ size?: number }>
+  disabled?: boolean
+  action: () => void
+}
 
-function TitleBar({ onPageChange, onOpenWorkspace, onNewDocument, onRefreshWorkspace, onCloseDocument, onSave, onShowShortcuts, onShowAbout, onShowWindowDiagnostics, onShowRuntimeDiagnostics }: {
+type AppMenuGroup = { id: TitleBarMenuId; label: string; items: AppMenuItem[] }
+
+export function TitleBar({ onPageChange, onOpenWorkspace, onNewConversation, onRefreshWorkspace, onShowShortcuts, onShowAbout, onShowWindowDiagnostics, onShowRuntimeDiagnostics }: {
   onPageChange: (page: ContentPage) => void
   onOpenWorkspace: () => void
-  onNewDocument: () => void
+  onNewConversation: () => void
   onRefreshWorkspace: () => void
-  onCloseDocument: () => void
-  onSave: () => void
   onShowShortcuts: () => void
   onShowAbout: () => void
   onShowWindowDiagnostics: () => void
@@ -167,18 +191,16 @@ function TitleBar({ onPageChange, onOpenWorkspace, onNewDocument, onRefreshWorks
   const modelProfiles = useAppStore((state) => state.modelProfiles)
   const theme = useAppStore((state) => state.theme)
   const setTheme = useAppStore((state) => state.setTheme)
-  const newConversation = useAppStore((state) => state.newConversation)
-  const setSettingsOpen = useAppStore((state) => state.setSettingsOpen)
-  const [openMenu, setOpenMenu] = useState<string | null>(null)
+  const setError = useAppStore((state) => state.setError)
+  const [openMenu, setOpenMenu] = useState<TitleBarMenuId | null>(null)
+  const [editTarget, setEditTarget] = useState<EditCommandTarget | null>(null)
+  const [, setEditStateRevision] = useState(0)
   const [maximized, setMaximized] = useState(false)
+  const editTargetRef = useRef<EditCommandTarget | null>(null)
+  const triggerRefs = useRef<Partial<Record<TitleBarMenuId, HTMLButtonElement | null>>>({})
   const activeModel = modelProfiles.find((profile) => profile.id === activeModelId)
   const isMac = isMacPlatform()
   const mod = isMac ? '⌘' : 'Ctrl'
-  const startNewConversation = () => {
-    newConversation()
-    setSettingsOpen(false)
-    onPageChange('chat')
-  }
 
   useEffect(() => {
     if (!isDesktop()) return
@@ -187,10 +209,47 @@ function TitleBar({ onPageChange, onOpenWorkspace, onNewDocument, onRefreshWorks
 
   useEffect(() => {
     const close = () => setOpenMenu(null)
-    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') close() }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || !openMenu) return
+      event.preventDefault()
+      const trigger = triggerRefs.current[openMenu]
+      close()
+      trigger?.focus()
+    }
     window.addEventListener('click', close)
     window.addEventListener('keydown', onKeyDown)
     return () => { window.removeEventListener('click', close); window.removeEventListener('keydown', onKeyDown) }
+  }, [openMenu])
+
+  useEffect(() => {
+    const remember = (event: FocusEvent) => {
+      const target = resolveEditCommandTarget(event.target)
+      if (!target) {
+        if (event.target instanceof Element && event.target.closest('.app-menus')) return
+        editTargetRef.current = null
+        setEditTarget(null)
+        return
+      }
+      rememberEditTarget(target)
+      editTargetRef.current = target
+      setEditTarget(target)
+      setEditStateRevision((value) => value + 1)
+    }
+    const record = (event: Event) => {
+      recordEditTarget(event.target)
+      if (resolveEditCommandTarget(event.target) === editTargetRef.current) setEditStateRevision((value) => value + 1)
+    }
+    const refreshState = () => setEditStateRevision((value) => value + 1)
+    window.addEventListener('focusin', remember)
+    window.addEventListener('input', record)
+    window.addEventListener('selectionchange', refreshState)
+    window.addEventListener(EDIT_STATE_CHANGE_EVENT, refreshState)
+    return () => {
+      window.removeEventListener('focusin', remember)
+      window.removeEventListener('input', record)
+      window.removeEventListener('selectionchange', refreshState)
+      window.removeEventListener(EDIT_STATE_CHANGE_EVENT, refreshState)
+    }
   }, [])
 
   const windowAction = async (action: 'minimize' | 'toggle' | 'close') => {
@@ -201,51 +260,95 @@ function TitleBar({ onPageChange, onOpenWorkspace, onNewDocument, onRefreshWorks
     if (action === 'close') await win.close()
   }
 
-  const editAction = (command: string) => { if (typeof document !== 'undefined') document.execCommand(command) }
-  const menus: Array<{ label: string; items: AppMenuItem[] }> = [
-    { label: '文件', items: [
-      { label: '新建会话', shortcut: `${mod} N`, icon: CirclePlus, action: startNewConversation },
-      { label: '打开工作区…', shortcut: `${mod} O`, icon: FolderOpen, action: onOpenWorkspace },
-      { label: '新建文档…', icon: FileText, action: onNewDocument },
-      { label: '刷新工作区', shortcut: `${mod} R`, icon: RefreshCw, action: onRefreshWorkspace },
-      { label: '保存文档', shortcut: `${mod} S`, icon: Save, action: onSave },
-      { label: '关闭文档', icon: X, action: onCloseDocument },
+  const editAction = (command: EditCommand) => {
+    void executeEditCommand(editTargetRef.current, command).catch((cause) => setError(`编辑命令执行失败：${String(cause)}`))
+  }
+  const menus: AppMenuGroup[] = [
+    { id: 'project', label: TITLE_BAR_MENU_LABELS.project, items: [
+      { id: 'addProject', label: TITLE_BAR_MENU_ITEM_LABELS.addProject, shortcut: `${mod} O`, icon: FolderOpen, action: onOpenWorkspace },
+      { id: 'refreshProject', label: TITLE_BAR_MENU_ITEM_LABELS.refreshProject, shortcut: `${mod} R`, icon: RefreshCw, disabled: !workspace, action: onRefreshWorkspace },
     ] },
-    { label: '编辑', items: [
-      { label: '撤销', shortcut: `${mod} Z`, icon: RotateCcw, action: () => editAction('undo') },
-      { label: '重做', shortcut: isMac ? '⇧ ⌘ Z' : 'Ctrl Y', icon: RotateCw, action: () => editAction('redo') },
-      { label: '剪切', shortcut: `${mod} X`, icon: Scissors, action: () => editAction('cut') },
-      { label: '复制', shortcut: `${mod} C`, icon: Copy, action: () => editAction('copy') },
-      { label: '粘贴', shortcut: `${mod} V`, icon: Clipboard, action: () => editAction('paste') },
-      { label: '全选', shortcut: `${mod} A`, icon: ListChecks, action: () => editAction('selectAll') },
+    { id: 'conversation', label: TITLE_BAR_MENU_LABELS.conversation, items: [
+      { id: 'newConversation', label: TITLE_BAR_MENU_ITEM_LABELS.newConversation, shortcut: `${mod} N`, icon: CirclePlus, action: onNewConversation },
     ] },
-    { label: '查看', items: [
-      { label: '对话页', icon: MessageSquareText, action: () => onPageChange('chat') },
-      { label: '文件页', icon: FileText, action: () => onPageChange('file') },
-      { label: '日志中心', icon: ScrollText, action: () => onPageChange('logs') },
-      { label: theme === 'dark' ? '切换浅色主题' : '切换深色主题', icon: theme === 'dark' ? Sun : Moon, action: () => setTheme(theme === 'dark' ? 'light' : 'dark') },
-      { label: '模型与应用设置', icon: Settings, action: () => setSettingsOpen(true) },
+    { id: 'edit', label: TITLE_BAR_MENU_LABELS.edit, items: [
+      { id: 'undo', label: TITLE_BAR_MENU_ITEM_LABELS.undo, shortcut: `${mod} Z`, icon: RotateCcw, disabled: !canExecuteEditCommand(editTarget, 'undo'), action: () => editAction('undo') },
+      { id: 'redo', label: TITLE_BAR_MENU_ITEM_LABELS.redo, shortcut: isMac ? '⇧ ⌘ Z' : 'Ctrl Y', icon: RotateCw, disabled: !canExecuteEditCommand(editTarget, 'redo'), action: () => editAction('redo') },
+      { id: 'cut', label: TITLE_BAR_MENU_ITEM_LABELS.cut, shortcut: `${mod} X`, icon: Scissors, disabled: !canExecuteEditCommand(editTarget, 'cut'), action: () => editAction('cut') },
+      { id: 'copy', label: TITLE_BAR_MENU_ITEM_LABELS.copy, shortcut: `${mod} C`, icon: Copy, disabled: !canExecuteEditCommand(editTarget, 'copy'), action: () => editAction('copy') },
+      { id: 'paste', label: TITLE_BAR_MENU_ITEM_LABELS.paste, shortcut: `${mod} V`, icon: Clipboard, disabled: !canExecuteEditCommand(editTarget, 'paste'), action: () => editAction('paste') },
+      { id: 'selectAll', label: TITLE_BAR_MENU_ITEM_LABELS.selectAll, shortcut: `${mod} A`, icon: ListChecks, disabled: !canExecuteEditCommand(editTarget, 'selectAll'), action: () => editAction('selectAll') },
     ] },
-    { label: '窗口', items: [
-      { label: '最小化', shortcut: `${mod} M`, icon: Minus, action: () => void windowAction('minimize') },
-      { label: maximized ? '还原窗口' : '最大化', icon: maximized ? Minimize2 : Maximize2, action: () => void windowAction('toggle') },
-      { label: '关闭窗口', shortcut: `${mod} W`, icon: X, action: () => void windowAction('close') },
+    { id: 'view', label: TITLE_BAR_MENU_LABELS.view, items: [
+      { id: 'chat', label: TITLE_BAR_MENU_ITEM_LABELS.chat, icon: MessageSquareText, action: () => onPageChange('chat') },
+      { id: 'files', label: TITLE_BAR_MENU_ITEM_LABELS.files, icon: FileText, action: () => onPageChange('file') },
+      { id: 'logs', label: TITLE_BAR_MENU_ITEM_LABELS.logs, icon: ScrollText, action: () => onPageChange('logs') },
+      { id: 'toggleTheme', label: TITLE_BAR_MENU_ITEM_LABELS.toggleTheme, icon: theme === 'dark' ? Sun : Moon, action: () => setTheme(theme === 'dark' ? 'light' : 'dark') },
     ] },
-    { label: '帮助', items: [
-      { label: '查看快捷键', icon: Keyboard, action: onShowShortcuts },
-      { label: '窗口诊断信息', icon: Settings, action: onShowWindowDiagnostics },
-      { label: '应用诊断日志', icon: ScrollText, action: onShowRuntimeDiagnostics },
-      { label: '关于 Vinkey', icon: Bot, action: onShowAbout },
+    { id: 'window', label: TITLE_BAR_MENU_LABELS.window, items: [
+      { id: 'minimize', label: TITLE_BAR_MENU_ITEM_LABELS.minimize, shortcut: `${mod} M`, icon: Minus, action: () => void windowAction('minimize') },
+      { id: maximized ? 'restore' : 'maximize', label: maximized ? TITLE_BAR_MENU_ITEM_LABELS.restore : TITLE_BAR_MENU_ITEM_LABELS.maximize, icon: maximized ? Minimize2 : Maximize2, action: () => void windowAction('toggle') },
+      { id: 'closeWindow', label: TITLE_BAR_MENU_ITEM_LABELS.closeWindow, shortcut: `${mod} W`, icon: X, action: () => void windowAction('close') },
+    ] },
+    { id: 'help', label: TITLE_BAR_MENU_LABELS.help, items: [
+      { id: 'shortcuts', label: TITLE_BAR_MENU_ITEM_LABELS.shortcuts, icon: Keyboard, action: onShowShortcuts },
+      { id: 'windowDiagnostics', label: TITLE_BAR_MENU_ITEM_LABELS.windowDiagnostics, icon: Settings, action: onShowWindowDiagnostics },
+      { id: 'runtimeDiagnostics', label: TITLE_BAR_MENU_ITEM_LABELS.runtimeDiagnostics, icon: ScrollText, action: onShowRuntimeDiagnostics },
+      { id: 'about', label: TITLE_BAR_MENU_ITEM_LABELS.about, icon: Bot, action: onShowAbout },
     ] },
   ]
+
+  const focusMenuItem = (menuId: TitleBarMenuId, position: 'first' | 'last') => {
+    window.requestAnimationFrame(() => {
+      const items = Array.from(document.querySelectorAll<HTMLButtonElement>(`#title-bar-menu-${menuId} [role="menuitem"]:not(:disabled)`))
+      items[position === 'first' ? 0 : items.length - 1]?.focus()
+    })
+  }
+
+  const handleMenuKeys = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)'))
+    if (items.length === 0) return
+    const index = items.indexOf(document.activeElement as HTMLButtonElement)
+    let next: number | null = null
+    if (event.key === 'ArrowDown') next = index < 0 ? 0 : (index + 1) % items.length
+    else if (event.key === 'ArrowUp') next = index < 0 ? items.length - 1 : (index - 1 + items.length) % items.length
+    else if (event.key === 'Home') next = 0
+    else if (event.key === 'End') next = items.length - 1
+    if (next === null) return
+    event.preventDefault()
+    items[next].focus()
+  }
 
   if (isMac) return null
   return <header className="title-bar" data-tauri-drag-region onDoubleClick={() => void windowAction('toggle')}>
     <div className="title-bar-brand" data-tauri-drag-region><span className="title-bar-mark">V</span><strong>Vinkey</strong><span className="title-bar-context">{workspace?.name ?? '本地工作台'}{activeModel ? ` · ${activeModel.name}` : ''}</span></div>
-    <nav className="app-menus" aria-label="应用菜单" onClick={(event) => event.stopPropagation()}>
-      {menus.map((menu) => <div className="app-menu" key={menu.label}>
-        <button className={`app-menu-trigger ${openMenu === menu.label ? 'active' : ''}`} aria-expanded={openMenu === menu.label} onClick={() => setOpenMenu(openMenu === menu.label ? null : menu.label)}>{menu.label}</button>
-        {openMenu === menu.label && <div className="app-menu-dropdown" role="menu">{menu.items.map((item) => <button key={item.label} role="menuitem" disabled={item.disabled} onClick={() => { item.action(); setOpenMenu(null) }}>{item.icon && <item.icon size={14} />}<span>{item.label}</span>{item.shortcut && <kbd>{item.shortcut}</kbd>}</button>)}</div>}
+    <nav className="app-menus" aria-label="应用菜单" data-menu-contract={TITLE_BAR_MENU_CONTRACT_VERSION} onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
+      {menus.map((menu) => <div className="app-menu" key={menu.id} data-menu-id={menu.id}>
+        <button
+          ref={(node) => { triggerRefs.current[menu.id] = node }}
+          className={`app-menu-trigger ${openMenu === menu.id ? 'active' : ''}`}
+          aria-expanded={openMenu === menu.id}
+          aria-haspopup="menu"
+          aria-controls={`title-bar-menu-${menu.id}`}
+          data-testid={`title-bar-menu-${menu.id}`}
+          onMouseDown={(event) => event.preventDefault()}
+          onKeyDown={(event) => {
+            if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return
+            event.preventDefault()
+            setOpenMenu(menu.id)
+            focusMenuItem(menu.id, event.key === 'ArrowUp' ? 'last' : 'first')
+          }}
+          onClick={() => setOpenMenu(openMenu === menu.id ? null : menu.id)}
+        >{menu.label}</button>
+        {openMenu === menu.id && <div id={`title-bar-menu-${menu.id}`} className="app-menu-dropdown" role="menu" aria-label={`${menu.label}菜单`} onKeyDown={handleMenuKeys}>{menu.items.map((item) => <button
+          key={item.id}
+          role="menuitem"
+          data-menu-item-id={item.id}
+          data-testid={`title-bar-menu-item-${item.id}`}
+          disabled={item.disabled}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => { item.action(); setOpenMenu(null) }}
+        >{item.icon && <item.icon size={14} />}<span>{item.label}</span>{item.shortcut && <kbd>{item.shortcut}</kbd>}</button>)}</div>}
       </div>)}
     </nav>
     <div className="title-bar-spacer" data-tauri-drag-region />
@@ -1272,7 +1375,6 @@ export function App() {
   const setProjects = useAppStore((state) => state.setProjects)
   const setProjectTransition = useAppStore((state) => state.setProjectTransition)
   const openTab = useAppStore((state) => state.openTab)
-  const closeTab = useAppStore((state) => state.closeTab)
   const toggleContext = useAppStore((state) => state.toggleContext)
   const markSaved = useAppStore((state) => state.markSaved)
   const setError = useAppStore((state) => state.setError)
@@ -1289,6 +1391,7 @@ export function App() {
   const [runtimeDiagnosticsLoading, setRuntimeDiagnosticsLoading] = useState(false)
   const [runtimeCopyState, setRuntimeCopyState] = useState<'idle' | 'copied'>('idle')
   const macMenuInstalled = useRef(false)
+  const macRefreshProjectItem = useRef<MenuItem | null>(null)
 
   const applyWorkspaceSnapshot = useCallback((next: Awaited<ReturnType<typeof refreshWorkspace>>, discover = true) => {
     const previous = useAppStore.getState().workspace
@@ -1372,27 +1475,23 @@ export function App() {
     } finally { setProjectTransition(false) }
   }, [setWorkspace, setProjects, setProjectTransition])
 
-  const newDocumentFromMenu = useCallback(async () => {
-    if (!workspace) return openWorkspaceFromMenu()
-    const value = window.prompt('文档相对路径（.md / .txt）')?.trim()
-    if (!value) return
-    try {
-      const path = /\.(md|markdown|txt)$/i.test(value) ? value : `${value}.md`
-      const document = await createDocument(path)
-      setWorkspace(await refreshWorkspace())
-      openTab({ ...document, savedContent: document.content })
-      setContentPage('file')
-      setFileEditorVisible(true)
-      setSettingsOpen(false)
-    } catch (cause) { setError(String(cause)) }
-  }, [openWorkspaceFromMenu, openTab, setError, setSettingsOpen, setWorkspace, workspace])
+  const newConversationFromMenu = useCallback(() => {
+    if (!useAppStore.getState().workspace) {
+      setError('请先添加本地项目，再新建会话')
+      return
+    }
+    useAppStore.getState().newConversation()
+    changeContentPage('chat')
+  }, [changeContentPage, setError])
 
   const showShortcuts = useCallback(() => {
-    window.alert('快捷键\n\n⌘/Ctrl + S  保存文档\n⌘/Ctrl + N  新建会话\n⌘/Ctrl + O  打开工作区\n⌘/Ctrl + W  关闭窗口\nEnter  发送消息\nShift + Enter  换行')
+    window.alert('快捷键\n\n⌘/Ctrl + O  添加本地项目\n⌘/Ctrl + N  新建会话\n⌘/Ctrl + R  刷新当前项目\n⌘/Ctrl + ,  打开设置\n⌘/Ctrl + S  保存当前文档\n⌘/Ctrl + W  关闭窗口\nEnter  发送消息\nShift + Enter  换行')
   }, [])
 
   const showAbout = useCallback(() => {
-    window.alert('Vinkey 0.1.0\n\n本地优先的 AI 文学创作工作台\n文档和会话数据保存在本机。')
+    void getRuntimeDiagnostics()
+      .then(({ version }) => window.alert(`Vinkey ${version}\n\n本地优先的 AI 文学创作工作台\n文档和会话数据保存在本机。`))
+      .catch(() => window.alert('Vinkey\n\n本地优先的 AI 文学创作工作台\n文档和会话数据保存在本机。'))
   }, [])
 
   const showWindowDiagnostics = useCallback(() => {
@@ -1449,12 +1548,6 @@ export function App() {
     } catch (cause) { setError(`刷新项目失败：${String(cause)}`) }
     finally { setProjectTransition(false) }
   }, [applyWorkspaceSnapshot, setProjects, setProjectTransition, setError])
-
-  const closeDocumentFromMenu = useCallback(() => {
-    const path = useAppStore.getState().activePath
-    if (path) closeTab(path)
-    setFileEditorVisible(false)
-  }, [closeTab])
 
   useEffect(() => {
     let active = true
@@ -1564,33 +1657,44 @@ export function App() {
     if (!isDesktop() || !isMacPlatform() || macMenuInstalled.current) return
     macMenuInstalled.current = true
     void installMacMenu({
-      newConversation: () => { useAppStore.getState().newConversation(); changeContentPage('chat') },
+      newConversation: newConversationFromMenu,
       openWorkspace: () => void openWorkspaceFromMenu(),
-      newDocument: () => void newDocumentFromMenu(),
       refreshWorkspace: () => void refreshWorkspaceFromMenu(),
-      closeDocument: closeDocumentFromMenu,
-      save: () => void saveActive(),
       changePage: changeContentPage,
       toggleTheme: () => { const current = useAppStore.getState().theme; useAppStore.getState().setTheme(current === 'dark' ? 'light' : 'dark') },
       openSettings: () => useAppStore.getState().setSettingsOpen(true),
       showShortcuts,
       showWindowDiagnostics,
       showRuntimeDiagnostics: () => void showRuntimeDiagnostics(),
+    }, Boolean(workspace)).then(({ refreshProjectItem }) => {
+      macRefreshProjectItem.current = refreshProjectItem
     }).catch((cause) => { macMenuInstalled.current = false; setError(`macOS 菜单初始化失败：${String(cause)}`) })
-  }, [changeContentPage, closeDocumentFromMenu, newDocumentFromMenu, openWorkspaceFromMenu, refreshWorkspaceFromMenu, saveActive, setError, showRuntimeDiagnostics, showShortcuts, showWindowDiagnostics])
+  }, [changeContentPage, newConversationFromMenu, openWorkspaceFromMenu, refreshWorkspaceFromMenu, setError, showRuntimeDiagnostics, showShortcuts, showWindowDiagnostics, workspace])
+
+  useEffect(() => {
+    if (!isDesktop() || !isMacPlatform() || !macRefreshProjectItem.current) return
+    void macRefreshProjectItem.current.setEnabled(Boolean(workspace)).catch((cause) => setError(`macOS 项目菜单状态同步失败：${String(cause)}`))
+  }, [setError, workspace])
 
   useEffect(() => {
     const listener = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); void saveActive() }
+      if (!event.ctrlKey && !event.metaKey) return
+      const key = event.key.toLowerCase()
+      if (key === 's') { event.preventDefault(); void saveActive(); return }
+      if (isMacPlatform()) return
+      if (key === 'o') { event.preventDefault(); void openWorkspaceFromMenu() }
+      else if (key === 'n') { event.preventDefault(); newConversationFromMenu() }
+      else if (key === 'r') { event.preventDefault(); if (useAppStore.getState().workspace) void refreshWorkspaceFromMenu() }
+      else if (event.key === ',') { event.preventDefault(); setSettingsOpen(true) }
     }
     window.addEventListener('keydown', listener)
     return () => window.removeEventListener('keydown', listener)
-  }, [saveActive])
+  }, [newConversationFromMenu, openWorkspaceFromMenu, refreshWorkspaceFromMenu, saveActive, setSettingsOpen])
 
   const hasActiveDocument = useMemo(() => tabs.some((tab) => tab.path === activePath), [activePath, tabs])
 
   return <div className="app-frame" data-theme={theme} data-platform={isMacPlatform() ? 'mac' : 'desktop'}>
-    <TitleBar onPageChange={changeContentPage} onOpenWorkspace={() => void openWorkspaceFromMenu()} onNewDocument={() => void newDocumentFromMenu()} onRefreshWorkspace={() => void refreshWorkspaceFromMenu()} onCloseDocument={closeDocumentFromMenu} onSave={() => void saveActive()} onShowShortcuts={showShortcuts} onShowAbout={showAbout} onShowWindowDiagnostics={showWindowDiagnostics} onShowRuntimeDiagnostics={() => void showRuntimeDiagnostics()} />
+    <TitleBar onPageChange={changeContentPage} onOpenWorkspace={() => void openWorkspaceFromMenu()} onNewConversation={newConversationFromMenu} onRefreshWorkspace={() => void refreshWorkspaceFromMenu()} onShowShortcuts={showShortcuts} onShowAbout={showAbout} onShowWindowDiagnostics={showWindowDiagnostics} onShowRuntimeDiagnostics={() => void showRuntimeDiagnostics()} />
     <div className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`} data-theme={theme}>
       <ProjectSessionSidebar onPageChange={changeContentPage} onOpenWorkspace={() => void openWorkspaceFromMenu()} onRefreshWorkspace={() => void refreshWorkspaceFromMenu()} onOpenDocument={openDocument} onSelectProject={selectProject} onDeleteProject={removeProject} />
       {settingsOpen ? <SettingsPage /> : <ContentPanel key={workspace?.id ?? 'no-project'} page={contentPage} onPageChange={changeContentPage} showFileEditor={fileEditorVisible && hasActiveDocument} onOpenDocument={openDocument} onOpenWorkspace={() => void openWorkspaceFromMenu()} onRefreshWorkspace={refreshWorkspaceFromMenu} onSave={saveActive} onCloseEditor={() => setFileEditorVisible(false)} onToggleContext={toggleDocumentContext} onOpenLogSource={openLogSource} onReviewDiff={() => { setContentPage('file'); setFileEditorVisible(true); setSettingsOpen(false) }} />}

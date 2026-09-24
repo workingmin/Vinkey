@@ -43,6 +43,8 @@ describe('UI shell acceptance CLI', () => {
     expect(script).toContain('NATIVE_APP_BUILD_NUMBER')
     expect(script).toContain('tauriFramework')
     expect(script).toContain('OUT_OF_SCOPE:W0-SHELL-MENU-P')
+    expect(script).toContain('SHELL-NATIVE-MAC-MENU-CONTRACT-GUARD')
+    expect(script).toContain('CONTRACT_GUARD_ONLY:OUT_OF_SCOPE:W0-SHELL-MENU-P')
     expect(script).not.toContain('SHELL-NATIVE-MAC-MENU-OPEN')
     expect(script).not.toContain('menu item "日志中心"')
   })
@@ -50,6 +52,8 @@ describe('UI shell acceptance CLI', () => {
   it('keeps title-bar menu interaction outside the W0-SHELL-P browser runner', () => {
     const script = readFileSync(resolve(repositoryRoot, 'scripts/ui-shell/run-ui-shell-acceptance.mjs'), 'utf8')
     expect(script).toContain('OUT_OF_SCOPE:W0-SHELL-MENU-P')
+    expect(script).toContain("const expectedMenus = ['项目', '会话', '编辑', '查看', '窗口', '帮助']")
+    expect(script).toContain('CONTRACT_GUARD_ONLY:OUT_OF_SCOPE:W0-SHELL-MENU-P')
     expect(script).not.toContain("getByRole('button', { name: '文件', exact: true }).click()")
     expect(script).not.toContain("getByRole('menu').waitFor()")
   })

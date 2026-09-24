@@ -8,10 +8,11 @@ import { python } from '@codemirror/lang-python'
 import { StreamLanguage } from '@codemirror/language'
 import { EditorState, type Extension } from '@codemirror/state'
 import { EditorView, keymap } from '@codemirror/view'
-import { defaultKeymap, historyKeymap } from '@codemirror/commands'
+import { defaultKeymap, historyKeymap, redo, redoDepth, selectAll, undo, undoDepth } from '@codemirror/commands'
 import { useEffect, useRef } from 'react'
 import type { EditorSelection, ThemeMode } from '../types'
 import { getLanguageName } from '../lib/fileTypes'
+import { EDIT_COMMAND_EVENT, EDIT_STATE_CHANGE_EVENT, type EditCommandEventDetail } from '../lib/editCommands'
 
 interface CodeEditorProps {
   value: string
@@ -74,8 +75,48 @@ export function CodeEditor({ value, filename, themeMode, editable = true, onChan
 
   useEffect(() => {
     if (!host.current) return
+    const hostElement = host.current
+    const updateCommandState = (editor: EditorView) => {
+      const selection = editor.state.selection.main
+      hostElement.dataset.editable = String(editable)
+      hostElement.dataset.canUndo = String(editable && undoDepth(editor.state) > 0)
+      hostElement.dataset.canRedo = String(editable && redoDepth(editor.state) > 0)
+      hostElement.dataset.hasSelection = String(!selection.empty)
+      hostElement.dataset.hasContent = String(editor.state.doc.length > 0)
+      hostElement.dispatchEvent(new CustomEvent(EDIT_STATE_CHANGE_EVENT, { bubbles: true }))
+    }
+    const handleEditCommand = (event: Event) => {
+      const editor = view.current
+      if (!editor) return
+      const command = (event as CustomEvent<EditCommandEventDetail>).detail?.command
+      if (!command) return
+      event.preventDefault()
+      if (command === 'undo') undo(editor)
+      else if (command === 'redo') redo(editor)
+      else if (command === 'selectAll') selectAll(editor)
+      else if (command === 'copy' || command === 'cut') {
+        const selection = editor.state.selection.main
+        if (!selection.empty) {
+          const selectedText = editor.state.sliceDoc(selection.from, selection.to)
+          void navigator.clipboard.writeText(selectedText).then(() => {
+            if (command === 'cut' && editable && view.current === editor) {
+              editor.dispatch({ changes: { from: selection.from, to: selection.to }, selection: { anchor: selection.from } })
+            }
+          })
+        }
+      } else if (command === 'paste' && editable) {
+        void navigator.clipboard.readText().then((text) => {
+          if (view.current !== editor) return
+          const selection = editor.state.selection.main
+          editor.dispatch({ changes: { from: selection.from, to: selection.to, insert: text }, selection: { anchor: selection.from + text.length } })
+        })
+      }
+      editor.focus()
+      window.requestAnimationFrame(() => { if (view.current === editor) updateCommandState(editor) })
+    }
+    hostElement.addEventListener(EDIT_COMMAND_EVENT, handleEditCommand)
     view.current = new EditorView({
-      parent: host.current,
+      parent: hostElement,
       state: EditorState.create({
         doc: value,
         extensions: [
@@ -96,11 +137,17 @@ export function CodeEditor({ value, filename, themeMode, editable = true, onChan
                 text: update.state.sliceDoc(selection.from, selection.to),
               })
             }
+            if (update.docChanged || update.selectionSet) updateCommandState(update.view)
           }),
         ],
       }),
     })
-    return () => { view.current?.destroy(); view.current = null }
+    updateCommandState(view.current)
+    return () => {
+      hostElement.removeEventListener(EDIT_COMMAND_EVENT, handleEditCommand)
+      view.current?.destroy()
+      view.current = null
+    }
   }, [editable, filename, themeMode])
 
   useEffect(() => {

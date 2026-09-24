@@ -172,6 +172,14 @@ async function main() {
       if (platform === 'win32') {
         await runCase(cases, 'SHELL-P-001-WIN-FRAME', 'Windows 自绘标题栏与窗口按钮 DOM 布局', async () => {
           await page.locator('.title-bar').waitFor()
+          const menuLabels = await page.locator('.app-menu-trigger').allTextContents()
+          const expectedMenus = ['项目', '会话', '编辑', '查看', '窗口', '帮助']
+          if (JSON.stringify(menuLabels) !== JSON.stringify(expectedMenus)) {
+            throw new Error(`标题栏菜单合同与目标版本不一致：${menuLabels.join('/')}`)
+          }
+          if (!await page.locator('.app-menus').getAttribute('data-menu-contract')) {
+            throw new Error('标题栏缺少菜单合同版本')
+          }
           await page.getByRole('button', { name: '最小化窗口' }).waitFor()
           await page.getByRole('button', { name: '最大化窗口' }).waitFor()
           await page.getByRole('button', { name: '关闭窗口' }).waitFor()
@@ -285,7 +293,7 @@ async function main() {
       repository: { version, gitSha: repositorySha },
       environment: { os: `${os.platform()} ${os.release()}`, osVersion: os.version(), arch: os.arch(), node: process.version, browser: `Chromium ${browser.version()}`, deviceScaleFactor: 1, viewportSizes: sizes, simulatedPlatforms: platforms },
       platformEvidence: {
-        titlebarMenus: 'OUT_OF_SCOPE:W0-SHELL-MENU-P',
+        titlebarMenus: 'CONTRACT_GUARD_ONLY:OUT_OF_SCOPE:W0-SHELL-MENU-P',
         titlebarControls: 'NOT_COVERED_BY_PLAYWRIGHT',
         macTrafficLights: 'NOT_COVERED_BY_PLAYWRIGHT',
         physicalDpi: 'REQUIRES_DESKTOP_DIAGNOSTICS',
