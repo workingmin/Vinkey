@@ -47,8 +47,9 @@ npm run test:ui-shell-native-mac -- --output <ARCHIVE_ROOT> [--app /path/to/Vink
 
 macOS 原生脚本的 `result.json` 可直接作为 macOS 桌面层证据；`display-info.txt` 保存 `system_profiler SPDisplaysDataType` 原始信息，`result.json` 保存 Accessibility 桌面点坐标和截图像素。多显示器、系统缩放和物理 DPI 仍需测试人员在回填表中确认。
 
-- 退出码：`<EXIT_CODE>`
-- stdout/stderr：`<STDOUT_FILE> / <STDERR_FILE>`
+- 退出码：`<EXIT_CODE>`（应与 `result.json.exitCode` 一致）
+- stdout 最终四行：`<CAPTURE_OR_TERMINAL_REFERENCE>`（脚本不生成 `stdout.txt`）
+- stderr/平台诊断：`<AUTOMATION_STDERR_OR_TERMINAL_REFERENCE>`
 - JSON 结果：`<RESULT_JSON_FILE_OR_NA>`
 - 窗口/应用诊断：`<DIAGNOSTICS_FILE>`
 - SHA-256 清单：`<SHA256SUMS_FILE>`
@@ -92,10 +93,14 @@ shell-w0-p-<YYYYMMDD>-<platform>/
 ├── ui-observations.md
 ├── screenshots/
 ├── recordings/
-├── stdout.txt
-├── stderr.txt
-├── diagnostics.txt
-└── SHA256SUMS
+├── result.json
+├── SHA256SUMS
+├── display-info.txt
+├── events.txt
+├── automation-stderr.txt
+├── native-automation.applescript
+├── tauri-dev.log
+└── diagnostics.txt
 ```
 
 不得上传 API Key、完整作品正文、系统用户名或未脱敏绝对路径。

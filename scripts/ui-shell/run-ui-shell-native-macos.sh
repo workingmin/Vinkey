@@ -330,7 +330,7 @@ NATIVE_OS_VERSION="$OS_VERSION" \
 NATIVE_DISPLAY_INFO="$DISPLAY_INFO" \
 node --input-type=module <<'NODE'
 import { createHash } from 'node:crypto'
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const outputDir = process.env.NATIVE_REPORT_DIR
@@ -351,6 +351,7 @@ const summary = {
   blocked: cases.filter((item) => item.status === 'BLOCKED').length,
 }
 const conclusion = summary.failed > 0 ? 'FAIL' : summary.blocked > 0 ? 'BLOCKED' : 'PASS'
+const exitCode = summary.failed > 0 ? 2 : summary.blocked > 0 ? 1 : 0
 const result = {
   schemaVersion: 1,
   generatedAt: new Date().toISOString(),
@@ -379,8 +380,18 @@ const result = {
   },
   cases,
   summary,
+  exitCode,
   conclusion,
-  artifacts: { screenshots, sha256: screenshotHashes, displayInfo: 'display-info.txt', automationStderr: 'automation-stderr.txt' },
+  artifacts: {
+    screenshots,
+    sha256: screenshotHashes,
+    manifestFile: 'SHA256SUMS',
+    events: 'events.txt',
+    automationScript: existsSync(join(outputDir, 'native-automation.applescript')) ? 'native-automation.applescript' : null,
+    displayInfo: 'display-info.txt',
+    automationStderr: existsSync(join(outputDir, 'automation-stderr.txt')) ? 'automation-stderr.txt' : null,
+    devLog: existsSync(join(outputDir, 'tauri-dev.log')) ? 'tauri-dev.log' : null,
+  },
 }
 writeFileSync(join(outputDir, 'result.json'), `${JSON.stringify(result, null, 2)}\n`)
 NODE
@@ -390,8 +401,9 @@ NODE
   while IFS= read -r screenshot; do
     shasum -a 256 "$screenshot"
   done < <(find "$OUTPUT_DIR/screenshots" -type f -name '*.png' -print | LC_ALL=C sort)
-  shasum -a 256 "$DISPLAY_INFO"
-  if [[ -f "$AUTOMATION_STDERR" ]]; then shasum -a 256 "$AUTOMATION_STDERR"; fi
+  for evidence_file in "$DISPLAY_INFO" "$AUTOMATION_STDERR" "$EVENTS_FILE" "$APPLE_SCRIPT_FILE" "$DEV_LOG"; do
+    if [[ -f "$evidence_file" ]]; then shasum -a 256 "$evidence_file"; fi
+  done
 } >"$OUTPUT_DIR/SHA256SUMS"
 
 node --input-type=module - "$OUTPUT_DIR/result.json" <<'NODE'
@@ -399,5 +411,7 @@ import { readFileSync } from 'node:fs'
 const result = JSON.parse(readFileSync(process.argv[2], 'utf8'))
 console.log(`UI shell native macOS acceptance: ${result.conclusion} (${result.summary.passed}/${result.summary.caseCount} passed, ${result.summary.failed} failed, ${result.summary.blocked} blocked)`)
 console.log(`Results: ${process.argv[2]}`)
-process.exitCode = result.summary.failed > 0 ? 2 : result.summary.blocked > 0 ? 1 : 0
+console.log(`SHA256SUMS: ${process.argv[2].replace(/result\.json$/u, 'SHA256SUMS')}`)
+console.log(`exit=${result.exitCode}`)
+process.exitCode = result.exitCode
 NODE

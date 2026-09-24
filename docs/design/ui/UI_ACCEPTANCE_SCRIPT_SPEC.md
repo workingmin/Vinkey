@@ -50,7 +50,7 @@
 | `tests/<domain>/` | 跨模块合同测试、CLI 测试、测试素材和 harness | 面向测试人员的命令行入口 |
 | `scripts/<domain>/` | 可执行验收脚本、跨平台包装器和结果格式化 | `*.test.*`、永久 API Key、业务 fixture 正文 |
 | `docs/design/ui/acceptance/` | 报告、回填模板和人工观察记录 | 未脱敏的原始日志或凭据 |
-| 测试人员本地归档目录 | 原始 JSON、stdout/stderr、截图、录屏和校验清单 | 提交到 Git 的密钥、正文全文、个人目录信息 |
+| 测试人员本地归档目录 | `result.json`、原始平台诊断、截图/录屏和校验清单；完整终端 stdout/stderr 仅在需要时由调用方另行保存 | 提交到 Git 的密钥、正文全文、个人目录信息 |
 
 脚本必须通过自身路径解析仓库根目录，不能依赖调用者当前目录。Shell、PowerShell 和 npm 入口应调用同一份核心实现，不能各自复制业务逻辑。
 
@@ -118,7 +118,8 @@ JSON 顶层字段保持稳定，新增字段只能向后兼容地追加：
   },
   "cases": [],
   "summary": { "caseCount": 0, "passed": 0, "failed": 0, "blocked": 0 },
-  "artifacts": { "logFile": "<LOG_FILE>", "stdoutFile": "<STDOUT_FILE>" },
+  "exitCode": 0,
+  "artifacts": { "manifestFile": "SHA256SUMS", "screenshots": [], "sha256": {} },
   "conclusion": "<PASS|FAIL|BLOCKED>"
 }
 ```
@@ -129,9 +130,20 @@ JSON 顶层字段保持稳定，新增字段只能向后兼容地追加：
 
 ### 5.2 人类可读输出
 
-终端输出至少包含：脚本和套件版本、实际 OS/架构、模型与 profile、用例进度、失败摘要、日志路径和最终结论。输出不得只写“测试通过”，也不得把没有执行的用例计入通过数。
+环境、模型/profile、套件版本和逐用例结果只写入 `result.json`；终端 stdout 保持短且稳定，不作为第二份结果或日志。输出不得只写“测试通过”，也不得把没有执行的用例计入通过数。
 
 `--json` 模式下 stdout 只允许一个完整 JSON 文档；若需要进度信息，写入 stderr。原始 JSON 应保存为测试证据，报告只引用摘要和 SHA-256。
+
+`result.json` 是批次唯一的机器可读结果源；不得再生成内容重复的 `result.txt` 或伪造的 `stdout.txt`。脚本 stdout 只输出最终摘要，不承担逐用例日志或第二份结果文件，固定为以下四行：
+
+```text
+<suite> acceptance: <PASS|FAIL|BLOCKED> (<passed>/<caseCount> passed, <failed> failed, <blocked> blocked)
+Results: <absolute-path>/result.json
+SHA256SUMS: <absolute-path>/SHA256SUMS
+exit=<exitCode>
+```
+
+逐用例进度、服务启动信息和异常详情写入 stderr；`result.json.exitCode` 是退出码唯一归档事实，终端最后一行 `exit=<n>` 只用于让 CI/人工日志可见，不能再被当作第二个结果源。测试人员无需手工执行 `echo $?`。
 
 ## 6. 退出码与结论
 
@@ -146,6 +158,8 @@ JSON 顶层字段保持稳定，新增字段只能向后兼容地追加：
 
 “阻断”与“失败”必须分开：无法启动 Ollama、缺少 GTK、没有凭据或平台 API 不可用是阻断；页面可进入但结果错误是功能失败。
 
+退出码只写入 `result.json` 顶层 `exitCode`，并在终端以 `exit=<n>` 打印。`SHA256SUMS` 校验 `result.json`、截图和其他原始证据，不校验终端 stdout/stderr；如测试人员需要保留完整终端转储，应在脚本外重定向为附加文件，并将该文件加入 `SHA256SUMS` 后再回传。
+
 ## 7. 安全、隐私与可重复执行
 
 - 不输出 API Key、系统凭据、完整用户正文、Authorization header 或完整 Cookie。连接结果只保留协议、脱敏地址和 `hasApiKey`。
@@ -153,7 +167,7 @@ JSON 顶层字段保持稳定，新增字段只能向后兼容地追加：
 - 脚本默认只读 SQLite；需要写入的 fixture 或临时目录必须显式命名并在结束时清理。
 - 相同版本、相同 profile 和相同参数重复执行应产生可比较结果；时间戳和耗时可以不同，套件版本、case ID 和字段语义不能漂移。
 - 真实 Ollama 评测应固定温度、上下文窗口、套件版本和超时；报告中记录模型标签，不把模型 `modelScore` 当作概率。
-- 失败时保留 JSON、stdout/stderr 和诊断日志；清理只删除临时目录，不删除测试人员指定的归档文件。
+- 失败时保留 `result.json`、`SHA256SUMS` 和平台诊断文件；终端 stdout/stderr 是否另行保存由调用方决定。清理只删除临时目录，不删除测试人员指定的归档文件。
 
 ## 8. 脚本自身的测试要求
 
@@ -169,18 +183,33 @@ JSON 顶层字段保持稳定，新增字段只能向后兼容地追加：
 
 ## 9. 测试人员证据回传规范
 
+### 9.1 输出文件责任边界
+
+| 文件/目录 | 必选性 | 唯一责任 | 不承担的责任 |
+| --- | --- | --- | --- |
+| `result.json` | 所有脚本必选 | 批次元数据、逐用例状态、汇总、`conclusion`、唯一 `exitCode` 和证据索引 | 不替代截图原件、平台原始日志或终端转储 |
+| `SHA256SUMS` | 所有脚本必选 | 校验 `result.json`、截图和实际产生的原始证据 | 不记录新的测试结论，不校验自身或未归档的终端流 |
+| `screenshots/`、录屏 | 按功能域 | 可视化 UI/平台行为原件 | 不作为机器通过/失败判定源 |
+| `display-info.txt` | macOS 显示诊断时 | `system_profiler` 原始显示器信息 | 不等同于物理 DPI 结论 |
+| `events.txt` | macOS 原生脚本 | Accessibility/System Events 用例原始结果 | 不替代 `result.json` 汇总 |
+| `automation-stderr.txt` | macOS 原生脚本 | `osascript` 原始 stderr | 不代表整个 shell 进程 stderr |
+| `native-automation.applescript` | macOS 原生脚本 | 本批次实际执行的自动化输入 | 不代表应用源码版本 |
+| `tauri-dev.log` | macOS `--dev` 时 | 桌面开发进程启动/运行日志 | 不替代用例结果 |
+
 每次执行以以下目录结构归档（目录可位于本地或测试附件系统，不要求提交原始日志到 Git）：
 
 ```text
 <domain>-<YYYYMMDD>-<platform>-<profile-safe-name>/
-├── result.json
-├── stdout.txt
-├── stderr.txt
-├── ui-observations.md
-├── SHA256SUMS
-└── screenshots/
+├── result.json                         # 必选：唯一机器结果源
+├── SHA256SUMS                          # 必选：结果与原始证据完整性清单
+├── screenshots/                        # 按功能域产生的截图/录屏帧
+├── display-info.txt                    # macOS 原生可选：显示器原始信息
+├── events.txt                          # macOS 原生可选：Accessibility 事件结果
+├── automation-stderr.txt              # macOS 原生可选：osascript 原始 stderr
+├── native-automation.applescript      # macOS 原生可选：本批次生成的自动化输入
+└── tauri-dev.log                       # macOS --dev 可选：开发应用启动日志
 ```
 
-回传给验收报告的最小集合是：`result.json`、退出码、执行命令、人工 UI 观察表、截图/录屏索引和 `SHA256SUMS`。报告按功能域使用对应模板回填：模型设置使用 [`UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md`](./acceptance/UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md)，壳层使用 [`UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md`](./acceptance/UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md)，项目/会话导航使用 [`UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md`](./acceptance/UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md)。未提供原始 JSON 或人工观察时，结论保持“待回填”或“条件通过”。
+回传给验收报告的最小集合是：`result.json`、`SHA256SUMS`、执行命令、人工 UI 观察表、截图/录屏索引和该平台实际产生的原始诊断文件。报告按功能域使用对应模板回填：模型设置使用 [`UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md`](./acceptance/UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md)，壳层使用 [`UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md`](./acceptance/UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md)，项目/会话导航使用 [`UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md`](./acceptance/UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md)。未提供原始 JSON 或人工观察时，结论保持“待回填”或“条件通过”。
 
 测试人员可以上传完整附件，也可以在协作平台只粘贴脱敏摘要并提供文件 SHA-256。任何上传前必须检查 API Key、正文、用户目录和系统凭据是否已脱敏。

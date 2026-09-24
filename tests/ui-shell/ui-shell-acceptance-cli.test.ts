@@ -49,10 +49,20 @@ describe('UI shell acceptance CLI', () => {
     const report = JSON.parse(readFileSync(join(runDirectory, 'result.json'), 'utf8')) as {
       acceptance: { id: string; domainId: string; gate: string }
       conclusion: string
+      exitCode: number
+      artifacts: { manifestFile: string }
       summary: { blocked: number }
     }
     expect(report.acceptance).toEqual({ id: 'W0-SHELL-P', domainId: 'D-SHELL', gate: 'P' })
     expect(report.conclusion).toBe('BLOCKED')
+    expect(report.exitCode).toBe(1)
+    expect(report.artifacts.manifestFile).toBe('SHA256SUMS')
     expect(report.summary.blocked).toBe(1)
+    expect(readdirSync(runDirectory)).not.toContain('result.txt')
+    expect(readdirSync(runDirectory)).not.toContain('stdout.txt')
+    expect(result.stdout).toContain('exit=1')
+    expect(result.stdout).toContain('SHA256SUMS:')
+    expect(result.stdout).not.toContain('Result summary:')
+    expect(result.stdout.trim().split(/\r?\n/u)).toHaveLength(4)
   })
 })

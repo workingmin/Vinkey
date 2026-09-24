@@ -31,7 +31,7 @@
 
 ## 3. 当前代码与自动化证据
 
-Playwright 自动化入口以隔离浏览器上下文预置无项目状态，可自动执行自绘标题栏 DOM、侧栏与设置状态、对话/文件/日志切换、空态/错误条、主题/键盘焦点，以及三个目标视口的结构断言和截图。macOS 原生入口启动 Tauri 应用后，通过 Accessibility/System Events 执行原生菜单、菜单项、Escape/外部点击、交通灯、窗口缩放/最小化/关闭和截图；显示器原始信息写入 `display-info.txt`，点坐标与截图像素写入 `result.json`。Windows 原生窗口和真实 DPI 仍需 Windows UI Automation 入口或人工材料。
+Playwright 自动化入口以隔离浏览器上下文预置无项目状态，可自动执行自绘标题栏 DOM、侧栏与设置状态、对话/文件/日志切换、空态/错误条、主题/键盘焦点，以及三个目标视口的结构断言和截图。macOS 原生入口启动 Tauri 应用后，通过 Accessibility/System Events 执行原生菜单、菜单项、Escape/外部点击、交通灯、窗口缩放/最小化/关闭和截图；显示器原始信息写入 `display-info.txt`，事件结果写入 `events.txt`，点坐标与截图像素、退出码和证据索引写入唯一结果源 `result.json`。Windows 原生窗口和真实 DPI 仍需 Windows UI Automation 入口或人工材料。
 
 | 证据 | 覆盖 | 结果/限制 |
 | --- | --- | --- |
@@ -51,7 +51,7 @@ Playwright 自动化入口以隔离浏览器上下文预置无项目状态，可
 
 - Windows/macOS 版本、架构、DPI/显示缩放、实际窗口尺寸。
 - Vinkey 版本/Git SHA、Node.js/Rust/Tauri 版本；本域无模型时填写 `N/A`。
-- 脚本 ID/版本、命令、退出码、stdout/stderr、诊断日志和 `result.json`（若已具备）。
+- 脚本 ID/版本、命令、`result.json`、`SHA256SUMS`、截图和该平台实际产生的诊断文件。stdout 只需记录终端最终四行；逐用例状态和异常详情在 stderr 或 `automation-stderr.txt` 中查看。`result.json.exitCode` 与进程退出码一致，无需手工执行 `echo $?`。
 
 ### 4.2 最低截图/录屏集合
 

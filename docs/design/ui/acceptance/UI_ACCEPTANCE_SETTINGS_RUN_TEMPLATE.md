@@ -45,9 +45,9 @@
 <COMMAND_USED>
 ```
 
-- 进程退出码：`<0 / 1 / 2 / OTHER>`
-- stdout 文件：`<STDOUT_FILE>`
-- stderr 文件：`<STDERR_FILE>`
+- 进程退出码：`<0 / 1 / 2 / OTHER>`（应与 `result.json.exitCode` 一致）
+- stdout 最终四行：`<CAPTURE_OR_TERMINAL_REFERENCE>`（脚本不生成 `stdout.txt`）
+- stderr/诊断：`<CAPTURE_OR_TERMINAL_REFERENCE>`
 - 机器结果 JSON：`<RESULT_JSON_FILE>`
 - 诊断日志：`<LOG_FILE>`
 - SHA-256 清单：`<SHA256SUMS_FILE>`
@@ -63,6 +63,7 @@
   "passed": "<COUNT>",
   "failed": "<COUNT>",
   "blocked": "<COUNT>",
+  "exitCode": "<EXIT_CODE>",
   "conclusion": "<PASS|FAIL|BLOCKED>"
 }
 ```

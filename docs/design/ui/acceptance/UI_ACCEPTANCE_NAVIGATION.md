@@ -77,7 +77,7 @@
 
 | 脚本 ID | 门槛 | 计划输出 | 状态 |
 | --- | --- | --- | --- |
-| `UI-ACC-NAV-FIXTURE-001` | `W0-NAV-F` | fixture manifest、逐用例结果、数据库/文件边界摘要、stdout/stderr、`result.json` | 待编写 |
+| `UI-ACC-NAV-FIXTURE-001` | `W0-NAV-F` | fixture manifest、逐用例结果、数据库/文件边界摘要、`result.json`、`SHA256SUMS` | 待编写 |
 | `UI-ACC-NAV-E2E-001` | `W2-NAV-E` | profile/model、会话 ID 摘要、标题阶段、搜索跳转、失败归因 | 待编写；等待目标设计实现 |
 | `UI-ACC-NAV-REGRESSION-001` | `W4-NAV-R` | 任务/草稿状态、阻断结果、恢复动作、过期响应断言 | 待编写 |
 
@@ -89,7 +89,7 @@
 
 - 操作系统、架构、DPI、Vinkey 版本和 Git SHA。
 - fixture manifest：脱敏路径、项目/会话/文档数量、生成方式和清理结果。
-- 命令、退出码、stdout、stderr、`result.json` 和 `SHA256SUMS`。
+- 命令、`result.json`、`SHA256SUMS`、截图/录屏和实际产生的诊断文件；stdout 记录最终四行，`result.json.exitCode` 即本批次归档退出码，无需另行执行 `echo $?`。
 - 项目切换、会话恢复、删除确认、搜索结果/无结果、错误重试截图或录屏。
 
 ### 7.2 `W2-NAV-E`

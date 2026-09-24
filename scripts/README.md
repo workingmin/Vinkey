@@ -19,9 +19,9 @@ npm run test:ui-shell-acceptance -- --output /path/to/shell-evidence
 npm run test:ui-shell-native-mac -- --output /path/to/native-shell-evidence
 ```
 
-`test:ui-shell-acceptance` 会启动临时 Vite 演示实例，使用隔离浏览器上下文，默认将证据写入 `artifacts/ui-shell-acceptance/run-<timestamp>/`。该 Playwright 层可在 macOS/Windows/Linux 执行 DOM 交互和视口验收，但不能代替 Tauri 原生菜单、窗口控制、macOS 交通灯或物理 DPI 验收。
+`test:ui-shell-acceptance` 会启动临时 Vite 演示实例，使用隔离浏览器上下文，默认将证据写入 `artifacts/ui-shell-acceptance/run-<timestamp>/`，并生成唯一结果源 `result.json`、截图和 `SHA256SUMS`。终端 stdout 只打印最终结论、结果路径、清单路径和 `exit=<n>`；逐用例状态与诊断写入 stderr。该 Playwright 层可在 macOS/Windows/Linux 执行 DOM 交互和视口验收，但不能代替 Tauri 原生菜单、窗口控制、macOS 交通灯或物理 DPI 验收。
 
-`test:ui-shell-native-mac` 只在 macOS 执行真实 Tauri 原生验收：默认启动已安装的 `/Applications/Vinkey.app`，也可用 `--app /path/to/Vinkey.app` 指定其他应用，或用 `--dev` 启动 `npm run desktop:dev`。脚本通过 macOS Accessibility/System Events 操作原生菜单、Escape/外部点击、交通灯、缩放、最小化、关闭和目标窗口尺寸，并写入截图、显示器元数据、`result.json` 与 `SHA256SUMS`。首次运行必须在系统设置中授予 Terminal/IDE“辅助功能”和“屏幕与系统音频录制”权限；若权限、应用或目标尺寸不可用，结果为 `BLOCKED`。
+`test:ui-shell-native-mac` 只在 macOS 执行真实 Tauri 原生验收：默认启动已安装的 `/Applications/Vinkey.app`，也可用 `--app /path/to/Vinkey.app` 指定其他应用，或用 `--dev` 启动 `npm run desktop:dev`。脚本通过 macOS Accessibility/System Events 操作原生菜单、Escape/外部点击、交通灯、缩放、最小化、关闭和目标窗口尺寸，并写入截图、显示器元数据、`events.txt`、`automation-stderr.txt`、`native-automation.applescript`、`result.json` 与 `SHA256SUMS`；开发模式另有 `tauri-dev.log`。`result.json.exitCode`、终端 `exit=<n>` 和进程退出码保持一致，无需测试人员手工执行 `echo $?`。首次运行必须在系统设置中授予 Terminal/IDE“辅助功能”和“屏幕与系统音频录制”权限；若权限、应用或目标尺寸不可用，结果为 `BLOCKED`。
 
 Windows 可使用 `npm run test:ui-shell-acceptance:win -- -Output C:\\vinkey-evidence`。`test:ui-shell-acceptance:sh` 在 macOS 默认验收 `/Applications/Vinkey.app`，加 `--browser` 可只执行 Playwright；Linux 默认执行 Playwright。首次安装 Playwright 后需执行 `npx playwright install chromium` 安装浏览器。
 

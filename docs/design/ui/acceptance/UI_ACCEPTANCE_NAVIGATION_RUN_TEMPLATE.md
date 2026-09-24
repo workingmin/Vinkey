@@ -58,8 +58,9 @@
 <COMMAND_USED>
 ```
 
-- 退出码：`<EXIT_CODE>`
-- stdout/stderr：`<STDOUT_FILE> / <STDERR_FILE>`
+- 退出码：`<EXIT_CODE>`（应与 `result.json.exitCode` 一致）
+- stdout 最终四行：`<CAPTURE_OR_TERMINAL_REFERENCE>`（脚本不生成 `stdout.txt`）
+- stderr/诊断：`<CAPTURE_OR_TERMINAL_REFERENCE>`
 - JSON 结果：`<RESULT_JSON_FILE>`
 - fixture/session manifest：`<MANIFEST_FILE>`
 - 诊断日志：`<DIAGNOSTICS_FILE>`
@@ -110,12 +111,11 @@ navigation-<gate>-<YYYYMMDD>-<platform>/
 ├── environment.md
 ├── fixture-or-session-manifest.json
 ├── result.json
-├── stdout.txt
-├── stderr.txt
+├── SHA256SUMS
 ├── diagnostics.txt
 ├── screenshots/
 ├── recordings/
-└── SHA256SUMS
+└── ui-observations.md
 ```
 
 不得上传 API Key、完整作品正文、系统用户名或未脱敏绝对路径。

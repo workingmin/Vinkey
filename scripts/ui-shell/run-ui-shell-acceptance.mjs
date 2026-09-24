@@ -90,6 +90,25 @@ async function runCase(cases, caseId, title, action) {
   }
 }
 
+async function writeAcceptanceArtifacts(output, result) {
+  const screenshots = (await readdir(output)).filter((name) => name.endsWith('.png')).sort()
+  result.artifacts ??= { outputDirectory: output, screenshots: [], sha256: {}, manifestFile: 'SHA256SUMS' }
+  result.artifacts.outputDirectory = output
+  result.artifacts.manifestFile = 'SHA256SUMS'
+  result.artifacts.screenshots = screenshots
+  result.artifacts.sha256 = {}
+  for (const filename of screenshots) {
+    result.artifacts.sha256[filename] = createHash('sha256').update(await readFile(path.join(output, filename))).digest('hex')
+  }
+
+  await writeFile(path.join(output, 'result.json'), `${JSON.stringify(result, null, 2)}\n`)
+  const resultHash = createHash('sha256').update(await readFile(path.join(output, 'result.json'))).digest('hex')
+  await writeFile(path.join(output, 'SHA256SUMS'), [
+    `${resultHash}  result.json`,
+    ...screenshots.map((filename) => `${result.artifacts.sha256[filename]}  ${filename}`),
+  ].join('\n') + '\n')
+}
+
 async function main() {
   const options = parseArgs(process.argv.slice(2))
   if (options.help) { printHelp(); return 0 }
@@ -253,7 +272,8 @@ async function main() {
       platformEvidence: { nativeMenu: 'NOT_COVERED_BY_PLAYWRIGHT', titlebarControls: 'NOT_COVERED_BY_PLAYWRIGHT', macTrafficLights: 'NOT_COVERED_BY_PLAYWRIGHT', physicalDpi: 'REQUIRES_DESKTOP_DIAGNOSTICS' },
       cases,
       summary,
-      artifacts: { outputDirectory: options.output, screenshots: [], sha256: {} },
+      exitCode,
+      artifacts: { outputDirectory: options.output, screenshots: [], sha256: {}, manifestFile: 'SHA256SUMS' },
       conclusion,
       startedAt,
       baseUrl: options.baseUrl ? '<provided>' : '<ephemeral-local-vite>',
@@ -263,16 +283,8 @@ async function main() {
       else if (item.status === 'BLOCKED') process.stderr.write(`[BLOCKED] ${item.caseId}: ${item.error}\n`)
       else process.stderr.write(`[${item.status}] ${item.caseId}\n`)
     }
-    const screenshots = (await readdir(options.output)).filter((name) => name.endsWith('.png')).sort()
-    result.artifacts.screenshots = screenshots
-    for (const filename of screenshots) {
-      result.artifacts.sha256[filename] = createHash('sha256').update(await readFile(path.join(options.output, filename))).digest('hex')
-    }
-    await writeFile(path.join(options.output, 'result.json'), `${JSON.stringify(result, null, 2)}\n`)
-    await writeFile(path.join(options.output, 'stdout.txt'), JSON.stringify({ conclusion, summary }, null, 2) + '\n')
-    const resultHash = createHash('sha256').update(await readFile(path.join(options.output, 'result.json'))).digest('hex')
-    await writeFile(path.join(options.output, 'SHA256SUMS'), [`${resultHash}  result.json`, ...screenshots.map((filename) => `${result.artifacts.sha256[filename]}  ${filename}`)].join('\n') + '\n')
-    process.stdout.write(`UI shell acceptance: ${conclusion} (${summary.passed}/${summary.caseCount} passed, ${summary.failed} failed)\nResults: ${path.join(options.output, 'result.json')}\n`)
+    await writeAcceptanceArtifacts(options.output, result)
+    process.stdout.write(`UI shell acceptance: ${conclusion} (${summary.passed}/${summary.caseCount} passed, ${summary.failed} failed, ${summary.blocked} blocked)\nResults: ${path.join(options.output, 'result.json')}\nSHA256SUMS: ${path.join(options.output, 'SHA256SUMS')}\nexit=${exitCode}\n`)
   } catch (error) {
     exitCode = 1
     const result = {
@@ -282,10 +294,12 @@ async function main() {
       suite: { id: 'ui-shell-playwright', version: '1.0.0' },
       cases,
       summary: { caseCount: cases.length, passed: 0, failed: 0, blocked: 1 },
+      exitCode,
       conclusion: 'BLOCKED',
       error: String(error),
     }
-    await writeFile(path.join(options.output, 'result.json'), `${JSON.stringify(result, null, 2)}\n`)
+    await writeAcceptanceArtifacts(options.output, result)
+    process.stdout.write(`UI shell acceptance: BLOCKED (0/${result.summary.caseCount} passed, 0 failed, 1 blocked)\nResults: ${path.join(options.output, 'result.json')}\nSHA256SUMS: ${path.join(options.output, 'SHA256SUMS')}\nexit=${exitCode}\n`)
     process.stderr.write(`UI shell acceptance blocked: ${String(error)}\n`)
   } finally {
     await browser?.close().catch(() => undefined)
