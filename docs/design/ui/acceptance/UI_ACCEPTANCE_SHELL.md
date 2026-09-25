@@ -35,7 +35,7 @@
 
 ## 3. 当前代码与自动化证据
 
-Playwright 自动化入口支持按平台运行。macOS 原生入口将同版本 Playwright 的 darwin WebView 用例作为 `webview/` companion 合并到同一顶层 `result.json`，覆盖侧栏折叠、设置返回、对话/文件/日志切换、无工作区空态、错误条、主题、键盘焦点和三个目标视口；原生入口只通过 Accessibility/System Events 执行交通灯、窗口缩放/最小化/关闭和窗口尺寸，不读取或执行系统菜单。标题栏菜单另由 `W0-SHELL-MENU-P/F` 归档。显示器原始信息写入 `display-info.txt`，事件结果写入 `events.txt`；构建溯源、工具链、统一退出码和证据索引只写入唯一机器结果源 `result.json`，不再生成重复的环境摘要文件。`webview/` 保留自己的结果与清单。Windows 原生窗口和真实 DPI 仍需 Windows UI Automation 入口或人工材料。
+Playwright 自动化入口支持按平台运行。macOS 原生入口将同版本 Playwright 的 darwin WebView 用例作为 `webview/` companion 合并到同一顶层 `result.json`，覆盖侧栏折叠、设置返回、对话/文件/日志切换、无工作区空态、错误条、主题、键盘焦点和三个目标视口；原生入口通过 Accessibility/System Events 执行交通灯、窗口缩放/最小化/关闭和窗口尺寸，并只读核对一级菜单合同。绿色交通灯切换后若离开 AX 树，脚本可调用“窗口”菜单恢复窗口，但必须把 `menu-recovery:<菜单项>` 写入用例明细；该恢复动作不计入标题栏菜单专项证据。标题栏菜单另由 `W0-SHELL-MENU-P/F` 归档。显示器原始信息写入 `display-info.txt`，事件结果写入 `events.txt`；构建溯源、工具链、统一退出码和证据索引只写入唯一机器结果源 `result.json`，不再生成重复的环境摘要文件。`webview/` 保留自己的结果与清单。Windows 原生窗口和真实 DPI 仍需 Windows UI Automation 入口或人工材料。
 
 | 证据 | 覆盖 | 结果/限制 |
 | --- | --- | --- |
@@ -45,7 +45,7 @@ Playwright 自动化入口支持按平台运行。macOS 原生入口将同版本
 | `src/components/SettingsPage.test.tsx` | 设置页状态和连接失败 | 归属 `D-MODEL`，不替代壳层返回验收 |
 | `src/App.tsx`、`src/styles.css` | 页面组装、断点、标题栏和内容容器源码 | Playwright 覆盖仍不等价于 Tauri 桌面壳层 |
 | `scripts/ui-shell/run-ui-shell-acceptance.mjs` | Playwright WebView 层自动操作、截图、尺寸断言和 JSON；支持 `--platform`、`--skip-native-evidence`、`--output-exact` | 不驱动 Tauri 原生菜单/窗口控件 |
-| `scripts/ui-shell/run-ui-shell-native-macos.sh` | macOS Accessibility/System Events 原生窗口操作、Playwright companion、构建溯源、截图、窗口尺寸和统一 JSON | 需要辅助功能/屏幕录制权限；无法在 Linux/CI 替代执行；不读取系统菜单 |
+| `scripts/ui-shell/run-ui-shell-native-macos.sh` | macOS Accessibility/System Events 原生窗口操作、Playwright companion、构建溯源、截图、窗口尺寸和统一 JSON | 需要辅助功能/屏幕录制权限；无法在 Linux/CI 替代执行；只读核对菜单合同，窗口恢复回退不作为菜单验收证据 |
 
 壳层脚本不得通过菜单选择器断言标题栏设计已完成；菜单名称、菜单动作和编辑焦点命令使用 [UI_ACCEPTANCE_TITLE_BAR_PLAN.md](./UI_ACCEPTANCE_TITLE_BAR_PLAN.md) 的专项脚本和人工证据。壳层脚本只验证菜单无关的窗口、容器和页面状态。
 
@@ -59,7 +59,7 @@ Playwright 自动化入口支持按平台运行。macOS 原生入口将同版本
 | --- | --- |
 | 命令 | `bash scripts/ui-shell/run-ui-shell-native-macos.sh`，使用默认 `/Applications/Vinkey.app` |
 | 批次 | `run-2026-09-24T082007Z`；结果生成于 `2026-09-24T08:20:22.489Z` |
-| 套件 | 旧批次 `ui-shell-native-macos@1.0.0`；新版脚本为 `ui-shell-native-macos@1.2.0`，验收标识 `W0-SHELL-P-NATIVE-MAC` |
+| 套件 | 旧批次 `ui-shell-native-macos@1.0.0`；新版脚本为 `ui-shell-native-macos@1.2.1`，验收标识 `W0-SHELL-P-NATIVE-MAC` |
 | 环境 | macOS `26.6.2`、Node.js `v24.19.0`、进程名 `Vinkey` |
 | 测试执行人 | `workingmin`，按 Git HEAD 提交者暂定；新版脚本写入 `repository.lastCommitter` |
 | 显示器 | Apple M4 内置 Liquid Retina，`2880x1864 Retina`，主显示器、未镜像 |

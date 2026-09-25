@@ -227,28 +227,20 @@ on run argv
           set end of reportLines to "FAIL|SHELL-NATIVE-MAC-MENU-CONTRACT-GUARD|截图前核对目标菜单合同|menus=" & my pairText(menuNames) & ";expected=Vinkey,项目,会话,编辑,查看,窗口,帮助;scope=guard-only"
         end if
 
-        set closeButton to missing value
-        set minimizeButton to missing value
-        set zoomButton to missing value
-        repeat with candidate in (every button of mainWindow)
-          try
-            set candidateDescription to description of candidate
-            if candidateDescription contains "close" or candidateDescription contains "关闭" then set closeButton to candidate
-            if candidateDescription contains "miniatur" or candidateDescription contains "minimize" or candidateDescription contains "最小化" then set minimizeButton to candidate
-            if candidateDescription contains "zoom" or candidateDescription contains "缩放" or candidateDescription contains "full screen" or candidateDescription contains "全屏" then set zoomButton to candidate
-          end try
-        end repeat
-        if closeButton is missing value or minimizeButton is missing value or zoomButton is missing value then error "无法通过 Accessibility 找到完整的红黄绿交通灯按钮"
+        set trafficLightPositions to my inspectTrafficLights(appName)
+        set closePosition to item 1 of trafficLightPositions
+        set minimizePosition to item 2 of trafficLightPositions
+        set zoomPosition to item 3 of trafficLightPositions
+        if closePosition is missing value or minimizePosition is missing value or zoomPosition is missing value then error "无法通过 Accessibility 找到完整的红黄绿交通灯按钮"
 
-        set closePosition to position of closeButton
-        set minimizePosition to position of minimizeButton
-        set zoomPosition to position of zoomButton
         my capture(reportDir, "screenshots/01-mac-traffic-lights.png")
         set end of reportLines to "PASS|SHELL-NATIVE-MAC-TRAFFIC-LIGHTS|发现并截图红黄绿交通灯|close=" & my pairText(closePosition) & ";minimize=" & my pairText(minimizePosition) & ";zoom=" & my pairText(zoomPosition)
 
         set desiredSizes to {{1440, 900}, {1280, 800}, {1024, 680}}
         repeat with desiredSize in desiredSizes
           set requestedSize to contents of desiredSize
+          if not (exists front window) then error "调整窗口尺寸前找不到主窗口"
+          set mainWindow to front window
           set size of mainWindow to requestedSize
           delay 0.5
           set actualSize to size of mainWindow
@@ -261,36 +253,53 @@ on run argv
           end if
         end repeat
 
-        set frontmost to true
-        click zoomButton
-        delay 0.9
-        set zoomedSize to size of mainWindow
-        click zoomButton
-        delay 0.9
-        set restoredSize to size of mainWindow
-        if zoomedSize is not restoredSize then
-          set end of reportLines to "PASS|SHELL-NATIVE-MAC-WINDOW-ZOOM|最大化/还原窗口(缩放窗口命令)|zoomed=" & my pairText(zoomedSize) & ";restored=" & my pairText(restoredSize)
-        else
-          set end of reportLines to "FAIL|SHELL-NATIVE-MAC-WINDOW-ZOOM|最大化/还原窗口(缩放窗口命令)|窗口尺寸未发生变化"
-        end if
-
-        click minimizeButton
-        delay 0.8
         try
-          set value of attribute "AXMinimized" of mainWindow to false
+          set zoomPress to my pressTrafficLight(appName, "zoom")
+          if zoomPress is missing value then
+            set end of reportLines to "BLOCKED|SHELL-NATIVE-MAC-WINDOW-ZOOM|最大化/还原窗口|无法重新查询并按下绿色交通灯"
+          else
+            delay 0.9
+            set zoomedSize to my frontWindowSize(appName)
+            set restoreMethod to my pressTrafficLight(appName, "zoom")
+            if restoreMethod is missing value then
+              set restoreMenuNames to {"缩放窗口"}
+              if zoomPress contains "full screen" or zoomPress contains "全屏" or zoomPress contains "AXFullScreenButton" then set restoreMenuNames to {"退出全屏", "进入全屏", "缩放窗口"}
+              set restoreMenuItem to my pressWindowMenuItem(appName, restoreMenuNames)
+              if restoreMenuItem is not missing value then set restoreMethod to "menu-recovery:" & restoreMenuItem
+            end if
+            if restoreMethod is missing value then
+              set end of reportLines to "BLOCKED|SHELL-NATIVE-MAC-WINDOW-ZOOM|最大化/还原窗口|绿色交通灯在状态切换后不可访问，且系统窗口菜单恢复失败;press=" & zoomPress
+            else
+              delay 0.9
+              set restoredSize to my frontWindowSize(appName)
+              if zoomedSize is missing value or restoredSize is missing value then
+                set end of reportLines to "BLOCKED|SHELL-NATIVE-MAC-WINDOW-ZOOM|最大化/还原窗口|状态切换后窗口尺寸不可读取;press=" & zoomPress & ";restore=" & restoreMethod
+              else if zoomedSize is not restoredSize then
+                set end of reportLines to "PASS|SHELL-NATIVE-MAC-WINDOW-ZOOM|最大化/还原窗口|zoomed=" & my pairText(zoomedSize) & ";restored=" & my pairText(restoredSize) & ";press=" & zoomPress & ";restore=" & restoreMethod
+              else
+                set end of reportLines to "FAIL|SHELL-NATIVE-MAC-WINDOW-ZOOM|最大化/还原窗口|窗口尺寸未发生变化;press=" & zoomPress & ";restore=" & restoreMethod
+              end if
+            end if
+          end if
+        on error zoomError
+          set end of reportLines to "BLOCKED|SHELL-NATIVE-MAC-WINDOW-ZOOM|最大化/还原窗口|" & my oneLine(zoomError)
         end try
-        set frontmost to true
-        delay 0.5
-        if exists front window then
-          set minimizedWindow to front window
-          try
-            set value of attribute "AXMinimized" of minimizedWindow to false
-          end try
-          delay 0.5
-          set end of reportLines to "PASS|SHELL-NATIVE-MAC-WINDOW-MINIMIZE|最小化并恢复窗口|恢复后窗口可访问"
-        else
-          set end of reportLines to "FAIL|SHELL-NATIVE-MAC-WINDOW-MINIMIZE|最小化并恢复窗口|恢复后找不到窗口"
-        end if
+
+        try
+          set minimizePress to my pressTrafficLight(appName, "minimize")
+          if minimizePress is missing value then
+            set end of reportLines to "BLOCKED|SHELL-NATIVE-MAC-WINDOW-MINIMIZE|最小化并恢复窗口|无法重新查询并按下黄色交通灯"
+          else
+            delay 0.8
+            if my restoreMinimizedWindow(appName) then
+              set end of reportLines to "PASS|SHELL-NATIVE-MAC-WINDOW-MINIMIZE|最小化并恢复窗口|已观察 AXMinimized 并恢复;press=" & minimizePress
+            else
+              set end of reportLines to "FAIL|SHELL-NATIVE-MAC-WINDOW-MINIMIZE|最小化并恢复窗口|未观察到最小化状态或恢复后找不到窗口;press=" & minimizePress
+            end if
+          end if
+        on error minimizeError
+          set end of reportLines to "BLOCKED|SHELL-NATIVE-MAC-WINDOW-MINIMIZE|最小化并恢复窗口|" & my oneLine(minimizeError)
+        end try
 
         set desktopBounds to missing value
         try
@@ -302,14 +311,22 @@ on run argv
           set end of reportLines to "BLOCKED|SHELL-NATIVE-MAC-DISPLAY-BOUNDS|记录桌面点坐标范围|Finder 桌面边界不可访问"
         end if
 
-        my capture(reportDir, "screenshots/03-mac-before-close.png")
-        click closeButton
-        delay 1
-        if exists front window then
-          set end of reportLines to "FAIL|SHELL-NATIVE-MAC-WINDOW-CLOSE|点击关闭交通灯|窗口仍然存在"
-        else
-          set end of reportLines to "PASS|SHELL-NATIVE-MAC-WINDOW-CLOSE|点击关闭交通灯|主窗口已关闭"
-        end if
+        try
+          my capture(reportDir, "screenshots/03-mac-before-close.png")
+          set closePress to my pressTrafficLight(appName, "close")
+          if closePress is missing value then
+            set end of reportLines to "BLOCKED|SHELL-NATIVE-MAC-WINDOW-CLOSE|点击关闭交通灯|无法重新查询并按下红色交通灯"
+          else
+            delay 1
+            if my processHasWindow(appName) then
+              set end of reportLines to "FAIL|SHELL-NATIVE-MAC-WINDOW-CLOSE|点击关闭交通灯|窗口仍然存在;press=" & closePress
+            else
+              set end of reportLines to "PASS|SHELL-NATIVE-MAC-WINDOW-CLOSE|点击关闭交通灯|主窗口已关闭;press=" & closePress
+            end if
+          end if
+        on error closeError
+          set end of reportLines to "BLOCKED|SHELL-NATIVE-MAC-WINDOW-CLOSE|点击关闭交通灯|" & my oneLine(closeError)
+        end try
       end tell
     end tell
   on error errorMessage
@@ -319,6 +336,142 @@ on run argv
   set AppleScript's text item delimiters to linefeed
   return reportLines as text
 end run
+
+on windowButtonMatches(buttonKind, candidateDescription, candidateSubrole)
+  if buttonKind is "close" then
+    if candidateSubrole is "AXCloseButton" then return true
+    if candidateDescription contains "close" or candidateDescription contains "关闭" then return true
+  else if buttonKind is "minimize" then
+    if candidateSubrole is "AXMinimizeButton" then return true
+    if candidateDescription contains "miniatur" or candidateDescription contains "minimize" or candidateDescription contains "最小化" then return true
+  else if buttonKind is "zoom" then
+    if candidateSubrole is "AXZoomButton" or candidateSubrole is "AXFullScreenButton" then return true
+    if candidateDescription contains "zoom" or candidateDescription contains "缩放" or candidateDescription contains "full screen" or candidateDescription contains "全屏" then return true
+  end if
+  return false
+end windowButtonMatches
+
+on inspectTrafficLights(appName)
+  set closePosition to missing value
+  set minimizePosition to missing value
+  set zoomPosition to missing value
+  tell application "System Events"
+    tell application process appName
+      if not (exists front window) then return {closePosition, minimizePosition, zoomPosition}
+      set currentButtons to every button of front window
+      repeat with candidateReference in currentButtons
+        try
+          set candidateButton to contents of candidateReference
+          set candidateDescription to ""
+          set candidateSubrole to ""
+          try
+            set candidateDescription to (description of candidateButton) as text
+          end try
+          try
+            set candidateSubrole to (value of attribute "AXSubrole" of candidateButton) as text
+          end try
+          if my windowButtonMatches("close", candidateDescription, candidateSubrole) then set closePosition to position of candidateButton
+          if my windowButtonMatches("minimize", candidateDescription, candidateSubrole) then set minimizePosition to position of candidateButton
+          if my windowButtonMatches("zoom", candidateDescription, candidateSubrole) then set zoomPosition to position of candidateButton
+        end try
+      end repeat
+    end tell
+  end tell
+  return {closePosition, minimizePosition, zoomPosition}
+end inspectTrafficLights
+
+on pressTrafficLight(appName, buttonKind)
+  set pressedDetail to missing value
+  tell application "System Events"
+    tell application process appName
+      set frontmost to true
+      if not (exists front window) then return missing value
+      set currentButtons to every button of front window
+      repeat with candidateReference in currentButtons
+        try
+          set candidateButton to contents of candidateReference
+          set candidateDescription to ""
+          set candidateSubrole to ""
+          try
+            set candidateDescription to (description of candidateButton) as text
+          end try
+          try
+            set candidateSubrole to (value of attribute "AXSubrole" of candidateButton) as text
+          end try
+          if my windowButtonMatches(buttonKind, candidateDescription, candidateSubrole) then
+            perform action "AXPress" of candidateButton
+            set pressedDetail to candidateSubrole & ":" & candidateDescription
+            exit repeat
+          end if
+        end try
+      end repeat
+    end tell
+  end tell
+  return pressedDetail
+end pressTrafficLight
+
+on pressWindowMenuItem(appName, itemNames)
+  tell application "System Events"
+    tell application process appName
+      set frontmost to true
+      if not (exists menu bar item "窗口" of menu bar 1) then return missing value
+      set windowMenu to menu bar item "窗口" of menu bar 1
+      repeat with itemNameReference in itemNames
+        set itemName to contents of itemNameReference
+        try
+          if exists menu item itemName of menu 1 of windowMenu then
+            click menu item itemName of menu 1 of windowMenu
+            return itemName
+          end if
+        end try
+      end repeat
+    end tell
+  end tell
+  return missing value
+end pressWindowMenuItem
+
+on frontWindowSize(appName)
+  tell application "System Events"
+    tell application process appName
+      if exists front window then return size of front window
+    end tell
+  end tell
+  return missing value
+end frontWindowSize
+
+on restoreMinimizedWindow(appName)
+  set minimizedObserved to false
+  tell application "System Events"
+    tell application process appName
+      repeat 10 times
+        set currentWindows to every window
+        repeat with windowReference in currentWindows
+          try
+            set candidateWindow to contents of windowReference
+            if (value of attribute "AXMinimized" of candidateWindow) is true then
+              set minimizedObserved to true
+              set value of attribute "AXMinimized" of candidateWindow to false
+            end if
+          end try
+        end repeat
+        if minimizedObserved then exit repeat
+        delay 0.1
+      end repeat
+      set frontmost to true
+      delay 0.3
+      if minimizedObserved and (exists front window) then return true
+    end tell
+  end tell
+  return false
+end restoreMinimizedWindow
+
+on processHasWindow(appName)
+  tell application "System Events"
+    tell application process appName
+      return exists front window
+    end tell
+  end tell
+end processHasWindow
 
 on pairText(values)
   set AppleScript's text item delimiters to ","
@@ -517,7 +670,7 @@ const result = {
   schemaVersion: 1,
   generatedAt: new Date().toISOString(),
   acceptance: { id: 'W0-SHELL-P-NATIVE-MAC', domainId: 'D-SHELL', gate: 'P' },
-  suite: { id: 'ui-shell-native-macos', version: '1.2.0' },
+  suite: { id: 'ui-shell-native-macos', version: '1.2.1' },
   repository,
   application,
   provenance,
