@@ -108,8 +108,7 @@ JSON 顶层字段保持稳定，新增字段只能向后兼容地追加：
   "repository": {
     "version": "<VINKEY_VERSION>",
     "gitSha": "<GIT_SHA>",
-    "dirty": false,
-    "lastCommitter": "<GIT_COMMITTER>"
+    "dirty": false
   },
   "application": {
     "version": "<INSTALLED_APP_VERSION>",
@@ -124,8 +123,8 @@ JSON 顶层字段保持稳定，新增字段只能向后兼容地追加：
     "repositoryClean": true
   },
   "execution": {
-    "executor": "<TESTER_OR_GIT_COMMITTER>",
-    "executorBasis": "<IDENTITY_SOURCE>"
+    "testerId": "<NON_PERSONAL_TESTER_ID>",
+    "testerIdBasis": "explicit non-personal identifier"
   },
   "environment": {
     "os": "<macOS|Windows>",
@@ -218,7 +217,9 @@ exit=<exitCode>
 | `result.json` | 所有脚本必选 | 批次元数据、逐用例状态、汇总、`conclusion`、唯一 `exitCode` 和证据索引 | 不替代截图原件、平台原始日志或终端转储 |
 | `SHA256SUMS` | 所有脚本必选 | 校验 `result.json`、截图和实际产生的原始证据 | 不记录新的测试结论，不校验自身或未归档的终端流 |
 | `screenshots/`、录屏 | 按功能域 | 可视化 UI/平台行为原件 | 不作为机器通过/失败判定源 |
-| `display-info.txt` | macOS 显示诊断时 | `system_profiler` 原始显示器信息 | 不等同于物理 DPI 结论 |
+| `display-info.txt` | macOS 显示诊断时 | 已移除序列号/UUID 的 `system_profiler` 辅助信息 | 不作为缩放或物理 DPI 的唯一结论 |
+| `display-metadata.json` | macOS 原生脚本 | 全部活动显示器的逻辑点、像素、毫米、有效缩放、物理 DPI、主屏/内置/镜像状态 | 物理尺寸缺失时必须标记人工 fallback |
+| `privacy-audit.json` | 可分发原生批次 | 文本隐私扫描状态、扫描文件数和命中类别 | 不保存命中的隐私原文 |
 | `events.txt` | macOS 原生脚本 | Accessibility/System Events 用例原始结果 | 不替代 `result.json` 汇总 |
 | `automation-stderr.txt` | macOS 原生脚本 | `osascript` 原始 stderr | 不代表整个 shell 进程 stderr |
 | `native-automation.applescript` | macOS 原生脚本 | 本批次实际执行的自动化输入 | 不代表应用源码版本 |
@@ -236,7 +237,10 @@ exit=<exitCode>
 ├── result.json                         # 必选：唯一机器结果源
 ├── SHA256SUMS                          # 必选：结果与原始证据完整性清单
 ├── screenshots/                        # 按功能域产生的截图/录屏帧
-├── display-info.txt                    # macOS 原生可选：显示器原始信息
+├── display-info.txt                    # macOS 原生可选：已脱敏显示器辅助信息
+├── display-metadata.json               # macOS 原生：结构化显示缩放/DPI 探针
+├── display-metadata-stderr.txt         # macOS 原生：显示探针诊断
+├── privacy-audit.json                  # 分发前隐私扫描结果
 ├── events.txt                          # macOS 原生可选：Accessibility 事件结果
 ├── automation-stderr.txt              # macOS 原生可选：osascript 原始 stderr
 ├── native-automation.applescript      # macOS 原生可选：本批次生成的自动化输入
@@ -247,6 +251,8 @@ exit=<exitCode>
 ├── webview-stderr.txt                  # macOS companion：内部子进程 stderr
 └── webview/                            # macOS companion：独立结果、清单和截图
 ```
+
+macOS 原生入口在隐私扫描通过后，默认于运行目录旁生成 `run-<timestamp>.tar.gz`；扫描失败时保留本地诊断但不得生成 tar。归档成员只包含同名运行目录，owner/group 固定且不携带扩展属性；helper 二进制缓存不进入归档。归档必须在文本脱敏、隐私扫描和 `SHA256SUMS` 完成后生成。截图必须是目标应用窗口级画面，禁止把完整桌面作为可分发验收证据。
 
 回传给验收报告的最小集合是：`result.json`、`SHA256SUMS`、执行命令、人工 UI 观察表、截图/录屏索引和该平台实际产生的原始诊断文件。报告按功能域使用对应模板回填：模型设置使用 [`UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md`](./acceptance/UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md)，壳层使用 [`UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md`](./acceptance/UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md)，项目/会话导航使用 [`UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md`](./acceptance/UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md)。未提供原始 JSON 或人工观察时，结论保持“待回填”或“条件通过”。
 

@@ -1,10 +1,11 @@
+use regex::Regex;
 use serde::Serialize;
 use serde_json::{Map, Value};
 use std::{
     fs::{self, File, OpenOptions},
     io::{BufWriter, Write},
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, OnceLock},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -89,6 +90,11 @@ impl RuntimeLogState {
 
     pub fn diagnostics(&self, version: &str) -> RuntimeDiagnostics {
         let contents = fs::read_to_string(&self.path).unwrap_or_default();
+        let workspace = self
+            .workspace_root
+            .lock()
+            .ok()
+            .and_then(|value| value.clone());
         let lines = contents
             .lines()
             .rev()
@@ -96,10 +102,10 @@ impl RuntimeLogState {
             .collect::<Vec<_>>()
             .into_iter()
             .rev()
-            .map(str::to_string)
+            .map(|line| sanitize_text(line, workspace.as_deref()))
             .collect();
         RuntimeDiagnostics {
-            path: self.path.display().to_string(),
+            path: "<app-data>/vinkey-runtime.jsonl".into(),
             platform: std::env::consts::OS.to_string(),
             version: version.to_string(),
             lines,
@@ -140,6 +146,28 @@ fn sanitize_text(text: &str, workspace_root: Option<&Path>) -> String {
             value = value.replace(root, "<workspace>");
         }
     }
+    for variable in ["HOME", "USERPROFILE"] {
+        if let Some(home) = std::env::var_os(variable).and_then(|path| path.into_string().ok()) {
+            if !home.is_empty() {
+                value = value.replace(&home, "<user-home>");
+            }
+        }
+    }
+    static UNIX_USER_PATH: OnceLock<Regex> = OnceLock::new();
+    static WINDOWS_USER_PATH: OnceLock<Regex> = OnceLock::new();
+    static EMAIL: OnceLock<Regex> = OnceLock::new();
+    value = UNIX_USER_PATH
+        .get_or_init(|| Regex::new(r#"(?:/Users|/home)/[^/\s"'<>|]+"#).unwrap())
+        .replace_all(&value, "<user-home>")
+        .into_owned();
+    value = WINDOWS_USER_PATH
+        .get_or_init(|| Regex::new(r#"(?i)[a-z]:\\+Users\\+[^\\\s"'<>|]+"#).unwrap())
+        .replace_all(&value, "<user-home>")
+        .into_owned();
+    value = EMAIL
+        .get_or_init(|| Regex::new(r"(?i)[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}").unwrap())
+        .replace_all(&value, "<redacted-email>")
+        .into_owned();
     for marker in [
         "Bearer ",
         "api_key=",
@@ -212,5 +240,36 @@ mod tests {
         for line in contents.lines() {
             serde_json::from_str::<Value>(line).unwrap();
         }
+    }
+
+    #[test]
+    fn diagnostics_never_exposes_the_absolute_log_path() {
+        let directory = tempdir().unwrap();
+        let path = directory.path().join("private-user").join("runtime.jsonl");
+        let logger = RuntimeLogState::open(path.clone()).unwrap();
+        let diagnostics = logger.diagnostics("0.1.0");
+        assert_eq!(diagnostics.path, "<app-data>/vinkey-runtime.jsonl");
+        assert!(!diagnostics
+            .path
+            .contains(directory.path().to_string_lossy().as_ref()));
+    }
+
+    #[test]
+    fn diagnostics_redacts_legacy_user_paths_and_email_addresses() {
+        let directory = tempdir().unwrap();
+        let path = directory.path().join("runtime.jsonl");
+        fs::write(
+            &path,
+            r#"{"message":"/Users/alice/project C:\\Users\\alice\\project /home/alice/project alice@example.com"}"#,
+        )
+        .unwrap();
+        let logger = RuntimeLogState::open(path).unwrap();
+        let diagnostics = logger.diagnostics("0.1.0");
+        let text = diagnostics.lines.join("\n");
+        assert!(text.contains("<user-home>"));
+        assert!(text.contains("<redacted-email>"));
+        assert!(!text.contains("/Users/"));
+        assert!(!text.contains("/home/"));
+        assert!(!text.contains("alice@example.com"));
     }
 }

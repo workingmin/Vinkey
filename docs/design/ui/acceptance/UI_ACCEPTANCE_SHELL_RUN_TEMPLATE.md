@@ -34,10 +34,10 @@
 ### macOS Tauri 原生 shell
 
 ```bash
-npm run test:ui-shell-native-mac -- --output <ARCHIVE_ROOT> [--app /path/to/Vinkey.app]
+npm run test:ui-shell-native-mac -- --output <ARCHIVE_ROOT> --tester-id <NON_PERSONAL_ID> [--app /path/to/Vinkey.app]
 ```
 
-该入口仅支持 macOS 15+，要求 Xcode Command Line Tools 的 `swiftc`，并只通过 ScreenCaptureKit helper 截图，不提供 `screencapture` 降级。它默认启动 `/Applications/Vinkey.app`；传入 `--app` 时启动其他已构建应用，传入 `--dev` 时启动 `npm run desktop:dev`。`npm run test:ui-shell-acceptance:sh` 在 macOS 采用相同默认值，加 `--browser` 可仅执行 Playwright。执行前须授予运行终端的 macOS“辅助功能”和“屏幕与系统音频录制”权限。它会在最后一个窗口用例点击关闭交通灯，请使用专用测试实例。
+该入口仅支持 macOS 15+，要求 Xcode Command Line Tools 的 `swiftc`，并只通过 ScreenCaptureKit helper 捕获目标应用窗口，不提供整桌面或 `screencapture` 降级。它默认启动 `/Applications/Vinkey.app`；传入 `--app` 时启动其他已构建应用，传入 `--dev` 时启动 `npm run desktop:dev`。默认创建临时隔离 Profile；`--profile-dir` 可指定验收目录，`--no-launch` 必须同时指定调用方已注入的 Profile。`--tester-id` 只能填写非个人标识。执行前须授予运行终端的 macOS“辅助功能”和“屏幕与系统音频录制”权限。它会在最后一个窗口用例点击关闭交通灯，请使用专用测试实例。
 
 ### Windows PowerShell
 
@@ -47,10 +47,10 @@ npm run test:ui-shell-native-mac -- --output <ARCHIVE_ROOT> [--app /path/to/Vink
 
 推荐浏览器自动化命令：`npm run test:ui-shell-acceptance -- --output <ARCHIVE_ROOT>`。脚本在归档根目录下创建带时间戳的单次运行目录。Playwright 只证明浏览器/WebView DOM 层；请把 Windows/macOS 15+ 桌面窗口结果单独填入下表，不能把浏览器截图当作原生菜单或交通灯证据。
 
-macOS 原生脚本的顶层 `result.json` 合并原生 Accessibility、darwin Playwright WebView companion 和构建溯源用例，可直接作为 macOS 桌面层统一机器证据。`application` 记录安装包版本、构建号和嵌入 Git SHA，`repository`/`provenance` 记录同版本校验，`environment` 记录架构、Node.js/Rust/Tauri/Swift 版本、macOS 15+ 门槛、helper target 与 `ScreenCaptureKit.SCScreenshotManager` 机制；`display-info.txt` 保存 `system_profiler SPDisplaysDataType` 原始信息。多显示器、系统缩放和物理 DPI 仍需测试人员在回填表中确认。
+macOS 原生脚本的顶层 `result.json` 合并原生 Accessibility、darwin Playwright WebView companion、构建溯源、隔离 Profile、显示探针和隐私扫描用例。`display-metadata.json` 记录全部活动显示器的 backing scale、逻辑点、物理像素/毫米、有效缩放、物理 DPI、主屏/内置/镜像状态；毫米尺寸不可得时结果为 `BLOCKED`，需人工 fallback。脚本在归档前脱敏文本并生成 `privacy-audit.json`，隐私用例通过时默认输出固定 owner 的 `run-<timestamp>.tar.gz`；扫描失败时不生成 tar。
 
 - 退出码：`<EXIT_CODE>`（应与 `result.json.exitCode` 一致）
-- stdout 最终四行：`<CAPTURE_OR_TERMINAL_REFERENCE>`（脚本不生成 `stdout.txt`）
+- stdout 最终四行或含 Archive 的五行：`<CAPTURE_OR_TERMINAL_REFERENCE>`（路径均为相对路径，脚本不生成 `stdout.txt`）
 - stderr/平台诊断：`<AUTOMATION_STDERR_OR_TERMINAL_REFERENCE>`
 - JSON 结果：`<RESULT_JSON_FILE_OR_NA>`
 - 窗口/应用诊断：`<DIAGNOSTICS_FILE>`
@@ -74,7 +74,7 @@ macOS 原生脚本的顶层 `result.json` 合并原生 Accessibility、darwin Pl
 | 报告场景 | 自动化用例/截图 | 仍需人工/平台证据 |
 | --- | --- | --- |
 | Windows 自绘标题栏与窗口按钮 | `SHELL-P-001-WIN-FRAME`、`01-win-titlebar-window-buttons-web.png` | Tauri 实际窗口按钮最小化/最大化/关闭；自绘标题栏拖动与双击 |
-| macOS Overlay 与交通灯 | `SHELL-P-001-MAC-FRAME`、`01-mac-overlay-layout-simulation.png`；原生脚本 `SHELL-NATIVE-MAC-*`、`01/02-mac-*.png` | 原生脚本需权限；多显示器/物理 DPI 需人工确认 |
+| macOS Overlay 与交通灯 | `SHELL-P-001-MAC-FRAME`、`01-mac-overlay-layout-simulation.png`；原生脚本 `SHELL-NATIVE-MAC-*`、`01/02-mac-*.png` | 原生脚本需权限；仅当显示探针标记 manual fallback 时补人工 DPI |
 | 侧栏、设置开关及状态恢复 | `SHELL-P-003-SETTINGS-*`、`02-*.png` | 真实窗口宽度和 macOS Overlay 避让观感 |
 | 内容切换、空态、错误条 | `SHELL-P-004-CONTENT-*`、`SHELL-P-006-ERROR-*`、`03-*.png` | 只需核实桌面 WebView 无平台差异时注明观察结果 |
 | 主题、焦点、尺寸 | `SHELL-P-008-THEME-FOCUS-*`、`SHELL-P-007-*`、`04-*.png`/`05-*.png` | 实机窗口尺寸、DPI/缩放值及物理像素截图；菜单 Escape 另见标题栏专项 |
@@ -97,6 +97,9 @@ shell-w0-p-<YYYYMMDD>-<platform>/
 ├── result.json
 ├── SHA256SUMS
 ├── display-info.txt
+├── display-metadata.json
+├── display-metadata-stderr.txt
+├── privacy-audit.json
 ├── events.txt
 ├── automation-stderr.txt
 ├── native-automation.applescript

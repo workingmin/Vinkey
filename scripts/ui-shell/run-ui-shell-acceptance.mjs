@@ -92,8 +92,52 @@ async function assertNoHorizontalOverflow(page, caseId) {
   }
 }
 
+async function waitForPaint(page) {
+  await page.evaluate(() => new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve))
+  }))
+}
+
+async function waitForStableWidth(locator, expectedWidth) {
+  await locator.evaluate((node, targetWidth) => new Promise((resolve, reject) => {
+    const deadline = performance.now() + 2_000
+    let stableFrames = 0
+    const inspect = () => {
+      const actualWidth = node.getBoundingClientRect().width
+      stableFrames = Math.abs(actualWidth - targetWidth) <= 0.5 ? stableFrames + 1 : 0
+      if (stableFrames >= 2) {
+        resolve(undefined)
+        return
+      }
+      if (performance.now() >= deadline) {
+        reject(new Error(`侧栏宽度未稳定为 ${targetWidth}px，最终为 ${actualWidth}px`))
+        return
+      }
+      requestAnimationFrame(inspect)
+    }
+    requestAnimationFrame(inspect)
+  }), expectedWidth)
+}
+
+async function waitForThemePaint(page, expectedTheme) {
+  const expectedBackground = expectedTheme === 'light' ? '#f4f5f6' : '#111315'
+  await page.waitForFunction(({ theme, background }) => {
+    const frame = document.querySelector('.app-frame')
+    if (!(frame instanceof HTMLElement) || frame.dataset.theme !== theme) return false
+    const shell = document.querySelector('.app-shell')
+    if (!(shell instanceof HTMLElement)) return false
+    return getComputedStyle(shell).getPropertyValue('--bg-app').trim().toLowerCase() === background
+  }, { theme: expectedTheme, background: expectedBackground })
+  await waitForPaint(page)
+}
+
+function containsAbsoluteUserPath(value) {
+  return /\/Users\/|\/home\/|[A-Za-z]:\\+(?:Users\\+)?/u.test(value)
+}
+
 async function capture(page, output, name) {
-  await page.screenshot({ path: path.join(output, `${name}.png`), fullPage: false })
+  await waitForPaint(page)
+  await page.screenshot({ path: path.join(output, `${name}.png`), fullPage: false, animations: 'disabled' })
 }
 
 async function runCase(cases, caseId, title, action) {
@@ -108,8 +152,8 @@ async function runCase(cases, caseId, title, action) {
 
 async function writeAcceptanceArtifacts(output, result) {
   const screenshots = (await readdir(output)).filter((name) => name.endsWith('.png')).sort()
-  result.artifacts ??= { outputDirectory: output, screenshots: [], sha256: {}, manifestFile: 'SHA256SUMS' }
-  result.artifacts.outputDirectory = output
+  result.artifacts ??= { outputDirectory: '.', screenshots: [], sha256: {}, manifestFile: 'SHA256SUMS' }
+  result.artifacts.outputDirectory = '.'
   result.artifacts.manifestFile = 'SHA256SUMS'
   result.artifacts.screenshots = screenshots
   result.artifacts.sha256 = {}
@@ -158,7 +202,12 @@ async function main() {
     browser = await chromium.launch({ headless: true })
     const platforms = options.platform ? [options.platform] : ['win32', 'darwin']
     for (const platform of platforms) {
-      const platformContext = await browser.newContext({ viewport: sizes[0], deviceScaleFactor: 1, reducedMotion: 'reduce' })
+      const platformContext = await browser.newContext({
+        viewport: sizes[0],
+        deviceScaleFactor: 1,
+        reducedMotion: 'reduce',
+        permissions: ['clipboard-read', 'clipboard-write'],
+      })
       await platformContext.addInitScript((platformName) => {
         Object.defineProperty(navigator, 'platform', { configurable: true, value: platformName === 'darwin' ? 'MacIntel' : 'Win32' })
       }, platform)
@@ -201,13 +250,17 @@ async function main() {
         await collapse.click()
         await sidebar.waitFor({ state: 'visible' })
         if (!await sidebar.evaluate((node) => node.classList.contains('collapsed'))) throw new Error('侧栏未进入折叠态')
+        await waitForStableWidth(sidebar, 52)
         await capture(page, options.output, `02-${platform}-sidebar-collapsed`)
         await page.getByRole('button', { name: '展开会话栏' }).click()
+        await waitForStableWidth(sidebar, 288)
         await page.getByRole('button', { name: '模型与应用设置' }).click()
         if (!await sidebar.evaluate((node) => node.classList.contains('collapsed'))) throw new Error('设置打开时侧栏应折叠')
+        await waitForStableWidth(sidebar, 52)
         await capture(page, options.output, `02-${platform}-settings-open`)
         await page.getByRole('button', { name: '返回工作区' }).click()
         if (await sidebar.evaluate((node) => node.classList.contains('collapsed'))) throw new Error('返回后未恢复侧栏展开状态')
+        await waitForStableWidth(sidebar, 288)
         await capture(page, options.output, `02-${platform}-settings-closed`)
       })
 
@@ -233,9 +286,38 @@ async function main() {
         await alert.waitFor({ state: 'detached' })
       })
 
+      await runCase(cases, `SHELL-P-006-DIAGNOSTICS-${platform}`, '应用诊断日志脱敏、刷新、复制、关闭和焦点恢复', async () => {
+        const returnFocus = page.getByRole('tab', { name: '对话' })
+        await returnFocus.focus()
+        await page.evaluate(() => window.dispatchEvent(new CustomEvent('vinkey:ui-acceptance-runtime-diagnostics')))
+        const dialog = page.getByRole('dialog', { name: '应用诊断日志' })
+        await dialog.waitFor()
+        await dialog.getByText('<app-data>/vinkey-runtime.jsonl', { exact: true }).waitFor()
+        const diagnosticText = await dialog.textContent()
+        if (!diagnosticText?.includes('<workspace>') || !diagnosticText.includes('<redacted>')) throw new Error('诊断 fixture 未显示脱敏标记')
+        if (containsAbsoluteUserPath(diagnosticText)) throw new Error('诊断界面暴露绝对用户路径')
+        await dialog.getByRole('button', { name: '刷新' }).click()
+        await dialog.getByRole('button', { name: '复制日志' }).waitFor()
+        await dialog.getByRole('button', { name: '复制日志' }).click()
+        await dialog.getByRole('button', { name: '已复制' }).waitFor()
+        const clipboardText = await page.evaluate(() => navigator.clipboard.readText())
+        if (!clipboardText.includes('<app-data>') || !clipboardText.includes('<redacted>')) throw new Error('复制内容缺少脱敏标记')
+        if (containsAbsoluteUserPath(clipboardText)) throw new Error('复制内容暴露绝对用户路径')
+        await capture(page, options.output, `03-${platform}-runtime-diagnostics`)
+        await page.keyboard.press('Escape')
+        await dialog.waitFor({ state: 'detached' })
+        if (!await returnFocus.evaluate((node) => node === document.activeElement)) throw new Error('Escape 关闭诊断后未恢复焦点')
+
+        await page.evaluate(() => window.dispatchEvent(new CustomEvent('vinkey:ui-acceptance-runtime-diagnostics')))
+        await dialog.waitFor()
+        await dialog.getByRole('button', { name: '关闭应用诊断日志' }).click()
+        await dialog.waitFor({ state: 'detached' })
+        if (!await returnFocus.evaluate((node) => node === document.activeElement)) throw new Error('按钮关闭诊断后未恢复焦点')
+      })
+
       await runCase(cases, `SHELL-P-008-THEME-FOCUS-${platform}`, '主题切换和键盘焦点可见性', async () => {
         await page.getByRole('button', { name: '切换浅色主题' }).click()
-        if (await page.locator('.app-frame').getAttribute('data-theme') !== 'light') throw new Error('主题未切换为浅色')
+        await waitForThemePaint(page, 'light')
         await capture(page, options.output, `04-${platform}-light-theme`)
         const focusable = page.getByRole('tab', { name: '文件' })
         await focusable.focus()
@@ -245,7 +327,7 @@ async function main() {
         }
         await capture(page, options.output, `04-${platform}-keyboard-focus`)
         await page.getByRole('button', { name: '切换深色主题' }).click()
-        if (await page.locator('.app-frame').getAttribute('data-theme') !== 'dark') throw new Error('主题未恢复深色')
+        await waitForThemePaint(page, 'dark')
       })
 
       for (const size of sizes) {
@@ -289,7 +371,7 @@ async function main() {
       schemaVersion: 1,
       generatedAt: new Date().toISOString(),
       acceptance: { id: options.skipNativeEvidence ? 'W0-SHELL-P-WEBVIEW' : 'W0-SHELL-P', domainId: 'D-SHELL', gate: 'P' },
-      suite: { id: 'ui-shell-playwright', version: '1.1.0' },
+      suite: { id: 'ui-shell-playwright', version: '1.2.0' },
       repository: { version, gitSha: repositorySha },
       environment: { os: `${os.platform()} ${os.release()}`, osVersion: os.version(), arch: os.arch(), node: process.version, browser: `Chromium ${browser.version()}`, deviceScaleFactor: 1, viewportSizes: sizes, simulatedPlatforms: platforms },
       platformEvidence: {
@@ -301,7 +383,7 @@ async function main() {
       cases,
       summary,
       exitCode,
-      artifacts: { outputDirectory: options.output, screenshots: [], sha256: {}, manifestFile: 'SHA256SUMS' },
+      artifacts: { outputDirectory: '.', screenshots: [], sha256: {}, manifestFile: 'SHA256SUMS' },
       conclusion,
       startedAt,
       baseUrl: options.baseUrl ? '<provided>' : '<ephemeral-local-vite>',
@@ -312,14 +394,14 @@ async function main() {
       else process.stderr.write(`[${item.status}] ${item.caseId}\n`)
     }
     await writeAcceptanceArtifacts(options.output, result)
-    process.stdout.write(`UI shell acceptance: ${conclusion} (${summary.passed}/${summary.caseCount} passed, ${summary.failed} failed, ${summary.blocked} blocked)\nResults: ${path.join(options.output, 'result.json')}\nSHA256SUMS: ${path.join(options.output, 'SHA256SUMS')}\nexit=${exitCode}\n`)
+    process.stdout.write(`UI shell acceptance: ${conclusion} (${summary.passed}/${summary.caseCount} passed, ${summary.failed} failed, ${summary.blocked} blocked)\nResults: result.json\nSHA256SUMS: SHA256SUMS\nexit=${exitCode}\n`)
   } catch (error) {
     exitCode = 1
     const result = {
       schemaVersion: 1,
       generatedAt: new Date().toISOString(),
       acceptance: { id: options.skipNativeEvidence ? 'W0-SHELL-P-WEBVIEW' : 'W0-SHELL-P', domainId: 'D-SHELL', gate: 'P' },
-      suite: { id: 'ui-shell-playwright', version: '1.1.0' },
+      suite: { id: 'ui-shell-playwright', version: '1.2.0' },
       cases,
       summary: { caseCount: cases.length, passed: 0, failed: 0, blocked: 1 },
       exitCode,
@@ -327,7 +409,7 @@ async function main() {
       error: String(error),
     }
     await writeAcceptanceArtifacts(options.output, result)
-    process.stdout.write(`UI shell acceptance: BLOCKED (0/${result.summary.caseCount} passed, 0 failed, 1 blocked)\nResults: ${path.join(options.output, 'result.json')}\nSHA256SUMS: ${path.join(options.output, 'SHA256SUMS')}\nexit=${exitCode}\n`)
+    process.stdout.write(`UI shell acceptance: BLOCKED (0/${result.summary.caseCount} passed, 0 failed, 1 blocked)\nResults: result.json\nSHA256SUMS: SHA256SUMS\nexit=${exitCode}\n`)
     process.stderr.write(`UI shell acceptance blocked: ${String(error)}\n`)
   } finally {
     await browser?.close().catch(() => undefined)

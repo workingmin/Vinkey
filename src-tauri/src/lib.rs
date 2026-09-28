@@ -592,11 +592,19 @@ fn now_millis() -> u128 {
         .as_nanos()
 }
 
+fn vinkey_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    if let Some(value) = std::env::var_os("VINKEY_ACCEPTANCE_DATA_DIR") {
+        let path = PathBuf::from(value);
+        if !path.is_absolute() {
+            return Err("VINKEY_ACCEPTANCE_DATA_DIR 必须是绝对路径".into());
+        }
+        return Ok(path);
+    }
+    app.path().app_data_dir().map_err(|error| error.to_string())
+}
+
 fn workspace_preference_path(app: &AppHandle) -> Result<PathBuf, String> {
-    app.path()
-        .app_data_dir()
-        .map(|path| path.join("workspace.json"))
-        .map_err(|error| error.to_string())
+    vinkey_data_dir(app).map(|path| path.join("workspace.json"))
 }
 
 fn restore_workspace_preference(app: &AppHandle) -> Option<Workspace> {
@@ -1098,10 +1106,7 @@ fn create_directory(
 }
 
 fn append_window_diagnostic(app: &AppHandle, message: &str) -> Result<PathBuf, String> {
-    let data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|error| error.to_string())?;
+    let data_dir = vinkey_data_dir(app)?;
     fs::create_dir_all(&data_dir).map_err(|error| error.to_string())?;
     let log_path = data_dir.join("vinkey-window.log");
     let timestamp = SystemTime::now()
@@ -1119,8 +1124,12 @@ fn append_window_diagnostic(app: &AppHandle, message: &str) -> Result<PathBuf, S
 
 fn window_build_diagnostic(app: &AppHandle) -> String {
     let executable = std::env::current_exe()
-        .map(|path| path.display().to_string())
-        .unwrap_or_else(|error| format!("无法读取：{error}"));
+        .ok()
+        .and_then(|path| {
+            path.file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+        })
+        .unwrap_or_else(|| "<app-executable>".into());
     let window_config = app
         .config()
         .app
@@ -1188,7 +1197,7 @@ fn sync_native_window_theme(
         "theme-request={theme}, theme-sync={theme_status}, native-theme={actual_theme}, decorated={decorated}, inner-size={inner_size}, outer-size={outer_size}, {}",
         window_build_diagnostic(&app)
     );
-    let log_path = append_window_diagnostic(&app, &message)?;
+    append_window_diagnostic(&app, &message)?;
     runtime.info(
         "window.theme_synced",
         log_fields([
@@ -1197,22 +1206,17 @@ fn sync_native_window_theme(
             ("decorated", Value::String(decorated)),
         ]),
     );
-    theme_result.map_err(|error| format!("{error}\n窗口诊断日志：{}", log_path.display()))?;
-    Ok(format!("{message}\n日志：{}", log_path.display()))
+    theme_result.map_err(|error| format!("{error}\n窗口诊断日志：<app-data>/vinkey-window.log"))?;
+    Ok(format!("{message}\n日志：<app-data>/vinkey-window.log"))
 }
 
 #[tauri::command]
 fn get_window_diagnostics(app: AppHandle) -> Result<String, String> {
-    let log_path = app
-        .path()
-        .app_data_dir()
-        .map_err(|error| error.to_string())?
-        .join("vinkey-window.log");
+    let log_path = vinkey_data_dir(&app)?.join("vinkey-window.log");
     let contents = fs::read_to_string(&log_path).unwrap_or_else(|_| "暂无窗口诊断记录。".into());
     let recent = contents.lines().rev().take(12).collect::<Vec<_>>();
     Ok(format!(
-        "窗口诊断日志：{}\n\n{}",
-        log_path.display(),
+        "窗口诊断日志：<app-data>/vinkey-window.log\n\n{}",
         recent.into_iter().rev().collect::<Vec<_>>().join("\n")
     ))
 }
@@ -1251,7 +1255,7 @@ pub fn run() {
         .manage(worker_service::WorkerRuntimeState::default())
         .manage(task_runtime::TaskDispatchState::default())
         .setup(|app| {
-            let data_dir = app.path().app_data_dir()?;
+            let data_dir = vinkey_data_dir(app.handle()).map_err(std::io::Error::other)?;
             fs::create_dir_all(&data_dir)?;
             let runtime = runtime_log::RuntimeLogState::open(data_dir.join("vinkey-runtime.jsonl"))
                 .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;

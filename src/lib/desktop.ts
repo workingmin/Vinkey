@@ -153,7 +153,14 @@ export async function getWindowDiagnostics(): Promise<string> {
 }
 
 export async function getRuntimeDiagnostics(): Promise<RuntimeDiagnostics> {
-  if (!isDesktop()) return { path: '浏览器演示模式', platform: 'web', version: '0.1.0', lines: [] }
+  if (!isDesktop()) return {
+    path: '<app-data>/vinkey-runtime.jsonl',
+    platform: 'web',
+    version: '0.1.0',
+    lines: import.meta.env.VITE_UI_ACCEPTANCE === '1'
+      ? ['{"event":"acceptance.fixture","fields":{"path":"<workspace>/chapter.md","token":"<redacted>"}}']
+      : [],
+  }
   return invoke<RuntimeDiagnostics>('get_runtime_diagnostics')
 }
 

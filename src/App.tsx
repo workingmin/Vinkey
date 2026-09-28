@@ -1390,6 +1390,8 @@ export function App() {
   const [runtimeDiagnosticsOpen, setRuntimeDiagnosticsOpen] = useState(false)
   const [runtimeDiagnosticsLoading, setRuntimeDiagnosticsLoading] = useState(false)
   const [runtimeCopyState, setRuntimeCopyState] = useState<'idle' | 'copied'>('idle')
+  const runtimeDiagnosticsCloseRef = useRef<HTMLButtonElement>(null)
+  const runtimeDiagnosticsReturnFocus = useRef<HTMLElement | null>(null)
   const macMenuInstalled = useRef(false)
   const macRefreshProjectItem = useRef<MenuItem | null>(null)
 
@@ -1498,7 +1500,10 @@ export function App() {
     void getWindowDiagnostics().then((diagnostics) => window.alert(diagnostics)).catch((cause) => setError(`读取窗口诊断失败：${String(cause)}`))
   }, [setError])
 
-  const showRuntimeDiagnostics = useCallback(async () => {
+  const showRuntimeDiagnostics = useCallback(async (preserveReturnFocus = false) => {
+    if (!preserveReturnFocus && document.activeElement instanceof HTMLElement) {
+      runtimeDiagnosticsReturnFocus.current = document.activeElement
+    }
     setRuntimeDiagnosticsOpen(true)
     setRuntimeDiagnosticsLoading(true)
     setRuntimeCopyState('idle')
@@ -1511,6 +1516,30 @@ export function App() {
       setRuntimeDiagnosticsLoading(false)
     }
   }, [setError])
+
+  const closeRuntimeDiagnostics = useCallback(() => {
+    setRuntimeDiagnosticsOpen(false)
+    const returnFocus = runtimeDiagnosticsReturnFocus.current
+    runtimeDiagnosticsReturnFocus.current = null
+    window.requestAnimationFrame(() => {
+      if (returnFocus?.isConnected) returnFocus.focus()
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!runtimeDiagnosticsOpen) return
+    const animationFrame = window.requestAnimationFrame(() => runtimeDiagnosticsCloseRef.current?.focus())
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      closeRuntimeDiagnostics()
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => {
+      window.cancelAnimationFrame(animationFrame)
+      window.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [closeRuntimeDiagnostics, runtimeDiagnosticsOpen])
 
   const copyRuntimeDiagnostics = useCallback(async () => {
     if (!runtimeDiagnostics) return
@@ -1535,9 +1564,14 @@ export function App() {
       const message = (event as CustomEvent<string>).detail
       if (typeof message === 'string' && message.trim()) setError(message)
     }
+    const openRuntimeDiagnostics = () => { void showRuntimeDiagnostics() }
     window.addEventListener('vinkey:ui-acceptance-error', injectError)
-    return () => window.removeEventListener('vinkey:ui-acceptance-error', injectError)
-  }, [setError])
+    window.addEventListener('vinkey:ui-acceptance-runtime-diagnostics', openRuntimeDiagnostics)
+    return () => {
+      window.removeEventListener('vinkey:ui-acceptance-error', injectError)
+      window.removeEventListener('vinkey:ui-acceptance-runtime-diagnostics', openRuntimeDiagnostics)
+    }
+  }, [setError, showRuntimeDiagnostics])
 
   const refreshWorkspaceFromMenu = useCallback(async () => {
     if (useAppStore.getState().projectTransition) return
@@ -1700,13 +1734,13 @@ export function App() {
       {settingsOpen ? <SettingsPage /> : <ContentPanel key={workspace?.id ?? 'no-project'} page={contentPage} onPageChange={changeContentPage} showFileEditor={fileEditorVisible && hasActiveDocument} onOpenDocument={openDocument} onOpenWorkspace={() => void openWorkspaceFromMenu()} onRefreshWorkspace={refreshWorkspaceFromMenu} onSave={saveActive} onCloseEditor={() => setFileEditorVisible(false)} onToggleContext={toggleDocumentContext} onOpenLogSource={openLogSource} onReviewDiff={() => { setContentPage('file'); setFileEditorVisible(true); setSettingsOpen(false) }} />}
       {error && <div className="error-banner" role="alert"><span>{error}</span><button aria-label="关闭错误提示" onClick={() => setError(null)}><X /></button></div>}
     </div>
-    {runtimeDiagnosticsOpen && <div className="runtime-diagnostics-backdrop" role="presentation" onClick={() => setRuntimeDiagnosticsOpen(false)}>
+    {runtimeDiagnosticsOpen && <div className="runtime-diagnostics-backdrop" role="presentation" onClick={closeRuntimeDiagnostics}>
       <section className="runtime-diagnostics-modal" role="dialog" aria-modal="true" aria-labelledby="runtime-diagnostics-title" onClick={(event) => event.stopPropagation()}>
-        <header><div><h2 id="runtime-diagnostics-title"><ScrollText />应用诊断日志</h2><p>{runtimeDiagnostics?.path ?? '正在读取日志路径…'}</p></div><button className="icon-button" aria-label="关闭应用诊断日志" title="关闭" onClick={() => setRuntimeDiagnosticsOpen(false)}><X /></button></header>
+        <header><div><h2 id="runtime-diagnostics-title"><ScrollText />应用诊断日志</h2><p>{runtimeDiagnostics?.path ?? '正在读取日志路径…'}</p></div><button ref={runtimeDiagnosticsCloseRef} className="icon-button" aria-label="关闭应用诊断日志" title="关闭" onClick={closeRuntimeDiagnostics}><X /></button></header>
         {runtimeDiagnosticsLoading ? <div className="runtime-diagnostics-empty">正在读取最近运行事件…</div> : runtimeDiagnostics && <>
           <div className="runtime-diagnostics-meta"><span>平台 {runtimeDiagnostics.platform}</span><span>版本 {runtimeDiagnostics.version}</span><span>{runtimeDiagnostics.lines.length} 条最近事件</span></div>
           <pre className="runtime-diagnostics-log">{runtimeDiagnostics.lines.length > 0 ? runtimeDiagnostics.lines.join('\n') : '暂无运行日志。'}</pre>
-          <footer><button className="secondary-button" onClick={() => void showRuntimeDiagnostics()}><RefreshCw />刷新</button><button className="primary-button" onClick={() => void copyRuntimeDiagnostics()}><Copy />{runtimeCopyState === 'copied' ? '已复制' : '复制日志'}</button></footer>
+          <footer><button className="secondary-button" onClick={() => void showRuntimeDiagnostics(true)}><RefreshCw />刷新</button><button className="primary-button" onClick={() => void copyRuntimeDiagnostics()}><Copy />{runtimeCopyState === 'copied' ? '已复制' : '复制日志'}</button></footer>
         </>}
       </section>
     </div>}
