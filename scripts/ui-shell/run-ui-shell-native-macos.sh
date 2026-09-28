@@ -82,7 +82,7 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
 fi
 
 command -v osascript >/dev/null || { printf '%s\n' '缺少 osascript' >&2; exit 1; }
-command -v screencapture >/dev/null || { printf '%s\n' '缺少 screencapture' >&2; exit 1; }
+command -v swiftc >/dev/null || { printf '%s\n' '缺少 swiftc（需要 Xcode 命令行工具；用于构建 ScreenCaptureKit 截图助手）' >&2; exit 1; }
 command -v shasum >/dev/null || { printf '%s\n' '缺少 shasum' >&2; exit 1; }
 
 if [[ -n "$APP_PATH" && "$NO_LAUNCH" -eq 0 ]]; then
@@ -111,6 +111,69 @@ APPLE_SCRIPT_FILE="$OUTPUT_DIR/native-automation.applescript"
 WEBVIEW_DIR="$OUTPUT_DIR/webview"
 WEBVIEW_STDOUT="$OUTPUT_DIR/webview-stdout.txt"
 WEBVIEW_STDERR="$OUTPUT_DIR/webview-stderr.txt"
+
+# ScreenCaptureKit 截图助手（macOS 15+ 已废弃 screencapture，本机无法出图；改用 ScreenCaptureKit）。
+# 编译产物缓存到 OUTPUT_ROOT/bin，按源码哈希命名，源码相同则跳过重复编译。
+CAPTURE_HELPER=""
+if command -v swiftc >/dev/null 2>&1; then
+  HELPER_SRC="$OUTPUT_DIR/capture-helper.swift"
+  cat >"$HELPER_SRC" <<'SCSWIFT'
+import Foundation
+import ScreenCaptureKit
+import ImageIO
+import UniformTypeIdentifiers
+
+let args = CommandLine.arguments
+guard args.count >= 2 else {
+    FileHandle.standardError.write(Data("usage: capture-helper <output.png>\n".utf8))
+    exit(2)
+}
+let outPath = args[1]
+let sem = DispatchSemaphore(value: 0)
+var exitCode: Int32 = 1
+Task {
+    do {
+        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        guard let display = content.displays.first else {
+            FileHandle.standardError.write(Data("no display available\n".utf8))
+            sem.signal(); return
+        }
+        let filter = SCContentFilter(display: display, excludingWindows: [])
+        let cfg = SCStreamConfiguration()
+        cfg.width = Int(display.width)
+        cfg.height = Int(display.height)
+        cfg.showsCursor = true
+        let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: cfg)
+        let url = URL(fileURLWithPath: outPath)
+        guard let dest = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil) else {
+            FileHandle.standardError.write(Data("cannot create image destination\n".utf8))
+            sem.signal(); return
+        }
+        CGImageDestinationAddImage(dest, image, nil)
+        guard CGImageDestinationFinalize(dest) else {
+            FileHandle.standardError.write(Data("failed to write PNG\n".utf8))
+            sem.signal(); return
+        }
+        exitCode = 0
+    } catch {
+        FileHandle.standardError.write(Data("capture error: \(error)\n".utf8))
+    }
+    sem.signal()
+}
+sem.wait()
+exit(exitCode)
+SCSWIFT
+  HELPER_HASH="$(shasum -a 256 "$HELPER_SRC" | awk '{print $1}' | cut -c1-12)"
+  mkdir -p "$OUTPUT_ROOT/bin"
+  CAPTURE_HELPER="$OUTPUT_ROOT/bin/capture-helper-$HELPER_HASH"
+  if [[ ! -x "$CAPTURE_HELPER" ]]; then
+    swiftc -O "$HELPER_SRC" -o "$CAPTURE_HELPER" 2>"$OUTPUT_DIR/capture-helper-build.log" || CAPTURE_HELPER=""
+  fi
+fi
+if [[ -z "$CAPTURE_HELPER" || ! -x "$CAPTURE_HELPER" ]]; then
+  printf '%s\n' '无法构建 ScreenCaptureKit 截图助手（需要 swiftc / Xcode 命令行工具与屏幕录制权限）' >&2
+fi
+
 COMPANION_EXIT=1
 RUN_STARTED_EPOCH_MS="$(node -e 'console.log(Date.now())')"
 
@@ -163,7 +226,10 @@ process_exists() {
 }
 
 accessible_window_exists() {
-  osascript -e "tell application \"System Events\" to tell application process \"$PROCESS_NAME\" to get visible of every window" 2>/dev/null | grep -q 'true'
+  # AX "visible" 对 Tauri/WebKit 窗口可能返回 missing value（实测本机 Vinkey 即如此），
+  # 用 exists front window 判定窗口存在更稳健。先激活进程，避免窗口落在非当前 Space 被漏判。
+  osascript -e "tell application \"System Events\" to tell application process \"$PROCESS_NAME\" to set frontmost to true" >/dev/null 2>&1 || true
+  osascript -e "tell application \"System Events\" to tell application process \"$PROCESS_NAME\" to exists front window" 2>/dev/null | grep -q '^true$'
 }
 
 request_installed_app_quit() {
@@ -238,6 +304,7 @@ on run argv
   set appName to item 2 of argv
   set windowReadyWaitMs to item 3 of argv
   set appPath to item 4 of argv
+  set captureHelper to item 5 of argv
   set reportLines to {}
 
   try
@@ -279,7 +346,7 @@ on run argv
         set zoomPosition to item 3 of trafficLightPositions
         if closePosition is missing value or minimizePosition is missing value or zoomPosition is missing value then error "无法通过 Accessibility 找到完整的红黄绿交通灯按钮"
 
-        my capture(reportDir, "screenshots/01-mac-traffic-lights.png")
+        my capture(reportDir, "screenshots/01-mac-traffic-lights.png", captureHelper)
         set end of reportLines to "PASS|SHELL-NATIVE-MAC-TRAFFIC-LIGHTS|发现并截图红黄绿交通灯|close=" & my pairText(closePosition) & ";minimize=" & my pairText(minimizePosition) & ";zoom=" & my pairText(zoomPosition)
 
         set desiredSizes to {{1440, 900}, {1280, 800}, {1024, 680}}
@@ -291,7 +358,7 @@ on run argv
           delay 0.5
           set actualSize to size of mainWindow
           set sizeName to (item 1 of requestedSize as text) & "x" & (item 2 of requestedSize as text)
-          my capture(reportDir, "screenshots/02-mac-window-" & sizeName & ".png")
+          my capture(reportDir, "screenshots/02-mac-window-" & sizeName & ".png", captureHelper)
           if actualSize = requestedSize then
             set end of reportLines to "PASS|SHELL-NATIVE-MAC-WINDOW-SIZE-" & sizeName & "|设置并读取实际窗口尺寸|actual=" & my pairText(actualSize)
           else
@@ -359,7 +426,7 @@ on run argv
 
         set closeConfirmed to false
         try
-          my capture(reportDir, "screenshots/03-mac-before-close.png")
+          my capture(reportDir, "screenshots/03-mac-before-close.png", captureHelper)
           set closePress to my pressTrafficLight(appName, "close")
           if closePress is missing value then
             set end of reportLines to "BLOCKED|SHELL-NATIVE-MAC-WINDOW-CLOSE|点击关闭交通灯|无法重新查询并按下红色交通灯"
@@ -388,7 +455,7 @@ on run argv
               end if
             end repeat
             if reopened then
-              my capture(reportDir, "screenshots/04-mac-window-reopened.png")
+              my capture(reportDir, "screenshots/04-mac-window-reopened.png", captureHelper)
               set end of reportLines to "PASS|SHELL-NATIVE-MAC-WINDOW-REOPEN|关闭后通过系统 Reopen 恢复主窗口|窗口重新可访问并已截图"
               set cleanupPress to my pressTrafficLight(appName, "close")
               delay 1
@@ -543,13 +610,9 @@ end restoreMinimizedWindow
 on processHasWindow(appName)
   tell application "System Events"
     tell application process appName
-      set currentWindows to every window
-      repeat with windowReference in currentWindows
-        try
-          set candidateWindow to contents of windowReference
-          if visible of candidateWindow is true then return true
-        end try
-      end repeat
+      try
+        return (count of windows) > 0
+      end try
     end tell
   end tell
   return false
@@ -573,13 +636,13 @@ on oneLine(value)
   return resultText
 end oneLine
 
-on capture(reportDir, relativePath)
+on capture(reportDir, relativePath, captureHelper)
   set destination to reportDir & "/" & relativePath
-  do shell script "/usr/sbin/screencapture -x " & quoted form of destination
+  do shell script captureHelper & " " & quoted form of destination
 end capture
 APPLESCRIPT
   set +e
-  osascript "$APPLE_SCRIPT_FILE" "$OUTPUT_DIR" "$PROCESS_NAME" "$WINDOW_READY_WAIT_MS" "$APP_PATH" >"$EVENTS_FILE" 2>"$AUTOMATION_STDERR"
+  osascript "$APPLE_SCRIPT_FILE" "$OUTPUT_DIR" "$PROCESS_NAME" "$WINDOW_READY_WAIT_MS" "$APP_PATH" "$CAPTURE_HELPER" >"$EVENTS_FILE" 2>"$AUTOMATION_STDERR"
   AUTOMATION_EXIT=$?
   set -e
   if ((AUTOMATION_EXIT != 0)); then
