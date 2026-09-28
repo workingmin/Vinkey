@@ -11,10 +11,12 @@ NO_LAUNCH=0
 DEV_MODE=0
 DEV_PID=""
 RUN_ID="$(date -u +%Y-%m-%dT%H%M%SZ)"
+MIN_MACOS_MAJOR=15
+MIN_MACOS_VERSION="15.0"
 
 print_help() {
   cat <<'HELP'
-macOS Tauri 原生壳层验收（W0-SHELL-P）
+macOS 15+ Tauri 原生壳层验收（W0-SHELL-P）
 
 用法：bash scripts/ui-shell/run-ui-shell-native-macos.sh [选项]
 
@@ -27,11 +29,13 @@ macOS Tauri 原生壳层验收（W0-SHELL-P）
   --help                   显示帮助
 
 前置条件：
-  1. 在“系统设置 → 隐私与安全性 → 辅助功能”允许 Terminal/终端（或运行本脚本的 IDE）控制电脑。
-  2. 若需要屏幕截图权限，在“屏幕与系统音频录制”中允许相同的应用。
-  3. 运行 `npm install --include=dev`，并准备 Rust/Tauri 开发环境。
-  4. 默认模式发现已有可见窗口时会阻断；已有零窗口进程会正常退出并重新启动，以绑定新的 app.start 构建记录。
-  5. 安装包应由当前干净 Git HEAD 构建；版本或 Git SHA 不一致时 provenance 用例失败。
+  1. 系统版本必须为 macOS 15 或更高版本；截图只使用 ScreenCaptureKit helper，不提供 screencapture 降级路径。
+  2. 安装 Xcode Command Line Tools，并确保 `swiftc` 可用。
+  3. 在“系统设置 → 隐私与安全性 → 辅助功能”允许 Terminal/终端（或运行本脚本的 IDE）控制电脑。
+  4. 在“屏幕与系统音频录制”中允许相同的应用使用 ScreenCaptureKit 截图。
+  5. 运行 `npm install --include=dev`，并准备 Rust/Tauri 开发环境。
+  6. 默认模式发现已有可见窗口时会阻断；已有零窗口进程会正常退出并重新启动，以绑定新的 app.start 构建记录。
+  7. 安装包应由当前干净 Git HEAD 构建；版本或 Git SHA 不一致时 provenance 用例失败。
 
 安装包模式会点击关闭按钮、通过系统 Reopen 恢复窗口，再次关闭作为清理；不要把未保存的重要桌面会话作为测试目标。
 HELP
@@ -81,9 +85,22 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
   exit 1
 fi
 
+command -v sw_vers >/dev/null || { printf '%s\n' '缺少 sw_vers，无法确认 macOS 版本' >&2; exit 1; }
 command -v osascript >/dev/null || { printf '%s\n' '缺少 osascript' >&2; exit 1; }
 command -v swiftc >/dev/null || { printf '%s\n' '缺少 swiftc（需要 Xcode 命令行工具；用于构建 ScreenCaptureKit 截图助手）' >&2; exit 1; }
 command -v shasum >/dev/null || { printf '%s\n' '缺少 shasum' >&2; exit 1; }
+
+OS_VERSION="$(sw_vers -productVersion 2>/dev/null || true)"
+OS_MAJOR="${OS_VERSION%%.*}"
+if [[ ! "$OS_MAJOR" =~ ^[0-9]+$ ]]; then
+  printf '无法解析 macOS 版本：%s\n' "${OS_VERSION:-unknown}" >&2
+  exit 1
+fi
+if ((OS_MAJOR < MIN_MACOS_MAJOR)); then
+  printf '不支持 macOS %s；本验收入口仅支持 macOS %s+ 的 ScreenCaptureKit 截图机制。\n' "$OS_VERSION" "$MIN_MACOS_VERSION" >&2
+  exit 1
+fi
+SWIFT_VERSION="$(swiftc --version 2>/dev/null | head -1 || true)"
 
 if [[ -n "$APP_PATH" && "$NO_LAUNCH" -eq 0 ]]; then
   [[ -d "$APP_PATH" && "$APP_PATH" == *.app ]] || {
@@ -112,12 +129,13 @@ WEBVIEW_DIR="$OUTPUT_DIR/webview"
 WEBVIEW_STDOUT="$OUTPUT_DIR/webview-stdout.txt"
 WEBVIEW_STDERR="$OUTPUT_DIR/webview-stderr.txt"
 
-# ScreenCaptureKit 截图助手（macOS 15+ 已废弃 screencapture，本机无法出图；改用 ScreenCaptureKit）。
-# 编译产物缓存到 OUTPUT_ROOT/bin，按源码哈希命名，源码相同则跳过重复编译。
-CAPTURE_HELPER=""
-if command -v swiftc >/dev/null 2>&1; then
-  HELPER_SRC="$OUTPUT_DIR/capture-helper.swift"
-  cat >"$HELPER_SRC" <<'SCSWIFT'
+# macOS 15+ only: compile the ScreenCaptureKit helper and do not fall back to screencapture.
+# Cache by source hash, target and architecture so incompatible helpers are never reused.
+HELPER_SRC="$OUTPUT_DIR/capture-helper.swift"
+HELPER_BUILD_LOG="$OUTPUT_DIR/capture-helper-build.log"
+CAPTURE_HELPER_ARCH="$(uname -m)"
+CAPTURE_HELPER_TARGET="$CAPTURE_HELPER_ARCH-apple-macosx$MIN_MACOS_VERSION"
+cat >"$HELPER_SRC" <<'SCSWIFT'
 import Foundation
 import ScreenCaptureKit
 import ImageIO
@@ -163,15 +181,18 @@ Task {
 sem.wait()
 exit(exitCode)
 SCSWIFT
-  HELPER_HASH="$(shasum -a 256 "$HELPER_SRC" | awk '{print $1}' | cut -c1-12)"
-  mkdir -p "$OUTPUT_ROOT/bin"
-  CAPTURE_HELPER="$OUTPUT_ROOT/bin/capture-helper-$HELPER_HASH"
-  if [[ ! -x "$CAPTURE_HELPER" ]]; then
-    swiftc -O "$HELPER_SRC" -o "$CAPTURE_HELPER" 2>"$OUTPUT_DIR/capture-helper-build.log" || CAPTURE_HELPER=""
+HELPER_HASH="$(shasum -a 256 "$HELPER_SRC" | awk '{print $1}' | cut -c1-12)"
+mkdir -p "$OUTPUT_ROOT/bin"
+CAPTURE_HELPER="$OUTPUT_ROOT/bin/capture-helper-macos15-$CAPTURE_HELPER_ARCH-$HELPER_HASH"
+if [[ ! -x "$CAPTURE_HELPER" ]]; then
+  if ! swiftc -O -target "$CAPTURE_HELPER_TARGET" "$HELPER_SRC" -o "$CAPTURE_HELPER" 2>"$HELPER_BUILD_LOG"; then
+    printf '无法使用 swiftc 构建 ScreenCaptureKit 截图助手；编译日志：%s\n' "$HELPER_BUILD_LOG" >&2
+    exit 1
   fi
 fi
-if [[ -z "$CAPTURE_HELPER" || ! -x "$CAPTURE_HELPER" ]]; then
-  printf '%s\n' '无法构建 ScreenCaptureKit 截图助手（需要 swiftc / Xcode 命令行工具与屏幕录制权限）' >&2
+if [[ ! -x "$CAPTURE_HELPER" ]]; then
+  printf '%s\n' 'ScreenCaptureKit 截图助手不可执行' >&2
+  exit 1
 fi
 
 COMPANION_EXIT=1
@@ -638,7 +659,7 @@ end oneLine
 
 on capture(reportDir, relativePath, captureHelper)
   set destination to reportDir & "/" & relativePath
-  do shell script captureHelper & " " & quoted form of destination
+  do shell script (quoted form of captureHelper) & " " & quoted form of destination
 end capture
 APPLESCRIPT
   set +e
@@ -669,7 +690,6 @@ fi
 DISPLAY_INFO="$OUTPUT_DIR/display-info.txt"
 system_profiler SPDisplaysDataType >"$DISPLAY_INFO" 2>&1 || true
 DESKTOP_BOUNDS="$(osascript -e 'tell application "Finder" to get bounds of window of desktop' 2>/dev/null || true)"
-OS_VERSION="$(sw_vers -productVersion 2>/dev/null || true)"
 SCREENSHOT_SIZE=""
 if compgen -G "$OUTPUT_DIR/screenshots/*.png" >/dev/null; then
   FIRST_SCREENSHOT="$(find "$OUTPUT_DIR/screenshots" -type f -name '*.png' -print -quit)"
@@ -682,6 +702,9 @@ NATIVE_PROCESS_NAME="$PROCESS_NAME" \
 NATIVE_DESKTOP_BOUNDS="$DESKTOP_BOUNDS" \
 NATIVE_SCREENSHOT_SIZE="$SCREENSHOT_SIZE" \
 NATIVE_OS_VERSION="$OS_VERSION" \
+NATIVE_MACOS_MIN_VERSION="$MIN_MACOS_VERSION" \
+NATIVE_SWIFT_VERSION="$SWIFT_VERSION" \
+NATIVE_CAPTURE_HELPER_TARGET="$CAPTURE_HELPER_TARGET" \
 NATIVE_APP_PATH="$APP_PATH" \
 NATIVE_APP_BUNDLE_ID="$APP_BUNDLE_ID" \
 NATIVE_APP_VERSION="$APP_BUNDLE_VERSION" \
@@ -815,7 +838,7 @@ const result = {
   schemaVersion: 1,
   generatedAt: new Date().toISOString(),
   acceptance: { id: 'W0-SHELL-P-NATIVE-MAC', domainId: 'D-SHELL', gate: 'P' },
-  suite: { id: 'ui-shell-native-macos', version: '1.3.0' },
+  suite: { id: 'ui-shell-native-macos', version: '1.4.0' },
   repository,
   application,
   provenance,
@@ -827,7 +850,9 @@ const result = {
     os: 'macOS',
     platform: 'darwin',
     osVersion: process.env.NATIVE_OS_VERSION || 'unknown',
+    minimumOsVersion: process.env.NATIVE_MACOS_MIN_VERSION || '15.0',
     node: process.version,
+    swift: process.env.NATIVE_SWIFT_VERSION || 'UNAVAILABLE',
     arch: process.env.NATIVE_MACHINE_ARCH || null,
     rust: process.env.NATIVE_RUST_VERSION || 'UNAVAILABLE',
     tauriCli: process.env.NATIVE_TAURI_CLI_VERSION || 'UNAVAILABLE',
@@ -842,6 +867,12 @@ const result = {
       return { x: Number((pixels[0] / points[2]).toFixed(2)), y: Number((pixels[1] / points[3]).toFixed(2)), source: 'main-display screenshot pixels / Finder desktop points' }
     })(),
     dpiNote: '截图像素与 Accessibility 桌面点坐标已记录；系统缩放与多显示器配置以 display-info.txt 和人工观察为准。',
+    screenshot: {
+      mechanism: 'ScreenCaptureKit.SCScreenshotManager',
+      helperCompiler: 'swiftc',
+      helperTarget: process.env.NATIVE_CAPTURE_HELPER_TARGET || null,
+      fallback: null,
+    },
   },
   platformEvidence: {
     titlebarMenus: 'CONTRACT_GUARD_ONLY:OUT_OF_SCOPE:W0-SHELL-MENU-P',
@@ -861,6 +892,8 @@ const result = {
     automationScript: existsSync(join(outputDir, 'native-automation.applescript')) ? 'native-automation.applescript' : null,
     displayInfo: 'display-info.txt',
     automationStderr: existsSync(join(outputDir, 'automation-stderr.txt')) ? 'automation-stderr.txt' : null,
+    captureHelperSource: 'capture-helper.swift',
+    captureHelperBuildLog: existsSync(join(outputDir, 'capture-helper-build.log')) ? 'capture-helper-build.log' : null,
     devLog: existsSync(join(outputDir, 'tauri-dev.log')) ? 'tauri-dev.log' : null,
     webview: companionResult ? {
       directory: 'webview',

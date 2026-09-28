@@ -1,8 +1,8 @@
 # Vinkey 当前版本 UI 功能域验收工作计划
 
 - 版本：`0.1.0`
-- 更新日期：`2026-09-24`
-- 适用环境：Windows/macOS 桌面环境；真实模型验收使用本地 Ollama 或已批准的兼容服务
+- 更新日期：`2026-09-28`
+- 适用环境：Windows/macOS 15+ 桌面环境；真实模型验收使用本地 Ollama 或已批准的兼容服务
 - 统一生命周期：[UI_DESIGN.md](./UI_DESIGN.md) 的“统一验收生命周期”
 - 脚本规范：[UI_ACCEPTANCE_SCRIPT_SPEC.md](./UI_ACCEPTANCE_SCRIPT_SPEC.md)
 - 脚本工作计划：[UI_ACCEPTANCE_SCRIPT_PLAN.md](./UI_ACCEPTANCE_SCRIPT_PLAN.md)
@@ -110,7 +110,7 @@
 | 导航 fixture | 计划已定义；脚本和隔离本地执行材料待补 |
 | 会话语义标题 | 当前仅首次输入 28 字符 fallback；`CF-022` 待参考，`W2-NAV-E` 相关用例阻断 |
 | 全局搜索面板 | 当前只有侧栏内联搜索；`CF-023` 待参考，目标入口/跳转用例阻断 |
-| 真实模型链路 | 依赖测试人员在 macOS/Windows + Ollama/profile 环境回传 |
+| 真实模型链路 | 依赖测试人员在 macOS 15+/Windows + Ollama/profile 环境回传 |
 
 ## 附录：相关文档
 

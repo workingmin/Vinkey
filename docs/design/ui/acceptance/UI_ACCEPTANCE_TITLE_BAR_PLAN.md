@@ -33,7 +33,7 @@
 | 条件 | 要求 | 不满足时 |
 | --- | --- | --- |
 | 目标应用 | 使用待验收的 Tauri 安装包；记录版本、构建号和嵌入 Git SHA | `BLOCKED`，不得用浏览器结果代替 |
-| 平台 | Windows 桌面或 macOS 桌面；macOS 需要 Accessibility/System Events 权限 | 目标平台项 `BLOCKED` |
+| 平台 | Windows 桌面或 macOS 15+ 桌面；macOS 需要 `swiftc`、Accessibility/System Events 和屏幕录制权限 | 目标平台项 `BLOCKED` |
 | 应用状态 | 可启动到工作台；无模型也可执行本专项；准备一个无项目状态和一个已打开项目状态 | 无法区分入口前置条件时 `BLOCKED` |
 | 编辑目标 | 至少准备对话输入框、可编辑文档、搜索/设置输入框 | 编辑焦点用例 `BLOCKED` |
 | 证据归档 | 可保存截图、事件日志、自动化 stderr、结果 JSON 和 SHA-256 清单 | 不能形成可追溯批次时 `BLOCKED` |
@@ -93,7 +93,7 @@ SHA256SUMS               # 结果目录内相对路径的哈希清单
 screenshots/             # 菜单树、动作后页面、关闭状态、窗口控制和尺寸截图
 events.txt               # 按时间顺序的操作与观察事件
 automation-stderr.txt    # 自动化器 stderr；空文件也应保留
-display-info.txt         # 平台显示器/缩放原始信息；仅 macOS/Windows 可得时提供
+display-info.txt         # 平台显示器/缩放原始信息；仅 macOS 15+/Windows 可得时提供
 native-automation.*      # AppleScript 或 Windows UI Automation 操作源
 webview/                 # 同批次 Playwright companion 结果（如执行）
 ```

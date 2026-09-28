@@ -2,7 +2,7 @@
 
 - 状态：当前版本验收规范
 - 更新日期：2026-09-28
-- 适用端：Windows、macOS；Linux 仅用于开发机或 CI 的代码层验证
+- 适用端：Windows、macOS 15+；Linux 仅用于开发机或 CI 的代码层验证
 - 应用壳层浏览器实现：[Playwright 验收脚本](../../../scripts/ui-shell/run-ui-shell-acceptance.mjs)
 - macOS 原生实现：[Accessibility/System Events 验收脚本](../../../scripts/ui-shell/run-ui-shell-native-macos.sh)
 - 关联计划：[UI_ACCEPTANCE_SCRIPT_PLAN.md](./UI_ACCEPTANCE_SCRIPT_PLAN.md)
@@ -16,8 +16,8 @@
 | 层级 | 是否调用真实服务 | 主要证据 | 适合执行位置 |
 | --- | --- | --- | --- |
 | 自动化测试 | 否，除非测试明确标记为集成测试 | Vitest、Rust 测试、CLI 合同测试 | CI、开发机 |
-| 本地环境脚本 | 是或读取真实本机配置 | Ollama/兼容服务响应、SQLite 配置、版本和退出码 | 测试人员的 macOS/Windows |
-| 人工 UI 验收 | 由测试人员观察 | 入口链路、视觉状态、键盘操作、截图/录屏和备注 | 测试人员的 macOS/Windows |
+| 本地环境脚本 | 是或读取真实本机配置 | Ollama/兼容服务响应、SQLite 配置、版本和退出码 | 测试人员的 macOS 15+/Windows |
+| 人工 UI 验收 | 由测试人员观察 | 入口链路、视觉状态、键盘操作、截图/录屏和备注 | 测试人员的 macOS 15+/Windows |
 
 本规范覆盖 UI 组件测试的辅助入口、跨模块验收、本地 Ollama 验收和人工 UI 验收的证据归档。脚本不得为了“绿色”而改写业务结果、跳过失败用例或把环境阻断标记为通过。
 
@@ -42,6 +42,8 @@
 脚本结果还必须标明验收门槛：`P` 表示平台/结构、`F` 表示 fixture/合同、`E` 表示真实端到端、`R` 表示跨域回归。例如 `W0-NAV-F` 中的 `F` 不要求 Ollama，`W2-NAV-E` 中的 `E` 必须记录真实模型/profile，`W4-NAV-R` 中的 `R` 必须记录跨域前置状态。`W0` 至 `W4` 是排期阶段，`D-*` 才是功能域身份。
 
 应用壳层的 `W0-SHELL-P` 只覆盖窗口/Overlay、窗口控制、侧栏与内容容器、设置替换、诊断/错误承载、主题/焦点和响应式基线。标题栏菜单树、菜单项动作、中文审计、菜单 Escape/外部点击和编辑命令焦点分派属于 `W0-SHELL-MENU-P/F`。壳层脚本可在截图前只读核对一级菜单合同，防止旧菜单污染视觉证据；除明确标记且不计作菜单证据的系统窗口恢复回退外，不得展开或执行菜单，也不得用该守卫结果扩大 `W0-SHELL-P` 的结论范围。桌面脚本必须分别等待进程和可访问窗口；进程存在但窗口未在限定时间进入 Accessibility/UI Automation 树时应输出独立 `BLOCKED`，不能依赖固定延时后笼统中断。
+
+当前版本的 macOS 桌面验收基线收敛为 **macOS 15+**。原生截图只能由 `swiftc` 构建的 ScreenCaptureKit helper 调用 `SCScreenshotManager` 产生，不得回退到 `screencapture` 或把浏览器截图冒充原生窗口证据。系统版本、`swiftc` 或 helper 编译不满足时属于执行前置条件不成立，必须在启动待测应用前终止；运行批次的 `result.json.environment` 应记录最低系统版本、Swift 版本、helper target 和截图机制。
 
 ## 3. 目录与职责边界
 
@@ -220,6 +222,8 @@ exit=<exitCode>
 | `events.txt` | macOS 原生脚本 | Accessibility/System Events 用例原始结果 | 不替代 `result.json` 汇总 |
 | `automation-stderr.txt` | macOS 原生脚本 | `osascript` 原始 stderr | 不代表整个 shell 进程 stderr |
 | `native-automation.applescript` | macOS 原生脚本 | 本批次实际执行的自动化输入 | 不代表应用源码版本 |
+| `capture-helper.swift` | macOS 15+ 原生脚本 | 本批次 ScreenCaptureKit 截图 helper 的可审计源码 | 不代表已取得屏幕录制权限或截图成功 |
+| `capture-helper-build.log` | macOS helper 首次编译或编译失败时 | `swiftc` 原始编译诊断 | 缓存命中时可不生成；不替代运行期截图错误 |
 | `tauri-dev.log` | macOS `--dev` 时 | 桌面开发进程启动/运行日志 | 不替代用例结果 |
 | `webview/` | 原生批次包含 Playwright companion 时 | companion 自身的 `result.json`、截图和子清单，便于独立复核 | 不替代顶层统一结论或原生平台证据 |
 | `webview-stdout.txt` | 原生批次包含 companion 时 | 隔离内部子进程固定四行输出，防止污染顶层 stdout | 不作为第二份结果源 |
@@ -236,6 +240,8 @@ exit=<exitCode>
 ├── events.txt                          # macOS 原生可选：Accessibility 事件结果
 ├── automation-stderr.txt              # macOS 原生可选：osascript 原始 stderr
 ├── native-automation.applescript      # macOS 原生可选：本批次生成的自动化输入
+├── capture-helper.swift               # macOS 15+ 原生：ScreenCaptureKit helper 源码
+├── capture-helper-build.log            # helper 首次编译/失败时可选：swiftc 原始诊断
 ├── tauri-dev.log                       # macOS --dev 可选：开发应用启动日志
 ├── webview-stdout.txt                  # macOS companion：内部子进程 stdout
 ├── webview-stderr.txt                  # macOS companion：内部子进程 stderr

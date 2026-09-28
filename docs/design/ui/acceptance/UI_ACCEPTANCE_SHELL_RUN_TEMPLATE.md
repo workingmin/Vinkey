@@ -1,6 +1,6 @@
 # 应用壳层与入口本地验收回填模板
 
-本模板供测试人员在 Windows/macOS 桌面环境执行 `W0-SHELL-P`。所有 `<...>` 都是待填项；项目、会话和搜索业务请使用导航域模板。标题栏菜单树、菜单动作、编辑焦点和中文审计另按 [标题栏菜单专项计划](./UI_ACCEPTANCE_TITLE_BAR_PLAN.md) 的 `W0-SHELL-MENU-P/F` 回填。本模板不记录菜单用例。
+本模板供测试人员在 Windows/macOS 15+ 桌面环境执行 `W0-SHELL-P`。所有 `<...>` 都是待填项；项目、会话和搜索业务请使用导航域模板。标题栏菜单树、菜单动作、编辑焦点和中文审计另按 [标题栏菜单专项计划](./UI_ACCEPTANCE_TITLE_BAR_PLAN.md) 的 `W0-SHELL-MENU-P/F` 回填。本模板不记录菜单用例。
 
 ## 1. 执行元数据
 
@@ -17,6 +17,7 @@
 
 | 检查项 | 结果 | 证据/备注 |
 | --- | --- | --- |
+| macOS 为 15+，且 `swiftc` 可构建 ScreenCaptureKit helper（Windows 填 `N/A`） | `<PASS/FAIL/BLOCKED/N/A>` | `<OS_VERSION / SWIFT_VERSION>` |
 | 应用成功启动并显示壳层 | `<PASS/FAIL/BLOCKED>` | `<...>` |
 | 目标平台窗口控制可用 | `<PASS/FAIL/BLOCKED>` | `<...>` |
 | 测试目录和路径已脱敏 | `<PASS/FAIL/BLOCKED>` | `<...>` |
@@ -36,7 +37,7 @@
 npm run test:ui-shell-native-mac -- --output <ARCHIVE_ROOT> [--app /path/to/Vinkey.app]
 ```
 
-该入口默认启动 `/Applications/Vinkey.app`；传入 `--app` 时启动其他已构建应用，传入 `--dev` 时启动 `npm run desktop:dev`。`npm run test:ui-shell-acceptance:sh` 在 macOS 采用相同默认值，加 `--browser` 可仅执行 Playwright。执行前须授予运行终端的 macOS“辅助功能”和“屏幕与系统音频录制”权限。它会在最后一个窗口用例点击关闭交通灯，请使用专用测试实例。
+该入口仅支持 macOS 15+，要求 Xcode Command Line Tools 的 `swiftc`，并只通过 ScreenCaptureKit helper 截图，不提供 `screencapture` 降级。它默认启动 `/Applications/Vinkey.app`；传入 `--app` 时启动其他已构建应用，传入 `--dev` 时启动 `npm run desktop:dev`。`npm run test:ui-shell-acceptance:sh` 在 macOS 采用相同默认值，加 `--browser` 可仅执行 Playwright。执行前须授予运行终端的 macOS“辅助功能”和“屏幕与系统音频录制”权限。它会在最后一个窗口用例点击关闭交通灯，请使用专用测试实例。
 
 ### Windows PowerShell
 
@@ -44,9 +45,9 @@ npm run test:ui-shell-native-mac -- --output <ARCHIVE_ROOT> [--app /path/to/Vink
 <COMMAND_USED>
 ```
 
-推荐浏览器自动化命令：`npm run test:ui-shell-acceptance -- --output <ARCHIVE_ROOT>`。脚本在归档根目录下创建带时间戳的单次运行目录。Playwright 只证明浏览器/WebView DOM 层；请把 Windows/macOS 桌面窗口结果单独填入下表，不能把浏览器截图当作原生菜单或交通灯证据。
+推荐浏览器自动化命令：`npm run test:ui-shell-acceptance -- --output <ARCHIVE_ROOT>`。脚本在归档根目录下创建带时间戳的单次运行目录。Playwright 只证明浏览器/WebView DOM 层；请把 Windows/macOS 15+ 桌面窗口结果单独填入下表，不能把浏览器截图当作原生菜单或交通灯证据。
 
-macOS 原生脚本的顶层 `result.json` 合并原生 Accessibility、darwin Playwright WebView companion 和构建溯源用例，可直接作为 macOS 桌面层统一机器证据。`application` 记录安装包版本、构建号和嵌入 Git SHA，`repository`/`provenance` 记录同版本校验，`environment` 记录架构及 Node.js/Rust/Tauri 版本；`display-info.txt` 保存 `system_profiler SPDisplaysDataType` 原始信息。多显示器、系统缩放和物理 DPI 仍需测试人员在回填表中确认。
+macOS 原生脚本的顶层 `result.json` 合并原生 Accessibility、darwin Playwright WebView companion 和构建溯源用例，可直接作为 macOS 桌面层统一机器证据。`application` 记录安装包版本、构建号和嵌入 Git SHA，`repository`/`provenance` 记录同版本校验，`environment` 记录架构、Node.js/Rust/Tauri/Swift 版本、macOS 15+ 门槛、helper target 与 `ScreenCaptureKit.SCScreenshotManager` 机制；`display-info.txt` 保存 `system_profiler SPDisplaysDataType` 原始信息。多显示器、系统缩放和物理 DPI 仍需测试人员在回填表中确认。
 
 - 退出码：`<EXIT_CODE>`（应与 `result.json.exitCode` 一致）
 - stdout 最终四行：`<CAPTURE_OR_TERMINAL_REFERENCE>`（脚本不生成 `stdout.txt`）
@@ -112,7 +113,7 @@ shell-w0-p-<YYYYMMDD>-<platform>/
 
 - 自动化层：`<PASS/FAIL/BLOCKED>`
 - Windows 桌面层：`<PASS/FAIL/BLOCKED/待回填>`
-- macOS 桌面层：`<PASS/FAIL/BLOCKED/待回填>`
+- macOS 15+ 桌面层：`<PASS/FAIL/BLOCKED/待回填>`
 - 人工 UI 层：`<PASS/FAIL/BLOCKED/待回填>`
 - 导航域材料是否另行提交：`<YES/NO + TEMPLATE_REF>`
 - 综合结论：`<通过/条件通过/不通过/阻断/待平台人工验收>`

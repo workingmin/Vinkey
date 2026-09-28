@@ -8,7 +8,7 @@
 - 回填模板：[UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md](./UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md)
 - 自动化入口：[Playwright 脚本](../../../../scripts/ui-shell/run-ui-shell-acceptance.mjs)，命令为 `npm run test:ui-shell-acceptance`
 - macOS 原生入口：[Accessibility/System Events 脚本](../../../../scripts/ui-shell/run-ui-shell-native-macos.sh)，命令为 `npm run test:ui-shell-native-mac`
-- 当前平台批次：`macOS`；Windows 材料待后续独立执行并回填，不影响本节形成 macOS 阶段结论
+- 当前平台批次：`macOS 15+`；Windows 材料待后续独立执行并回填，不影响本节形成 macOS 阶段结论
 - 报告状态：**macOS 待新版壳层脚本复测**；旧批次混合了菜单操作、未包含同版本 WebView companion 和构建溯源，不能作为新版 `W0-SHELL-P` 完整通过依据
 - 更新日期：`2026-09-28`
 
@@ -16,7 +16,7 @@
 
 本报告只判定应用壳层的平台/结构承载：窗口或 Overlay、窗口控制、侧栏容器、内容页承载、设置替换、诊断/错误承载、主题、焦点和响应式基线。标题栏菜单树、菜单项动作、中文菜单审计和菜单关闭由独立的 [标题栏菜单专项计划](./UI_ACCEPTANCE_TITLE_BAR_PLAN.md) 的 `W0-SHELL-MENU-P/F` 执行；本报告不把菜单结果计入 `W0-SHELL-P`，也不把旧菜单自动化结果当作目标菜单通过。项目、会话、搜索、标题生命周期和删除边界属于 `D-NAV`，分别由 `W0-NAV-F`、`W2-NAV-E`、`W4-NAV-R` 判定；本报告不把侧栏结构截图当作导航业务通过。
 
-`W0-SHELL-P` 不要求 Ollama。浏览器演示只能支持结构观察，不能替代 Windows/macOS Tauri 窗口控制、DPI 和真实尺寸证据；原生菜单不在本门槛范围内。
+`W0-SHELL-P` 不要求 Ollama。浏览器演示只能支持结构观察，不能替代 Windows/macOS 15+ Tauri 窗口控制、DPI 和真实尺寸证据；原生菜单不在本门槛范围内。
 
 标题栏菜单的目标语义和缺口以 [TITLE_BAR_DESIGN.md](../TITLE_BAR_DESIGN.md) 为准，但不属于本报告的 `SHELL-P-*` 用例。此前批次中“文件 / 编辑 / 查看 / 窗口 / 帮助”的机器 PASS 只证明旧菜单行为；新版壳层脚本只在截图前核对目标一级菜单，菜单动作和命令焦点分派仍应在 `W0-SHELL-MENU-P/F` 中复测。
 
@@ -24,7 +24,7 @@
 
 | 用例 | 操作链路 | 结构断言 | 当前状态 |
 | --- | --- | --- | --- |
-| `SHELL-P-001` 应用窗口/Overlay 承载 | Windows 自绘 / macOS Overlay | 平台装饰方式正确；内容区避让标题栏安全区；不依赖菜单树 | Playwright 只证明 DOM/布局；macOS/Windows 实机证据待新版批次 |
+| `SHELL-P-001` 应用窗口/Overlay 承载 | Windows 自绘 / macOS Overlay | 平台装饰方式正确；内容区避让标题栏安全区；不依赖菜单树 | Playwright 只证明 DOM/布局；macOS 15+/Windows 实机证据待新版批次 |
 | `SHELL-P-002` 窗口控制 | 最小化 → 最大化/还原 → 关闭 | 动作正确；状态同步；关闭遵循平台行为 | 原生脚本覆盖交通灯/缩放/最小化/关闭；Windows 待执行 |
 | `SHELL-P-003` 侧栏容器 | 展开 ↔ 52px 折叠 → 恢复 | 品牌、全局入口承载和设置入口不丢；macOS Overlay 不遮挡 | 代码/浏览器自动化已覆盖，目标平台人工材料待补 |
 | `SHELL-P-004` 内容页容器 | 对话 ↔ 文件 ↔ 日志 | 内容区互斥切换，容器尺寸稳定；业务状态由各域负责 | Playwright 覆盖无项目空态和三页容器；目标平台材料待补 |
@@ -35,7 +35,7 @@
 
 ## 3. 当前代码与自动化证据
 
-Playwright 自动化入口支持按平台运行。macOS 原生入口将同版本 Playwright 的 darwin WebView 用例作为 `webview/` companion 合并到同一顶层 `result.json`，覆盖侧栏折叠、设置返回、对话/文件/日志切换、无工作区空态、错误条、主题、键盘焦点和三个目标视口；原生入口通过 Accessibility/System Events 执行交通灯、窗口缩放/最小化/关闭和窗口尺寸，并只读核对一级菜单合同。默认启动会拒绝复用已有可见窗口；已有零窗口进程会先正常退出再重启，随后最多等待 30 秒让主窗口进入 Accessibility 树。绿色交通灯切换后若离开 AX 树，脚本可调用“窗口”菜单恢复窗口，但必须把 `menu-recovery:<菜单项>` 写入用例明细；该恢复动作不计入标题栏菜单专项证据。标题栏菜单另由 `W0-SHELL-MENU-P/F` 归档。显示器原始信息写入 `display-info.txt`，事件结果写入 `events.txt`；构建溯源、工具链、统一退出码和证据索引只写入唯一机器结果源 `result.json`，不再生成重复的环境摘要文件。`webview/` 保留自己的结果与清单。Windows 原生窗口和真实 DPI 仍需 Windows UI Automation 入口或人工材料。
+Playwright 自动化入口支持按平台运行。macOS 原生入口仅支持 macOS 15+，由 `swiftc` 构建 ScreenCaptureKit helper 并通过 `SCScreenshotManager` 截图，不提供 `screencapture` 降级。它将同版本 Playwright 的 darwin WebView 用例作为 `webview/` companion 合并到同一顶层 `result.json`，覆盖侧栏折叠、设置返回、对话/文件/日志切换、无工作区空态、错误条、主题、键盘焦点和三个目标视口；原生入口通过 Accessibility/System Events 执行交通灯、窗口缩放/最小化/关闭和窗口尺寸，并只读核对一级菜单合同。默认启动会拒绝复用已有可见窗口；已有零窗口进程会先正常退出再重启，随后最多等待 30 秒让主窗口进入 Accessibility 树。绿色交通灯切换后若离开 AX 树，脚本可调用“窗口”菜单恢复窗口，但必须把 `menu-recovery:<菜单项>` 写入用例明细；该恢复动作不计入标题栏菜单专项证据。标题栏菜单另由 `W0-SHELL-MENU-P/F` 归档。显示器原始信息写入 `display-info.txt`，事件结果写入 `events.txt`；构建溯源、工具链、Swift/helper 信息、统一退出码和证据索引只写入唯一机器结果源 `result.json`，不再生成重复的环境摘要文件。`webview/` 保留自己的结果与清单。Windows 原生窗口和真实 DPI 仍需 Windows UI Automation 入口或人工材料。
 
 | 证据 | 覆盖 | 结果/限制 |
 | --- | --- | --- |
@@ -45,7 +45,7 @@ Playwright 自动化入口支持按平台运行。macOS 原生入口将同版本
 | `src/components/SettingsPage.test.tsx` | 设置页状态和连接失败 | 归属 `D-MODEL`，不替代壳层返回验收 |
 | `src/App.tsx`、`src/styles.css` | 页面组装、断点、标题栏和内容容器源码 | Playwright 覆盖仍不等价于 Tauri 桌面壳层 |
 | `scripts/ui-shell/run-ui-shell-acceptance.mjs` | Playwright WebView 层自动操作、截图、尺寸断言和 JSON；支持 `--platform`、`--skip-native-evidence`、`--output-exact` | 不驱动 Tauri 原生菜单/窗口控件 |
-| `scripts/ui-shell/run-ui-shell-native-macos.sh` | macOS Accessibility/System Events 原生窗口操作、启动/窗口就绪检查、Playwright companion、构建溯源、截图、窗口尺寸和统一 JSON | 需要辅助功能/屏幕录制权限；无法在 Linux/CI 替代执行；已有可见窗口时阻断；只读核对菜单合同，窗口恢复回退不作为菜单验收证据 |
+| `scripts/ui-shell/run-ui-shell-native-macos.sh` | macOS 15+ Accessibility/System Events 原生窗口操作、启动/窗口就绪检查、ScreenCaptureKit helper 截图、Playwright companion、构建溯源、窗口尺寸和统一 JSON | 需要 `swiftc`、辅助功能/屏幕录制权限；不支持 macOS 14 及以下；无法在 Linux/CI 替代执行；已有可见窗口时阻断；只读核对菜单合同，窗口恢复回退不作为菜单验收证据 |
 
 壳层脚本不得通过菜单选择器断言标题栏设计已完成；菜单名称、菜单动作和编辑焦点命令使用 [UI_ACCEPTANCE_TITLE_BAR_PLAN.md](./UI_ACCEPTANCE_TITLE_BAR_PLAN.md) 的专项脚本和人工证据。壳层脚本只验证菜单无关的窗口、容器和页面状态。
 
@@ -100,9 +100,9 @@ Playwright 自动化入口支持按平台运行。macOS 原生入口将同版本
 
 ### 5.1 环境
 
-- Windows/macOS 版本、架构、DPI/显示缩放、实际窗口尺寸。
-- Vinkey 版本/Git SHA、Node.js/Rust/Tauri 版本；本域无模型时填写 `N/A`。
-- 脚本 ID/版本、命令、顶层 `result.json`、`SHA256SUMS`、`screenshots/`、`events.txt`、`automation-stderr.txt`，以及 `webview/` companion 目录和 `webview-stdout.txt`/`webview-stderr.txt`。stdout 只需记录终端最终四行；逐用例、应用/仓库版本和工具链状态在顶层 JSON 中统一查看。`result.json.exitCode` 与进程退出码一致，无需手工执行 `echo $?`。
+- Windows/macOS 15+ 版本、架构、DPI/显示缩放、实际窗口尺寸。
+- Vinkey 版本/Git SHA、Node.js/Rust/Tauri 版本；macOS 另记录 Swift 版本、helper target 和 ScreenCaptureKit 机制；本域无模型时填写 `N/A`。
+- 脚本 ID/版本、命令、顶层 `result.json`、`SHA256SUMS`、`screenshots/`、`events.txt`、`automation-stderr.txt`、`capture-helper.swift`，以及 `webview/` companion 目录和 `webview-stdout.txt`/`webview-stderr.txt`。`capture-helper-build.log` 仅在首次编译或失败时存在。stdout 只需记录终端最终四行；逐用例、应用/仓库版本和工具链状态在顶层 JSON 中统一查看。`result.json.exitCode` 与进程退出码一致，无需手工执行 `echo $?`。
 
 ### 5.2 最低截图/录屏集合
 
