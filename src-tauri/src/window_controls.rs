@@ -52,6 +52,13 @@ mod native {
         apply(window, None)?;
         let target = window.clone();
         window.on_window_event(move |event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                if let Err(error) = target.hide() {
+                    eprintln!("Native window hide failed: {error}");
+                }
+                return;
+            }
             if matches!(
                 event,
                 WindowEvent::Resized(_)

@@ -30,10 +30,10 @@ macOS Tauri 原生壳层验收（W0-SHELL-P）
   1. 在“系统设置 → 隐私与安全性 → 辅助功能”允许 Terminal/终端（或运行本脚本的 IDE）控制电脑。
   2. 若需要屏幕截图权限，在“屏幕与系统音频录制”中允许相同的应用。
   3. 运行 `npm install --include=dev`，并准备 Rust/Tauri 开发环境。
-  4. 默认模式执行前完全退出已有 Vinkey 进程，以便本批次绑定新的 app.start 构建记录。
+  4. 默认模式发现已有可见窗口时会阻断；已有零窗口进程会正常退出并重新启动，以绑定新的 app.start 构建记录。
   5. 安装包应由当前干净 Git HEAD 构建；版本或 Git SHA 不一致时 provenance 用例失败。
 
-脚本会点击关闭按钮作为最后一个原生窗口用例；不要把未保存的重要桌面会话作为测试目标。
+安装包模式会点击关闭按钮、通过系统 Reopen 恢复窗口，再次关闭作为清理；不要把未保存的重要桌面会话作为测试目标。
 HELP
 }
 
@@ -158,7 +158,44 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-if ((NO_LAUNCH == 0)); then
+process_exists() {
+  osascript -e "tell application \"System Events\" to exists application process \"$PROCESS_NAME\"" 2>/dev/null | grep -q '^true$'
+}
+
+accessible_window_exists() {
+  osascript -e "tell application \"System Events\" to tell application process \"$PROCESS_NAME\" to get visible of every window" 2>/dev/null | grep -q 'true'
+}
+
+request_installed_app_quit() {
+  if [[ -n "$APP_BUNDLE_ID" ]]; then
+    osascript -e "tell application id \"$APP_BUNDLE_ID\" to quit" >/dev/null 2>&1
+  else
+    osascript -e "tell application \"$PROCESS_NAME\" to quit" >/dev/null 2>&1
+  fi
+}
+
+STARTUP_BLOCK_REASON=""
+if ((NO_LAUNCH == 0)) && process_exists; then
+  if accessible_window_exists; then
+    STARTUP_BLOCK_REASON="验收启动前已有可访问的 $PROCESS_NAME 窗口；为避免关闭未保存内容，请先正常退出应用，或明确使用 --no-launch"
+  else
+    if ((DEV_MODE == 1)); then
+      STARTUP_BLOCK_REASON="验收启动前已有零窗口的开发进程 $PROCESS_NAME；请先终止该开发进程后重试"
+    elif ! request_installed_app_quit; then
+      STARTUP_BLOCK_REASON="无法正常退出已有零窗口进程 $PROCESS_NAME"
+    else
+      for _ in $(seq 1 30); do
+        if ! process_exists; then break; fi
+        sleep 0.5
+      done
+      if process_exists; then
+        STARTUP_BLOCK_REASON="已有零窗口进程 $PROCESS_NAME 在正常退出请求后仍未结束"
+      fi
+    fi
+  fi
+fi
+
+if [[ -z "$STARTUP_BLOCK_REASON" ]] && ((NO_LAUNCH == 0)); then
   if ((DEV_MODE == 0)); then
     open "$APP_PATH" >/dev/null || true
   else
@@ -170,39 +207,48 @@ if ((NO_LAUNCH == 0)); then
   fi
 fi
 
-process_exists() {
-  osascript -e "tell application \"System Events\" to exists application process \"$PROCESS_NAME\"" 2>/dev/null | grep -q '^true$'
-}
-
-if ! process_exists; then
+if [[ -z "$STARTUP_BLOCK_REASON" ]] && ! process_exists; then
   for _ in $(seq 1 180); do
     if process_exists; then break; fi
     sleep 1
   done
 fi
 
-if ! process_exists; then
+WINDOW_READY_WAIT_MS=0
+if [[ -z "$STARTUP_BLOCK_REASON" ]] && process_exists && ! accessible_window_exists; then
+  for _ in $(seq 1 60); do
+    sleep 0.5
+    WINDOW_READY_WAIT_MS=$((WINDOW_READY_WAIT_MS + 500))
+    if accessible_window_exists; then break; fi
+  done
+fi
+
+if [[ -n "$STARTUP_BLOCK_REASON" ]]; then
+  printf '%s\n' "BLOCKED|SHELL-NATIVE-MAC-PRECONDITION|原生窗口验收启动前置条件|$STARTUP_BLOCK_REASON" >"$EVENTS_FILE"
+elif ! process_exists; then
   printf '未找到 Tauri 进程“%s”。请检查 %s\n' "$PROCESS_NAME" "$DEV_LOG" >&2
   printf '%s\n' 'BLOCKED|SHELL-NATIVE-MAC-LAUNCH|启动 Tauri 桌面应用|Accessibility 进程不可见' >"$EVENTS_FILE"
+elif ! accessible_window_exists; then
+  printf 'Tauri 进程“%s”已出现，但等待 %sms 后仍没有可访问窗口。\n' "$PROCESS_NAME" "$WINDOW_READY_WAIT_MS" >&2
+  printf '%s\n' "BLOCKED|SHELL-NATIVE-MAC-WINDOW-READY|等待 Tauri 窗口进入 Accessibility 树|process=$PROCESS_NAME;waitMs=$WINDOW_READY_WAIT_MS" >"$EVENTS_FILE"
 else
   cat >"$APPLE_SCRIPT_FILE" <<'APPLESCRIPT'
 on run argv
   set reportDir to item 1 of argv
   set appName to item 2 of argv
+  set windowReadyWaitMs to item 3 of argv
+  set appPath to item 4 of argv
   set reportLines to {}
 
   try
     tell application "System Events"
       tell application process appName
         set frontmost to true
-        repeat 1 times
-          delay 1
-        end repeat
-        if not (exists front window) then error "Tauri 进程存在但没有可访问窗口"
+        if not (exists front window) then error "窗口就绪检查通过后，Tauri 主窗口再次变为不可访问"
         set mainWindow to front window
         set initialPosition to position of mainWindow
         set initialSize to size of mainWindow
-        set end of reportLines to "PASS|SHELL-NATIVE-MAC-LAUNCH|Tauri 桌面窗口可访问|position=" & my pairText(initialPosition) & ";size=" & my pairText(initialSize)
+        set end of reportLines to "PASS|SHELL-NATIVE-MAC-LAUNCH|Tauri 桌面窗口可访问|position=" & my pairText(initialPosition) & ";size=" & my pairText(initialSize) & ";windowReadyWaitMs=" & windowReadyWaitMs
 
         set expectedMenuNames to {"Vinkey", "项目", "会话", "编辑", "查看", "窗口", "帮助"}
         set menuNames to {}
@@ -311,6 +357,7 @@ on run argv
           set end of reportLines to "BLOCKED|SHELL-NATIVE-MAC-DISPLAY-BOUNDS|记录桌面点坐标范围|Finder 桌面边界不可访问"
         end if
 
+        set closeConfirmed to false
         try
           my capture(reportDir, "screenshots/03-mac-before-close.png")
           set closePress to my pressTrafficLight(appName, "close")
@@ -319,14 +366,42 @@ on run argv
           else
             delay 1
             if my processHasWindow(appName) then
-              set end of reportLines to "FAIL|SHELL-NATIVE-MAC-WINDOW-CLOSE|点击关闭交通灯|窗口仍然存在;press=" & closePress
+              set end of reportLines to "FAIL|SHELL-NATIVE-MAC-WINDOW-CLOSE|点击关闭交通灯|关闭后仍有可见窗口;press=" & closePress
             else
-              set end of reportLines to "PASS|SHELL-NATIVE-MAC-WINDOW-CLOSE|点击关闭交通灯|主窗口已关闭;press=" & closePress
+              set end of reportLines to "PASS|SHELL-NATIVE-MAC-WINDOW-CLOSE|点击关闭交通灯|主窗口已隐藏且无可见窗口;press=" & closePress
+              set closeConfirmed to true
             end if
           end if
         on error closeError
           set end of reportLines to "BLOCKED|SHELL-NATIVE-MAC-WINDOW-CLOSE|点击关闭交通灯|" & my oneLine(closeError)
         end try
+
+        if closeConfirmed and appPath is not "" then
+          try
+            do shell script "/usr/bin/open " & quoted form of appPath
+            set reopened to false
+            repeat 60 times
+              delay 0.5
+              if my processHasWindow(appName) then
+                set reopened to true
+                exit repeat
+              end if
+            end repeat
+            if reopened then
+              my capture(reportDir, "screenshots/04-mac-window-reopened.png")
+              set end of reportLines to "PASS|SHELL-NATIVE-MAC-WINDOW-REOPEN|关闭后通过系统 Reopen 恢复主窗口|窗口重新可访问并已截图"
+              set cleanupPress to my pressTrafficLight(appName, "close")
+              delay 1
+              if cleanupPress is missing value or my processHasWindow(appName) then
+                set end of reportLines to "BLOCKED|SHELL-NATIVE-MAC-CLEANUP|Reopen 验证后清理窗口|无法再次隐藏主窗口"
+              end if
+            else
+              set end of reportLines to "BLOCKED|SHELL-NATIVE-MAC-WINDOW-REOPEN|关闭后通过系统 Reopen 恢复主窗口|等待 30000ms 后窗口仍不可访问"
+            end if
+          on error reopenError
+            set end of reportLines to "BLOCKED|SHELL-NATIVE-MAC-WINDOW-REOPEN|关闭后通过系统 Reopen 恢复主窗口|" & my oneLine(reopenError)
+          end try
+        end if
       end tell
     end tell
   on error errorMessage
@@ -468,9 +543,16 @@ end restoreMinimizedWindow
 on processHasWindow(appName)
   tell application "System Events"
     tell application process appName
-      return exists front window
+      set currentWindows to every window
+      repeat with windowReference in currentWindows
+        try
+          set candidateWindow to contents of windowReference
+          if visible of candidateWindow is true then return true
+        end try
+      end repeat
     end tell
   end tell
+  return false
 end processHasWindow
 
 on pairText(values)
@@ -497,7 +579,7 @@ on capture(reportDir, relativePath)
 end capture
 APPLESCRIPT
   set +e
-  osascript "$APPLE_SCRIPT_FILE" "$OUTPUT_DIR" "$PROCESS_NAME" >"$EVENTS_FILE" 2>"$AUTOMATION_STDERR"
+  osascript "$APPLE_SCRIPT_FILE" "$OUTPUT_DIR" "$PROCESS_NAME" "$WINDOW_READY_WAIT_MS" "$APP_PATH" >"$EVENTS_FILE" 2>"$AUTOMATION_STDERR"
   AUTOMATION_EXIT=$?
   set -e
   if ((AUTOMATION_EXIT != 0)); then
@@ -670,7 +752,7 @@ const result = {
   schemaVersion: 1,
   generatedAt: new Date().toISOString(),
   acceptance: { id: 'W0-SHELL-P-NATIVE-MAC', domainId: 'D-SHELL', gate: 'P' },
-  suite: { id: 'ui-shell-native-macos', version: '1.2.1' },
+  suite: { id: 'ui-shell-native-macos', version: '1.3.0' },
   repository,
   application,
   provenance,

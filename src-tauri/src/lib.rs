@@ -1244,7 +1244,7 @@ fn record_runtime_event(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(WorkspaceState::default())
         .manage(models::ChatCancellation::default())
@@ -1390,8 +1390,44 @@ pub fn run() {
             database::character_graph_benchmark,
             database::character_graph_path,
         ])
-        .run(tauri::generate_context!())
-        .expect("failed to run Vinkey");
+        .build(tauri::generate_context!())
+        .expect("failed to build Vinkey");
+
+    app.run(|app_handle, event| {
+        #[cfg(target_os = "macos")]
+        if let tauri::RunEvent::Reopen {
+            has_visible_windows,
+            ..
+        } = event
+        {
+            restore_main_window(app_handle, has_visible_windows);
+        }
+        #[cfg(not(target_os = "macos"))]
+        let _ = (app_handle, event);
+    });
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn should_restore_main_window(has_visible_windows: bool) -> bool {
+    !has_visible_windows
+}
+
+#[cfg(target_os = "macos")]
+fn restore_main_window(app: &AppHandle, has_visible_windows: bool) {
+    if !should_restore_main_window(has_visible_windows) {
+        return;
+    }
+    let Some(window) = app.get_webview_window("main") else {
+        eprintln!("macOS reopen failed: main window is unavailable");
+        return;
+    };
+    if let Err(error) = window.show() {
+        eprintln!("macOS reopen show failed: {error}");
+        return;
+    }
+    if let Err(error) = window.set_focus() {
+        eprintln!("macOS reopen focus failed: {error}");
+    }
 }
 
 #[cfg(test)]
@@ -1420,5 +1456,11 @@ mod tests {
             "code"
         );
         assert!(ensure_document_extension(Path::new("image.png")).is_err());
+    }
+
+    #[test]
+    fn restores_main_window_only_when_macos_has_no_visible_windows() {
+        assert!(should_restore_main_window(false));
+        assert!(!should_restore_main_window(true));
     }
 }

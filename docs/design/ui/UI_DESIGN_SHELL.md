@@ -2,7 +2,7 @@
 
 - 状态：`D-SHELL` 当前实现基线与目标约束；标题栏目标菜单已实现，待双平台专项验收
 - 版本：`0.1.0`
-- 更新日期：`2026-09-24`
+- 更新日期：`2026-09-28`
 - 适用端：Windows、macOS 桌面应用；浏览器仅用于演示和代码层验证
 - 功能域：`D-SHELL` 应用壳层与入口
 - 业务入口：[UI_ENTRY_POINTS.md](./UI_ENTRY_POINTS.md)
@@ -186,7 +186,7 @@ Windows 自绘标题栏显示品牌、当前项目/模型、“项目/会话/编
 | --- | --- | --- | --- | --- | --- |
 | `UI-SHELL-APP-MENUS` | 入口 | `BF-SHELL-*`、`BF-NAV-*`、文档和诊断入口 | 汇集应用级命令；平台承载不同但语义一致 | `src/App.tsx`、`src/lib/titleBarMenu.ts`、`installMacMenu` | 已实现，待 `W0-SHELL-MENU-P/F` 验收 |
 | `UI-SHELL-MENU-TRIGGER` | 操作 | `EP-SHELL-*` | 一次展开一个菜单；外部点击/Escape 关闭 | `src/App.tsx` | 已实现 |
-| `UI-SHELL-WINDOW-CONTROLS` | 操作 | `BF-SHELL-003` / `EP-SHELL-003` | 最小化、最大化/还原、关闭和状态同步 | `src/App.tsx`、Tauri bridge | 已实现 |
+| `UI-SHELL-WINDOW-CONTROLS` | 操作 | `BF-SHELL-003` / `EP-SHELL-003` | 最小化、最大化/还原、关闭和状态同步；macOS 关闭后保留进程，Dock/系统 Reopen 恢复主窗口 | `src/App.tsx`、Tauri bridge、`src-tauri/src/window_controls.rs` | 已实现，待 macOS 实机复测 |
 | `UI-SHELL-CONTENT-SWITCHER` | 入口 | `BF-NAV-001..003` / `EP-NAV-001..003` | 互斥切换三类内容页，不改变承载状态 | `src/App.tsx` `ContentPanel` | 已实现 |
 | `UI-SHELL-CONTENT-SUMMARY` | 状态 | `BF-NAV-001..003` / `EP-NAV-001..003` | 显示页面、工作区和活动模型摘要 | `src/App.tsx` | 已实现 |
 | `UI-SHELL-RUNTIME-LOG-DIALOG` | 结果 | `BF-DIAGNOSTICS-001` / `EP-DIAGNOSTICS-001` | 只读诊断弹窗；焦点约束和 Escape 仍待补证据 | `src/App.tsx` | 部分实现 |
@@ -202,7 +202,7 @@ Windows 自绘标题栏显示品牌、当前项目/模型、“项目/会话/编
 | 页面组装 | [`src/App.tsx`](../../../src/App.tsx) | 内容页、设置替换、错误、诊断和菜单挂载 |
 | 应用状态 | [`src/store.ts`](../../../src/store.ts) | 主题、页面承载、设置折叠恢复和运行边界 |
 | 桌面桥接 | [`src/lib/desktop.ts`](../../../src/lib/desktop.ts) | 浏览器演示与 Tauri 分流，窗口/菜单/诊断能力统一封装 |
-| 原生窗口控制 | [`src/lib/nativeWindowControls.ts`](../../../src/lib/nativeWindowControls.ts)、`src-tauri/src/window_controls.rs` | 侧栏宽度、macOS 交通灯和窗口诊断同步 |
+| 原生窗口控制 | [`src/lib/nativeWindowControls.ts`](../../../src/lib/nativeWindowControls.ts)、`src-tauri/src/window_controls.rs` | 侧栏宽度、macOS 交通灯、关闭隐藏、Reopen 恢复和窗口诊断同步 |
 | 样式与断点 | [`src/styles.css`](../../../src/styles.css) | 网格宽度、平台安全区、折叠和断点 |
 
 ## 8. 资源交付与设计验收标准
