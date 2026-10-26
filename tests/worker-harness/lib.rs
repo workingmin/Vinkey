@@ -120,6 +120,8 @@ pub mod models {
         Ok("未找到与任务相关的证据。".into())
     }
 }
+#[path = "../../src-tauri/src/conversation_activity.rs"]
+mod conversation_activity;
 #[path = "../../src-tauri/src/job_service.rs"]
 mod job_service;
 #[path = "../../src-tauri/src/long_text.rs"]

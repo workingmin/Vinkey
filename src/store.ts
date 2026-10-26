@@ -17,6 +17,7 @@ interface AppState {
   projects: ProjectSummary[]
   projectTransition: boolean
   pendingChatRequests: number
+  pendingConversationRequests: Record<string, number>
   tabs: DocumentTab[]
   activePath: string | null
   contextDocuments: ContextDocument[]
@@ -109,6 +110,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   projects: [],
   projectTransition: false,
   pendingChatRequests: 0,
+  pendingConversationRequests: {},
   tabs: [],
   activePath: null,
   contextDocuments: [],

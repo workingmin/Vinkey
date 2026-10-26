@@ -33,6 +33,7 @@ const PROJECTS_KEY = 'vinkey.demo.projects'
 const MEMORY_KEY = 'vinkey.demo.projectMemory'
 const FINGERPRINT_KEY = 'vinkey.demo.connectionFingerprints'
 const demoCancellations = new Set<string>()
+const demoConversationRequests = new Map<string, number>()
 const demoTaskJobs = new Map<string, TaskJob>()
 const demoProjectDocuments = new Map<string, Map<string, DocumentSnapshot>>()
 const demoCredentialKeys = new Map<string, string>()
@@ -985,8 +986,33 @@ export async function clearConversationRunHistory(workspaceId?: string): Promise
   return invoke<number>('clear_conversation_run_history', { workspaceId })
 }
 
+export async function beginConversationRequest(id: string, workspaceId: string, existing: boolean): Promise<void> {
+  if (!isDesktop()) {
+    const values = readDemoConversations(workspaceId)
+    if (existing && !values.some((conversation) => conversation.id === id)) throw new Error('会话记录已删除，请新建会话')
+    const key = JSON.stringify([workspaceId, id])
+    demoConversationRequests.set(key, (demoConversationRequests.get(key) ?? 0) + 1)
+    return
+  }
+  await invoke('begin_conversation_request', { id, workspaceId, existing })
+}
+
+export async function endConversationRequest(id: string, workspaceId: string): Promise<void> {
+  if (!isDesktop()) {
+    const key = JSON.stringify([workspaceId, id])
+    const count = (demoConversationRequests.get(key) ?? 0) - 1
+    if (count > 0) demoConversationRequests.set(key, count)
+    else demoConversationRequests.delete(key)
+    return
+  }
+  await invoke('end_conversation_request', { id, workspaceId })
+}
+
 export async function deleteConversation(id: string, workspaceId?: string): Promise<void> {
   if (!isDesktop()) {
+    if (demoConversationRequests.has(JSON.stringify([workspaceId ?? readDemoProjects().activeId, id]))) {
+      throw new Error('此会话的任务尚未结束，请等待任务停止并完成保存后再删除')
+    }
     localStorage.setItem(demoConversationKey(workspaceId), JSON.stringify(readDemoConversations(workspaceId).filter((item) => item.id !== id)))
     return
   }

@@ -12,6 +12,7 @@ use std::{
 use tauri::{AppHandle, Manager, State, WebviewWindow};
 
 mod character_graph;
+mod conversation_activity;
 mod database;
 mod hardware;
 mod job_service;
@@ -701,7 +702,10 @@ fn authorize_workspace(
 
 fn ensure_workspace_idle(app: &AppHandle) -> Result<(), String> {
     let chats = app.state::<models::ChatCancellation>();
-    if !chats.0.lock().map_err(|_| "会话状态不可用")?.is_empty()
+    if app
+        .state::<conversation_activity::ConversationActivity>()
+        .has_requests()
+        || !chats.0.lock().map_err(|_| "会话状态不可用")?.is_empty()
         || app
             .state::<worker_service::WorkerRuntimeState>()
             .has_workers()
@@ -1251,6 +1255,7 @@ pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(WorkspaceState::default())
+        .manage(conversation_activity::ConversationActivity::default())
         .manage(models::ChatCancellation::default())
         .manage(worker_service::WorkerRuntimeState::default())
         .manage(task_runtime::TaskDispatchState::default())
@@ -1379,6 +1384,8 @@ pub fn run() {
             database::save_conversation_message,
             database::clear_conversation_run_history,
             database::delete_conversation,
+            database::begin_conversation_request,
+            database::end_conversation_request,
             database::list_project_memory,
             database::search_project_memory,
             database::propose_project_memory,

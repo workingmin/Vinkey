@@ -47,6 +47,7 @@ import { normalizeServiceError } from './lib/serviceError'
 import { buildDocumentIndexMessage } from './lib/documentMetadata'
 import { buildFocusedWorkspaceMessage } from './lib/focusedAnalysis'
 import { isLoopbackModelEndpoint } from './lib/modelPrivacy'
+import { withConversationRequest } from './lib/conversationActivity'
 
 import {
   buildMultiFileRevisionContract, buildMultiFileRevisionTargets, buildSelectionRevisionContract,
@@ -643,14 +644,15 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
 
   const send = async () => {
     const state = useAppStore.getState()
-    if (state.projectTransition) return
+    if (state.projectTransition || !prompt.trim() || busy) return
     if (!state.workspace) { setError('请先选择项目'); return }
-    useAppStore.setState((current) => ({ pendingChatRequests: current.pendingChatRequests + 1 }))
-    try { await sendMessage() }
-    finally { useAppStore.setState((current) => ({ pendingChatRequests: current.pendingChatRequests - 1 })) }
+    const nextConversationId = conversationId ?? crypto.randomUUID()
+    try {
+      await withConversationRequest(state.workspace.id, nextConversationId, Boolean(conversationId), () => sendMessage(nextConversationId))
+    } catch (error) { setError(formatError(error)) }
   }
 
-  const sendMessage = async () => {
+  const sendMessage = async (nextConversationId: string) => {
     const value = prompt.trim()
     if (!value || busy) return
     const editorRevision = pendingActionId === 'document-revision' ? pendingEditorRevision : null
@@ -701,7 +703,6 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
     if (taskDispatch.executionPhase === 'clarification-required') {
       const question = taskDispatch.clarification?.question ?? '请补充本次请求需要处理的具体范围。'
       const now = Date.now()
-      const nextConversationId = conversationId ?? crypto.randomUUID()
       const nextTitle = conversationId ? conversationTitle : value.replace(/\s+/g, ' ').slice(0, 28)
       const userMessage = {
         id: crypto.randomUUID(), role: 'user' as const, content: value, createdAt: now,
@@ -890,7 +891,6 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
       return
     }
     const now = Date.now()
-    const nextConversationId = conversationId ?? crypto.randomUUID()
     const nextTitle = conversationId ? conversationTitle : value.replace(/\s+/g, ' ').slice(0, 28)
     if (!conversationId) setConversation({ id: nextConversationId, title: nextTitle, messages, updatedAt: now })
     setPrompt('')

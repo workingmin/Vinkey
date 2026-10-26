@@ -1360,18 +1360,62 @@ pub fn clear_conversation_run_history(
 }
 
 #[tauri::command]
-pub fn delete_conversation(
+pub fn begin_conversation_request(
     id: String,
-    workspace_id: Option<String>,
-    app: tauri::AppHandle,
+    workspace_id: String,
+    existing: bool,
+    activity: State<'_, crate::conversation_activity::ConversationActivity>,
     state: State<'_, crate::WorkspaceState>,
     legacy: State<'_, DatabaseState>,
 ) -> Result<(), String> {
-    crate::ensure_workspace_idle(&app)?;
-    conversation_database(&state, &legacy, workspace_id, false)?
-        .execute("DELETE FROM conversations WHERE id = ?1", [id])
-        .map_err(|error| format!("无法删除会话：{error}"))?;
-    Ok(())
+    activity.begin(workspace_id.clone(), id.clone(), || {
+        let connection = conversation_database(&state, &legacy, Some(workspace_id), true)?;
+        if existing {
+            let exists: bool = connection
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM conversations WHERE id = ?1)",
+                    [&id],
+                    |row| row.get(0),
+                )
+                .map_err(|error| format!("无法读取会话：{error}"))?;
+            if !exists {
+                return Err("会话记录已删除，请新建会话".into());
+            }
+        }
+        Ok(())
+    })
+}
+
+#[tauri::command]
+pub fn end_conversation_request(
+    id: String,
+    workspace_id: String,
+    activity: State<'_, crate::conversation_activity::ConversationActivity>,
+) -> Result<(), String> {
+    activity.end(workspace_id, id)
+}
+
+#[tauri::command]
+pub fn delete_conversation(
+    id: String,
+    workspace_id: Option<String>,
+    activity: State<'_, crate::conversation_activity::ConversationActivity>,
+    workers: State<'_, crate::worker_service::WorkerRuntimeState>,
+    state: State<'_, crate::WorkspaceState>,
+    legacy: State<'_, DatabaseState>,
+) -> Result<(), String> {
+    let workspace_id = match workspace_id {
+        Some(id) => id,
+        None => crate::lock_workspace(&state)?.id,
+    };
+    activity.while_idle(workspace_id.clone(), id.clone(), || {
+        workers.with_idle_conversation(&workspace_id, &id, || {
+            conversation_database(&state, &legacy, Some(workspace_id.clone()), false)?
+                .execute("DELETE FROM conversations WHERE id = ?1", [&id])
+                .map_err(|error| format!("无法删除会话：{error}"))?;
+            Ok(())
+        })
+    })
 }
 
 #[tauri::command]

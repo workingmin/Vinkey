@@ -170,6 +170,7 @@ impl Default for WorkerProgress {
 
 #[derive(Default)]
 struct WorkerControl {
+    conversation: Option<(String, String)>,
     cancel: AtomicBool,
     pause: AtomicBool,
     completed: AtomicUsize,
@@ -213,6 +214,28 @@ pub struct WorkerRuntimeState {
 }
 
 impl WorkerRuntimeState {
+    pub fn with_idle_conversation<T>(
+        &self,
+        workspace_id: &str,
+        conversation_id: &str,
+        operation: impl FnOnce() -> Result<T, String>,
+    ) -> Result<T, String> {
+        let controls = self.controls.lock().map_err(|_| "Worker 运行状态不可用")?;
+        if controls.values().any(|control| {
+            control
+                .conversation
+                .as_ref()
+                .is_some_and(|(workspace, conversation)| {
+                    workspace == workspace_id && conversation == conversation_id
+                })
+        }) {
+            return Err("此会话的后台任务尚未结束，请先停止任务".into());
+        }
+        let result = operation();
+        drop(controls);
+        result
+    }
+
     pub fn has_workers(&self) -> bool {
         self.controls
             .lock()
@@ -2683,7 +2706,13 @@ pub fn start(
         },
     )?;
     persist_start_manifest(jobs_root, workspace, &input)?;
-    let control = Arc::new(WorkerControl::default());
+    let control = Arc::new(WorkerControl {
+        conversation: input
+            .conversation_id
+            .as_ref()
+            .map(|id| (workspace.id.clone(), id.clone())),
+        ..WorkerControl::default()
+    });
     controls.insert(input.job_id.clone(), control.clone());
     drop(controls);
 
@@ -2995,6 +3024,31 @@ pub fn restore_running(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn worker_deletion_guard_is_scoped_to_its_conversation_and_project() {
+        let runtime = WorkerRuntimeState::default();
+        runtime.controls.lock().unwrap().insert(
+            "job".into(),
+            Arc::new(WorkerControl {
+                conversation: Some(("project".into(), "conversation".into())),
+                ..WorkerControl::default()
+            }),
+        );
+        assert!(runtime
+            .with_idle_conversation("project", "conversation", || Ok(()))
+            .is_err());
+        assert!(runtime
+            .with_idle_conversation("other-project", "conversation", || Ok(()))
+            .is_ok());
+        assert!(runtime
+            .with_idle_conversation("project", "history", || Ok(()))
+            .is_ok());
+        runtime.controls.lock().unwrap().clear();
+        assert!(runtime
+            .with_idle_conversation("project", "conversation", || Ok(()))
+            .is_ok());
+    }
 
     fn input() -> StartLongTextWorkerInput {
         let instruction = "分析全文".to_string();

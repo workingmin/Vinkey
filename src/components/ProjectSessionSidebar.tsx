@@ -6,6 +6,7 @@ import { deleteConversation, isDesktop, listConversations, loadConversation, sea
 import { formatConversationAge } from '../lib/conversationTime'
 import { observeNativeWindowControls } from '../lib/nativeWindowControls'
 import { RecordDeletionDialog } from './RecordDeletionDialog'
+import { isConversationBusy } from '../lib/conversationActivity'
 
 type Props = {
   onPageChange: (page: 'chat' | 'file' | 'logs') => void
@@ -23,8 +24,9 @@ function readExpanded(): string[] {
 }
 
 export function ProjectSessionSidebar({ onPageChange, onOpenWorkspace, onRefreshWorkspace, onOpenDocument, onSelectProject, onDeleteProject }: Props) {
-  const { projects, workspace, conversations, conversationId, messages, chatRuns, settingsOpen, sidebarCollapsed, projectTransition,
-    theme, setTheme, setSidebarCollapsed, setSettingsOpen, setError, setConversation, newConversation, removeConversation } = useAppStore()
+  const state = useAppStore()
+  const { projects, workspace, conversations, conversationId, messages, settingsOpen, sidebarCollapsed, projectTransition,
+    theme, setTheme, setSidebarCollapsed, setSettingsOpen, setError, setConversation, newConversation, removeConversation } = state
   const [query, setQuery] = useState('')
   const [expanded, setExpanded] = useState<string[]>(readExpanded)
   const [sessions, setSessions] = useState<Record<string, ConversationSummary[]>>({})
@@ -104,8 +106,7 @@ export function ProjectSessionSidebar({ onPageChange, onOpenWorkspace, onRefresh
     const { project, conversation } = deletion
     if (useAppStore.getState().projectTransition) throw new Error('项目切换中，请稍后重试')
     if (conversation) {
-      if (useAppStore.getState().pendingChatRequests) throw new Error('请先等待当前任务结束，再删除会话记录')
-      if (useAppStore.getState().chatRuns[conversation.id]) throw new Error('会话正在运行，请先停止任务')
+      if (isConversationBusy(useAppStore.getState(), project.id, conversation.id)) throw new Error('此会话的任务尚未结束，请等待任务停止并完成保存后再删除')
       await deleteConversation(conversation.id, project.id)
       if (useAppStore.getState().workspace?.id === project.id) removeConversation(conversation.id)
       setSessions((previous) => ({ ...previous, [project.id]: (previous[project.id] ?? []).filter((item) => item.id !== conversation.id) }))
@@ -167,7 +168,7 @@ export function ProjectSessionSidebar({ onPageChange, onOpenWorkspace, onRefresh
                     {!value && <button className="project-new-session" disabled={busy} onClick={() => void openSession(project)}><CirclePlus />新建会话</button>}
                     {!value && current && !conversationId && <button className="conversation-item active" disabled={busy} onClick={() => onPageChange('chat')}><MessageSquareText /><span><b>新会话</b><small>{Math.max(0, messages.length - 1)} 条消息 · 尚未保存</small></span></button>}
                     {matches.map((conversation) => {
-                      const running = current && Boolean(chatRuns[conversation.id])
+                      const running = isConversationBusy(state, project.id, conversation.id)
                       const age = formatConversationAge(conversation.updatedAt, currentTime)
                       return <div className={`conversation-item ${current && conversationId === conversation.id ? 'active' : ''}`} key={conversation.id}>
                         <button className="conversation-item-select" disabled={busy} onClick={() => void openSession(project, conversation.id)}><MessageSquareText /><span><b title={conversation.title}>{conversation.title}</b><small className="conversation-item-meta">{conversation.messageCount} 条消息{running ? ' · 运行中' : ''}</small></span></button>
