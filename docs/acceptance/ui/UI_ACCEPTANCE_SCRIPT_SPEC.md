@@ -6,8 +6,8 @@
 - 应用壳层浏览器实现：[Playwright 验收脚本](../../../scripts/ui-shell/run-ui-shell-acceptance.mjs)
 - macOS 原生实现：[Accessibility/System Events 验收脚本](../../../scripts/ui-shell/run-ui-shell-native-macos.sh)
 - 关联计划：[UI_ACCEPTANCE_SCRIPT_PLAN.md](./UI_ACCEPTANCE_SCRIPT_PLAN.md)
-- 关联回填模板：[UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md](./acceptance/UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md)、[UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md](./acceptance/UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md)、[UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md](./acceptance/UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md)
-- 标题栏菜单专项：[UI_ACCEPTANCE_TITLE_BAR_PLAN.md](./acceptance/UI_ACCEPTANCE_TITLE_BAR_PLAN.md)
+- 关联回填模板：[UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md](./UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md)、[UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md](./UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md)、[UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md](./UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md)
+- 标题栏菜单专项：[UI_ACCEPTANCE_TITLE_BAR_PLAN.md](./UI_ACCEPTANCE_TITLE_BAR_PLAN.md)
 
 ## 1. 目的与适用范围
 
@@ -54,7 +54,7 @@
 | `src/**/*.test.ts(x)` | 与单个模块紧密相关的 Vitest 测试 | 依赖真实 Ollama 的长时间验收 |
 | `tests/<domain>/` | 跨模块合同测试、CLI 测试、测试素材和 harness | 面向测试人员的命令行入口 |
 | `scripts/<domain>/` | 可执行验收脚本、跨平台包装器和结果格式化 | `*.test.*`、永久 API Key、业务 fixture 正文 |
-| `docs/design/ui/acceptance/` | 报告、回填模板和人工观察记录 | 未脱敏的原始日志或凭据 |
+| `docs/acceptance/ui/` | 报告、回填模板和人工观察记录 | 未脱敏的原始日志或凭据 |
 | 测试人员本地归档目录 | `result.json`、原始平台诊断、截图/录屏和校验清单；完整终端 stdout/stderr 仅在需要时由调用方另行保存 | 提交到 Git 的密钥、正文全文、个人目录信息 |
 
 脚本必须通过自身路径解析仓库根目录，不能依赖调用者当前目录。Shell、PowerShell 和 npm 入口应调用同一份核心实现，不能各自复制业务逻辑。
@@ -254,6 +254,6 @@ exit=<exitCode>
 
 macOS 原生入口在隐私扫描通过后，默认于运行目录旁生成 `run-<timestamp>.tar.gz`；扫描失败时保留本地诊断但不得生成 tar。归档成员只包含同名运行目录，owner/group 固定且不携带扩展属性；helper 二进制缓存不进入归档。归档必须在文本脱敏、隐私扫描和 `SHA256SUMS` 完成后生成。截图必须是目标应用窗口级画面，禁止把完整桌面作为可分发验收证据。
 
-回传给验收报告的最小集合是：`result.json`、`SHA256SUMS`、执行命令、人工 UI 观察表、截图/录屏索引和该平台实际产生的原始诊断文件。报告按功能域使用对应模板回填：模型设置使用 [`UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md`](./acceptance/UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md)，壳层使用 [`UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md`](./acceptance/UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md)，项目/会话导航使用 [`UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md`](./acceptance/UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md)。未提供原始 JSON 或人工观察时，结论保持“待回填”或“条件通过”。
+回传给验收报告的最小集合是：`result.json`、`SHA256SUMS`、执行命令、人工 UI 观察表、截图/录屏索引和该平台实际产生的原始诊断文件。报告按功能域使用对应模板回填：模型设置使用 [`UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md`](./UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md)，壳层使用 [`UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md`](./UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md)，项目/会话导航使用 [`UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md`](./UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md)。未提供原始 JSON 或人工观察时，结论保持“待回填”或“条件通过”。
 
 测试人员可以上传完整附件，也可以在协作平台只粘贴脱敏摘要并提供文件 SHA-256。任何上传前必须检查 API Key、正文、用户目录和系统凭据是否已脱敏。

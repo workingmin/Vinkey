@@ -2,7 +2,7 @@
 
 - 功能域：`D-NAV` 项目与会话导航
 - 验收标识：`W0-NAV-F`、`W2-NAV-E`、`W4-NAV-R`
-- 验收对象：[UI_DESIGN_NAVIGATION.md](../UI_DESIGN_NAVIGATION.md)、[UI_ENTRY_POINTS.md](../UI_ENTRY_POINTS.md)
+- 验收对象：[UI_DESIGN_NAVIGATION.md](../../design/ui/UI_DESIGN_NAVIGATION.md)、[UI_ENTRY_POINTS.md](../../design/ui/UI_ENTRY_POINTS.md)
 - 回填模板：[UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md](./UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md)
 - 报告状态：设计与用例已建立；本地脚本、目标平台证据和人工材料待补
 - 更新日期：`2026-09-23`
@@ -81,7 +81,7 @@
 | `UI-ACC-NAV-E2E-001` | `W2-NAV-E` | profile/model、会话 ID 摘要、标题阶段、搜索跳转、失败归因 | 待编写；等待目标设计实现 |
 | `UI-ACC-NAV-REGRESSION-001` | `W4-NAV-R` | 任务/草稿状态、阻断结果、恢复动作、过期响应断言 | 待编写 |
 
-脚本必须遵循 [UI_ACCEPTANCE_SCRIPT_SPEC.md](../UI_ACCEPTANCE_SCRIPT_SPEC.md)。fixture 脚本需要 `.sh`、`.ps1` 和统一 TypeScript 核心入口；从仓库外目录可重复执行，并保证清理范围只包含本次生成的临时目录。
+脚本必须遵循 [UI_ACCEPTANCE_SCRIPT_SPEC.md](UI_ACCEPTANCE_SCRIPT_SPEC.md)。fixture 脚本需要 `.sh`、`.ps1` 和统一 TypeScript 核心入口；从仓库外目录可重复执行，并保证清理范围只包含本次生成的临时目录。
 
 ## 7. 测试人员必须回传的材料
 

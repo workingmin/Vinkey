@@ -15,4 +15,4 @@ Playwright 端到端验收入口位于 `scripts/ui-shell/`，其应用壳层交�
 - `tests/` 下的代码由测试运行器执行，不作为人工命令入口。
 - `scripts/` 下的代码可由开发者或 npm 命令直接执行，不包含 `*.test.*`。
 - fixture 生成器位于 `scripts/fixtures/`，生成结果和 SHA-256 清单位于 `tests/fixtures/`。
-- IntentRouter 的测试方法与本地模型验收命令见 `docs/design/agent/intent-router/TEST_ACCEPTANCE.md`。
+- IntentRouter 的测试方法与本地模型验收命令见 `docs/acceptance/intent-router/TEST_ACCEPTANCE.md`。

@@ -69,6 +69,7 @@ npm run package:mac -- --open
 ## 开发文档
 
 - [文档目录与分类说明](docs/README.md)
+- [验收文档审核入口](docs/acceptance/README.md)
 - [开发框架与技术选型](docs/architecture/DEVELOPMENT_FRAMEWORK.md)
 - [AI 业务链路架构与改造方案](docs/architecture/AI_BUSINESS_CHAINS.md)
 - [UI 设计文档总览](docs/design/ui/UI_DESIGN.md)

@@ -3,7 +3,7 @@
 - 状态：已实现确定性路由与专项模型评测入口；三层候选式路由方案进入设计阶段
 - 适用版本：Vinkey 本地 AI 文学创作工作台
 - 上位设计：[Agent 与 Skill 建设计划](../AGENT_SKILL_PLAN.md)
-- 验收手册：[IntentRouter 测试与验收](TEST_ACCEPTANCE.md)
+- 验收手册：[IntentRouter 测试与验收](../../../acceptance/intent-router/TEST_ACCEPTANCE.md)
 - 三层架构方案：[IntentRouter 三层架构与本地模型补强](ARCHITECTURE.md)
 - 候选式测试计划：[IntentRouter 候选路由测试计划](TEST_PLAN.md)
 
@@ -159,4 +159,4 @@ Registry 是 Agent/Skill 映射的权威来源。评测用例必须与 Registry 
 - 低置信正文请求是否仍在 Tool 调用前澄清。
 - 模型评测用例是否与确定性路由结果一致。
 
-具体命令和验收记录格式见 [IntentRouter 测试与验收](TEST_ACCEPTANCE.md)。
+具体命令和验收记录格式见 [IntentRouter 测试与验收](../../../acceptance/intent-router/TEST_ACCEPTANCE.md)。

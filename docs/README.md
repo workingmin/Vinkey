@@ -8,7 +8,8 @@
 | --- | --- | --- |
 | [`design/ui/`](design/ui/) | 页面、交互、视觉系统、入口、状态和 UI 现状基线 | [UI 设计总览](design/ui/UI_DESIGN.md) |
 | [`design/agent/`](design/agent/) | Agent/Skill 建设计划、流程模板和厂商流程对比 | [Agent 流程模板](design/agent/AGENT_FLOW_TEMPLATES.md) |
-| [`design/agent/intent-router/`](design/agent/intent-router/) | IntentRouter 架构、实现、测试计划与验收手册 | [IntentRouter 专项设计](design/agent/intent-router/) |
+| [`design/agent/intent-router/`](design/agent/intent-router/) | IntentRouter 架构、实现与测试计划 | [IntentRouter 专项设计](design/agent/intent-router/) |
+| [`acceptance/`](acceptance/) | 验收计划、脚本规范、专项报告与执行回填模板 | [验收文档审核入口](acceptance/README.md) |
 | [`architecture/`](architecture/) | 技术选型、业务链路和 Runtime 分层 | [AI 业务链路架构](architecture/AI_BUSINESS_CHAINS.md) |
 | [`research/`](research/) | 外部项目调研和候选能力方案 | [GitHub 同类项目调研](research/GITHUB_REFERENCE.md) |
 | [`competitors/`](competitors/) | 竞品分析报告、功能决策台账和验证模板 | [竞品分析总览](competitors/) |
@@ -17,6 +18,7 @@
 ## 维护约定
 
 - UI 页面或交互域变更写入 `design/ui/`；跨域入口、现状盘点和视觉 token 仍由 UI 总览文档索引。
+- 验收计划、脚本规范、专项报告和回填模板统一写入 `acceptance/`，并更新验收审核索引。
 - UI 功能域使用 `D-*` 分类；验收标识使用“波次-功能域-门槛”（`P/F/E/R`），不要把功能域名称和验收波次混用。
 - Agent、Skill、Workflow 和消息流模板写入 `design/agent/`；业务链路的系统边界写入 `architecture/`。
 - 调研结论与待验证方案写入 `research/`，落地后的稳定运行约束迁移或同步到 `architecture/` 或 `runtime/`。
@@ -41,15 +43,21 @@
 - [视觉与组件系统](design/ui/UI_DESIGN_SYSTEM.md)
 - [状态、流程与验收](design/ui/UI_DESIGN_STATES.md)
 - [临时交互状态](design/ui/TEMPORARY_INTERACTION_STATES.md)
-- [UI 验收工作计划](design/ui/UI_ACCEPTANCE_PLAN.md)
-- [UI 验收脚本设计规范](design/ui/UI_ACCEPTANCE_SCRIPT_SPEC.md)
-- [UI 验收脚本编写计划](design/ui/UI_ACCEPTANCE_SCRIPT_PLAN.md)
-- [模型设置专项验收](design/ui/acceptance/UI_ACCEPTANCE_SETTINGS.md)
-- [模型设置本地验收回填模板](design/ui/acceptance/UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md)
-- [应用壳层与入口专项验收](design/ui/acceptance/UI_ACCEPTANCE_SHELL.md)
-- [应用壳层与入口本地验收回填模板](design/ui/acceptance/UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md)
-- [项目与会话导航专项验收](design/ui/acceptance/UI_ACCEPTANCE_NAVIGATION.md)
-- [项目与会话导航本地验收回填模板](design/ui/acceptance/UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md)
+
+### 验收文档
+
+- [验收文档审核入口](acceptance/README.md)
+- [UI 验收工作计划](acceptance/ui/UI_ACCEPTANCE_PLAN.md)
+- [UI 验收脚本设计规范](acceptance/ui/UI_ACCEPTANCE_SCRIPT_SPEC.md)
+- [UI 验收脚本编写计划](acceptance/ui/UI_ACCEPTANCE_SCRIPT_PLAN.md)
+- [模型设置专项验收](acceptance/ui/UI_ACCEPTANCE_SETTINGS.md)
+- [模型设置本地验收回填模板](acceptance/ui/UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md)
+- [应用壳层与入口专项验收](acceptance/ui/UI_ACCEPTANCE_SHELL.md)
+- [应用壳层与入口本地验收回填模板](acceptance/ui/UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md)
+- [项目与会话导航专项验收](acceptance/ui/UI_ACCEPTANCE_NAVIGATION.md)
+- [项目与会话导航本地验收回填模板](acceptance/ui/UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md)
+- [标题栏与功能菜单专项验收计划](acceptance/ui/UI_ACCEPTANCE_TITLE_BAR_PLAN.md)
+- [IntentRouter 测试与验收](acceptance/intent-router/TEST_ACCEPTANCE.md)
 
 ### Agent 与架构
 
@@ -57,7 +65,6 @@
 - [IntentRouter 专项设计](design/agent/intent-router/)
 - [IntentRouter 三层架构](design/agent/intent-router/ARCHITECTURE.md)
 - [IntentRouter 测试计划](design/agent/intent-router/TEST_PLAN.md)
-- [IntentRouter 测试与验收](design/agent/intent-router/TEST_ACCEPTANCE.md)
 - [Agent 流程模板](design/agent/AGENT_FLOW_TEMPLATES.md)
 - [Agent 流程模板对比](design/agent/AGENT_FLOW_COMPARISON.md)
 - [开发框架与技术选型](architecture/DEVELOPMENT_FRAMEWORK.md)

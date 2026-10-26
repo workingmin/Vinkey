@@ -6,8 +6,8 @@
 - 功能域：`D-NAV` 项目与会话导航
 - 业务入口：[UI_ENTRY_POINTS.md](./UI_ENTRY_POINTS.md)
 - 壳层承载：[UI_DESIGN_SHELL.md](./UI_DESIGN_SHELL.md)
-- 专项验收：[UI_ACCEPTANCE_NAVIGATION.md](./acceptance/UI_ACCEPTANCE_NAVIGATION.md)
-- 本地回填：[UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md](./acceptance/UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md)
+- 专项验收：[UI_ACCEPTANCE_NAVIGATION.md](../../acceptance/ui/UI_ACCEPTANCE_NAVIGATION.md)
+- 本地回填：[UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md](../../acceptance/ui/UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md)
 
 ## 1. 文档总述
 
@@ -202,7 +202,7 @@ D-SHELL：窗口、标题栏、侧栏容器、内容区容器
 - 验证阻断、确认、取消、保存后继续和过期结果丢弃。
 - 只复核跨域风险，不重复 `W0-NAV-F` 的全部基础数据合同。
 
-执行矩阵、当前阻断和测试人员材料见[项目与会话导航验收报告](./acceptance/UI_ACCEPTANCE_NAVIGATION.md)。
+执行矩阵、当前阻断和测试人员材料见[项目与会话导航验收报告](../../acceptance/ui/UI_ACCEPTANCE_NAVIGATION.md)。
 
 ## 附录：变更记录
 

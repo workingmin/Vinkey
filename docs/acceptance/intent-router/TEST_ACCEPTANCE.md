@@ -1,9 +1,9 @@
 # IntentRouter 测试与验收
 
-- 对应设计：[IntentRouter 专项设计](README.md)
-- 三层架构：[IntentRouter 三层架构与本地模型补强](ARCHITECTURE.md)
-- 候选式测试计划：[IntentRouter 候选路由测试计划](TEST_PLAN.md)
-- 配置审计：[Vinkey 配置持久化审计](../CONFIG_PERSISTENCE_REVIEW.md)
+- 对应设计：[IntentRouter 专项设计](../../design/agent/intent-router/README.md)
+- 三层架构：[IntentRouter 三层架构与本地模型补强](../../design/agent/intent-router/ARCHITECTURE.md)
+- 候选式测试计划：[IntentRouter 候选路由测试计划](../../design/agent/intent-router/TEST_PLAN.md)
+- 配置审计：[Vinkey 配置持久化审计](../../design/agent/CONFIG_PERSISTENCE_REVIEW.md)
 - 评测套件：`intent-router-eval-3`
 - 目标：分别验证确定性路由合同，以及“本地模型候选输出 + IntentRouter 工程化校验”的实际 Agent 分类能力
 
@@ -101,7 +101,7 @@ CLI 读取 `model_profiles`、`model_profile_connections`、`model_connections`�
 
 旧版桌面应用把 `vinkey.activeModelId` 保存在 WebView localStorage，而不是 SQLite。独立 CLI 无法可靠读取旧值，因此不能把 SQLite 中 `updated_at` 最新的 profile 当作“当前模型”。新版应用完成迁移后 CLI 会读取 SQLite 当前值；未迁移时应显式传入 `--profile-id`，避免误验其他模型。
 
-新版 Vinkey 已将 `activeModelId` 持久化到 SQLite `app_preferences`。启动一次新版应用后，CLI 可以从 SQLite 读取带有 `（当前）` 标记的 profile；升级迁移和其他配置的保留策略见 [配置持久化审计](../CONFIG_PERSISTENCE_REVIEW.md)。
+新版 Vinkey 已将 `activeModelId` 持久化到 SQLite `app_preferences`。启动一次新版应用后，CLI 可以从 SQLite 读取带有 `（当前）` 标记的 profile；升级迁移和其他配置的保留策略见 [配置持久化审计](../../design/agent/CONFIG_PERSISTENCE_REVIEW.md)。
 
 ### 推荐执行顺序
 

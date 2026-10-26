@@ -10,8 +10,8 @@
 - 全局视觉与组件：[UI_DESIGN_SYSTEM.md](./UI_DESIGN_SYSTEM.md)
 - 状态、流程与跨域规则：[UI_DESIGN_STATES.md](./UI_DESIGN_STATES.md)
 - 标题栏专项：[TITLE_BAR_DESIGN.md](./TITLE_BAR_DESIGN.md)
-- 壳层验收：[UI_ACCEPTANCE_SHELL.md](./acceptance/UI_ACCEPTANCE_SHELL.md)
-- 导航验收：[UI_ACCEPTANCE_NAVIGATION.md](./acceptance/UI_ACCEPTANCE_NAVIGATION.md)
+- 壳层验收：[UI_ACCEPTANCE_SHELL.md](../../acceptance/ui/UI_ACCEPTANCE_SHELL.md)
+- 导航验收：[UI_ACCEPTANCE_NAVIGATION.md](../../acceptance/ui/UI_ACCEPTANCE_NAVIGATION.md)
 
 ## 1. 文档总述
 
@@ -220,7 +220,7 @@ Windows 自绘标题栏显示品牌、当前项目/模型、“项目/会话/编
 4. 推荐窗口尺寸无重叠、遮挡或导航跳动；窄屏隐藏行为有明确限制。
 5. 菜单、图标按钮、弹窗和侧栏切换有键盘路径、可见焦点、可读名称和 Escape 关闭路径。
 
-项目/会话/搜索业务不得用 `W0-SHELL-P` 的结构截图代替导航验收；执行结果见 [UI_ACCEPTANCE_SHELL.md](./acceptance/UI_ACCEPTANCE_SHELL.md) 和 [UI_ACCEPTANCE_NAVIGATION.md](./acceptance/UI_ACCEPTANCE_NAVIGATION.md)。
+项目/会话/搜索业务不得用 `W0-SHELL-P` 的结构截图代替导航验收；执行结果见 [UI_ACCEPTANCE_SHELL.md](../../acceptance/ui/UI_ACCEPTANCE_SHELL.md) 和 [UI_ACCEPTANCE_NAVIGATION.md](../../acceptance/ui/UI_ACCEPTANCE_NAVIGATION.md)。
 
 ## 附录：相关 ID 与证据入口
 
@@ -230,7 +230,7 @@ Windows 自绘标题栏显示品牌、当前项目/模型、“项目/会话/编
 | 导航设计 | [UI_DESIGN_NAVIGATION.md](./UI_DESIGN_NAVIGATION.md) |
 | 竞品与决策 | [COMPETITOR_CATALOG.md](../../competitors/COMPETITOR_CATALOG.md)、[FEATURE_DECISIONS.md](../../competitors/FEATURE_DECISIONS.md)，`CF-019` 至 `CF-024`；标题栏证据卡见 [TITLE_BAR_DESIGN.md](./TITLE_BAR_DESIGN.md#21-逐项证据卡) |
 | 设计系统 | [UI_DESIGN_SYSTEM.md](./UI_DESIGN_SYSTEM.md) |
-| 壳层验收 | [UI_ACCEPTANCE_SHELL.md](./acceptance/UI_ACCEPTANCE_SHELL.md)；标题栏菜单专项：[UI_ACCEPTANCE_TITLE_BAR_PLAN.md](./acceptance/UI_ACCEPTANCE_TITLE_BAR_PLAN.md) |
+| 壳层验收 | [UI_ACCEPTANCE_SHELL.md](../../acceptance/ui/UI_ACCEPTANCE_SHELL.md)；标题栏菜单专项：[UI_ACCEPTANCE_TITLE_BAR_PLAN.md](../../acceptance/ui/UI_ACCEPTANCE_TITLE_BAR_PLAN.md) |
 
 ## 变更记录
 

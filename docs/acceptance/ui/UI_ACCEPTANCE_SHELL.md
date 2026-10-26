@@ -2,12 +2,12 @@
 
 - 功能域：`D-SHELL` 应用壳层与入口承载
 - 验收标识：`W0-SHELL-P`
-- 关联设计：[UI_DESIGN_SHELL.md](../UI_DESIGN_SHELL.md)、[TITLE_BAR_DESIGN.md](../TITLE_BAR_DESIGN.md)
+- 关联设计：[UI_DESIGN_SHELL.md](../../design/ui/UI_DESIGN_SHELL.md)、[TITLE_BAR_DESIGN.md](../../design/ui/TITLE_BAR_DESIGN.md)
 - 标题栏菜单专项计划：[UI_ACCEPTANCE_TITLE_BAR_PLAN.md](./UI_ACCEPTANCE_TITLE_BAR_PLAN.md)，拆分为 `W0-SHELL-MENU-P`（平台/结构）与 `W0-SHELL-MENU-F`（fixture 业务入口链路）
 - 导航业务报告：[UI_ACCEPTANCE_NAVIGATION.md](./UI_ACCEPTANCE_NAVIGATION.md)
 - 回填模板：[UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md](./UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md)
-- 自动化入口：[Playwright 脚本](../../../../scripts/ui-shell/run-ui-shell-acceptance.mjs)，命令为 `npm run test:ui-shell-acceptance`
-- macOS 原生入口：[Accessibility/System Events 脚本](../../../../scripts/ui-shell/run-ui-shell-native-macos.sh)，命令为 `npm run test:ui-shell-native-mac`
+- 自动化入口：[Playwright 脚本](../../../scripts/ui-shell/run-ui-shell-acceptance.mjs)，命令为 `npm run test:ui-shell-acceptance`
+- macOS 原生入口：[Accessibility/System Events 脚本](../../../scripts/ui-shell/run-ui-shell-native-macos.sh)，命令为 `npm run test:ui-shell-native-mac`
 - 当前平台批次：`macOS 15+`；Windows 材料待后续独立执行并回填，不影响本节形成 macOS 阶段结论
 - 当前证据批次：`artifacts/ui-shell-native-macos/run-2026-09-28T073118Z.tar.gz`
 - 报告状态：**macOS 条件通过/待证据复测**；`073118Z` 机器结果 20/20 通过，但该历史包仍有截图同步、诊断链路、显示缩放和归档脱敏缺口；四项脚本整改已在 `ui-shell-native-macos@1.5.0` / `ui-shell-playwright@1.2.0` 实施，需新 macOS 批次验证后才能关闭
@@ -19,7 +19,7 @@
 
 `W0-SHELL-P` 不要求 Ollama。浏览器演示只能支持结构观察，不能替代 Windows/macOS 15+ Tauri 窗口控制、DPI 和真实尺寸证据；原生菜单不在本门槛范围内。
 
-标题栏菜单的目标语义和缺口以 [TITLE_BAR_DESIGN.md](../TITLE_BAR_DESIGN.md) 为准，但不属于本报告的 `SHELL-P-*` 用例。此前批次中“文件 / 编辑 / 查看 / 窗口 / 帮助”的机器 PASS 只证明旧菜单行为；新版壳层脚本只在截图前核对目标一级菜单，菜单动作和命令焦点分派仍应在 `W0-SHELL-MENU-P/F` 中复测。
+标题栏菜单的目标语义和缺口以 [TITLE_BAR_DESIGN.md](../../design/ui/TITLE_BAR_DESIGN.md) 为准，但不属于本报告的 `SHELL-P-*` 用例。此前批次中“文件 / 编辑 / 查看 / 窗口 / 帮助”的机器 PASS 只证明旧菜单行为；新版壳层脚本只在截图前核对目标一级菜单，菜单动作和命令焦点分派仍应在 `W0-SHELL-MENU-P/F` 中复测。
 
 ## 2. 设计断言矩阵
 

@@ -3,7 +3,7 @@
 - 版本：`0.1.0`
 - 更新日期：`2026-09-28`
 - 适用环境：Windows/macOS 15+ 桌面环境；真实模型验收使用本地 Ollama 或已批准的兼容服务
-- 统一生命周期：[UI_DESIGN.md](./UI_DESIGN.md) 的“统一验收生命周期”
+- 统一生命周期：[UI_DESIGN.md](../../design/ui/UI_DESIGN.md) 的“统一验收生命周期”
 - 脚本规范：[UI_ACCEPTANCE_SCRIPT_SPEC.md](./UI_ACCEPTANCE_SCRIPT_SPEC.md)
 - 脚本工作计划：[UI_ACCEPTANCE_SCRIPT_PLAN.md](./UI_ACCEPTANCE_SCRIPT_PLAN.md)
 
@@ -50,7 +50,7 @@
 | `W0-EDITOR-F` | `D-EDITOR` | fixture/合同 | 工作区/文件桥接 | 文件树、打开、编辑、保存、Unicode 路径、保存错误和越界 | `UI_ACCEPTANCE_EDITOR.md` |
 | `W0-SHELL-MENU-F` | `D-SHELL` + 入口 fixture | fixture/合同 | `W0-SHELL-MENU-P`、`W0-NAV-F`、`W0-EDITOR-F`；设置入口使用可控 UI fixture | 项目添加/刷新、新建会话、查看页面状态保持、编辑焦点命令、设置打开/返回；不要求 Ollama 或真实多轮会话 | `UI_ACCEPTANCE_TITLE_BAR_PLAN.md`（F 子集） |
 | `W1-MODEL-E` | `D-MODEL` | 真实端到端 | `D-SHELL`、桌面桥接、SQLite、系统凭据库 | profile、服务、连接测试、活动模型、凭据边界、硬件提示和真实 Ollama | `UI_ACCEPTANCE_SETTINGS.md` |
-| `W1-INTENT-E` | `D-INTENT` | 真实端到端 | `D-MODEL` 与真实模型 | IntentRouter 真实输出、schema、失败归因和准入日志 | `design/agent/intent-router/TEST_ACCEPTANCE.md` |
+| `W1-INTENT-E` | `D-INTENT` | 真实端到端 | `D-MODEL` 与真实模型 | IntentRouter 真实输出、schema、失败归因和准入日志 | `acceptance/intent-router/TEST_ACCEPTANCE.md` |
 | `W2-CHAT-E` | `D-CHAT` | 真实端到端 | `D-SHELL`、`D-MODEL`、`D-INTENT` | 多轮发送、流式完成、停止、超时、失败恢复和活动模型快照 | 对话专项报告（待建立） |
 | `W2-NAV-E` | `D-NAV` | 真实端到端 | `W0-NAV-F`、`W2-CHAT-E` | 多项目多会话、标题生命周期、刷新持久化、目标全局搜索和跳转 | `UI_ACCEPTANCE_NAVIGATION.md` |
 | `W3-CONTEXT-E` | `D-CONTEXT` | 真实端到端 | `W0-EDITOR-F`、`W1-MODEL-E`、`W2-CHAT-E` | 上下文范围、召回、预算、来源收据、权限和分析结果 | 上下文专项报告（待建立） |
@@ -114,10 +114,10 @@
 
 ## 附录：相关文档
 
-- [UI 设计总览](./UI_DESIGN.md)
-- [应用壳层设计](./UI_DESIGN_SHELL.md)
-- [项目与会话导航设计](./UI_DESIGN_NAVIGATION.md)
-- [项目与会话导航验收](./acceptance/UI_ACCEPTANCE_NAVIGATION.md)
-- [标题栏菜单专项验收](./acceptance/UI_ACCEPTANCE_TITLE_BAR_PLAN.md)
-- [模型设置验收](./acceptance/UI_ACCEPTANCE_SETTINGS.md)
+- [UI 设计总览](../../design/ui/UI_DESIGN.md)
+- [应用壳层设计](../../design/ui/UI_DESIGN_SHELL.md)
+- [项目与会话导航设计](../../design/ui/UI_DESIGN_NAVIGATION.md)
+- [项目与会话导航验收](./UI_ACCEPTANCE_NAVIGATION.md)
+- [标题栏菜单专项验收](./UI_ACCEPTANCE_TITLE_BAR_PLAN.md)
+- [模型设置验收](./UI_ACCEPTANCE_SETTINGS.md)
 - [验收脚本设计规范](./UI_ACCEPTANCE_SCRIPT_SPEC.md)

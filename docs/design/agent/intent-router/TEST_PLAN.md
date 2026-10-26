@@ -1,7 +1,7 @@
 # IntentRouter 候选路由测试计划
 
 - 对应架构：[IntentRouter 三层架构与本地模型补强](ARCHITECTURE.md)
-- 当前基线：[IntentRouter 测试与验收](TEST_ACCEPTANCE.md)
+- 当前基线：[IntentRouter 测试与验收](../../../acceptance/intent-router/TEST_ACCEPTANCE.md)
 - 目标套件：`intent-router-eval-3`（候选合同已接入评测，运行时 resolver 仍分阶段落地）
 
 ## 1. 测试目标

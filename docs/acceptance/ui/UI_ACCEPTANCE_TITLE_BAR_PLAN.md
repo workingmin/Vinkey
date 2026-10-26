@@ -5,9 +5,9 @@
 - 平台/结构子门槛：`W0-SHELL-MENU-P`
 - fixture 业务链路子门槛：`W0-SHELL-MENU-F`
 - 父验收：`W0-SHELL-P`
-- 设计依据：[TITLE_BAR_DESIGN.md](../TITLE_BAR_DESIGN.md)
+- 设计依据：[TITLE_BAR_DESIGN.md](../../design/ui/TITLE_BAR_DESIGN.md)
 - 壳层报告：[UI_ACCEPTANCE_SHELL.md](./UI_ACCEPTANCE_SHELL.md)
-- 入口总表：[UI_ENTRY_POINTS.md](../UI_ENTRY_POINTS.md)
+- 入口总表：[UI_ENTRY_POINTS.md](../../design/ui/UI_ENTRY_POINTS.md)
 - 计划更新：`2026-09-28`
 
 > 实现基线：目标菜单树、设置归属、Windows 焦点命令桥接和菜单选择器已实现。当前状态为“待验收”，不是 `W0-SHELL-MENU-P/F` 已通过。

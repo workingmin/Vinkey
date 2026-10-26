@@ -1,7 +1,7 @@
 # 模型设置专项验收报告
 
 - 功能域：模型设置
-- 验收对象：[UI_DESIGN_SETTINGS.md](../UI_DESIGN_SETTINGS.md)
+- 验收对象：[UI_DESIGN_SETTINGS.md](../../design/ui/UI_DESIGN_SETTINGS.md)
 - 执行日期：2026-09-22
 - 代码基线：`main`，版本 `0.1.0`
 - 结论：**条件通过（平台执行结果待测试人员回填）**
@@ -22,7 +22,7 @@
 
 ## 2. 竞品证据与设计决策
 
-正式名称和产品层级遵循[竞品术语规范](../../../competitors/TERMINOLOGY.md)。以下分类防止把竞品存在误写成 Vinkey 必须集成：
+正式名称和产品层级遵循[竞品术语规范](../../competitors/TERMINOLOGY.md)。以下分类防止把竞品存在误写成 Vinkey 必须集成：
 
 | 设计事项 | 证据来源 | 证据类别 | Vinkey 决策 | 追踪 |
 | --- | --- | --- | --- | --- |
@@ -38,11 +38,11 @@
 
 | 层级 | 实现位置 | 本轮核对内容 |
 | --- | --- | --- |
-| 前端页面 | [`SettingsPage.tsx`](../../../../src/components/SettingsPage.tsx) | 入口、模型选择器、服务表单、目录状态、删除确认、硬件信息和响应式布局 |
-| 桌面/演示桥接 | [`desktop.ts`](../../../../src/lib/desktop.ts) | 浏览器模拟数据、模型发现、准入检查、连接和模型持久化调用 |
-| 本机硬件 | [`hardwareProfile.ts`](../../../../src/lib/hardwareProfile.ts)、`src-tauri/src/hardware.rs` | 统一内存/独立显存、最低/标准/推荐档位、未知硬件状态 |
+| 前端页面 | [`SettingsPage.tsx`](../../../src/components/SettingsPage.tsx) | 入口、模型选择器、服务表单、目录状态、删除确认、硬件信息和响应式布局 |
+| 桌面/演示桥接 | [`desktop.ts`](../../../src/lib/desktop.ts) | 浏览器模拟数据、模型发现、准入检查、连接和模型持久化调用 |
+| 本机硬件 | [`hardwareProfile.ts`](../../../src/lib/hardwareProfile.ts)、`src-tauri/src/hardware.rs` | 统一内存/独立显存、最低/标准/推荐档位、未知硬件状态 |
 | 后端模型边界 | `src-tauri/src/models.rs` | 地址规范化、凭据指纹、唯一索引、密钥系统凭据库、删除和模型关联 |
-| 应用状态 | [`store.ts`](../../../../src/store.ts) | 活动模型、运行中锁定、删除后的活动模型校正和会话状态 |
+| 应用状态 | [`store.ts`](../../../src/store.ts) | 活动模型、运行中锁定、删除后的活动模型校正和会话状态 |
 
 ## 4. 测试矩阵与执行结果
 
@@ -50,11 +50,11 @@
 
 | 层级 | 测试文件 | 覆盖内容 | 结果 |
 | --- | --- | --- | --- |
-| UI 组件/业务链路 | [`SettingsPage.test.tsx`](../../../../src/components/SettingsPage.test.tsx) | 硬件档位、远程表单、发现与选择、删除校正、失败/缓存、上下展开、去重和密钥不落浏览器存储 | 14/14 通过 |
-| 硬件纯逻辑 | [`hardwareProfile.test.ts`](../../../../src/lib/hardwareProfile.test.ts) | 统一内存、独立显存、未知与低配、回环服务策略 | 通过 |
-| 模型准入 | [`modelEvaluation.test.ts`](../../../../src/lib/modelEvaluation.test.ts) | 延迟、吞吐、质量基线和回归约束 | 通过 |
-| 隐私 | [`modelPrivacy.test.ts`](../../../../src/lib/modelPrivacy.test.ts) | 正文/密钥不进入不应持久化或发送的边界 | 通过 |
-| Store/桌面数据 | [`store.test.ts`](../../../../src/store.test.ts)、[`desktop.test.ts`](../../../../src/lib/desktop.test.ts) | 活动模型和连接/会话数据行为 | 通过 |
+| UI 组件/业务链路 | [`SettingsPage.test.tsx`](../../../src/components/SettingsPage.test.tsx) | 硬件档位、远程表单、发现与选择、删除校正、失败/缓存、上下展开、去重和密钥不落浏览器存储 | 14/14 通过 |
+| 硬件纯逻辑 | [`hardwareProfile.test.ts`](../../../src/lib/hardwareProfile.test.ts) | 统一内存、独立显存、未知与低配、回环服务策略 | 通过 |
+| 模型准入 | [`modelEvaluation.test.ts`](../../../src/lib/modelEvaluation.test.ts) | 延迟、吞吐、质量基线和回归约束 | 通过 |
+| 隐私 | [`modelPrivacy.test.ts`](../../../src/lib/modelPrivacy.test.ts) | 正文/密钥不进入不应持久化或发送的边界 | 通过 |
+| Store/桌面数据 | [`store.test.ts`](../../../src/store.test.ts)、[`desktop.test.ts`](../../../src/lib/desktop.test.ts) | 活动模型和连接/会话数据行为 | 通过 |
 | Rust 数据层 | `src-tauri/src/models.rs`、`database.rs` 内置测试 | 凭据指纹、迁移、唯一身份、历史重复连接处理 | `cargo test --manifest-path src-tauri/Cargo.toml` 被宿主系统库阻断；列为目标平台待办 |
 
 ### 4.2 命令执行
@@ -66,7 +66,7 @@
 | `npm run build` | TypeScript 和 Vite 构建通过；仅有产物 chunk 大小提示 |
 | `cargo test --manifest-path src-tauri/Cargo.toml` | 未完成：宿主 `glib-2.0` 为 2.68.4，依赖要求 ≥2.70；同时缺少 `gdk-3.0` pkg-config 条目 |
 
-此前直接执行 `npm test` 在外部 `NODE_ENV=production` 下触发 `React.act is not a function`，属于 React 生产构建与 Testing Library 的环境兼容问题，不是业务断言失败。新增 [`vitest.config.ts`](../../../../vitest.config.ts) 和 [`src/test/setup.ts`](../../../../src/test/setup.ts) 固定测试环境后，复核通过。
+此前直接执行 `npm test` 在外部 `NODE_ENV=production` 下触发 `React.act is not a function`，属于 React 生产构建与 Testing Library 的环境兼容问题，不是业务断言失败。新增 [`vitest.config.ts`](../../../vitest.config.ts) 和 [`src/test/setup.ts`](../../../src/test/setup.ts) 固定测试环境后，复核通过。
 
 ## 5. UI 业务链路验收
 
