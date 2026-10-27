@@ -1,9 +1,9 @@
 # 正式竞品名录
 
-- 快照日期：`2026-09-22`
+- 基础快照日期：`2026-09-22`；`2026-10-27` 正式补录 WorkBuddy、百度搭子，未全量刷新其他条目的历史统计。
 - 筛选方法：[竞品筛选方法论](SELECTION_METHODOLOGY.md)
 - 名称规则：[竞品术语规范](TERMINOLOGY.md)
-- 说明：只有通过市场认可充分条件的对象才进入本表。设计价值不等于正式竞品资格。
+- 说明：常规入选遵循市场认可充分条件；用户明确指定的正式竞品按决策纳入并独立记录补证状态。正式纳入不等于全部能力、市场指标或界面细节已完成验证。
 - 排序规则：先按类别分组，再按 Vinkey 领域相关性、市场认可度、维护可靠性排序；同分时按规范名称的拼音/ASCII 字母排序，详见[筛选方法论](SELECTION_METHODOLOGY.md#41-正式名录排序规则)。
 
 ## 1. 核心竞品：本地文档与 AI 工作台
@@ -68,6 +68,17 @@ CloudCLI、Opcode、Claude Code Router 和 CLIProxyAPI 需要分开描述：Clou
 | [WPS Office AI](https://www.wps.cn/) | 商业文档办公工作台 | WPS App 2013-02-25 上线；当前版本 26.9.1，2026-09-16 更新 | 中国区 App Store 4.78/5，约 182.2 万条评分；金山办公公开财报和行业报道持续披露 AI 使用增长 | 文档编辑、办公文档 AI、导出和稳定保存 |
 
 WPS Office AI 不与豆包、Kimi 等通用助手混为一类：它的核心竞品价值来自文档格式、编辑器、版本和办公交付，而不是通用对话或长上下文品牌。
+
+## 5.1 商业通用 Agent 工作台
+
+2026-10-27 按用户明确要求将 WorkBuddy、百度搭子补录为**正式竞品**，用于对比文档任务执行、过程可见性、继续处理与结果交付。二者不归入单纯模型品牌或开发者编码工具。原有分组顺序保留；本组不以尚未完成的市场评分排序。
+
+| 规范名称 | 类型与正式纳入依据 | 已核实资料（2026-10-27） | 市场与体验证据边界 | Vinkey 用途 |
+| --- | --- | --- | --- | --- |
+| [WorkBuddy](https://www.codebuddy.cn/docs/workbuddy/Conversation)（腾讯） | 商业通用 Agent 工作台；用户指定正式纳入 | [官方更新日志](https://www.codebuddy.cn/docs/workbuddy/Changelog)有 2026-03-04 上线和持续维护记录；[任务管理文档](https://www.codebuddy.cn/docs/workbuddy/Task-Management)描述状态与继续处理 | 官方产品与维护身份已核实；用户提供过任务过程观察；[App Store 分发](https://apps.apple.com/cn/app/id6761374913)可查。未在本轮计算市场评分或声称完成独立反馈闭环核验 | 推进段、状态命名、活动详情、历史与结果的关联 |
+| [百度搭子](https://dumate.baidu.com/app)（DuMate） | 商业通用办公 Agent 工作台；用户指定正式纳入 | [官方个人版更新动态](https://cloud.baidu.com/doc/Dumate/s/cmmu7shvw)含 2026-03-23 起的版本记录及近期更新；[官方常见问题](https://cloud.baidu.com/discover/dumate-faq-guide-help.html)说明可查看执行操作；[订阅协议](https://cloud.baidu.com/doc/Dumate/s/ymowkv4zo)明确付费服务身份 | 官方文档与维护身份已核实；市场规模、独立反馈闭环、当前个人版具体文案与折叠默认值待实测。企业版资料不得直接当作个人版行为 | 文件/工具操作的可读记录、并行任务归属、任务控制与交付 |
+
+补录取代此前“WorkBuddy 仅为设计来源、未进入正式名录”的口径。两者正式身份不受后续截图补充影响；补充资料用于验证具体行为。过程文案的跨产品比较见[任务过程文案评审草案](../design/ui/TASK_PROCESS_COPY_DESIGN.md)。只保存文字证据与公开链接，禁止保存竞品截图或视觉素材。
 
 ## 6. 商业开发者 Agent
 

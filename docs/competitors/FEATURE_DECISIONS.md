@@ -1,6 +1,6 @@
 # 竞品启发的功能决策总表
 
-- 版本：`2026-10-26`（修订 `CF-006` 过程展示原则）
+- 版本：`2026-10-27`（补录正式竞品、扩展 `CF-006` 文案比较与素材规则）
 - 用途：把竞品观察转换成 Vinkey 可追踪的功能决策；本表不是产品路线图的替代品。
 - 状态说明：详见 [竞品分析目录说明](README.md#状态标签)。
 - 竞品名称和类别：以[正式竞品名录](COMPETITOR_CATALOG.md)和[术语规范](TERMINOLOGY.md)为准。
@@ -14,7 +14,7 @@
 | `CF-003` | 上下文 | Copilot、Cursor、Aider、Continue | 先索引/结构定位，再按相关性和预算读取正文 | `overview / focused / deep` 与独立 coverage/source policy | `已参考` | [上下文设计](../architecture/DEVELOPMENT_FRAMEWORK.md#3-系统分层)；结果带范围和源指纹 |
 | `CF-004` | 编辑器 | MarkText、Typora、Obsidian | 低干扰编辑、预览、保存状态、快捷键和文件树 | 保留编辑/分栏/预览、原子保存和外部变化边界 | `部分参考` | [文件与编辑器](../design/ui/UI_DESIGN_EDITOR.md)；外部修改冲突仍待补齐 |
 | `CF-005` | AI 改稿 | Cursor、Aider、Knote（设计来源） | AI 修改以 diff/审阅呈现，而不是静默覆盖 | `DiffProposal` 逐块接受/拒绝，接受后仍未保存 | `已参考` | `src/lib/diffProposal.ts`、编辑器验收；源指纹变化拒绝应用 |
-| `CF-006` | 长任务 | OpenAI Codex、Claude Code、豆包 | 进度、后台执行、恢复、结果与过程分离 | `TaskJob + Step + Event + Checkpoint`；忠实保留实际过程与历史，两层自主折叠（真实推进段 / 具体活动详情），任务级批量操作不增加层级；本轮不考虑过程合并 | `部分参考` | [Agent 流程对比](../design/agent/AGENT_FLOW_COMPARISON.md)；暂停/恢复必须校验快照；补充观察及证据边界见下文，逐事件历史与折叠行为已实现；默认两层已实现，原生复验待完成 |
+| `CF-006` | 长任务 | OpenAI Codex、Claude Code、Cursor、WorkBuddy、百度搭子、Kimi、豆包 | 进度、后台执行、恢复、结果与过程分离 | `TaskJob + Step + Event + Checkpoint`；忠实保留实际过程与历史，两层自主折叠（真实推进段 / 具体活动详情），任务级批量操作不增加层级；本轮不考虑过程合并 | `部分参考` | [Agent 流程对比](../design/agent/AGENT_FLOW_COMPARISON.md)；暂停/恢复必须校验快照；补充观察及证据边界见下文，逐事件历史与折叠行为已实现；默认两层已实现，原生复验待完成 |
 | `CF-007` | Artifact | Claude Code、豆包、OpenAI Codex | 报告、图表、diff 独立于聊天正文 | 使用类型化 `Answer / Report / Artifact / Proposal`，不运行任意 HTML | `已参考` | [业务链路](../architecture/AI_BUSINESS_CHAINS.md)；产物只读预览和来源可追踪 |
 | `CF-008` | Agent 路由 | OpenAI Codex、Claude Code、Cline | 小任务直接处理，广域任务才升级 Agent/子 Agent | 确定性服务、单次模型、固定 Workflow、Hybrid Agent 分层 | `已参考` | [Agent 模板](../design/agent/AGENT_FLOW_TEMPLATES.md)；路由不能静默扩大权限 |
 | `CF-009` | 项目记忆 | GitHub Copilot、Claude Code、Novelcrafter | 项目指令、记忆和当前上下文分层 | 仅保存已确认事实，按源版本可失效；审校疑点不入记忆 | `部分参考` | `projectMemory` 与长期记忆设计；记忆候选仍需确认 |
@@ -36,11 +36,11 @@
 
 ## CF-006 过程展示修订依据（2026-10-26）
 
-补充证据是用户提供的 WorkBuddy“分析小说”两张交互截图及分段推进机制说明，按组合改造作为设计启发；正式竞品名录未收录 WorkBuddy，本次不据截图将其升级为正式名录成员。截图可见多次“继续处理任务过程”、展开/收起入口和过程与正文交错，不能由此推断其内部事件协议或全部历史持久化能力。
+最初证据是用户提供的 WorkBuddy“分析小说”交互观察及分段推进机制说明：同名续接提示和展开入口具有真实过程及历史查阅价值，不能据此推断内部协议或全部持久化能力。2026-10-27 按用户要求，WorkBuddy 与百度搭子已正式补录至[竞品名录](COMPETITOR_CATALOG.md)；不再沿用“WorkBuddy 仅为设计来源”的口径。截图仅在会话中观察，仓库不保存图像原件或变体。
 
 Vinkey 接受的设计方向是忠实展示实际任务过程，保留多轮推进的历史查阅价值，再用多层折叠控制阅读范围；文案相同不构成删减真实记录的理由。本轮不考虑合并功能，默认两层已落实，跨会话展开偏好待讨论。现有实现与目标态分别记录在[过程展示设计](../design/ui/TEMPORARY_INTERACTION_STATES.md#6-当前实现与目标差距)，现已推进逐事件保留、分页、保存恢复与用户折叠选择保持；默认两层已实现，Rust 原生验收仍受当前环境依赖限制。
 
-CF-006 的文案专项评审见[任务过程文案设计](../design/ui/TASK_PROCESS_COPY_DESIGN.md)，包含两张原始截图、观察边界、当前实现对照与待评审选择。该草案不变更本表的采用状态，也不将 WorkBuddy 新增为正式竞品。
+CF-006 的文案专项评审见[任务过程文案设计](../design/ui/TASK_PROCESS_COPY_DESIGN.md)，覆盖 WorkBuddy、百度搭子、Claude Code、Cursor、Kimi 的公开行为对照，并列出豆包等当前界面的补证项。各产品事实、会话内观察和 Vinkey 设计推断分别标注，文案仍为评审草案。
 
 ## 优先级规则
 

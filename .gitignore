@@ -75,3 +75,7 @@ dev-debug.log
 
 # Acceptance/verification run output (generated, never committed)
 artifacts/
+
+# Competitor screenshots/assets must never be stored in this repository.
+# Repository-wide policy (including renamed/encoded copies): see AGENTS.md.
+/docs/competitors/assets/
