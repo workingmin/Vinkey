@@ -1,17 +1,22 @@
 # 商业与 Agent 产品分析报告
 
-- 观察日期：2026-09-22
+- 初始行为观察日期：2026-09-22；2026-10-27 复核名录、维护来源及研究优先级，未逐项重测历史行为。
 - 设计同步：2026-10-26，仅修订 Vinkey 过程展示取舍，不表示重新调研外部产品。
-- 专项补充：2026-10-27，正式纳入 WorkBuddy、百度搭子；核对相关官方文档并扩展任务过程文案比较。未全量刷新其他章节历史结论；竞品素材仅保留文字观察和公开链接。
+- 当前资料：[正式名录](COMPETITOR_CATALOG.md)与[2026-10-27 快照](RESEARCH_SNAPSHOT_2026_10_27.md)记录当前收录、版本与限制；本报告下文的行为分析保留各自观察范围。
 - 目标：分析可观察的任务编排、上下文、审批、长任务和创作交互，不把商业产品 SDK 作为 Vinkey 的默认依赖。
 - 适用边界：功能、流程和结果形态可借鉴；账号、计费、云端数据面和厂商认证必须单独评估。
 - 名称口径：[竞品术语规范](TERMINOLOGY.md)；正式名单：[正式竞品名录](COMPETITOR_CATALOG.md)。
+
+Vinkey 定位为本地中文创作工作台。中文界面与任务文案优先比较中国区办公 Agent，其次是中文文档与通用助手；开发者产品主要补充运行机制，文学工具保留领域专项价值。市场规模不直接决定设计，精确交互仍需同场景验证。
 
 ## 1. 产品分组
 
 | 产品/体系 | 主要观察对象 | 与 Vinkey 的关系 | 当前结论 |
 | --- | --- | --- | --- |
-| [OpenAI Codex](https://learn.chatgpt.com/docs/overview) | 任务目标、审批、后台执行、事件、diff 和恢复 | Agent Runtime 交互参考 | 已参考流程合同；不作为用户可选 Runtime 集成 |
+| [WorkBuddy](https://www.codebuddy.cn/docs/workbuddy/Conversation) | 通用 Agent 工作台的推进段、过程、任务控制与结果 | 中文 Agent 直接交互参考 | 按同类采用与官方维护证据重新收录；已参考真实过程保留原则，文案方案待评审 |
+| [百度搭子（DuMate）](https://cloud.baidu.com/discover/dumate-faq-guide-help.html) | 办公任务操作、过程查看和多任务 | 中文 Agent 直接交互参考 | 按同类采用与官方维护证据重新收录；官方行为可查，精确界面文案与折叠策略待实测 |
+| [千问办公](https://qwenwork.cn/) | 长任务、历史、权限与交付 | 中文办公 Agent 优先交互参考 | 独立同类采用与官方连续更新支持收录；当前精确界面待实测 |
+| [OpenAI Codex](https://developers.openai.com/learn/codex) | 任务目标、审批、后台执行、事件、diff 和恢复 | Agent Runtime 交互参考 | 已参考流程合同；不作为用户可选 Runtime 集成 |
 | [Claude Code](https://code.claude.com/docs/en/overview) | Tool Loop、权限模式、Artifacts、Skills、子 Agent | Agent Runtime 交互参考 | 已参考权限、Artifact、会话控制；不复用其账号/SDK |
 | [Cursor](https://cursor.com/) | 代码库检索、Agent/Ask、编辑器上下文和 diff | 上下文与改稿参考 | 已参考相关性检索和修改审阅；文学对象需重新建模 |
 | [GitHub Copilot](https://github.com/features/copilot) | Repository indexing、Ask/Research、代码上下文 | 检索和深度分层参考 | 已参考索引优先；不采用云端仓库默认授权 |
@@ -20,8 +25,6 @@
 | Claude 产品的 Research 能力 / [ChatGPT Deep Research](https://help.openai.com/en/articles/10500283-deep-research) | 搜索规划、来源、长时间研究结果 | 联网研究参考 | `待参考`；先完成授权、来源和隐私设计 |
 | 豆包、Kimi、元宝、千问、文心、讯飞星火、DeepSeek | 中文通用与长文本助手 | 附件、耗时入口、文档式长结果和可视化 | 已纳入正式竞品名录；结果展示参考，不把过程展示当作质量证明 |
 | WPS Office AI | 商业文档办公工作台 | 文档编辑、格式、导出、版本和办公 AI | 已纳入正式竞品名录；作为文档交付和编辑器参考 |
-| [WorkBuddy](https://www.codebuddy.cn/docs/workbuddy/Conversation) | 通用 Agent 工作台的推进段、过程、任务控制与结果 | 中文 Agent 直接交互参考 | 2026-10-27 正式补录；已参考真实过程保留原则，文案方案待评审 |
-| [百度搭子（DuMate）](https://cloud.baidu.com/discover/dumate-faq-guide-help.html) | 办公任务操作、过程查看和多任务 | 中文 Agent 直接交互参考 | 2026-10-27 正式补录；官方行为可查，精确界面文案与折叠策略待实测 |
 | Notion/Google Docs | 云文档、协作、评论和分享 | 桌面编辑器边界参考 | 当前不采用云协作，避免改变本地优先威胁模型 |
 
 ## 2. Agent Runtime 共同模式

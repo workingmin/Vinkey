@@ -79,6 +79,7 @@
 - [竞品分析总览](competitors/)
 - [竞品筛选方法论](competitors/SELECTION_METHODOLOGY.md)
 - [正式竞品名录](competitors/COMPETITOR_CATALOG.md)
+- [竞品资料复核快照（2026-10-27）](competitors/RESEARCH_SNAPSHOT_2026_10_27.md)
 - [竞品术语规范](competitors/TERMINOLOGY.md)
 - [竞品功能决策总表](competitors/FEATURE_DECISIONS.md)
 - [开源项目分析报告](competitors/OPEN_SOURCE_REPORT.md)
