@@ -13,7 +13,6 @@
 | [竞品功能决策总表](FEATURE_DECISIONS.md) | 跨项目、跨功能 | 某个能力是谁启发的，当前状态是什么，下一步怎么验收 |
 | [竞品筛选方法论](SELECTION_METHODOLOGY.md) | 分类收录条件、证据角色与复审规则 | 为什么一个项目能进入正式竞品列表 |
 | [正式竞品名录](COMPETITOR_CATALOG.md) | 正式竞品、专项参考、观察与维护状态 | 当前应该比较哪些项目，哪些只能作为设计来源 |
-| [2026-10-27 资料快照](RESEARCH_SNAPSHOT_2026_10_27.md) | 市场来源、12 个仓库、8 个中国区 iOS 条目与商业维护资料 | 本轮更新的数据、口径和未验证范围是什么 |
 | [竞品术语规范](TERMINOLOGY.md) | 产品、CLI、SDK、路由器和代理层的规范名称 | 如何避免把不同层级的 Agent 产品混写 |
 | [开源项目分析报告](OPEN_SOURCE_REPORT.md) | GitHub 与开源桌面/编辑器项目 | 哪些本地优先、编辑器、知识组织和上下文设计可借鉴 |
 | [商业与 Agent 产品分析报告](COMMERCIAL_AGENT_REPORT.md) | 商业写作产品、Coding Agent、通用 Agent | 哪些任务编排、审批、Artifact、长任务和创作体验可借鉴 |
@@ -50,6 +49,8 @@
 - “参考”不等于“集成”。Vinkey 当前保持 `Tauri 2 + React + Rust + SQLite` 和 Ollama/OpenAI-compatible Provider 边界，不因竞品存在就引入其 SDK、账号体系或商用 API。
 
 ## 维护流程
+
+资料与结论在对应主题文档中原位维护，量化证据统一放入[正式名录](COMPETITOR_CATALOG.md)。历史版本和变更原因通过 Git 追溯，不新增快照型文档，也不在多个报告重复维护同一批统计数据。
 
 新增或更新报告时：
 

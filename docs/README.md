@@ -17,6 +17,8 @@
 
 ## 维护约定
 
+- 主题文档原位更新，保留当前有效内容、必要来源与核验日期；历史版本及变更原因通过 Git 提交记录管理，不另建按日期或版本拆分的快照型文档。
+
 - UI 页面或交互域变更写入 `design/ui/`；跨域入口、现状盘点和视觉 token 仍由 UI 总览文档索引。
 - 验收计划、脚本规范、专项报告和回填模板统一写入 `acceptance/`，并更新验收审核索引。
 - UI 功能域使用 `D-*` 分类；验收标识使用“波次-功能域-门槛”（`P/F/E/R`），不要把功能域名称和验收波次混用。
@@ -79,7 +81,6 @@
 - [竞品分析总览](competitors/)
 - [竞品筛选方法论](competitors/SELECTION_METHODOLOGY.md)
 - [正式竞品名录](competitors/COMPETITOR_CATALOG.md)
-- [竞品资料复核快照（2026-10-27）](competitors/RESEARCH_SNAPSHOT_2026_10_27.md)
 - [竞品术语规范](competitors/TERMINOLOGY.md)
 - [竞品功能决策总表](competitors/FEATURE_DECISIONS.md)
 - [开源项目分析报告](competitors/OPEN_SOURCE_REPORT.md)
