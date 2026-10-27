@@ -46,7 +46,7 @@
 - [视觉与组件系统](design/ui/UI_DESIGN_SYSTEM.md)
 - [状态、流程与验收](design/ui/UI_DESIGN_STATES.md)
 - [临时交互状态](design/ui/TEMPORARY_INTERACTION_STATES.md)
-- [任务过程文案设计与竞品对照（评审草案）](design/ui/TASK_PROCESS_COPY_DESIGN.md)
+- [任务过程界面与文案完整设计（待评审）](design/ui/TASK_PROCESS_COPY_DESIGN.md)
 
 ### 验收文档
 

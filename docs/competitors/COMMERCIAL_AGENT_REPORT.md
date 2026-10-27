@@ -129,7 +129,7 @@ Codex cloud/Remote、Claude Code on the web/Remote 和长文助手产品把后�
 
 ### 3.4 任务过程文案专项比较（2026-10-27）
 
-详细事实、来源与待验证项统一维护在[任务过程文案评审草案](../design/ui/TASK_PROCESS_COPY_DESIGN.md#2-多竞品对照与证据边界)，不以产品能力介绍替代界面实测。
+详细事实、来源与待验证项统一维护在[任务过程界面与文案提案](../design/ui/TASK_PROCESS_COPY_DESIGN.md#2-多竞品对照与证据边界)，不以产品能力介绍替代界面实测。
 
 | 对照对象 | 本轮比较重点 | Vinkey 独立设计取舍 |
 | --- | --- | --- |
