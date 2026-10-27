@@ -14,6 +14,7 @@
 | [UI_ENTRY_POINTS.md](./UI_ENTRY_POINTS.md) | 跨页面业务功能入口、前置条件、跳转目标和实现状态 | 入口新增、入口文案、跨域流程 |
 | [TITLE_BAR_DESIGN.md](./TITLE_BAR_DESIGN.md) | 标题栏、平台菜单、快捷键和窗口诊断的实现基线 | 标题栏/菜单专项调整 |
 | [UI_DESIGN_CHAT.md](./UI_DESIGN_CHAT.md) | 对话页、消息、输入区、上下文和流式生成 | 对话效率、消息审核、输入体验 |
+| [TASK_PROCESS_COPY_DESIGN.md](./TASK_PROCESS_COPY_DESIGN.md) | 任务过程文案、WorkBuddy 截图对照、任务拆解与触发条件 | 评审草案；文案和状态映射尚未按草案修改 |
 | [UI_DESIGN_EDITOR.md](./UI_DESIGN_EDITOR.md) | 文件列表、文档标签、编辑器、预览和保存 | 文档编辑、预览、审核工作流 |
 | [UI_DESIGN_LOGS.md](./UI_DESIGN_LOGS.md) | 后台日志中心、步骤状态、失败重试和分析产物 | 任务状态、恢复操作、结果查看 |
 | [UI_DESIGN_SETTINGS.md](./UI_DESIGN_SETTINGS.md) | 设置页、模型配置、外观偏好 | 配置表单、连接状态、设置导航 |

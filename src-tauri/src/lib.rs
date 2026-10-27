@@ -408,9 +408,13 @@ fn start_long_text_worker(
 #[tauri::command]
 fn get_long_text_worker_output(
     job_id: String,
+    workspace_id: Option<String>,
     state: State<'_, WorkspaceState>,
 ) -> Result<Option<worker_service::LongTextWorkerOutput>, String> {
     let workspace = lock_workspace(&state)?;
+    if workspace_id.as_ref().is_some_and(|id| id != &workspace.id) {
+        return Err("工作区已切换，无法读取此任务的产物".into());
+    }
     worker_service::output(&analysis_jobs_dir(&workspace), &job_id)
 }
 
@@ -418,9 +422,13 @@ fn get_long_text_worker_output(
 fn list_task_worker_events(
     job_id: String,
     after_sequence: Option<u64>,
+    workspace_id: Option<String>,
     state: State<'_, WorkspaceState>,
 ) -> Result<Vec<worker_service::TaskWorkerEvent>, String> {
     let workspace = lock_workspace(&state)?;
+    if workspace_id.as_ref().is_some_and(|id| id != &workspace.id) {
+        return Err("工作区已切换，无法读取此任务的过程".into());
+    }
     worker_service::events(&analysis_jobs_dir(&workspace), &job_id, after_sequence)
 }
 

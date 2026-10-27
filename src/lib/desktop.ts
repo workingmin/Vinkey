@@ -15,6 +15,7 @@ import type { StructureProposal } from './structureSegmentation'
 import { createTaskExecutionDispatch, validateTaskExecutionInput } from './taskRuntime'
 import type { TaskExecutionDispatch, TaskExecutionInput } from './taskRuntime'
 import type { LocalHardware } from './hardwareProfile'
+import { appendWorkerActivity } from './chatActivity'
 
 export async function getLocalHardware(): Promise<LocalHardware> {
   if (!isDesktop()) return { platform: 'demo', architecture: 'demo', totalMemoryBytes: null, gpuMemoryBytes: null, unifiedMemory: false }
@@ -377,6 +378,7 @@ export async function prepareLongTextWorker(
 ): Promise<LongTextWorkerOutput> {
   if (!isDesktop()) {
     let sequence = 1
+    const segment = { id: crypto.randomUUID(), label: '阅读与分块', startedAt: Date.now() }
     await startTaskJob({
       taskId: input.jobId,
       taskType: 'long-text-analysis',
@@ -392,10 +394,10 @@ export async function prepareLongTextWorker(
       connectionNameSnapshot: input.connectionNameSnapshot,
     })
     const manifests: ChunkManifest[] = []
-    onEvent?.({ sequence: sequence++, timestamp: Date.now(), jobId: input.jobId, stage: 'chunking', status: 'running', completed: 0, total: input.documents.length, message: '浏览器演示正在准备分块' })
+    onEvent?.({ segment, sequence: sequence++, timestamp: Date.now(), jobId: input.jobId, stage: 'chunking', status: 'running', completed: 0, total: input.documents.length, message: '浏览器演示正在准备分块' })
     for (const [index, document] of input.documents.entries()) {
       manifests.push(await chunkDocument(document.path, input.maxTokens, input.overlapTokens))
-      onEvent?.({ sequence: sequence++, timestamp: Date.now(), jobId: input.jobId, stage: 'chunking', status: 'running', completed: index + 1, total: input.documents.length, message: `已完成分块：${document.path}` })
+      onEvent?.({ segment, sequence: sequence++, timestamp: Date.now(), jobId: input.jobId, stage: 'chunking', status: 'running', completed: index + 1, total: input.documents.length, message: `已完成分块：${document.path}` })
     }
     await updateTaskJob({
       taskId: input.jobId,
@@ -426,7 +428,7 @@ export async function prepareLongTextWorker(
       durationMs: 0,
       completedAt: Date.now(),
     }
-    onEvent?.({ sequence, timestamp: Date.now(), jobId: input.jobId, stage: 'chunking', status: 'completed', completed: manifests.length, total: manifests.length, message: '浏览器演示分块完成' })
+    onEvent?.({ segment, sequence, timestamp: Date.now(), jobId: input.jobId, stage: 'chunking', status: 'completed', completed: manifests.length, total: manifests.length, message: '浏览器演示分块完成' })
     return output
   }
 
@@ -450,8 +452,18 @@ export async function prepareLongTextWorker(
     await invoke<TaskJob>('start_long_text_worker', { input, authorizationTicket })
     for (;;) {
       const output = await invoke<LongTextWorkerOutput | null>('get_long_text_worker_output', { jobId: input.jobId })
-      if (output) return output
+      if (output) {
+        // The result may become available before the last notification reaches
+        // this WebView. Drain persisted events before detaching the listener.
+        const finalEvents = await invoke<TaskWorkerEvent[]>('list_task_worker_events', { jobId: input.jobId, afterSequence: null })
+        finalEvents.forEach(dispatchEvent)
+        return output
+      }
       const job = await getTaskJob(input.jobId)
+      if (job.status === 'failed' || job.status === 'cancelled') {
+        const finalEvents = await invoke<TaskWorkerEvent[]>('list_task_worker_events', { jobId: input.jobId, afterSequence: null })
+        finalEvents.forEach(dispatchEvent)
+      }
       if (job.status === 'failed') throw job.failure ?? new Error(job.error ?? 'Rust Worker 执行失败')
       if (job.status === 'cancelled') throw new Error('请求已停止')
       await new Promise((resolve) => window.setTimeout(resolve, 150))
@@ -950,7 +962,49 @@ export async function loadConversation(id: string, workspaceId?: string): Promis
     if (!conversation) throw new Error('找不到该会话')
     return conversation
   }
-  return invoke<Conversation>('load_conversation', { id, workspaceId })
+  const conversation = await invoke<Conversation>('load_conversation', { id, workspaceId })
+  // A Worker can persist events while the WebView is closed. Restore those
+  // actual records; never reconstruct missing steps from the final answer.
+  for (const message of conversation.messages) {
+    if (message.role !== 'assistant') continue
+    const jobIds = [...new Set((message.activityLog ?? []).flatMap((item) => item.worker?.jobId ?? item.jobId ?? []))]
+    for (const jobId of jobIds) {
+      try {
+        const events = await invoke<TaskWorkerEvent[]>('list_task_worker_events', { jobId, afterSequence: null, workspaceId })
+        const savedSequence = (message.activityLog ?? []).reduce((sequence, item) => item.worker?.jobId === jobId ? Math.max(sequence, item.worker.sequence) : sequence, 0)
+        let history = message.activityLog ?? []
+        for (const event of events) history = appendWorkerActivity(history, event)
+        message.activityLog = history
+        const latest = events.at(-1)
+        if (!latest) message.activityHistoryError = '尚未找到此任务的后台过程记录，当前仅显示已保存的会话记录。'
+        if (latest && latest.sequence > savedSequence) {
+          const savedResponseTime = message.completedAt ?? message.createdAt
+          message.runResult = undefined
+          message.completedAt = undefined
+          if (latest.status === 'failed' || latest.status === 'cancelled') {
+            message.runResult = { status: latest.status }
+            message.completedAt = latest.timestamp
+          } else if (latest.stage === 'lifecycle' && latest.status === 'completed') {
+            const output = await invoke<LongTextWorkerOutput | null>('get_long_text_worker_output', { jobId, workspaceId })
+            if (output) {
+              if (message.content.trim() && message.content !== output.content) {
+                message.activityLog = [...history, {
+                  id: `saved-response:${message.id}`, status: 'streaming', message: '恢复前保存的响应',
+                  timestamp: savedResponseTime, completedAt: savedResponseTime, response: message.content,
+                }]
+              }
+              message.content = output.content
+              message.runResult = { status: 'completed' }
+              message.completedAt = latest.timestamp
+            }
+          }
+        }
+      } catch {
+        message.activityHistoryError = '部分后台过程暂时无法读取，当前仅显示已保存的会话记录。重新打开会话可重试。'
+      }
+    }
+  }
+  return conversation
 }
 
 export async function saveConversationMessage(conversationId: string, title: string, message: ChatMessage, workspaceId?: string): Promise<void> {

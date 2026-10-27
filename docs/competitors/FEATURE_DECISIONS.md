@@ -1,6 +1,6 @@
 # 竞品启发的功能决策总表
 
-- 版本：`2026-09-24`
+- 版本：`2026-10-26`（修订 `CF-006` 过程展示原则）
 - 用途：把竞品观察转换成 Vinkey 可追踪的功能决策；本表不是产品路线图的替代品。
 - 状态说明：详见 [竞品分析目录说明](README.md#状态标签)。
 - 竞品名称和类别：以[正式竞品名录](COMPETITOR_CATALOG.md)和[术语规范](TERMINOLOGY.md)为准。
@@ -14,7 +14,7 @@
 | `CF-003` | 上下文 | Copilot、Cursor、Aider、Continue | 先索引/结构定位，再按相关性和预算读取正文 | `overview / focused / deep` 与独立 coverage/source policy | `已参考` | [上下文设计](../architecture/DEVELOPMENT_FRAMEWORK.md#3-系统分层)；结果带范围和源指纹 |
 | `CF-004` | 编辑器 | MarkText、Typora、Obsidian | 低干扰编辑、预览、保存状态、快捷键和文件树 | 保留编辑/分栏/预览、原子保存和外部变化边界 | `部分参考` | [文件与编辑器](../design/ui/UI_DESIGN_EDITOR.md)；外部修改冲突仍待补齐 |
 | `CF-005` | AI 改稿 | Cursor、Aider、Knote（设计来源） | AI 修改以 diff/审阅呈现，而不是静默覆盖 | `DiffProposal` 逐块接受/拒绝，接受后仍未保存 | `已参考` | `src/lib/diffProposal.ts`、编辑器验收；源指纹变化拒绝应用 |
-| `CF-006` | 长任务 | OpenAI Codex、Claude Code、豆包 | 进度、后台执行、恢复、结果与过程分离 | `TaskJob + Step + Event + Checkpoint`；过程默认折叠 | `部分参考` | [Agent 流程对比](../design/agent/AGENT_FLOW_COMPARISON.md)；暂停/恢复必须校验快照 |
+| `CF-006` | 长任务 | OpenAI Codex、Claude Code、豆包 | 进度、后台执行、恢复、结果与过程分离 | `TaskJob + Step + Event + Checkpoint`；忠实保留实际过程与历史，两层自主折叠（真实推进段 / 具体活动详情），任务级批量操作不增加层级；本轮不考虑过程合并 | `部分参考` | [Agent 流程对比](../design/agent/AGENT_FLOW_COMPARISON.md)；暂停/恢复必须校验快照；补充观察及证据边界见下文，逐事件历史与折叠行为已实现；默认两层已实现，原生复验待完成 |
 | `CF-007` | Artifact | Claude Code、豆包、OpenAI Codex | 报告、图表、diff 独立于聊天正文 | 使用类型化 `Answer / Report / Artifact / Proposal`，不运行任意 HTML | `已参考` | [业务链路](../architecture/AI_BUSINESS_CHAINS.md)；产物只读预览和来源可追踪 |
 | `CF-008` | Agent 路由 | OpenAI Codex、Claude Code、Cline | 小任务直接处理，广域任务才升级 Agent/子 Agent | 确定性服务、单次模型、固定 Workflow、Hybrid Agent 分层 | `已参考` | [Agent 模板](../design/agent/AGENT_FLOW_TEMPLATES.md)；路由不能静默扩大权限 |
 | `CF-009` | 项目记忆 | GitHub Copilot、Claude Code、Novelcrafter | 项目指令、记忆和当前上下文分层 | 仅保存已确认事实，按源版本可失效；审校疑点不入记忆 | `部分参考` | `projectMemory` 与长期记忆设计；记忆候选仍需确认 |
@@ -33,6 +33,14 @@
 | `CF-022` | 会话标题生命周期 | 待完成正式竞品证据卡；候选观察范围以正式名录和术语规范为准 | 会话标题需要稳定主标题而不是持续覆盖最后一轮问题；临时标题应在无模型时可用，语义升级、手动命名和失败回退需有清晰生命周期 | 首次有效用户输入生成确定性临时标题；第一轮完成或累计 2 至 3 条输入后至多升级一次；手动标题优先；模型不可用时保留临时标题 | `待参考` | `UI_DESIGN_NAVIGATION.md` 第 4.3 节、`UI_ACCEPTANCE_NAVIGATION.md` 的 `W2-NAV-E`；正式证据和实现完成前不得标记已参考 |
 | `CF-023` | 全局搜索入口与结果面板 | 待完成正式竞品证据卡；不把外部产品局部 DOM/SVG 作为证据 | 搜索入口、范围提示、分组结果和跳转返回必须统一；当前侧栏输入框与目标全局搜索需避免同名歧义 | 目标态提供标题栏/侧栏/键盘共用入口，结果按项目、会话、当前项目文档分组；正文遵守授权工作区边界；当前内联搜索只作为过渡实现 | `待参考` | `UI_DESIGN_NAVIGATION.md` 第 5 节、`UI_ACCEPTANCE_NAVIGATION.md` 的 `W2-NAV-E`；入口和面板未实现前保持 BLOCKED |
 | `CF-024` | 系统标题栏与功能菜单语义 | CloudCLI、Cherry Studio、NoteGen、Obsidian、Typora、Cursor；逐项证据卡见 `TITLE_BAR_DESIGN.md` | 项目/工作区、会话、文档和编辑器是不同层级；成熟 AI/本地工作台把项目与会话作为稳定控制面，单文档编辑器的文件菜单不能直接覆盖多对象工作台 | 一级菜单采用“项目/会话/编辑/查看/窗口/帮助”；文件新建/保存/关闭回到项目文件页局部入口；编辑命令按当前焦点分派；设置移出“查看”；Windows 自绘、macOS 原生菜单保持共同语义 | `已参考 / 实现已对齐，待专项验收` | `src/lib/titleBarMenu.ts`、`src/lib/editCommands.ts`、`src/App.tsx`、`UI_DESIGN_SHELL.md`、`TITLE_BAR_DESIGN.md`、`UI_ENTRY_POINTS.md`；全局搜索仍由 `CF-023` 独立阻断 |
+
+## CF-006 过程展示修订依据（2026-10-26）
+
+补充证据是用户提供的 WorkBuddy“分析小说”两张交互截图及分段推进机制说明，按组合改造作为设计启发；正式竞品名录未收录 WorkBuddy，本次不据截图将其升级为正式名录成员。截图可见多次“继续处理任务过程”、展开/收起入口和过程与正文交错，不能由此推断其内部事件协议或全部历史持久化能力。
+
+Vinkey 接受的设计方向是忠实展示实际任务过程，保留多轮推进的历史查阅价值，再用多层折叠控制阅读范围；文案相同不构成删减真实记录的理由。本轮不考虑合并功能，默认两层已落实，跨会话展开偏好待讨论。现有实现与目标态分别记录在[过程展示设计](../design/ui/TEMPORARY_INTERACTION_STATES.md#6-当前实现与目标差距)，现已推进逐事件保留、分页、保存恢复与用户折叠选择保持；默认两层已实现，Rust 原生验收仍受当前环境依赖限制。
+
+CF-006 的文案专项评审见[任务过程文案设计](../design/ui/TASK_PROCESS_COPY_DESIGN.md)，包含两张原始截图、观察边界、当前实现对照与待评审选择。该草案不变更本表的采用状态，也不将 WorkBuddy 新增为正式竞品。
 
 ## 优先级规则
 

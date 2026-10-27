@@ -1,7 +1,7 @@
 # Agent 流程模板对比
 
 - 状态：评审基线
-- 日期：2026-09-17
+- 日期：2026-10-26（过程展示设计修订）
 - Vinkey 模板：[Agent 流程模板](AGENT_FLOW_TEMPLATES.md)
 - 产品名称口径：[竞品术语规范](../../competitors/TERMINOLOGY.md)
 - 正式竞品名录：[竞品名录](../../competitors/COMPETITOR_CATALOG.md)
@@ -18,7 +18,7 @@
 | 目标声明 | outcome、constraints、verification；Goal 可暂停/恢复/编辑 | 任务指令、计划、Tool 权限和完成结果 | 短指令，过程弱化，强调最终长文 | outcome、constraints、definition of done、领域 output contract |
 | 执行选择 | Agent 自主使用受控工具 | Agent Loop、工具、子 Agent/Skill | 可观察交互中过程折叠为耗时入口 | 先判定 deterministic/direct/workflow/agent/hybrid，Agent 不是默认 |
 | 上下文 | workspace/thread，运行中可追加约束 | session、文件、项目指令、memory | 附件独立成块 | 稳定 TargetRef + scope/coverage/sourcePolicy + 源指纹 |
-| 过程展示 | 进度行、状态更新、审批、最终 review | 工具调用、权限确认、Artifact、结果 | “共用时”入口 + 文档式结果 | 可验证 TaskEvent；默认折叠；不展示隐藏思维链 |
+| 过程展示 | 进度行、状态更新、审批、最终 review | 工具调用、权限确认、Artifact、结果 | “共用时”入口 + 文档式结果 | 忠实保留实际过程与历史；两层自主折叠（真实推进段 / 具体活动详情），任务级批量操作不增加层级 |
 | 产物 | 代码变更、测试结果、diff | 文件、Artifact、diff | Markdown、表格、代码/可视化内容 | Answer、Report、Artifact、DiffProposal、CanonProposal、MemoryProposal |
 | 审批粒度 | shell/network/file 等权限与变更 review | Tool 权限、文件修改和执行确认 | 当前资料未见显式领域审批 | 文档块、canon 项、记忆项、网络范围和正式写入 |
 | 恢复模型 | thread/goal/task 恢复 | session/checkpoint 恢复 | 当前资料未体现 | Task/Step/Event/Checkpoint，按源指纹和模板版本恢复 |
@@ -36,7 +36,7 @@
 
 来自 Claude Code：
 
-- Tool 调用与最终回答分层，过程默认折叠。
+- Tool 调用与最终回答可分别阅读；Vinkey 采用用户自主多层折叠，默认两层为真实推进段与活动详情，响应独立展示。
 - Artifact 独立于聊天正文，适合报告、关系图、时间线和导出文件。
 - 结构化输出、审批和 checkpoint 属于 Runtime 合同，而不是提示词约定。
 
@@ -44,8 +44,16 @@
 
 - 附件在用户请求中独立展示，避免正文重复文件名。
 - 助手最终回答采用无气泡的文档式排版，适合标题、表格和长列表。
-- 完成后的过程退化成紧凑耗时入口，主视觉集中于结果。
+- 借鉴耗时入口便于快速查阅结果的形式；Vinkey 同时保留完整过程，不将完成后自动收起作为要求。
 - 可视化应成为安全的只读 Artifact；Vinkey 不直接运行模型生成的任意 HTML。
+
+### 补充观察：WorkBuddy 分段任务过程
+
+依据为用户在 2026-10-26 提供的两张“分析小说”交互截图及其机制说明，不延伸为对产品内部架构或全部功能的判断，也不据此新增正式竞品名录条目。
+
+多次“继续处理任务过程”对应 Agent 分段推进时，具有实时观察和历史查阅价值，不能因提示文案相同就判定为应消除的重复。折叠按钮使用户能够选择阅读范围；截图中具体过程文本的内容、语言与初始展开方式是另一个设计问题，不否定过程记录的必要性。
+
+Vinkey 的修正方向是忠实保留真实过程，再提供用户自主的多层折叠；本轮不考虑过程合并，已确认默认两层为真实推进段与活动详情，任务级按钮只批量操作。该原则同步到功能决策 `CF-006`，逐事件历史与折叠行为已推进实现；两层结构已落实，原生复验仍待完成，详见[过程展示设计](../ui/TEMPORARY_INTERACTION_STATES.md)。
 
 ## 4. Vinkey 有意不同的部分
 

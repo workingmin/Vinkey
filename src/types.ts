@@ -229,6 +229,12 @@ export interface LongTextWorkerOutput {
   completedAt: number
 }
 
+export interface ProcessSegment {
+  id: string
+  label: string
+  startedAt?: number
+}
+
 export interface TaskWorkerEvent {
   sequence: number
   timestamp: number
@@ -238,6 +244,7 @@ export interface TaskWorkerEvent {
   completed: number
   total: number
   message: string
+  segment?: ProcessSegment | null
   artifact?: string | null
   cacheSource?: 'model' | 'shared' | 'checkpoint' | 'quarantined' | null
 }
@@ -268,6 +275,8 @@ export interface ChatMessage {
   activityLog?: ChatActivity[]
   taskRef?: TaskMessageRef | null
   runResult?: ChatRunResult | null
+  /** Read-time warning, not reconstructed history. */
+  activityHistoryError?: string
 }
 
 export interface ChatRunResult {
@@ -510,6 +519,10 @@ export interface ChatRequest {
 export type ChatRunStatus = 'sending' | 'thinking' | 'fetching' | 'tool_calling' | 'streaming' | 'stopping'
 
 export interface ChatActivity {
+  /** Stable event identity; absent on legacy, possibly truncated histories. */
+  id?: string
+  jobId?: string
+  segment?: ProcessSegment | null
   status: ChatRunStatus
   message: string | null
   timestamp: number
@@ -518,6 +531,8 @@ export interface ChatActivity {
   artifacts?: string[]
   cacheHits?: number
   modelRequests?: number
+  /** Public response preserved when context recovery starts a new answer. */
+  response?: string
 }
 
 export type ChatStreamEvent =

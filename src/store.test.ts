@@ -108,7 +108,7 @@ describe('conversation chat runs', () => {
     expect(state.messages.at(-1)?.content).toBe('后台生成内容')
   })
 
-  it('keeps completed output and removes an empty failed response', () => {
+  it('keeps completed output and preserves execution history even with an empty response', () => {
     const store = useAppStore.getState()
     store.setConversation(conversation('a'))
     store.beginChatRun(run('a'))
@@ -120,7 +120,8 @@ describe('conversation chat runs', () => {
 
     store.beginChatRun(run('a'))
     store.endChatRun('a', true)
-    expect(useAppStore.getState().messages.some((item) => item.id === 'assistant-a')).toBe(false)
+    expect(useAppStore.getState().messages.at(-1)?.activityLog).toHaveLength(1)
+    expect(useAppStore.getState().completedChatMessages.a?.content).toBe('')
   })
 
   it('updates temporary status without changing the live response', () => {
@@ -167,7 +168,7 @@ describe('conversation chat runs', () => {
     })
   })
 
-  it('keeps a bounded activity trail on the completed assistant message', () => {
+  it('keeps the entire activity trail on the completed assistant message', () => {
     const store = useAppStore.getState()
     store.setConversation(conversation('a'))
     store.beginChatRun(run('a'))
@@ -179,7 +180,35 @@ describe('conversation chat runs', () => {
 
     const assistant = useAppStore.getState().messages.at(-1)
     expect(assistant?.content).toBe('完成')
-    expect(assistant?.activityLog).toHaveLength(80)
+    expect(assistant?.activityLog).toHaveLength(101)
+    expect(assistant?.activityLog?.[1].message).toBe('步骤 0')
+  })
+
+  it('records explicit same-named continuations with distinct segment identities', () => {
+    const store = useAppStore.getState()
+    store.beginChatRun(run('a'))
+    store.beginChatSegment('a', '生成回答')
+    store.setChatRunStatus('a', 'streaming')
+    store.appendChatRunChunk('a', '第一段实际响应')
+    store.resetChatRunResponse('a')
+    const first = useAppStore.getState().chatRuns.a.activityLog.at(-1)!
+    store.beginChatSegment('a', '生成回答')
+    const next = useAppStore.getState().chatRuns.a.activityLog.at(-1)!
+    expect(next.segment?.label).toBe(first.segment?.label)
+    expect(next.segment?.id).not.toBe(first.segment?.id)
+    expect(first.response).toBe('第一段实际响应')
+  })
+
+  it('preserves the public response replaced during context recovery', () => {
+    const store = useAppStore.getState()
+    store.beginChatRun(run('a'))
+    store.appendChatRunChunk('a', '需要补充文档内容')
+    store.resetChatRunResponse('a')
+    store.appendChatRunChunk('a', '补充后的回答')
+    store.endChatRun('a', false)
+    const saved = useAppStore.getState().completedChatMessages.a
+    expect(saved.content).toBe('补充后的回答')
+    expect(saved.activityLog?.at(-1)?.response).toBe('需要补充文档内容')
   })
 
   it('restores a completed activity trail after switching conversations', () => {

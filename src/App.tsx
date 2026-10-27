@@ -48,6 +48,8 @@ import { buildDocumentIndexMessage } from './lib/documentMetadata'
 import { buildFocusedWorkspaceMessage } from './lib/focusedAnalysis'
 import { isLoopbackModelEndpoint } from './lib/modelPrivacy'
 import { withConversationRequest } from './lib/conversationActivity'
+import { persistChatRun } from './lib/chatRunPersistence'
+import { watchWorkerHistory } from './lib/workerHistorySubscription'
 
 import {
   buildMultiFileRevisionContract, buildMultiFileRevisionTargets, buildSelectionRevisionContract,
@@ -80,23 +82,6 @@ function formatError(error: unknown): string {
 }
 
 const RESPONSE_BATCH_MARKER = '\n\n<!-- vinkey-response-batch -->\n\n'
-
-async function appendMarkdownBatches(
-  conversationId: string,
-  content: string,
-  append: (conversationId: string, chunk: string) => void,
-  setStatus: (conversationId: string, status: ChatRunStatus, message?: string | null) => void,
-): Promise<void> {
-  const blocks = content.trim().split(/\n{2,}/u).filter(Boolean)
-  if (blocks.length === 0) return
-  for (const [index, block] of blocks.entries()) {
-    setStatus(conversationId, 'streaming', `已生成第 ${index + 1} / ${blocks.length} 段结果`)
-    append(conversationId, `${index === 0 ? '' : RESPONSE_BATCH_MARKER}${block}`)
-    // Yield between Markdown blocks so the message stream can paint progress without
-    // exposing hidden model reasoning or creating one activity row per token.
-    await new Promise<void>((resolve) => window.setTimeout(resolve, 0))
-  }
-}
 
 type ContentPage = 'chat' | 'file' | 'logs'
 
@@ -461,7 +446,8 @@ function ChatMessageItem({ message, activity, taskDescription, onCopyError }: {
 
   return <article id={`message-${message.id}`} data-message-id={message.id} tabIndex={-1} aria-label={isAssistant ? '助手消息' : '用户消息'} className={`message ${message.role}`}>
     <div className="message-stack">
-      {isAssistant && <MessageActivity items={activityLog} active={Boolean(activity)} taskDescription={taskDescription} />}
+      {isAssistant && <MessageActivity items={activityLog} active={Boolean(activity)} taskDescription={taskDescription}
+        result={message.runResult} runStatus={activity?.status} completedAt={message.completedAt} historyError={message.activityHistoryError} />}
       {!isAssistant && <TaskRequestSummary task={message.taskRef} />}
       {isAssistant && taskDescription && activityLog.length > 0 && message.content && <div className="message-result-label">详细结果</div>}
       <div className="message-bubble">
@@ -548,6 +534,9 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
   const contextDocuments = useAppStore((state) => state.contextDocuments)
   const chatRuns = useAppStore((state) => state.chatRuns)
   const conversationId = useAppStore((state) => state.conversationId)
+  useEffect(() => {
+    if (workspace && conversationId) return watchWorkerHistory(workspace.id, conversationId)
+  }, [workspace?.id, conversationId])
   const conversationTitle = useAppStore((state) => state.conversationTitle)
   const modelProfiles = useAppStore((state) => state.modelProfiles)
   const activeModelId = useAppStore((state) => state.activeModelId)
@@ -913,8 +902,11 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
       assistantMessage,
       taskJobId: useLongTextPipeline ? taskDispatch.jobId : null,
     })
+    let finishPersistence: (() => Promise<void>) | undefined
     try {
       await saveConversationMessage(nextConversationId, nextTitle, userMessage, workspace?.id)
+      finishPersistence = persistChatRun(nextConversationId, nextTitle, workspace?.id,
+        (error) => setError(`过程自动保存失败：${formatError(error)}`))
       setConversations(await listConversations(workspace?.id))
       setChatRunStatus(nextConversationId, 'thinking', null)
       if (taskDispatch.serviceId === 'structure-segmentation') {
@@ -939,7 +931,7 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
         const result = await analyzeLongText(requestContextDocuments, value, selectedModel, nextRequestId, (progress) => {
           const message = `${progress.message} · ${progress.completed}/${progress.total}`
           if (progress.event) recordWorkerEvent(nextConversationId, progress.event)
-          else setChatRunStatus(nextConversationId, progress.stage === 'chunking' ? 'fetching' : 'tool_calling', message)
+          else setChatRunStatus(nextConversationId, progress.stage === 'chunking' ? 'fetching' : 'tool_calling', message, progress.segment)
           setAnalysisStatus(message)
         }, workspace?.id ?? 'workspace', excludedWorkspaceDocuments, undefined, (toolName, input, output) => {
           if (output) toolGateway.assertResult(toolName, output.value)
@@ -960,7 +952,7 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
         const evidenceNote = result.evidence.length > 0
           ? `\n\n> 证据校验：发现 ${result.evidence.length} 条来源引用，其中 ${result.evidence.filter((item) => item.verified).length} 条已通过行号和原文校验。`
           : '\n\n> 证据校验：最终回答没有生成可解析的来源引用。'
-        await appendMarkdownBatches(nextConversationId, result.content, appendChatRunChunk, setChatRunStatus)
+        appendChatRunChunk(nextConversationId, result.content)
         appendChatRunChunk(nextConversationId, `${excludedNote}${evidenceNote}`)
         const candidates = taskPlan.intent === 'continuity-review' || taskPlan.intent === 'document-revision'
           ? []
@@ -982,6 +974,7 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
           messages: modelMessages,
         }
         let firstResponse = ''
+        useAppStore.getState().beginChatSegment(nextConversationId, '生成回答')
         await toolGateway.call('stream_chat', modelRequest, () => streamChat(modelRequest, (event) => {
           if (event.type === 'chunk') {
             firstResponse += event.content
@@ -1023,6 +1016,7 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
           const recoveryContext = buildSelectedDocumentsOverviewMessage(recoveryDocuments)
           const recoveryBudget = calculateContextBudget(messages, [], [budgetDraft, recoveryContext].filter(Boolean).join('\n\n'), selectedModel.contextWindow)
           resetChatRunResponse(nextConversationId)
+          useAppStore.getState().beginChatSegment(nextConversationId, '补充上下文后继续回答')
           setChatRunStatus(nextConversationId, 'fetching', '正在补充文档画像…')
           await recordRuntimeEvent(
             'context.recovery',
@@ -1060,10 +1054,11 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
       appendChatRunChunk(nextConversationId, `\n\n> ${cancelled ? '任务已停止，已完成的产物仍保留。' : `任务未完成：${message}`}`)
     } finally {
       setAnalysisStatus(null)
+      await finishPersistence?.()
       const completedBeforeEnd = useAppStore.getState().chatRuns[nextConversationId]?.assistantMessage
       endChatRun(nextConversationId, !completedBeforeEnd?.content, runResult)
       const completed = useAppStore.getState().completedChatMessages[nextConversationId]
-      if (completed?.content) {
+      if (completed) {
         try {
           await saveConversationMessage(nextConversationId, nextTitle, completed, workspace?.id)
           setConversations(await listConversations(workspace?.id))

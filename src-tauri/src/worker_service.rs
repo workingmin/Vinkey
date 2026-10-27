@@ -26,7 +26,6 @@ const CHECKPOINT_SCHEMA_VERSION: &str = "long-text-checkpoints-2";
 const MAP_CACHE_DIR: &str = "_stage-cache";
 const MAP_CACHE_SCHEMA_VERSION: &str = "long-text-map-cache-2";
 const MAX_MAP_CACHE_ENTRIES: usize = 1_024;
-const MAX_WORKER_EVENTS: usize = 1_000;
 const MAX_MODEL_ATTEMPTS: u32 = 3;
 const MIN_CHUNK_TOKENS: usize = 128;
 const VALIDATOR_VERSION: &str = "evidence-gate-4";
@@ -134,6 +133,15 @@ pub struct LongTextWorkerOutput {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProcessSegment {
+    pub id: String,
+    pub label: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub started_at: Option<u64>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TaskWorkerEvent {
     pub sequence: u64,
     pub timestamp: u64,
@@ -147,10 +155,13 @@ pub struct TaskWorkerEvent {
     pub artifact: Option<String>,
     #[serde(default)]
     pub cache_source: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub segment: Option<ProcessSegment>,
 }
 
 #[derive(Clone, Debug)]
 struct WorkerProgress {
+    segment: Option<ProcessSegment>,
     stage: String,
     step_id: Option<String>,
     completed: usize,
@@ -160,6 +171,7 @@ struct WorkerProgress {
 impl Default for WorkerProgress {
     fn default() -> Self {
         Self {
+            segment: None,
             stage: "lifecycle".into(),
             step_id: None,
             completed: 0,
@@ -184,6 +196,21 @@ impl WorkerControl {
         self.total.store(total, Ordering::Relaxed);
         if let Ok(mut progress) = self.progress.lock() {
             *progress = WorkerProgress {
+                segment: Some(ProcessSegment {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    started_at: Some(now_ms()),
+                    label: match stage {
+                        "chunking" => "阅读与分块".into(),
+                        "map" => "局部分析".into(),
+                        "chapter" => "章节汇总".into(),
+                        "volume" => "卷级汇总".into(),
+                        "reduce" => "阶段汇总".into(),
+                        "synthesis" => "全书综合".into(),
+                        "evidence" => "来源校验".into(),
+                        "lifecycle" => "任务结束".into(),
+                        _ => "执行分析".into(),
+                    },
+                }),
                 stage: stage.into(),
                 step_id,
                 completed,
@@ -197,6 +224,16 @@ impl WorkerControl {
         if let Ok(mut progress) = self.progress.lock() {
             progress.completed = completed;
         }
+    }
+
+    fn continue_segment(&self) {
+        let progress = self.snapshot();
+        self.set_phase(
+            &progress.stage,
+            progress.step_id,
+            progress.completed,
+            progress.total,
+        );
     }
 
     fn snapshot(&self) -> WorkerProgress {
@@ -554,6 +591,20 @@ fn publish(
     app: &AppHandle,
     mut event: TaskWorkerEvent,
 ) -> Result<(), String> {
+    if event.segment.is_none() {
+        let controls = runtime
+            .controls
+            .lock()
+            .map_err(|_| "Worker 运行状态不可用")?;
+        if let Some(control) = controls.get(&event.job_id) {
+            let progress = control.snapshot();
+            if event.stage == progress.stage
+                || progress.step_id.as_deref() == Some(event.stage.as_str())
+            {
+                event.segment = progress.segment;
+            }
+        }
+    }
     let _guard = runtime
         .event_write
         .lock()
@@ -568,9 +619,6 @@ fn persist_event(jobs_root: &Path, mut event: TaskWorkerEvent) -> Result<TaskWor
     event.sequence = events.last().map(|value| value.sequence + 1).unwrap_or(1);
     event.timestamp = now_ms();
     events.push(event.clone());
-    if events.len() > MAX_WORKER_EVENTS {
-        events.drain(0..events.len() - MAX_WORKER_EVENTS);
-    }
     write_json(
         &artifact_path(jobs_root, &event.job_id, EVENTS_NAME),
         &events,
@@ -598,7 +646,33 @@ fn worker_event(
         message: message.into(),
         artifact: None,
         cache_source: None,
+        segment: None,
     }
+}
+
+fn publish_phase_completed(
+    jobs_root: &Path,
+    runtime: &WorkerRuntimeState,
+    app: &AppHandle,
+    job_id: &str,
+    control: &WorkerControl,
+) -> Result<(), String> {
+    let progress = control.snapshot();
+    let label = progress
+        .segment
+        .as_ref()
+        .map(|segment| segment.label.as_str())
+        .unwrap_or("当前步骤");
+    let mut event = worker_event(
+        job_id,
+        &progress.stage,
+        "completed",
+        progress.completed,
+        progress.total,
+        format!("{label}已完成"),
+    );
+    event.segment = progress.segment;
+    publish(jobs_root, runtime, app, event)
 }
 
 async fn wait_for_control(control: &WorkerControl) -> Result<(), String> {
@@ -1678,6 +1752,23 @@ async fn model_text(
     let mut correction: Option<String> = None;
     for attempt in 1..=MAX_MODEL_ATTEMPTS {
         wait_for_control(control).await?;
+        if attempt > 1 {
+            control.continue_segment();
+            let progress = control.snapshot();
+            publish(
+                jobs_root,
+                runtime,
+                app,
+                worker_event(
+                    &input.job_id,
+                    stage,
+                    "running",
+                    progress.completed,
+                    progress.total,
+                    format!("开始第 {attempt} 次模型调用尝试"),
+                ),
+            )?;
+        }
         *attempts += 1;
         let correction_hint = correction
             .as_deref()
@@ -2086,6 +2177,7 @@ async fn run_pipeline_worker(
                     ),
                 },
             )?;
+            control.set_phase("lifecycle", None, output.chunk_count, output.chunk_count);
             publish(
                 &jobs_root,
                 &runtime,
@@ -2153,11 +2245,7 @@ async fn run_pipeline_worker(
             })
             .unwrap_or(generated);
         write_json(
-            &artifact_path(
-                &jobs_root,
-                &input.job_id,
-                &manifest_name,
-            ),
+            &artifact_path(&jobs_root, &input.job_id, &manifest_name),
             &manifest,
             " Worker 分块",
         )?;
@@ -2286,6 +2374,8 @@ async fn run_pipeline_worker(
         json!({"summaryCount": summaries.len()}),
     )?;
 
+    publish_phase_completed(&jobs_root, &runtime, &app, &input.job_id, &control)?;
+
     // Nodes have stable source/heading identities. A change only invalidates dependent ancestors.
     let mut current = summaries;
     for stage in ["chapter", "volume"] {
@@ -2350,6 +2440,7 @@ async fn run_pipeline_worker(
             "step.completed",
             json!({"nodeCount": current.len()}),
         )?;
+        publish_phase_completed(&jobs_root, &runtime, &app, &input.job_id, &control)?;
     }
 
     let mut level = 0;
@@ -2393,6 +2484,7 @@ async fn run_pipeline_worker(
             "step.completed",
             json!({}),
         )?;
+        publish_phase_completed(&jobs_root, &runtime, &app, &input.job_id, &control)?;
     }
     control.set_phase("synthesis", Some("synthesis".into()), 0, 1);
     update_step(
@@ -2451,6 +2543,7 @@ async fn run_pipeline_worker(
         json!({}),
     )?;
 
+    publish_phase_completed(&jobs_root, &runtime, &app, &input.job_id, &control)?;
     control.set_phase("evidence", Some("evidence".into()), 0, 1);
     update_step(
         &jobs_root,
@@ -2565,6 +2658,7 @@ async fn run_pipeline_worker(
             })),
         },
     )?;
+    control.set_phase("lifecycle", None, 1, 1);
     publish(
         &jobs_root,
         &runtime,
@@ -2838,6 +2932,7 @@ pub fn resume(
         .cloned();
     if let Some(control) = control {
         control.pause.store(false, Ordering::Relaxed);
+        control.continue_segment();
         let job = job_service::update(
             jobs_root,
             job_service::UpdateTaskJobInput {
@@ -3470,9 +3565,8 @@ mod tests {
     #[test]
     fn repairs_a_unique_single_line_quote_when_the_model_offsets_its_line() {
         let documents = HashMap::from([("chapter.md".into(), "标题\n关键证据\n结尾".into())]);
-        let references = parse_evidence(
-            "[source: chapter.md chunk=c1 lines=1-1 quote=\"关键证据\"]",
-        );
+        let references =
+            parse_evidence("[source: chapter.md chunk=c1 lines=1-1 quote=\"关键证据\"]");
         let verified = verify_evidence(references, &documents);
         assert!(verified[0].verified);
         assert_eq!(verified[0].line_start, 2);
@@ -3608,7 +3702,35 @@ mod tests {
     }
 
     #[test]
-    fn persists_replays_and_trims_worker_events() {
+    fn explicit_execution_boundaries_have_distinct_persistent_identities() {
+        let control = WorkerControl::default();
+        control.set_phase("map", Some("map".into()), 0, 2);
+        let first = control.snapshot().segment.unwrap();
+        control.set_completed(1);
+        assert_eq!(control.snapshot().segment.unwrap().id, first.id);
+        control.continue_segment();
+        let resumed = control.snapshot().segment.unwrap();
+        assert_ne!(resumed.id, first.id);
+        assert_eq!(resumed.label, first.label);
+        control.set_phase("map", Some("map".into()), 0, 2);
+        assert_ne!(control.snapshot().segment.unwrap().id, resumed.id);
+
+        let directory = tempfile::tempdir().unwrap();
+        let mut event = worker_event("job-1", "map", "running", 0, 2, "开始");
+        event.segment = Some(first.clone());
+        persist_event(directory.path(), event).unwrap();
+        let restored = read_events_at(directory.path(), "job-1").unwrap();
+        assert_eq!(restored[0].segment.as_ref().unwrap().id, first.id);
+        let mut legacy = serde_json::to_value(&restored[0]).unwrap();
+        legacy.as_object_mut().unwrap().remove("segment");
+        assert!(serde_json::from_value::<TaskWorkerEvent>(legacy)
+            .unwrap()
+            .segment
+            .is_none());
+    }
+
+    #[test]
+    fn persists_and_replays_worker_events_without_truncating_history() {
         let directory = tempfile::tempdir().unwrap();
         let first = persist_event(
             directory.path(),
@@ -3623,8 +3745,10 @@ mod tests {
         assert_eq!((first.sequence, second.sequence), (1, 2));
         assert_eq!(events(directory.path(), "job-1", Some(1)).unwrap().len(), 1);
 
-        let seeded = (1..=MAX_WORKER_EVENTS)
+        let previous_limit = 1_000;
+        let seeded = (1..=previous_limit)
             .map(|sequence| TaskWorkerEvent {
+                segment: None,
                 sequence: sequence as u64,
                 artifact: None,
                 cache_source: None,
@@ -3633,7 +3757,7 @@ mod tests {
                 stage: "map".into(),
                 status: "running".into(),
                 completed: sequence,
-                total: MAX_WORKER_EVENTS + 1,
+                total: previous_limit + 1,
                 message: "进度".into(),
             })
             .collect::<Vec<_>>();
@@ -3649,9 +3773,9 @@ mod tests {
         )
         .unwrap();
         let retained = read_events_at(directory.path(), "job-1").unwrap();
-        assert_eq!(appended.sequence, (MAX_WORKER_EVENTS + 1) as u64);
-        assert_eq!(retained.len(), MAX_WORKER_EVENTS);
-        assert_eq!(retained.first().unwrap().sequence, 2);
+        assert_eq!(appended.sequence, (previous_limit + 1) as u64);
+        assert_eq!(retained.len(), previous_limit + 1);
+        assert_eq!(retained.first().unwrap().sequence, 1);
         assert_eq!(retained.last().unwrap().sequence, appended.sequence);
     }
 

@@ -1,7 +1,7 @@
 # Vinkey Agent 流程模板
 
 - 状态：设计基线，供实现、评测和实测对照
-- 日期：2026-09-17
+- 日期：2026-10-26（本次修订运行事件与过程展示合同）
 - 来源：[Agent 与 Skill 建设计划](AGENT_SKILL_PLAN.md)、[AI 业务链路架构](../../architecture/AI_BUSINESS_CHAINS.md)
 - 对比说明：[Agent 流程对比](AGENT_FLOW_COMPARISON.md)
 
@@ -301,6 +301,7 @@ task_event:
   task_id: string
   run_id: string
   step_id: string
+  segment: { id: string, label: string, startedAt: unix_ms } | null # 执行器提供；旧记录允许缺失
   phase: intake | planning | reading | executing | verifying | awaiting_approval | completed
   status: queued | running | paused | completed | failed | cancelled
   label: string
@@ -311,7 +312,17 @@ task_event:
   timestamp: unix_ms
 ```
 
-消息流只显示 `label`、进度、耗时、Artifact、审批和稳定错误信息。模型推理文本、未授权正文和完整 Prompt 不属于 TaskEvent。
+上面的结构是现有设计示意，不是完整过程历史协议。消息流应忠实展示实际发生的公开响应、动作、进度、分段结果、Artifact、审批和稳定错误；公开响应和结果可通过关联记录承载，不要求把正文塞入状态事件。隐藏思维链、未授权正文和完整 Prompt 不属于 TaskEvent。
+
+2026-10-26 修订的目标合同：
+
+- 保留同一任务中每次真实推进、同一阶段的再次执行以及失败后的重试/恢复记录，能够识别事件身份、实际顺序、执行轮次/尝试与结果归属；具体新增字段和协议版本另行设计。
+- 不能仅以 `phase`、`step_id`、同名标签或相同文案代表唯一历史记录，也不能由 UI 猜测或制造执行轮次。本轮不设计过程合并功能。
+- 当前状态从实际事件与执行终态派生；过程历史独立持久化。前端缓存、分页和可见条数不能替代历史保存。
+- 结果与产生它的执行过程关联，允许过程与实际分段结果交错呈现；最终文本的显示分段不构成执行轮次。
+- 展开/收起只控制阅读范围，不改变事件和产物。默认两层为真实推进段与具体活动详情；任务级按钮只批量操作推进段，结果独立显示。执行器提供可选 `segment: { id, label, startedAt }`，在实际阶段入口、重试和恢复处创建新 ID；没有边界的数据不能由 UI 推测分段。
+
+交互细则和当前实现差距见[临时交互状态设计](../ui/TEMPORARY_INTERACTION_STATES.md)。现已基于现有 Worker `sequence` 实现逐事件展示、保存恢复和折叠选择保持；推进段字段已作为可选元数据接入并兼容旧事件；未引入新的 Agent Tool Loop。
 
 ## 7. 模板验收矩阵
 
@@ -326,7 +337,7 @@ task_event:
 | 来源 | 源指纹、覆盖率、引用准确率 |
 | 审批 | 接受、拒绝、部分接受、源已变化 |
 | 成本 | 首 token、总耗时、token、模型调用次数、缓存命中 |
-| 产品 | 空态、运行态、失败态、等待确认、完成态 |
+| 产品 | 空态、运行态、失败态、等待确认、完成态；真实多轮过程与结果关联、完整历史查阅、用户折叠选择保持；两层与批量操作、结果可见性 |
 
 P0 模板优先接入 `ContinuityReviewer` 和 `CanonIngestion` 的 A/B 试点。若 Agent 模式在完成率、证据准确率、人工修正量或恢复能力上没有超过固定 Workflow，则保留固定链路，不扩大 Agent 化范围。
 

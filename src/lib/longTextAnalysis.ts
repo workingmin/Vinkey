@@ -3,7 +3,7 @@ import { estimateTokens } from './context'
 import { buildDocumentIndexMessage, buildDocumentMetadataCards } from './documentMetadata'
 import { parseEvidenceReferences, verifyEvidenceReferences } from './workspaceAnalysis'
 import { formatServiceError } from './serviceError'
-import type { AnalysisJobManifest, ChatStreamEvent, ContextDocument, EvidenceReference, ModelProfile, TaskWorkerEvent, TextChunk, WorkspaceDocumentRef } from '../types'
+import type { AnalysisJobManifest, ChatStreamEvent, ContextDocument, EvidenceReference, ModelProfile, ProcessSegment, TaskWorkerEvent, TextChunk, WorkspaceDocumentRef } from '../types'
 import type { TaskExecutionDispatch } from './taskRuntime'
 
 export type AnalysisStage = TaskWorkerEvent['stage']
@@ -14,6 +14,7 @@ export interface AnalysisProgress {
   total: number
   message: string
   event?: TaskWorkerEvent
+  segment?: ProcessSegment
 }
 
 export interface LongTextAnalysisResult {
@@ -377,11 +378,12 @@ export async function analyzeLongText(
       taskId: jobId, stepId: 'map', stepKind: 'map', stepStatus: 'running',
       eventType: 'step.started', eventFields: { chunkCount: chunks.length },
     })
-    onProgress?.({ stage: 'map', completed: 0, total: chunks.length, message: chunkAnalysisMessage(chunks) })
+    const mapSegment = { id: crypto.randomUUID(), label: '局部分析', startedAt: Date.now() }
+    onProgress?.({ segment: mapSegment, stage: 'map', completed: 0, total: chunks.length, message: chunkAnalysisMessage(chunks) })
     for (const [index, chunk] of chunks.entries()) {
       await waitWhilePaused(requestId, jobId)
       assertNotCancelled(requestId)
-      onProgress?.({ stage: 'map', completed: index, total: chunks.length, message: `正在分析第 ${index + 1}/${chunks.length} 块（${chunk.sourceId}，约 ${formatCount(chunk.estimatedTokens)} tokens）…` })
+      onProgress?.({ segment: mapSegment, stage: 'map', completed: index, total: chunks.length, message: `正在分析第 ${index + 1}/${chunks.length} 块（${chunk.sourceId}，约 ${formatCount(chunk.estimatedTokens)} tokens）…` })
       const cached = resumeJobId
         ? await guardedCall('read_analysis_artifact', { jobId, name: `summary-${String(index + 1).padStart(5, '0')}.md` }, () => readAnalysisArtifact(jobId, `summary-${String(index + 1).padStart(5, '0')}.md`), toolCallGuard)
         : null
@@ -394,7 +396,7 @@ export async function analyzeLongText(
         const name = `summary-${String(index + 1).padStart(5, '0')}.md`
         await guardedCall('write_analysis_artifact', { jobId, name, content: text }, () => writeAnalysisArtifact(jobId, name, text), toolCallGuard)
       }
-      onProgress?.({ stage: 'map', completed: index + 1, total: chunks.length, message: `${cached === null ? '已完成' : '复用已完成'}第 ${index + 1}/${chunks.length} 块（${chunk.sourceId}）` })
+      onProgress?.({ segment: mapSegment, stage: 'map', completed: index + 1, total: chunks.length, message: `${cached === null ? '已完成' : '复用已完成'}第 ${index + 1}/${chunks.length} 块（${chunk.sourceId}）` })
     }
     if (summaries.length === 0) throw new Error('模型没有返回可汇总的分块结果')
     await updateTaskJob({
@@ -412,17 +414,18 @@ export async function analyzeLongText(
         taskId: jobId, stepId: reduceStepId, stepKind: 'reduce', stepStatus: 'running',
         eventType: 'step.started', eventFields: { batchCount: batches.length },
       })
-      onProgress?.({ stage: 'reduce', completed: 0, total: batches.length, message: `正在汇总第 ${level + 1} 层摘要：${formatCount(current.length)} 条摘要分 ${formatCount(batches.length)} 批处理…` })
+      const reduceSegment = { id: crypto.randomUUID(), label: `第 ${level + 1} 层阶段汇总`, startedAt: Date.now() }
+      onProgress?.({ segment: reduceSegment, stage: 'reduce', completed: 0, total: batches.length, message: `正在汇总第 ${level + 1} 层摘要：${formatCount(current.length)} 条摘要分 ${formatCount(batches.length)} 批处理…` })
       for (const [index, batch] of batches.entries()) {
         await waitWhilePaused(requestId, jobId)
         assertNotCancelled(requestId)
-        onProgress?.({ stage: 'reduce', completed: index, total: batches.length, message: `正在处理第 ${index + 1}/${batches.length} 批阶段汇总…` })
+        onProgress?.({ segment: reduceSegment, stage: 'reduce', completed: index, total: batches.length, message: `正在处理第 ${index + 1}/${batches.length} 批阶段汇总…` })
         modelInvocationCount += 1
         const text = await collectResponse(requestId, profile.id, [{ role: 'user', content: summaryPrompt(instruction, batch, false, indexMessage, effectiveContextWindow) }], toolCallGuard)
         if (text) next.push({ sourceId: 'summary', chunkId: `level-${level}-${index}`, heading: null, text: clipToTokens(text, summaryClipLimit(effectiveContextWindow, indexMessage)), evidence: batch.flatMap((record) => record.evidence ?? []) })
         const name = `reduce-${level + 1}-${String(index + 1).padStart(4, '0')}.md`
         await guardedCall('write_analysis_artifact', { jobId, name, content: text }, () => writeAnalysisArtifact(jobId, name, text), toolCallGuard)
-        onProgress?.({ stage: 'reduce', completed: index + 1, total: batches.length, message: `已完成第 ${index + 1}/${batches.length} 批阶段汇总` })
+        onProgress?.({ segment: reduceSegment, stage: 'reduce', completed: index + 1, total: batches.length, message: `已完成第 ${index + 1}/${batches.length} 批阶段汇总` })
       }
       if (next.length === 0) throw new Error('模型没有返回可用的阶段汇总')
       await updateTaskJob({
@@ -439,7 +442,8 @@ export async function analyzeLongText(
       taskId: jobId, stepId: 'synthesis', stepKind: 'synthesis', stepStatus: 'running',
       eventType: 'step.started', eventFields: { summaryCount: current.length },
     })
-    onProgress?.({ stage: 'synthesis', completed: 0, total: 1, message: `正在综合 ${formatCount(current.length)} 条阶段摘要，完成最终任务…` })
+    const synthesisSegment = { id: crypto.randomUUID(), label: '全书综合', startedAt: Date.now() }
+    onProgress?.({ segment: synthesisSegment, stage: 'synthesis', completed: 0, total: 1, message: `正在综合 ${formatCount(current.length)} 条阶段摘要，完成最终任务…` })
     modelInvocationCount += 1
     const content = await collectResponse(requestId, profile.id, [{ role: 'user', content: summaryPrompt(instruction, current, true, indexMessage, effectiveContextWindow) }], toolCallGuard)
     const finalEvidence = verifyEvidenceReferences(parseEvidenceReferences(content), documents)
@@ -461,7 +465,7 @@ export async function analyzeLongText(
       taskId: jobId, status: 'completed', stepId: 'synthesis', stepStatus: 'completed', checkpoint: 'analysis.md',
       eventType: 'task.completed', eventFields: { chunkCount: chunks.length, evidenceCount: evidence.length },
     })
-    onProgress?.({ stage: 'synthesis', completed: 1, total: 1, message: '长文本任务完成' })
+    onProgress?.({ segment: synthesisSegment, stage: 'synthesis', completed: 1, total: 1, message: '长文本任务完成' })
     return {
       content, jobId, chunkCount: chunks.length, summaryCount: summaries.length, evidence,
       modelInvocationCount, mapCacheHits: 0, stageCacheHits: 0, jobCheckpointHits: 0,

@@ -2,13 +2,12 @@ import { create } from 'zustand'
 import type {
   ChatMessage, ContextDocument, Conversation, ConversationSummary, DocumentTab,
   ModelProfile, ThemeMode, ViewMode, WorkspaceSnapshot, ProjectSummary,
-  ChatActivity, ChatRunResult, ChatRunStatus, TaskWorkerEvent,
+  ChatActivity, ChatRunResult, ChatRunStatus, TaskWorkerEvent, ProcessSegment,
   DiffProposal, EditorRevisionRequest, EditorSelection,
 } from './types'
 import { applyDiffProposalSet, fingerprintDocument } from './lib/diffProposal'
-import { mergeWorkerActivity } from './lib/chatActivity'
+import { appendWorkerActivity } from './lib/chatActivity'
 
-const MAX_CHAT_ACTIVITY_LOG = 80
 const LEGACY_MODEL_PREFERENCE_KEYS = ['vinkey.autoStopOllamaModels', 'vinkey.modelAssignments']
 for (const key of LEGACY_MODEL_PREFERENCE_KEYS) localStorage.removeItem(key)
 
@@ -53,7 +52,8 @@ interface AppState {
   setPendingNewFiles: (paths: string[]) => void
   clearPendingNewFiles: () => void
   beginChatRun: (run: ChatRun) => void
-  setChatRunStatus: (conversationId: string, status: ChatRunStatus, message?: string | null) => void
+  setChatRunStatus: (conversationId: string, status: ChatRunStatus, message?: string | null, segment?: ProcessSegment) => void
+  beginChatSegment: (conversationId: string, label: string) => void
   recordWorkerEvent: (conversationId: string, event: TaskWorkerEvent) => void
   appendChatRunChunk: (conversationId: string, chunk: string) => void
   resetChatRunResponse: (conversationId: string) => void
@@ -81,6 +81,7 @@ export interface ChatRun {
   conversationTitle: string
   requestId: string
   taskJobId?: string | null
+  processSegment?: ProcessSegment
   status: ChatRunStatus
   statusMessage: string | null
   activityLog: ChatActivity[]
@@ -166,11 +167,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   setPendingNewFiles: (paths) => set({ pendingNewFiles: [...new Set(paths)].slice(0, 8) }),
   clearPendingNewFiles: () => set({ pendingNewFiles: [] }),
   beginChatRun: (run) => set((state) => {
+    const processSegment = run.processSegment ?? { id: crypto.randomUUID(), label: '处理请求', startedAt: Date.now() }
     const activityLog = run.activityLog.length > 0
       ? run.activityLog
-      : [{ status: run.status, message: run.statusMessage, timestamp: Date.now() }]
+      : [{ id: crypto.randomUUID(), jobId: run.taskJobId ?? undefined, segment: processSegment, status: run.status, message: run.statusMessage, timestamp: Date.now() }]
     const nextRun = {
       ...run,
+      processSegment,
       activityLog,
       assistantMessage: { ...run.assistantMessage, activityLog },
     }
@@ -181,18 +184,23 @@ export const useAppStore = create<AppState>((set, get) => ({
         : state.messages,
     }
   }),
-  setChatRunStatus: (conversationId, status, statusMessage = null) => set((state) => {
+  beginChatSegment: (conversationId, label) => {
+    get().setChatRunStatus(conversationId, 'thinking', label, { id: crypto.randomUUID(), label, startedAt: Date.now() })
+  },
+  setChatRunStatus: (conversationId, status, statusMessage = null, segment) => set((state) => {
     const run = state.chatRuns[conversationId]
-    if (!run || (run.status === status && run.statusMessage === statusMessage)) return state
+    if (!run || (run.status === status && run.statusMessage === statusMessage && (!segment || segment.id === run.processSegment?.id))) return state
     const completedAt = Date.now()
     const previous = run.activityLog.at(-1)
-    const closedLog = previous && !previous.completedAt
+    const closedLog = previous && !previous.worker && !previous.completedAt
       ? [...run.activityLog.slice(0, -1), { ...previous, completedAt }]
       : run.activityLog
-    const activity: ChatActivity = { status, message: statusMessage, timestamp: completedAt }
-    const activityLog = [...closedLog, activity].slice(-MAX_CHAT_ACTIVITY_LOG)
+    const processSegment = segment ?? run.processSegment
+    const activity: ChatActivity = { id: crypto.randomUUID(), segment: processSegment, status, message: statusMessage, timestamp: completedAt }
+    const activityLog = [...closedLog, activity]
     const nextRun = {
       ...run,
+      processSegment,
       status,
       statusMessage,
       activityLog,
@@ -208,10 +216,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   recordWorkerEvent: (conversationId, event) => set((state) => {
     const run = state.chatRuns[conversationId]
     if (!run) return state
-    const activityLog = mergeWorkerActivity(run.activityLog, event)
+    const activityLog = appendWorkerActivity(run.activityLog, event)
     if (activityLog === run.activityLog) return state
+    const latest = activityLog.at(-1)
     const nextRun = { ...run, activityLog, status: 'tool_calling' as const,
-      statusMessage: event.message, assistantMessage: { ...run.assistantMessage, activityLog } }
+      statusMessage: latest?.message ?? null, assistantMessage: { ...run.assistantMessage, activityLog } }
     return { chatRuns: { ...state.chatRuns, [conversationId]: nextRun },
       messages: state.conversationId === conversationId ? mergeRunMessages(state.messages, nextRun) : state.messages }
   }),
@@ -232,9 +241,16 @@ export const useAppStore = create<AppState>((set, get) => ({
   resetChatRunResponse: (conversationId) => set((state) => {
     const run = state.chatRuns[conversationId]
     if (!run || !run.assistantMessage.content) return state
+    const timestamp = Date.now()
+    const closedLog = run.activityLog.map((item) => !item.worker && item.completedAt === undefined ? { ...item, completedAt: timestamp } : item)
+    const activityLog: ChatActivity[] = [...closedLog, {
+      id: crypto.randomUUID(), segment: run.processSegment, status: 'streaming', message: '补充上下文前的响应',
+      timestamp, completedAt: timestamp, response: run.assistantMessage.content,
+    }]
     const nextRun = {
       ...run,
-      assistantMessage: { ...run.assistantMessage, content: '' },
+      activityLog,
+      assistantMessage: { ...run.assistantMessage, content: '', activityLog },
     }
     return {
       chatRuns: { ...state.chatRuns, [conversationId]: nextRun },
@@ -250,19 +266,20 @@ export const useAppStore = create<AppState>((set, get) => ({
     delete chatRuns[conversationId]
     const completedAt = Date.now()
     const previous = run.activityLog.at(-1)
-    const activityLog = previous && !previous.completedAt
+    const activityLog = previous && !previous.worker && !previous.completedAt
       ? [...run.activityLog.slice(0, -1), { ...previous, completedAt }]
       : run.activityLog
     const completedAssistant = { ...run.assistantMessage, completedAt, activityLog, runResult: result }
     const completedChatMessages = { ...state.completedChatMessages }
-    if (discardAssistant || !completedAssistant.content.trim()) delete completedChatMessages[conversationId]
+    const discard = discardAssistant && activityLog.length === 0 && !completedAssistant.content.trim()
+    if (discard) delete completedChatMessages[conversationId]
     else completedChatMessages[conversationId] = completedAssistant
     const nextRun = { ...run, assistantMessage: completedAssistant }
     return {
       chatRuns,
       completedChatMessages,
       messages: state.conversationId === conversationId
-        ? (discardAssistant
+        ? (discard
           ? state.messages.filter((message) => message.id !== run.assistantMessage.id)
           : mergeRunMessages(state.messages, nextRun))
         : state.messages,
@@ -273,6 +290,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     conversationTitle: conversation.title,
     messages: mergeRunMessages(
       removeWelcomeMessage(conversation.messages).map((message) => state.completedChatMessages[conversation.id]?.id === message.id
+        && (state.completedChatMessages[conversation.id].completedAt ?? 0) > (message.completedAt ?? 0)
+        && (state.completedChatMessages[conversation.id].activityLog?.length ?? 0) >= (message.activityLog?.length ?? 0)
         ? state.completedChatMessages[conversation.id]
         : message),
       state.chatRuns[conversation.id],

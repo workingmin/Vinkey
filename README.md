@@ -73,6 +73,7 @@ npm run package:mac -- --open
 - [开发框架与技术选型](docs/architecture/DEVELOPMENT_FRAMEWORK.md)
 - [AI 业务链路架构与改造方案](docs/architecture/AI_BUSINESS_CHAINS.md)
 - [UI 设计文档总览](docs/design/ui/UI_DESIGN.md)
+- [任务过程文案设计与竞品对照（评审草案）](docs/design/ui/TASK_PROCESS_COPY_DESIGN.md)
 - [UI 现状盘点](docs/design/ui/UI_INVENTORY.md)
 - [Agent 与 Skill 建设计划](docs/design/agent/AGENT_SKILL_PLAN.md)
 - [Agent 流程模板](docs/design/agent/AGENT_FLOW_TEMPLATES.md)
