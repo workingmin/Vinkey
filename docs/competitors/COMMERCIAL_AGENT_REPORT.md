@@ -1,37 +1,31 @@
 # 商业与 Agent 产品分析报告
 
 - 初始行为观察日期：2026-09-22；2026-10-27 复核名录、维护来源及研究优先级，未逐项重测历史行为。
-- 设计同步：2026-10-26，仅修订 Vinkey 过程展示取舍，不表示重新调研外部产品。
-- 当前资料：[正式名录](COMPETITOR_CATALOG.md)集中记录当前收录、版本、证据来源与限制；本报告下文的行为分析保留各自观察范围。
+- 2026-10-28 按[正式竞品名录](COMPETITOR_CATALOG.md)移除未收录对象相关分析，仅保留正式名录中的商业/Agent 类产品。
+- 当前资料：[正式名录](COMPETITOR_CATALOG.md)集中记录当前收录、版本、证据来源与限制；本报告只解释已采用设计，不重复维护统计数据。
 - 目标：分析可观察的任务编排、上下文、审批、长任务和创作交互，不把商业产品 SDK 作为 Vinkey 的默认依赖。
 - 适用边界：功能、流程和结果形态可借鉴；账号、计费、云端数据面和厂商认证必须单独评估。
-- 名称口径：[竞品术语规范](TERMINOLOGY.md)；正式名单：[正式竞品名录](COMPETITOR_CATALOG.md)。
+- 名称口径：[竞品术语规范](TERMINOLOGY.md)。
 
-Vinkey 定位为本地中文创作工作台。中文界面与任务文案优先比较中国区办公 Agent，其次是中文文档与通用助手；开发者产品主要补充运行机制，文学工具保留领域专项价值。市场规模不直接决定设计，精确交互仍需同场景验证。
+Vinkey 定位为本地中文创作工作台。本报告覆盖正式名录中的商业/Agent 类对象：WorkBuddy、百度搭子、千问办公、Claude Code、Kimi、豆包、Novelcrafter。本地文档工作台产品（NoteGen、Cherry Studio）见[开源项目竞品分析报告](OPEN_SOURCE_REPORT.md)。
 
-## 1. 产品分组
+## 1. 对象与身份
 
-| 产品/体系 | 主要观察对象 | 与 Vinkey 的关系 | 当前结论 |
-| --- | --- | --- | --- |
-| [WorkBuddy](https://www.codebuddy.cn/docs/workbuddy/Conversation) | 通用 Agent 工作台的推进段、过程、任务控制与结果 | 中文 Agent 直接交互参考 | 按同类采用与官方维护证据重新收录；已参考真实过程保留原则，文案方案待评审 |
-| [百度搭子（DuMate）](https://cloud.baidu.com/discover/dumate-faq-guide-help.html) | 办公任务操作、过程查看和多任务 | 中文 Agent 直接交互参考 | 按同类采用与官方维护证据重新收录；官方行为可查，精确界面文案与折叠策略待实测 |
-| [千问办公](https://qwenwork.cn/) | 长任务、历史、权限与交付 | 中文办公 Agent 优先交互参考 | 独立同类采用与官方连续更新支持收录；当前精确界面待实测 |
-| [OpenAI Codex](https://developers.openai.com/learn/codex) | 任务目标、审批、后台执行、事件、diff 和恢复 | Agent Runtime 交互参考 | 已参考流程合同；不作为用户可选 Runtime 集成 |
-| [Claude Code](https://code.claude.com/docs/en/overview) | Tool Loop、权限模式、Artifacts、Skills、子 Agent | Agent Runtime 交互参考 | 已参考权限、Artifact、会话控制；不复用其账号/SDK |
-| [Cursor](https://cursor.com/) | 代码库检索、Agent/Ask、编辑器上下文和 diff | 上下文与改稿参考 | 已参考相关性检索和修改审阅；文学对象需重新建模 |
-| [GitHub Copilot](https://github.com/features/copilot) | Repository indexing、Ask/Research、代码上下文 | 检索和深度分层参考 | 已参考索引优先；不采用云端仓库默认授权 |
-| [Novelcrafter](https://www.novelcrafter.com/features) | Codex、人物/地点/lore、写作协作 | 文学领域产品参考 | 已参考资产卡、别名和受控上下文；正式 canon 仍需用户确认 |
-| [Sudowrite](https://www.sudowrite.com/) | Story Bible、创意生成、续写和编辑协作 | 文学创作体验参考 | 观察创作流畅度；不让模型绕过证据写入事实 |
-| Claude 产品的 Research 能力 / [ChatGPT Deep Research](https://help.openai.com/en/articles/10500283-deep-research) | 搜索规划、来源、长时间研究结果 | 联网研究参考 | `待参考`；先完成授权、来源和隐私设计 |
-| 豆包、Kimi、元宝、千问、文心、讯飞星火、DeepSeek | 中文通用与长文本助手 | 附件、耗时入口、文档式长结果和可视化 | 已纳入正式竞品名录；结果展示参考，不把过程展示当作质量证明 |
-| WPS Office AI | 商业文档办公工作台 | 文档编辑、格式、导出、版本和办公 AI | 已纳入正式竞品名录；作为文档交付和编辑器参考 |
-| Notion/Google Docs | 云文档、协作、评论和分享 | 桌面编辑器边界参考 | 当前不采用云协作，避免改变本地优先威胁模型 |
+| 产品/体系 | 名录身份 | 主要观察对象 | 与 Vinkey 的关系 | 当前结论 |
+| --- | --- | --- | --- | --- |
+| [WorkBuddy](https://www.codebuddy.cn/docs/workbuddy/Conversation) | 正式竞品 | 通用 Agent 工作台的推进段、过程、任务控制与结果 | 中文任务过程直接参考 | 官方维护与同类采用证据支持；已参考真实过程保留原则，文案方案待评审 |
+| [百度搭子（DuMate）](https://cloud.baidu.com/discover/dumate-faq-guide-help.html) | 正式竞品 | 办公任务操作、过程查看和多任务 | 中文办公任务直接参考 | 官方维护与采用证据可查，精确界面文案与折叠策略待实测 |
+| [千问办公](https://qwenwork.cn/) | 正式竞品 | 长任务、历史、权限与交付 | 中文任务文案与恢复参考 | 官方连续更新支持收录；当前精确界面待实测 |
+| [Claude Code](https://code.claude.com/docs/en/overview) | 专项参考（运行机制） | Tool Loop、权限模式、Artifacts、Skills、子 Agent | 运行机制参考，不复用其账号/SDK | 已参考权限、Artifact、会话控制 |
+| [Kimi](https://www.kimi.com/) | 正式相邻竞品 | 长文阅读、文件问答、分析结果 | 中文长文阅读与结果表达参考 | 正式名录收录；只比较通用助手表面，不混用该品牌其他 Agent 或桌面表面 |
+| [豆包](https://www.doubao.com/) | 正式相邻竞品 | 中文创作、附件、长结果表达 | 中文创作与结果展示参考 | 正式名录收录；当前界面文案与折叠关系待补证 |
+| [Novelcrafter](https://www.novelcrafter.com/features) | 专项参考（文学创作） | 人物/地点/lore、章节、受控上下文 | 文学资产与创作流程参考 | 已参考资产卡、别名和受控上下文；正式 canon 仍需用户确认 |
 
-## 2. Agent Runtime 共同模式
+## 2. Agent Runtime 与中文任务共同模式
 
 ### 2.1 目标、约束和完成定义
 
-OpenAI Codex 的长任务说明、Claude Code 的计划/权限/工具循环和其他 Agent 产品的任务入口有一个共同点：复杂任务需要可观察的目标和完成条件。只显示“正在思考”不能让用户判断是否完成。
+Claude Code 的计划/权限/工具循环和中国区办公 Agent 的任务入口有一个共同点：复杂任务需要可观察的目标和完成条件。只显示“正在思考”不能让用户判断是否完成。
 
 **Vinkey 已参考：**
 
@@ -42,13 +36,13 @@ OpenAI Codex 的长任务说明、Claude Code 的计划/权限/工具循环和�
 
 **Vinkey 有意不同：**
 
-- OpenAI Codex/Claude Code 的默认对象是代码仓库和 shell 工具；Vinkey 的权限对象是文档正文、分析范围、DiffProposal、canon、记忆和联网范围。
+- Claude Code 的默认对象是代码仓库和 shell 工具；Vinkey 的权限对象是文档正文、分析范围、DiffProposal、canon、记忆和联网范围。
 - Vinkey 不允许 Agent 通过自然语言把普通草稿升级为写入或网络权限。
 - 业务结果必须附带来源、覆盖收据和源指纹，不能只返回“任务成功”。
 
 ### 2.2 上下文与按需升级
 
-Cursor、Copilot、Claude Code 等产品都把“相关上下文”作为能力，而不是默认把整个项目塞入模型。Research/Explore 类入口通常允许更高成本换取更广覆盖。
+Claude Code 把“相关上下文”作为能力，而不是默认把整个项目塞入模型；Kimi、豆包把长文附件、范围与结果阅读分层，避免把中间过程当最终结果。
 
 **Vinkey 已参考：**
 
@@ -64,7 +58,7 @@ Cursor、Copilot、Claude Code 等产品都把“相关上下文”作为能力�
 
 ### 2.3 工具、审批和安全
 
-OpenAI Codex 的 sandbox/approval policy、Claude Code 的 permission mode、Skills/MCP/Hook 组合，证明工具能力必须有宿主控制面。工具越通用，越难解释业务副作用。
+Claude Code 的 permission mode、Skills/MCP/Hook 组合说明：工具能力必须有宿主控制面，工具越通用，越难解释业务副作用。
 
 **Vinkey 已参考：**
 
@@ -77,7 +71,7 @@ OpenAI Codex 的 sandbox/approval policy、Claude Code 的 permission mode、Ski
 
 ### 2.4 Artifact、diff 和最终结果
 
-Claude Code 的 Artifact、OpenAI Codex 的 diff/任务结果、豆包的文档式长文输出都说明：复杂结果不应挤在聊天气泡中，也不应把中间过程伪装成最终答案。
+Claude Code 的 Artifact 与豆包的文档式长文输出都说明：复杂结果不应挤在聊天气泡中，也不应把中间过程伪装成最终答案。
 
 **Vinkey 已参考：**
 
@@ -89,7 +83,7 @@ Claude Code 的 Artifact、OpenAI Codex 的 diff/任务结果、豆包的文档�
 
 ### 2.5 长任务、暂停和恢复
 
-Codex cloud/Remote、Claude Code on the web/Remote 和长文助手产品把后台任务、耗时入口和恢复作为独立体验。对 Vinkey 来说，恢复的关键不是继续生成，而是确认输入仍然有效。
+WorkBuddy、百度搭子、千问办公的长时间任务入口与 Claude Code 的后台/恢复体验都要求：恢复的关键不是继续生成，而是确认输入仍然有效。
 
 **Vinkey 已参考：**
 
@@ -99,7 +93,7 @@ Codex cloud/Remote、Claude Code on the web/Remote 和长文助手产品把后�
 
 **待参考：** 跨页面任务中心、重启后的恢复提示、失败项局部重试和“查看本次输入快照”。恢复体验的验收应包括：应用重启、模型不可用、源文件修改和部分块失败四类场景。
 
-## 3. 文学创作产品的专项取舍
+## 3. 文学创作与中文长文专项取舍
 
 ### 3.1 Novelcrafter：资产卡与受控上下文
 
@@ -109,25 +103,17 @@ Codex cloud/Remote、Claude Code on the web/Remote 和长文助手产品把后�
 
 **Vinkey 不直接复制：** 不把第三方产品的字段和交互当作固定标准；Vinkey 还要处理审校疑点、冲突分桶、提案确认和本地增量失效。
 
-### 3.2 Sudowrite：创作流畅度与事实边界
+### 3.2 中文长文本助手：过程查阅与结果阅读
 
-**参考点：** 创意生成、人物/大纲协作、续写和改写入口应低摩擦，用户不需要先理解复杂 Agent 概念。
-
-**Vinkey 采用：** 对话页提供明确的分析、拆分、人物线和改稿入口；确定性任务优先走本地服务，模型只在需要时出现。
-
-**Vinkey 不采用：** 模型生成的漂亮段落不等于已确认事实。续写、改写和创意均标记为草稿或 Proposal，不自动写回正文、canon 或记忆。
-
-### 3.3 中文长文本助手：过程查阅与结果阅读
-
-**参考对象：** 豆包、Kimi、元宝、千问、文心、讯飞星火和 DeepSeek；这些产品已经在[正式竞品名录](COMPETITOR_CATALOG.md)中按“商业中文通用与长文本助手”单独归类。
+**参考对象：** 正式名录中的 Kimi、豆包。
 
 **参考点：** 附件独立展示、耗时过程收拢为入口、最终结果采用适合长文阅读的标题/表格/列表和可视化。
 
 **Vinkey 采用：** 文件引用标签、可折叠活动轨迹、报告/Artifact 分层和来源收据。
 
-**Vinkey 有意不同：** 长任务结果不能以“共用时”替代覆盖率、失败块和证据。文学分析必须让用户区分事实、推断、疑点和草稿。WPS Office AI 的文档编辑和格式交付另列为办公工作台能力，不与通用助手的对话体验混排。
+**Vinkey 有意不同：** 长任务结果不能以“共用时”替代覆盖率、失败块和证据。文学分析必须让用户区分事实、推断、疑点和草稿。
 
-### 3.4 任务过程文案专项比较（2026-10-27）
+### 3.3 任务过程文案专项比较（2026-10-27）
 
 详细事实、来源与待验证项统一维护在[任务过程界面与文案提案](../design/ui/TASK_PROCESS_COPY_DESIGN.md#2-多竞品对照与证据边界)，不以产品能力介绍替代界面实测。
 
@@ -136,8 +122,7 @@ Codex cloud/Remote、Claude Code on the web/Remote 和长文助手产品把后�
 | WorkBuddy | 真实续接入口、状态与过程/结果关联 | 保留同名实际推进；区域名与动作名分开；不照搬原界面 |
 | 百度搭子 | 可查阅的文件、脚本、浏览器操作 | 动作＋对象＋范围；多任务信息须有归属 |
 | Claude Code | 计划清单、后台任务与详细记录的区别 | 计划不冒充已执行记录；不移植终端的展示数量或合并策略 |
-| Cursor | 文件检查点、任务继续、异步任务控制 | “还原文稿”“继续处理”“重新执行步骤”分开命名 |
-| Kimi Agent 模式／Kimi Work | 从计划到执行和交付、持续目标 | 各交互表面分别核对；完成文案指向真实产出 |
+| Kimi | 长文阅读与分支任务的结果表达 | 过程与结果分层；聊天气泡不承载完整交付 |
 | 豆包 | 当前界面过程文案和折叠关系待补证 | 保留正式对照席位，不据无证据印象给出结论 |
 
 这不是重新定义 Vinkey 的执行引擎，也不意味着上述产品都使用两层折叠。具体状态由 Vinkey 真实事件支持，文案和界面独立设计；不在仓库保存任何竞品截图、录屏或其变体。
@@ -146,12 +131,12 @@ Codex cloud/Remote、Claude Code on the web/Remote 和长文助手产品把后�
 
 | 能力 | 借鉴 | 当前不做的部分 | 原因 |
 | --- | --- | --- | --- |
-| Agent Loop | 计划、Tool、事件、审批、恢复 | 直接嵌入 OpenAI Codex/Claude Code Runtime | 厂商认证、数据面、成本和工程边界不匹配 |
-| 云端后台任务 | 独立任务状态、进度、结果审阅 | 把作品正文上传托管执行 | 与本地隐私和离线模型定位冲突 |
-| 联网研究 | 搜索计划、来源卡、交叉核验 | 默认联网或自动写入 canon | 来源治理和外发授权尚未完成 |
-| 多 Agent | 独立上下文、并行验证 | 为展示复杂度而默认并行 | 结果合并、成本和证据归属更难验证 |
-| 团队协作 | 评论、提案、版本 | 云同步、成员权限、分享链接 | 需要全新的同步冲突和威胁模型 |
-| 模型市场 | 提供商/模型可切换 | 大量内置厂商与自动路由 | 当前目标是本地/兼容协议的可解释连接 |
+| Agent Loop | Claude Code 的计划、Tool、事件、审批、恢复 | 直接嵌入 Claude Code Runtime | 厂商认证、数据面、成本和工程边界不匹配 |
+| 云端后台任务 | WorkBuddy、百度搭子、千问办公的任务状态与进度 | 把作品正文上传托管执行 | 与本地隐私和离线模型定位冲突 |
+| 联网研究 | 保留为待验证能力，不绑定外部产品 | 默认联网或自动写入 canon | 来源治理和外发授权尚未完成 |
+| 多 Agent | 仅在隔离上下文和评测证明有收益时采用 | 为展示复杂度而默认并行 | 结果合并、成本和证据归属更难验证 |
+| 团队协作 | 先完成单机可恢复闭环 | 云同步、成员权限、分享链接 | 需要全新的同步冲突和威胁模型 |
+| 模型市场 | 兼容协议与可解释连接 | 大量内置厂商与自动路由 | 当前目标是本地/兼容协议的可解释连接 |
 
 ## 5. 下一轮商业产品验证计划
 
@@ -159,18 +144,15 @@ Codex cloud/Remote、Claude Code on the web/Remote 和长文助手产品把后�
 
 | 场景 | 对比对象 | 关键指标 |
 | --- | --- | --- |
-| “找出人物关系冲突并给证据” | Vinkey / Cursor / Claude Code / 长文助手 | 关键冲突召回率、证据准确率、人工修正分钟数 |
-| “按要求改写三个段落” | Vinkey / Cursor / Sudowrite / Knote（设计来源） | 越界修改率、审阅时间、接受后保存安全性 |
-| “整理一份研究简报” | Vinkey / Research 产品 | 来源可核验率、来源重复率、外发数据范围 |
-| “中断后继续长文分析” | Vinkey / OpenAI Codex / Claude Code 长任务体验 | 恢复成功率、源变化提示、失败块重试时间 |
-| “从正文建立人物资产” | Vinkey / Novelcrafter / 图谱项目 | 候选精度、确认负担、局部失效可解释性 |
+| “找出人物关系冲突并给证据” | Vinkey / Novelcrafter / Claude Code | 关键冲突召回率、证据准确率、人工修正分钟数 |
+| “按要求改写三个段落” | Vinkey / 豆包 / Claude Code | 越界修改率、审阅时间、接受后保存安全性 |
+| “整理一份研究简报” | Vinkey（无外部产品对照，先补来源治理） | 来源可核验率、来源重复率、外发数据范围 |
+| “中断后继续长文分析” | Vinkey / WorkBuddy、百度搭子、千问办公 | 恢复成功率、源变化提示、失败块重试时间 |
+| “从正文建立人物资产” | Vinkey / Novelcrafter | 候选精度、确认负担、局部失效可解释性 |
 
 ## 6. 来源
 
 - [Agent 流程模板对比](../design/agent/AGENT_FLOW_COMPARISON.md)
 - [AI 业务链路架构](../architecture/AI_BUSINESS_CHAINS.md)
-- [GitHub 同类项目调研](../research/GITHUB_REFERENCE.md)
 - [轻量级联网搜索设计](../research/LIGHTWEIGHT_WEB_RESEARCH.md)
-- [Codex 长任务与控制面资料](https://learn.chatgpt.com/docs/long-running-work)、[Codex app-server](https://learn.chatgpt.com/docs/app-server)
-- [Claude Code 工作方式](https://code.claude.com/docs/en/how-claude-code-works)、[Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk/overview)
-- [GitHub Copilot repository indexing](https://docs.github.com/en/copilot/concepts/context/repository-indexing)、[Cursor agent search](https://cursor.com/docs/agent/tools/search)
+- [Claude Code 工作方式](https://code.claude.com/docs/en/how-claude-code-works)
