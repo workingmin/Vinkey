@@ -25,6 +25,12 @@
 
 以上顺序即参照优先级，不是综合市场排名。中文同类产品对界面与文案更有参考价值，但不能由中文品牌推断离线运行、本地存储或隐私保证。旧版未附逐项证据的综合分数撤下，改为说明具体用途与证据范围。
 
+**日期列约定**：下文各证据表中
+
+- `资料/发行日期`：来源页、发行记录或数据页面标注的时间，不是 Vinkey 核验时间。
+- `核验批次`：Vinkey 本轮核验该资料的时间，即 2026-10-27。
+- 两者不同且不可互相替代；同一产品存在多个版本、多个来源时，各日期分别在对应单元格列出。
+
 ## 2. 中国区办公类 AI Agent
 
 ### 2.1 分类与市场依据
@@ -45,11 +51,11 @@
 
 ### 2.2 重新评估后的正式竞品
 
-| 产品与比较范围 | 官方身份与维护证据 | 市场/使用证据 | 收录结论与 Vinkey 用途 | 仍需验证 |
-| --- | --- | --- | --- | --- |
-| **[WorkBuddy](https://www.codebuddy.cn/docs/workbuddy/Conversation)**，腾讯；以中国区桌面任务对话为主要比较表面 | [更新日志](https://www.codebuddy.cn/docs/workbuddy/Changelog)：2026-03-04 上线，10-20 有 5.9.0 记录；[任务管理](https://www.codebuddy.cn/docs/workbuddy/Task-Management)说明任务状态与继续处理 | M1 的独立采用数据；会话内“分析小说”实际观察；[App Store 分发](https://apps.apple.com/cn/app/id6761374913)可定位 | **正式竞品，中文过程交互优先参考。** 产品存续、持续维护、同类采用与多步文档任务证据相互支持；研究推进段、状态、过程与结果关联 | 当前桌面版本的默认展开值、历史重开、异常恢复；用户截图版本未核定，不外推全端行为 |
-| **[百度搭子](https://dumate.baidu.com/app)**（DuMate），以个人版为主要比较范围 | [个人版更新动态](https://cloud.baidu.com/doc/Dumate/s/cmmu7shvw)：2026-03-23 起有版本记录，10-24 有 v1.0.88；[常见问题](https://cloud.baidu.com/discover/dumate-faq-guide-help.html)描述过程中的文件、脚本和浏览器操作；[订阅协议](https://cloud.baidu.com/doc/Dumate/s/ymowkv4zo)明确服务身份 | M1 的独立采用数据；[开发者社区体验文章](https://developer.baidu.com/article/detail.html?id=8272707)为使用线索，作者内容不当作官方承诺 | **正式竞品，中文办公任务优先参考。** 采用、维护和任务执行能力均有可定位来源；研究动作对象、任务归属、文件交付 | 个人版精确中文标签、折叠行为与中断恢复待实测；企业版资料不能替代个人版 |
-| **[千问办公](https://qwenwork.cn/)**（QwenWork），桌面与网页分别观察 | [阿里云官方产品文档](https://help.aliyun.com/zh/qwenwork)确认产品与办公执行范围；[桌面更新日志](https://docs.qwenwork.cn/release-notes/desktop)：2026-10-09 的 1.2.5、10-15 的 1.3.1，涉及执行、历史与反馈问题修复 | M1 的独立采用数据；更新日志提供具体使用问题及修复记录，尚未完成独立体验复测 | **正式竞品，中文任务文案优先参考。** 有同类采用与持续维护证据；研究等待、长耗时活动、权限记录、历史恢复和产物交付 | 各端实际布局、默认折叠值及修复后的行为；不以“千问”App 数据代替其市场数据 |
+| 产品与比较范围 | 官方身份与维护证据 | 官方资料/发行日期 | 市场/使用证据 | 收录结论与 Vinkey 用途 | 仍需验证 | 核验批次 |
+| --- | --- | --- | --- | --- | --- | --- |
+| **[WorkBuddy](https://www.codebuddy.cn/docs/workbuddy/Conversation)**，腾讯；以中国区桌面任务对话为主要比较表面 | [更新日志](https://www.codebuddy.cn/docs/workbuddy/Changelog)记录版本迭代；[任务管理](https://www.codebuddy.cn/docs/workbuddy/Task-Management)说明任务状态与继续处理 | 2026-03-04（上线）；2026-10-20（5.9.0） | M1 的独立采用数据；会话内“分析小说”实际观察；[App Store 分发](https://apps.apple.com/cn/app/id6761374913)可定位 | **正式竞品，中文过程交互优先参考。** 产品存续、持续维护、同类采用与多步文档任务证据相互支持；研究推进段、状态、过程与结果关联 | 当前桌面版本的默认展开值、历史重开、异常恢复；用户截图版本未核定，不外推全端行为 | 2026-10-27 |
+| **[百度搭子](https://dumate.baidu.com/app)**（DuMate），以个人版为主要比较范围 | [个人版更新动态](https://cloud.baidu.com/doc/Dumate/s/cmmu7shvw)记录版本；[常见问题](https://cloud.baidu.com/discover/dumate-faq-guide-help.html)描述过程中的文件、脚本和浏览器操作；[订阅协议](https://cloud.baidu.com/doc/Dumate/s/ymowkv4zo)明确服务身份 | 2026-03-23 起有版本记录；2026-10-24（v1.0.88） | M1 的独立采用数据；[开发者社区体验文章](https://developer.baidu.com/article/detail.html?id=8272707)为使用线索，作者内容不当作官方承诺 | **正式竞品，中文办公任务优先参考。** 采用、维护和任务执行能力均有可定位来源；研究动作对象、任务归属、文件交付 | 个人版精确中文标签、折叠行为与中断恢复待实测；企业版资料不能替代个人版 | 2026-10-27 |
+| **[千问办公](https://qwenwork.cn/)**（QwenWork），桌面与网页分别观察 | [阿里云官方产品文档](https://help.aliyun.com/zh/qwenwork)确认产品与办公执行范围；[桌面更新日志](https://docs.qwenwork.cn/release-notes/desktop)涉及执行、历史与反馈问题修复 | 2026-10-09（1.2.5）；2026-10-15（1.3.1） | M1 的独立采用数据；更新日志提供具体使用问题及修复记录，尚未完成独立体验复测 | **正式竞品，中文任务文案优先参考。** 有同类采用与持续维护证据；研究等待、长耗时活动、权限记录、历史恢复和产物交付 | 各端实际布局、默认折叠值及修复后的行为；不以“千问”App 数据代替其市场数据 | 2026-10-27 |
 
 “优先参考”是研究优先级，不等于认为它们的所有交互更优。中文任务文案应在同一任务下比较，并由 Vinkey 的真实事件和用户需求决定。
 
@@ -61,19 +67,19 @@
 
 以下以官方仓库身份、发行记录和社区采用作为证据。第 3 节的数据采集于 2026-10-27，日期按 UTC 记录；采用栏链接到仓库 API，发行链接对应具体版本。查询使用 `GET /repos/{owner}/{repo}` 和 `/releases?per_page=3`，2 个仓库均未归档。Star/Fork 不等于安装用户或中国区份额；仓库创建日不等于产品上线日，最后推送不等于实质维护，发行列表不覆盖所有渠道。
 
-| 产品 | 本轮维护记录（UTC 日期） | 社区采用（Star / Fork）与最后推送 | 收录与参考重点 | 边界 |
-| --- | --- | --- | --- | --- |
-| [NoteGen](https://github.com/codexu/note-gen) | [note-gen-v0.39.0](https://github.com/codexu/note-gen/releases/tag/note-gen-v0.39.0)，2026-10-25；10 月多次发行 | [12,924 / 977](https://api.github.com/repos/codexu/note-gen)；2026-10-27 | **正式竞品**；本地 Markdown、中文内容工作区、会话与文档组织 | GPL-3.0；参考产品行为，独立实现；实际中文创作流程需持续观察 |
-| [Cherry Studio](https://github.com/CherryHQ/cherry-studio) | [v2.1.8](https://github.com/CherryHQ/cherry-studio/releases/tag/v2.1.8)，2026-10-26；10 月多次发行 | [53,017 / 5,134](https://api.github.com/repos/CherryHQ/cherry-studio)；2026-10-27 | **正式竞品**；多模型工作台、连接状态、模型配置与中文交互 | AGPL-3.0；多模型丰富度不等于文学创作适配度 |
+| 产品 | 发行记录 | 发行日期（UTC） | 社区采用（Star / Fork） | 最后推送（UTC） | 收录与参考重点 | 边界 | 核验批次 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| [NoteGen](https://github.com/codexu/note-gen) | [note-gen-v0.39.0](https://github.com/codexu/note-gen/releases/tag/note-gen-v0.39.0)，10 月多次发行 | 2026-10-25 | [12,924 / 977](https://api.github.com/repos/codexu/note-gen) | 2026-10-27 | **正式竞品**；本地 Markdown、中文内容工作区、会话与文档组织 | GPL-3.0；参考产品行为，独立实现；实际中文创作流程需持续观察 | 2026-10-27 |
+| [Cherry Studio](https://github.com/CherryHQ/cherry-studio) | [v2.1.8](https://github.com/CherryHQ/cherry-studio/releases/tag/v2.1.8)，10 月多次发行 | 2026-10-26 | [53,017 / 5,134](https://api.github.com/repos/CherryHQ/cherry-studio) | 2026-10-27 | **正式竞品**；多模型工作台、连接状态、模型配置与中文交互 | AGPL-3.0；多模型丰富度不等于文学创作适配度 | 2026-10-27 |
 
 ## 4. 中国区通用助手
 
 这组只保留两个直接支持中文长文与创作的相邻竞品。表内数据为 **2026-10-27 采集的中国区 iOS 版本**；版本日期为 UTC，不能替代网页、桌面或各 Agent 模式的版本。版本单元格链接至对应商店应用，评分栏链接至 Apple Lookup（`country=cn`）。评分为五分制、保留两位小数；评价数为所有版本累计评分数，不是当前版本评论数或活跃/付费用户数。
 
-| 产品 | iOS 版本 / 更新日 | 评分 / 评价数（来源） | Vinkey 的参考场景 | 必须分开的对象 |
-| --- | --- | --- | --- | --- |
-| [Kimi](https://www.kimi.com/) | [3.1.6](https://apps.apple.com/cn/app/id6474233312) / 2026-10-24 | [4.89 / 195,128](https://itunes.apple.com/lookup?id=6474233312&country=cn) | 长文阅读、文件问答、分析结果 | 通用 App、网页 Agent、Kimi Work、Kimi Code |
-| [豆包](https://www.doubao.com/) | [15.5.0](https://apps.apple.com/cn/app/id6459478672) / 2026-10-26 | [4.64 / 5,052,336](https://itunes.apple.com/lookup?id=6459478672&country=cn) | 中文创作、附件、长结果表达 | 通用助手与豆包工作 |
+| 产品 | iOS 版本 | 版本更新日（UTC） | 评分 / 评价数（来源） | Vinkey 的参考场景 | 必须分开的对象 | 核验批次 |
+| --- | --- | --- | --- | --- | --- | --- |
+| [Kimi](https://www.kimi.com/) | [3.1.6](https://apps.apple.com/cn/app/id6474233312) | 2026-10-24 | [4.89 / 195,128](https://itunes.apple.com/lookup?id=6474233312&country=cn) | 长文阅读、文件问答、分析结果 | 通用 App、网页 Agent、Kimi Work、Kimi Code | 2026-10-27 |
+| [豆包](https://www.doubao.com/) | [15.5.0](https://apps.apple.com/cn/app/id6459478672) | 2026-10-26 | [4.64 / 5,052,336](https://itunes.apple.com/lookup?id=6459478672&country=cn) | 中文创作、附件、长结果表达 | 通用助手与豆包工作 | 2026-10-27 |
 
 上述版本和商店评价可以证明分发、维护与用户反馈入口；不能单独证明长文本上限、桌面交互、AI 使用增长或某项能力优劣。本轮不沿用缺少直接财报出处的增长结论。
 
@@ -81,17 +87,17 @@
 
 中文交互优先，并不排除文学结构更贴近需求的专项产品。以下保留正式专项参考身份，不声称拥有已核验的中国区市场份额。
 
-| 产品 | 本轮官方维护核验 | 专项价值与边界 |
-| --- | --- | --- |
-| [Novelcrafter](https://www.novelcrafter.com/features) | [2026-10-19 更新](https://www.novelcrafter.com/changelog/october-19th-2026)涉及小说导入和 Codex 问题修复 | 人物/设定资产、章节与受控上下文；Novelcrafter Codex 不是 OpenAI Codex；中文文案另行设计 |
+| 产品 | 官方维护证据 | 资料/发行日期 | 核验批次 | 专项价值与边界 |
+| --- | --- | --- | --- | --- |
+| [Novelcrafter](https://www.novelcrafter.com/features) | [10-19 更新](https://www.novelcrafter.com/changelog/october-19th-2026)涉及小说导入和 Codex 问题修复 | 2026-10-19 | 2026-10-27 | 人物/设定资产、章节与受控上下文；Novelcrafter Codex 不是 OpenAI Codex；中文文案另行设计 |
 
 ## 6. 开发者 Agent 执行机制专项参考
 
 这组对运行机制、上下文、权限和恢复有价值，**在中文创作者界面与任务文案研究中的优先级低于同类中文产品**。收录为参考不等于当前集成计划、依赖推荐或许可证审查通过。
 
-| 产品 | 本轮核验来源/记录 | 参考范围 |
-| --- | --- | --- |
-| [Claude Code](https://code.claude.com/docs/en/overview) | [v2.1.311](https://github.com/anthropics/claude-code/releases/tag/v2.1.311)，2026-10-26 UTC | 工具循环、权限、会话控制；终端表达不能直接成为中文创作工作台文案 |
+| 产品 | 官方维护证据 | 发行日期（UTC） | 核验批次 | 参考范围 |
+| --- | --- | --- | --- | --- |
+| [Claude Code](https://code.claude.com/docs/en/overview) | [v2.1.311](https://github.com/anthropics/claude-code/releases/tag/v2.1.311) | 2026-10-26 | 2026-10-27 | 工具循环、权限、会话控制；终端表达不能直接成为中文创作工作台文案 |
 
 ## 7. 后续研究
 
