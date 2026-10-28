@@ -5,21 +5,25 @@
 - 收录方法：[筛选方法论](SELECTION_METHODOLOGY.md)；名称边界：[术语规范](TERMINOLOGY.md)。
 - 名录原位维护当前结论、必要证据与核验日期，历史版本和变更原因通过 Git 提交记录追溯，不另建快照型文档。
 
-本轮核验涵盖独立市场报告、12 个仓库的元数据与最近发行记录、8 个中国区 iOS 应用及商业产品官方维护资料。未登录商业产品账号或完成全部 Issue、代码与 180 天实质维护审计；此前 WorkBuddy 会话观察仅支持对应场景，不外推所有平台、套餐与版本。
+本轮把名录收紧到 **9 个参照对象**：保留当前版本功能能够直接锚定的产品，低成熟度候选、已迁移/停服与仅具历史研究价值的对象不再列入。未登录商业产品账号或完成全部 Issue、代码与 180 天实质维护审计；此前 WorkBuddy 会话观察仅支持对应场景，不外推所有平台、套餐与版本。
 
 ## 1. 名录如何使用
 
-名录区分**正式竞品、专项参考、观察对象、维护复核**。正式竞品不表示已实测所有功能，也不表示应集成其服务。专项参考只对特定设计问题成立；观察对象不与已核验产品并列作成熟度背书。
+名录只保留能直接锚定当前版本功能的对象，不表示已实测其所有功能，也不表示应集成其服务。观察对象、维护复核对象和仅有榜单列名的对象不再单列，其受理与升级条件见[筛选方法论](SELECTION_METHODOLOGY.md)。
 
-| 设计问题 | 优先参考 | 补充参考 | Vinkey 的取舍依据 |
-| --- | --- | --- | --- |
-| 中文任务状态、继续执行、过程折叠与历史查阅 | 中国区办公类 AI Agent：WorkBuddy、百度搭子、千问办公 | 中文通用助手；开发者 Agent 的执行机制 | 中文用户是否读得懂，状态是否对应实际事件，过程能否自主查阅 |
-| 本地中文文稿、工作区与模型连接 | NoteGen、Cherry Studio；WPS 的文档操作 | MarkText、Obsidian、Typora | 本地文件归属、中文输入、保存/恢复、正文外发边界 |
-| 长文阅读、附件与分析结果 | Kimi、豆包、千问、元宝 | DeepSeek、讯飞星火、文心 | 中文长文、引用、范围、结果可读性；聊天与办公模式分开验证 |
-| 人物、设定、章节与创作审核 | 中文创作任务的实际需求；Novelcrafter、Sudowrite 的专项设计 | 通用文档工具 | 文学领域能力具有专项优先级，海外产品的英文文案不能直接成为中文规范 |
-| 上下文、工具循环、权限与恢复 | 已验证的开发者 Agent、开源生态 | 历史实现与研究项目 | 可用于机制研究；不以开发者术语主导创作者界面 |
+| 对象 | 当前版本参照锚点 |
+| --- | --- |
+| WorkBuddy | 中文任务推进段、状态、过程与历史查阅 |
+| 百度搭子 | 中文办公任务的动作对象、任务归属与文件交付 |
+| 千问办公 | 中文任务文案、等待/长耗时活动、历史恢复与产物交付 |
+| NoteGen | 本地 Markdown 工作区、会话与文档组织 |
+| Cherry Studio | 本地模型配置、连接状态与中文交互 |
+| Kimi | 长文阅读、文件问答与分析结果 |
+| 豆包 | 中文创作、附件与长结果表达 |
+| Novelcrafter | 人物/设定资产、章节与受控上下文 |
+| Claude Code | 工具循环、权限与会话控制机制 |
 
-以上是设计参考顺序，不是综合市场排名。中文同类产品对界面与文案更有参考价值，但不能由中文品牌推断离线运行、本地存储或隐私保证。旧版未附逐项证据的综合分数撤下，改为说明具体用途与证据范围。
+以上顺序即参照优先级，不是综合市场排名。中文同类产品对界面与文案更有参考价值，但不能由中文品牌推断离线运行、本地存储或隐私保证。旧版未附逐项证据的综合分数撤下，改为说明具体用途与证据范围。
 
 ## 2. 中国区办公类 AI Agent
 
@@ -49,98 +53,47 @@
 
 “优先参考”是研究优先级，不等于认为它们的所有交互更优。中文任务文案应在同一任务下比较，并由 Vinkey 的真实事件和用户需求决定。
 
-### 2.3 同类候选与产品迁移
+### 2.3 低成熟度与迁移对象
 
-除前三外，[快科技报道（站长之家转载）](https://www.chinaz.com/2026/1021/1783126.shtml)还列出 QClaw、豆包工作、TRAE Work、Qoderwork、AutoClaw、QwenPaw、LobsterAI。以下保留同类检索范围，但不把报道列名视为完成产品与体验核验。
-
-| 对象 | 本轮可确认情况 | 当前登记与下一步 |
-| --- | --- | --- |
-| **豆包工作** | 上述市场报道单列该产品；不能借用豆包通用 App 的版本、评分或月活来证明桌面办公体验 | **优先观察**。补齐官方独立产品/模式入口、更新记录及真实任务操作；尤其是中文过程、文件交付和历史查询 |
-| **TRAE / 原 TraeWork**（榜单名 TRAE Work） | [旧产品日志](https://docs.trae.cn/work_changelog)有 2026-08-21 的 v0.1.49～0.1.52 更新；[官方迁移说明](https://docs.trae.cn/work_traework-to-traecode-data-migration)现已说明 TraeWork 与 TraeCode 融合为 TRAE，重心转向 Agent 与 IDE 开发流程 | **专项参考，迁移复核**。保留旧办公表面的历史价值；当前入口需重新实测，不把 9 月旧名称统计直接解释为新产品采用量。迁移页面未标发布日期，本轮仅记录核对日 |
-| **QClaw** | [官方入口](https://qclaw.qq.com/)出现迁移/停服提示；[澎湃报道](https://www.thepaper.cn/newsDetail_forward_34140067)于 2026-09-24 报道腾讯确认将于 **2026-12-24 00:00** 停服 | **退出跟踪**。截至本轮日期尚未到停服日；不作为长期现役交互基准，可观察历史迁移与结果保存 |
-| **Kimi Work** | [官方介绍](https://www.kimi.com/resources/kimi-work-introduction)更新于 2026-10-08，说明桌面持续任务与过程介入 | **优先观察**。单独核验新产品的维护与采用；Kimi 通用 App 的成熟度不能整体转移到此产品 |
-| Qoderwork、AutoClaw、QwenPaw、LobsterAI | 上述市场报道有列名，本轮未逐项完成官方身份、当前维护和中文文档场景核验 | **候选观察**。先核验官方来源与产品边界，再决定是否升级；不因规模小直接排除 |
+低成熟度候选、已迁移/停服及仅有榜单列名的对象不再单列；其进入名录前的核验与升级条件见[筛选方法论](SELECTION_METHODOLOGY.md)。本轮移除对象由 Git 提交记录追溯。
 
 ## 3. 本地文档与中文 AI 工作台
 
-以下以官方仓库身份、发行记录和社区采用作为证据。第 3、6.2 节的数据采集于 2026-10-27，日期按 UTC 记录；采用栏链接到仓库 API，发行链接对应具体版本。查询使用 `GET /repos/{owner}/{repo}` 和 `/releases?per_page=3`，12 个仓库均未归档。Star/Fork 不等于安装用户或中国区份额；仓库创建日不等于产品上线日，最后推送不等于实质维护，发行列表不覆盖所有渠道。
+以下以官方仓库身份、发行记录和社区采用作为证据。第 3 节的数据采集于 2026-10-27，日期按 UTC 记录；采用栏链接到仓库 API，发行链接对应具体版本。查询使用 `GET /repos/{owner}/{repo}` 和 `/releases?per_page=3`，2 个仓库均未归档。Star/Fork 不等于安装用户或中国区份额；仓库创建日不等于产品上线日，最后推送不等于实质维护，发行列表不覆盖所有渠道。
 
 | 产品 | 本轮维护记录（UTC 日期） | 社区采用（Star / Fork）与最后推送 | 收录与参考重点 | 边界 |
 | --- | --- | --- | --- | --- |
 | [NoteGen](https://github.com/codexu/note-gen) | [note-gen-v0.39.0](https://github.com/codexu/note-gen/releases/tag/note-gen-v0.39.0)，2026-10-25；10 月多次发行 | [12,924 / 977](https://api.github.com/repos/codexu/note-gen)；2026-10-27 | **正式竞品**；本地 Markdown、中文内容工作区、会话与文档组织 | GPL-3.0；参考产品行为，独立实现；实际中文创作流程需持续观察 |
 | [Cherry Studio](https://github.com/CherryHQ/cherry-studio) | [v2.1.8](https://github.com/CherryHQ/cherry-studio/releases/tag/v2.1.8)，2026-10-26；10 月多次发行 | [53,017 / 5,134](https://api.github.com/repos/CherryHQ/cherry-studio)；2026-10-27 | **正式竞品**；多模型工作台、连接状态、模型配置与中文交互 | AGPL-3.0；多模型丰富度不等于文学创作适配度 |
-| [MarkText](https://github.com/marktext/marktext) | [v0.23.0](https://github.com/marktext/marktext/releases/tag/v0.23.0)，2026-10-21 | [63,164 / 4,667](https://api.github.com/repos/marktext/marktext)；2026-10-27 | **编辑器专项参考**；编辑/预览、文件与保存状态 | MIT；不再把纯编辑器与完整 AI 工作台按总分混排 |
 
-## 4. 中国区通用助手与文档办公产品
+## 4. 中国区通用助手
 
-这组是正式的相邻竞品，用于中文阅读、写作、附件与结果表达。它们不自动归入办公 Agent。下表为 **2026-10-27 采集的中国区 iOS 版本**；版本日期为 UTC，不能替代网页、桌面或各 Agent 模式的版本。版本单元格链接至对应商店应用，评分栏链接至 Apple Lookup（`country=cn`）。评分为五分制、保留两位小数；评价数为所有版本累计评分数，不是当前版本评论数或活跃/付费用户数。表内不作市场排名。
+这组只保留两个直接支持中文长文与创作的相邻竞品。表内数据为 **2026-10-27 采集的中国区 iOS 版本**；版本日期为 UTC，不能替代网页、桌面或各 Agent 模式的版本。版本单元格链接至对应商店应用，评分栏链接至 Apple Lookup（`country=cn`）。评分为五分制、保留两位小数；评价数为所有版本累计评分数，不是当前版本评论数或活跃/付费用户数。
 
 | 产品 | iOS 版本 / 更新日 | 评分 / 评价数（来源） | Vinkey 的参考场景 | 必须分开的对象 |
 | --- | --- | --- | --- | --- |
 | [Kimi](https://www.kimi.com/) | [3.1.6](https://apps.apple.com/cn/app/id6474233312) / 2026-10-24 | [4.89 / 195,128](https://itunes.apple.com/lookup?id=6474233312&country=cn) | 长文阅读、文件问答、分析结果 | 通用 App、网页 Agent、Kimi Work、Kimi Code |
 | [豆包](https://www.doubao.com/) | [15.5.0](https://apps.apple.com/cn/app/id6459478672) / 2026-10-26 | [4.64 / 5,052,336](https://itunes.apple.com/lookup?id=6459478672&country=cn) | 中文创作、附件、长结果表达 | 通用助手与豆包工作 |
-| [千问](https://www.qianwen.com/) | [7.5.2](https://apps.apple.com/cn/app/id6466733523) / 2026-10-25 | [4.26 / 343,419](https://itunes.apple.com/lookup?id=6466733523&country=cn) | 中文长文、多模态与结果组织 | 通用 App、千问办公与 Qwen 模型 |
-| [元宝](https://yuanbao.tencent.com/) | [2.90.10](https://apps.apple.com/cn/app/id6480446430) / 2026-10-26 | [4.11 / 253,107](https://itunes.apple.com/lookup?id=6480446430&country=cn) | 附件、搜索与长结果导航 | 元宝、WorkBuddy 与 CodeBuddy |
-| [DeepSeek](https://www.deepseek.com/) | [2.7.1](https://apps.apple.com/cn/app/id6737597349) / 2026-10-23 | [3.85 / 91,401](https://itunes.apple.com/lookup?id=6737597349&country=cn) | 中文推理结果和回答组织 | 用户应用与模型/API |
-| [讯飞星火](https://xinghuo.xfyun.cn/) | [5.11.7](https://apps.apple.com/cn/app/id6449919551) / 2026-10-17 | [4.83 / 86,088](https://itunes.apple.com/lookup?id=6449919551&country=cn) | 中文写作、语音输入与专业文档入口 | 通用产品与行业方案 |
-| [文心](https://yiyan.baidu.com/) | [5.21.0](https://apps.apple.com/cn/app/id6446882473) / 2026-10-22 | [4.19 / 19,414](https://itunes.apple.com/lookup?id=6446882473&country=cn) | 中文写作、知识问答与品牌迁移 | 文心应用、模型与百度搭子 |
-| [WPS Office AI](https://www.wps.cn/) | [WPS Office 26.10.1](https://apps.apple.com/cn/app/id599852710) / 2026-10-23 | [4.79 / 1,871,684](https://itunes.apple.com/lookup?id=599852710&country=cn) | 文档编辑、修改、保存、导出与格式交付 | 整套 WPS 的商店评价不等于 AI 功能采用，更不等于独立办公 Agent 月活 |
 
 上述版本和商店评价可以证明分发、维护与用户反馈入口；不能单独证明长文本上限、桌面交互、AI 使用增长或某项能力优劣。本轮不沿用缺少直接财报出处的增长结论。
 
-## 5. 文学创作、本地知识与编辑器专项参考
+## 5. 文学创作专项参考
 
-中文交互优先，并不排除文学结构或本地编辑方面更贴近需求的专项产品。以下保留正式专项参考身份，不声称拥有已核验的中国区市场份额。
+中文交互优先，并不排除文学结构更贴近需求的专项产品。以下保留正式专项参考身份，不声称拥有已核验的中国区市场份额。
 
 | 产品 | 本轮官方维护核验 | 专项价值与边界 |
 | --- | --- | --- |
 | [Novelcrafter](https://www.novelcrafter.com/features) | [2026-10-19 更新](https://www.novelcrafter.com/changelog/october-19th-2026)涉及小说导入和 Codex 问题修复 | 人物/设定资产、章节与受控上下文；Novelcrafter Codex 不是 OpenAI Codex；中文文案另行设计 |
-| [Sudowrite](https://www.sudowrite.com/) | [官方更新与反馈](https://feedback.sudowrite.com/changelog)有 2026-10-23 记录 | 创意、续写和 Story Bible 的创作流程；不由英文体验推断中文生成质量 |
-| [Obsidian](https://obsidian.md/) | [更新日志](https://obsidian.md/changelog/)持续有 2026-10 月记录，含桌面/移动及早期访问渠道 | 本地库、文档导航与链接；渠道分别核对，不把 Catalyst 版本写成公开稳定版；非开源产品 |
-| [Typora](https://typora.io/) | [稳定发行页](https://www.typora.io/releases/stable.html)列出 1.14.15；页面未给该条明确发布日期 | 低干扰 Markdown 编辑、保存/导出；不能据采集日补造发布日期；非开源产品 |
 
-## 6. 开发者 Agent 与集成生态专项参考
+## 6. 开发者 Agent 执行机制专项参考
 
 这组对运行机制、上下文、权限和恢复有价值，**在中文创作者界面与任务文案研究中的优先级低于同类中文产品**。收录为参考不等于当前集成计划、依赖推荐或许可证审查通过。
 
-### 6.1 商业开发者 Agent
-
 | 产品 | 本轮核验来源/记录 | 参考范围 |
 | --- | --- | --- |
-| [OpenAI Codex](https://developers.openai.com/learn/codex) | [CLI 稳定发行 rust-v0.164.0](https://github.com/openai/codex/releases/tag/rust-v0.164.0)，2026-10-23；[latest API](https://api.github.com/repos/openai/codex/releases/latest)确认非预发行，不以 alpha 标签代表稳定版 | 任务、权限与可审阅修改；CLI、IDE、云端分开观察，通用 ChatGPT 页面不直接证明 Codex 专属行为 |
 | [Claude Code](https://code.claude.com/docs/en/overview) | [v2.1.311](https://github.com/anthropics/claude-code/releases/tag/v2.1.311)，2026-10-26 UTC | 工具循环、权限、会话控制；终端表达不能直接成为中文创作工作台文案 |
-| [Cursor](https://cursor.com/) | [Changelog](https://cursor.com/changelog)有 2026-10-20 更新 | 上下文、修改审阅、任务控制；本地与后台 Agent 分开 |
-| [GitHub Copilot](https://github.com/features/copilot) | [官方更新](https://github.blog/changelog/label/copilot/)有 2026-10-26 记录 | 索引、上下文与组织权限；不同 IDE、计划和企业设置分别验证 |
 
-### 6.2 开源 Agent、工作台与代理
-
-仓库数据的采集方式与限制见第 3 节。日期为 UTC；发行渠道和预发行标记分别保留，GitHub 非预发行标记不代表所有平台的稳定版。许可证字段是仓库级标识，不代替文件级审查。
-
-| 产品 | 可核验发行/维护记录 | 社区采用（Star / Fork）与最后推送 | 当前分类与用途 |
-| --- | --- | --- | --- |
-| [Cline](https://github.com/cline/cline) | [v4.1.26](https://github.com/cline/cline/releases/tag/v4.1.26)，2026-10-26；SDK/桌面另有版本 | [70,911 / 7,769](https://api.github.com/repos/cline/cline)；2026-10-27 | **专项参考**：工具循环、审批和执行记录；Apache-2.0 |
-| [Continue](https://github.com/continuedev/continue) | 2026-10-27 有推送；本次 Release 列表中 VS Code 稳定版 [v2.0.0](https://github.com/continuedev/continue/releases/tag/v2.0.0-vscode) 为 06-19，[v2.1.0](https://github.com/continuedev/continue/releases/tag/v2.1.0-vscode) 为预发行 | [36,344 / 5,526](https://api.github.com/repos/continuedev/continue)；2026-10-27 | **专项参考，渠道复核**：上下文 Provider；仓库活跃不能证明每个发行渠道及时更新；Apache-2.0 |
-| [OpenCode](https://github.com/anomalyco/opencode) | [v1.19.4](https://github.com/anomalyco/opencode/releases/tag/v1.19.4)，2026-10-22 | [222,112 / 29,715](https://api.github.com/repos/anomalyco/opencode)；2026-10-27 | **专项参考**：多模型 CLI、会话；MIT |
-| [OpenHands](https://github.com/OpenHands/OpenHands) | [v1.33.0](https://github.com/OpenHands/OpenHands/releases/tag/v1.33.0)，2026-10-23 | [91,970 / 12,217](https://api.github.com/repos/OpenHands/OpenHands)；2026-10-27 | **专项参考**：任务、隔离、后台执行；仓库 API 标识 MIT，具体模块另查 |
-| [CloudCLI](https://github.com/siteboon/claudecodeui)（仓库 claudecodeui） | [v1.37.5](https://github.com/siteboon/claudecodeui/releases/tag/v1.37.5)，2026-10-17 | [14,303 / 2,078](https://api.github.com/repos/siteboon/claudecodeui)；2026-10-27 | **专项参考**：多 Agent CLI 的项目/会话控制面；AGPL-3.0 |
-| [Claude Code Router](https://github.com/musistudio/claude-code-router) | [v3.1.3](https://github.com/musistudio/claude-code-router/releases/tag/v3.1.3)，2026-10-09 | [37,868 / 3,178](https://api.github.com/repos/musistudio/claude-code-router)；2026-10-10 | **生态参考**：模型路由控制面；不是完整用户 Agent；MIT |
-| [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) | [v8.0.44](https://github.com/router-for-me/CLIProxyAPI/releases/tag/v8.0.44)，2026-10-26 | [56,544 / 8,644](https://api.github.com/repos/router-for-me/CLIProxyAPI)；2026-10-27 | **生态参考**：API 兼容与隔离；不是创作工作台，不默认复用认证模式；MIT |
-| [Aider](https://github.com/Aider-AI/aider) | 最新公开 Release [v0.86.0](https://github.com/Aider-AI/aider/releases/tag/v0.86.0) 为 **2025-08-09**；最后推送 **2026-05-22**；未归档 | [49,771 / 5,106](https://api.github.com/repos/Aider-AI/aider)；2026-05-22 | **维护复核 / 历史专项参考**：保留 repo map、上下文预算的历史价值，撤下“当前持续活跃”背书；Apache-2.0 |
-| [Opcode](https://github.com/winfunc/opcode) | 最新公开 Release [v0.2.0](https://github.com/winfunc/opcode/releases/tag/v0.2.0) 为 **2025-08-31**；最后推送 2026-09-18；未归档 | [22,421 / 1,707](https://api.github.com/repos/winfunc/opcode)；2026-09-18 | **维护复核 / 历史专项参考**：单 CLI GUI；一次推送不足以证明稳定发行与支持；AGPL-3.0 |
-
-## 7. 研究来源与待补证对象
-
-以下对象保留历史研究价值，本轮没有完整刷新其采用与维护证据，不写成“已核实不支持”或“已停更”：
-
-| 对象 | 保留用途 | 升级为正式参考所需证据 |
-| --- | --- | --- |
-| SoloMD | 本地 Markdown、BYOK 与提供商配置 | 当前官方版本、持续维护与真实采用 |
-| Knote | 修改提案和人工接受 | 当前产品身份、维护与真实采用 |
-| StorySphere | 人物、关系、事件抽取 | 当前仓库、反馈和可比创作场景 |
-| graphify-novel | 章节批处理、缓存与 review | 当前存续、维护与采用 |
-| NLP-Characters-Relationships | NER/共现候选抽取 | 维护与实际效果证据；实验实现不等于成熟产品 |
-
-## 8. 后续研究
+## 7. 后续研究
 
 下一轮界面研究优先用同一中文文稿任务比较 WorkBuddy、百度搭子、千问办公：提交后准备/等待、长任务多次推进、活动展开、补充要求、失败重试、完成交付与历史重开。官方文档已支持的行为与用户实测分开记录；仍缺的精确文案与默认折叠值可由用户会话观察补充。
 
