@@ -85,6 +85,27 @@ export function assertToolResult(toolName: string, output: unknown): void {
   assertJsonSchema(tool.outputSchema, output, `Tool ${toolName} 输出`)
 }
 
+export function withToolTimeout<T>(toolName: string, timeoutMs: number, operation: () => Promise<T>): Promise<T> {
+  if (timeoutMs <= 0) return operation()
+  return new Promise<T>((resolve, reject) => {
+    let settled = false
+    const timer = setTimeout(() => {
+      settled = true
+      reject(new Error(`Tool ${toolName} 执行超时（${timeoutMs}ms）`))
+    }, timeoutMs)
+    const complete = (callback: () => void) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      callback()
+    }
+    operation().then(
+      (value) => complete(() => resolve(value)),
+      (error: unknown) => complete(() => reject(error instanceof Error ? error : new Error(String(error)))),
+    )
+  })
+}
+
 export function assertToolCallAllowed(plan: RoutedTaskPolicy, toolName: string, input?: unknown): void {
   assertRoutedTaskPolicy(plan)
   if (!plan.allowedTools.includes(toolName)) {
@@ -115,7 +136,8 @@ export function createToolGateway(plan: RoutedTaskPolicy): ToolGateway {
     },
     async call<T>(toolName: string, input: unknown, operation: () => Promise<T>) {
       assertToolCallAllowed(plan, toolName, input)
-      const output = await operation()
+      const timeoutMs = getToolDefinition(toolName)?.timeoutMs ?? 0
+      const output = await withToolTimeout(toolName, timeoutMs, operation)
       assertToolResult(toolName, output)
       return output
     },

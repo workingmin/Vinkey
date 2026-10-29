@@ -1,9 +1,10 @@
-import { ChevronDown, ChevronRight, CirclePlus, FileText, Folder, FolderOpen, MessageSquareText, Moon, PanelLeftClose, PanelLeftOpen, RefreshCw, Search, Settings, Sun, Trash2, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, CirclePlus, FileText, Folder, FolderOpen, MessageSquareText, Moon, PanelLeftClose, PanelLeftOpen, Pencil, RefreshCw, Search, Settings, Sun, Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '../store'
 import type { ConversationSummary, ProjectSummary } from '../types'
 import { deleteConversation, isDesktop, listConversations, loadConversation, searchWorkspace } from '../lib/desktop'
 import { formatConversationAge } from '../lib/conversationTime'
+import { normalizeConversationTitle } from '../lib/conversationTitle'
 import { observeNativeWindowControls } from '../lib/nativeWindowControls'
 import { RecordDeletionDialog } from './RecordDeletionDialog'
 import { isConversationBusy } from '../lib/conversationActivity'
@@ -26,7 +27,7 @@ function readExpanded(): string[] {
 export function ProjectSessionSidebar({ onPageChange, onOpenWorkspace, onRefreshWorkspace, onOpenDocument, onSelectProject, onDeleteProject }: Props) {
   const state = useAppStore()
   const { projects, workspace, conversations, conversationId, messages, settingsOpen, sidebarCollapsed, projectTransition,
-    theme, setTheme, setSidebarCollapsed, setSettingsOpen, setError, setConversation, newConversation, removeConversation } = state
+    theme, setTheme, setSidebarCollapsed, setSettingsOpen, setError, setConversation, renameConversation, newConversation, removeConversation } = state
   const [query, setQuery] = useState('')
   const [expanded, setExpanded] = useState<string[]>(readExpanded)
   const [sessions, setSessions] = useState<Record<string, ConversationSummary[]>>({})
@@ -137,7 +138,7 @@ export function ProjectSessionSidebar({ onPageChange, onOpenWorkspace, onRefresh
           <button className="icon-button" title="添加项目" aria-label="添加项目" disabled={busy} onClick={onOpenWorkspace}><FolderOpen /></button>
           <button className="icon-button" title="刷新项目列表" aria-label="刷新项目列表" disabled={busy} onClick={() => { setRevision((n) => n + 1); onRefreshWorkspace() }}><RefreshCw /></button>
         </div>
-        <label className="sidebar-search"><Search /><input aria-label="搜索项目、会话或当前项目文档" placeholder="搜索项目或会话" value={query} onChange={(event) => setQuery(event.target.value)} />{query && <button type="button" aria-label="清除搜索" onClick={() => setQuery('')}><X /></button>}</label>
+        <label className="sidebar-search"><Search /><input id="global-search-input" aria-label="搜索项目、会话或当前项目文档" placeholder="搜索项目或会话" value={query} onChange={(event) => setQuery(event.target.value)} />{query && <button type="button" aria-label="清除搜索" onClick={() => setQuery('')}><X /></button>}</label>
       </header>
       <div className="session-sidebar-body" id="session-sidebar-body">
         <div className="sidebar-section-label"><span>{value ? '匹配项目' : '项目'}</span><small>{visibleProjects.length}</small></div>
@@ -172,7 +173,7 @@ export function ProjectSessionSidebar({ onPageChange, onOpenWorkspace, onRefresh
                       const age = formatConversationAge(conversation.updatedAt, currentTime)
                       return <div className={`conversation-item ${current && conversationId === conversation.id ? 'active' : ''}`} key={conversation.id}>
                         <button className="conversation-item-select" disabled={busy} onClick={() => void openSession(project, conversation.id)}><MessageSquareText /><span><b title={conversation.title}>{conversation.title}</b><small className="conversation-item-meta">{conversation.messageCount} 条消息{running ? ' · 运行中' : ''}</small></span></button>
-                        <div className="conversation-item-action">{age && <time className="conversation-item-age" dateTime={new Date(conversation.updatedAt).toISOString()} title={new Date(conversation.updatedAt).toLocaleString()}>{age}</time>}<button className="conversation-item-delete" title={running ? '会话正在运行' : '删除会话记录'} aria-label={`删除会话“${conversation.title}”`} disabled={busy || running} onClick={() => setDeletion({ project, conversation })}><Trash2 /></button></div>
+                        <div className="conversation-item-action">{age && <time className="conversation-item-age" dateTime={new Date(conversation.updatedAt).toISOString()} title={new Date(conversation.updatedAt).toLocaleString()}>{age}</time>}<button className="conversation-item-rename" title="重命名会话" aria-label={`重命名会话“${conversation.title}”`} disabled={busy || running} onClick={(event) => { event.stopPropagation(); const next = window.prompt('重命名会话', conversation.title); if (next?.trim()) renameConversation(conversation.id, normalizeConversationTitle(next)) }}><Pencil /></button><button className="conversation-item-delete" title={running ? '会话正在运行' : '删除会话记录'} aria-label={`删除会话“${conversation.title}”`} disabled={busy || running} onClick={() => setDeletion({ project, conversation })}><Trash2 /></button></div>
                       </div>
                     })}
                     {matches.length === 0 && (value || !current) && <div className="empty-small compact">{value ? '没有匹配的会话' : '暂无会话'}</div>}

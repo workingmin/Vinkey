@@ -1626,6 +1626,66 @@ pub fn reject_project_memory(
     update_project_memory_status(ids, "rejected", state, legacy, runtime)
 }
 
+#[tauri::command]
+pub fn invalidate_project_memory(
+    paths: Vec<String>,
+    state: State<'_, crate::WorkspaceState>,
+    legacy: State<'_, DatabaseState>,
+    runtime: State<'_, RuntimeLogState>,
+) -> Result<usize, String> {
+    if paths.is_empty() || paths.len() > 100 {
+        return Err("失效记忆来源路径无效".into());
+    }
+    for path in &paths {
+        if path.trim().is_empty() || path.len() > 500 || path.contains('\0') {
+            return Err("失效记忆来源路径无效".into());
+        }
+    }
+    let changed: std::collections::HashSet<String> = paths.into_iter().collect();
+    let mut connection = open_project_for_commands(&state, &legacy)?;
+    let transaction = connection
+        .transaction()
+        .map_err(|error| format!("无法使项目记忆失效：{error}"))?;
+    let mut statement = transaction
+        .prepare("SELECT id, source_paths FROM project_memory WHERE status = 'confirmed'")
+        .map_err(|error| format!("无法读取待失效项目记忆：{error}"))?;
+    let rows = statement
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+            ))
+        })
+        .map_err(|error| format!("无法读取待失效项目记忆：{error}"))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("无法读取待失效项目记忆：{error}"))?;
+    drop(statement);
+    let mut invalidated = 0usize;
+    for (id, sources_json) in rows {
+        let source_paths: Vec<String> = serde_json::from_str(&sources_json).unwrap_or_default();
+        if source_paths.iter().any(|path| changed.contains(path)) {
+            let affected = transaction
+                .execute(
+                    "UPDATE project_memory SET status = 'proposed', updated_at = ?1 WHERE id = ?2 AND status = 'confirmed'",
+                    params![now_ms() as i64, id],
+                )
+                .map_err(|error| format!("无法使项目记忆失效：{error}"))?;
+            invalidated += affected as usize;
+        }
+    }
+    transaction
+        .commit()
+        .map_err(|error| format!("无法提交项目记忆失效：{error}"))?;
+    runtime.info(
+        "project_memory.invalidated",
+        serde_json::json!({ "count": invalidated })
+            .as_object()
+            .cloned()
+            .unwrap_or_default(),
+    );
+    Ok(invalidated)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

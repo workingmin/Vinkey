@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { classifyTask } from './intent'
-import { assertRoutedTaskPolicy, assertToolCallAllowed, assertToolResult, validateRoutedTaskPolicy } from './runtimePolicy'
+import { assertRoutedTaskPolicy, assertToolCallAllowed, assertToolResult, validateRoutedTaskPolicy, withToolTimeout } from './runtimePolicy'
 
 describe('routed task runtime policy', () => {
   it('accepts every currently routed business chain', () => {
@@ -106,5 +106,10 @@ describe('routed task runtime policy', () => {
       sourcePolicy: 'web-excerpts' as const,
     }
     expect(validateRoutedTaskPolicy(plan)).toContain('Skill research-agent 不允许副作用 read')
+  })
+
+  it('wraps tool calls in their registered timeout and preserves structured errors', async () => {
+    await expect(withToolTimeout('read_document', 1, () => new Promise<never>(() => {}))).rejects.toThrow('Tool read_document 执行超时')
+    await expect(withToolTimeout('read_document', -1, () => Promise.resolve('ok'))).resolves.toBe('ok')
   })
 })

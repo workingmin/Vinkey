@@ -59,6 +59,7 @@ interface AppState {
   resetChatRunResponse: (conversationId: string) => void
   endChatRun: (conversationId: string, discardAssistant: boolean, result?: ChatRunResult) => void
   setConversation: (conversation: Conversation) => void
+  renameConversation: (id: string, title: string) => void
   newConversation: () => void
   setConversations: (conversations: ConversationSummary[]) => void
   removeConversation: (id: string) => void
@@ -303,6 +304,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     settingsSidebarBeforeOpen: null,
     settingsSidebarUserOverride: false,
   })),
+  renameConversation: (id, title) => set((state) => {
+    const conversations = state.conversations.map((conversation) => conversation.id === id ? { ...conversation, title, updatedAt: Date.now() } : conversation)
+    return {
+      conversations,
+      conversationTitle: state.conversationId === id ? title : state.conversationTitle,
+    }
+  }),
   newConversation: () => set({ conversationId: null, conversationTitle: '新会话', messages: initialMessages, contextDocuments: [], editorSelection: null, pendingEditorRevision: null }),
   setConversations: (conversations) => set({ conversations }),
   removeConversation: (id) => set((state) => {

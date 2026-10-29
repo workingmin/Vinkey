@@ -641,6 +641,20 @@ export async function rejectProjectMemory(ids: string[]): Promise<ProjectMemoryI
   return invoke<ProjectMemoryItem[]>('reject_project_memory', { ids })
 }
 
+export async function invalidateProjectMemory(paths: string[]): Promise<number> {
+  if (!isDesktop()) {
+    const now = Date.now()
+    const values = readDemoMemory().map((item) => (
+      item.status === 'confirmed' && item.sourcePaths.some((path) => paths.includes(path))
+        ? { ...item, status: 'proposed' as const, updatedAt: now }
+        : item
+    ))
+    localStorage.setItem(demoMemoryKey(), JSON.stringify(values))
+    return values.filter((item) => item.status === 'proposed' && item.sourcePaths.some((path) => paths.includes(path))).length
+  }
+  return invoke<number>('invalidate_project_memory', { paths })
+}
+
 export async function upsertCharacters(characters: CharacterInput[]): Promise<CharacterRecord[]> {
   if (!isDesktop()) {
     const now = Date.now()

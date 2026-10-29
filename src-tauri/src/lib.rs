@@ -1402,6 +1402,7 @@ pub fn run() {
             database::propose_project_memory,
             database::confirm_project_memory,
             database::reject_project_memory,
+            database::invalidate_project_memory,
             research_sources::list_research_sources,
             research_sources::save_research_source,
             research_sources::delete_research_source,

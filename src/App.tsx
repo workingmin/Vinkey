@@ -26,7 +26,7 @@ import {
   getActiveModelId, getWindowDiagnostics, getRuntimeDiagnostics, listModelProfiles, loadConversation, persistActiveModelId, readDocument, readFileBytes, refreshWorkspace,
   recordRuntimeEvent, writeStructureOutputs,
   saveConversationMessage, saveDocument, streamChat, syncNativeWindowTheme,
-  confirmProjectMemory, listProjectMemory, proposeProjectMemory, rejectProjectMemory, searchProjectMemory,
+  confirmProjectMemory, invalidateProjectMemory, listProjectMemory, proposeProjectMemory, rejectProjectMemory, searchProjectMemory,
 } from './lib/desktop'
 import { buildRevisionContextMessage, calculateContextBudget, selectRecentMessages } from './lib/context'
 import { analyzeLongText, buildTaskDisplayTitle, cancelLongTextAnalysis } from './lib/longTextAnalysis'
@@ -48,6 +48,7 @@ import { buildDocumentIndexMessage } from './lib/documentMetadata'
 import { buildFocusedWorkspaceMessage } from './lib/focusedAnalysis'
 import { isLoopbackModelEndpoint } from './lib/modelPrivacy'
 import { runResearchPipeline } from './lib/research'
+import { buildTemporaryTitle, deriveSemanticTitle } from './lib/conversationTitle'
 import { withConversationRequest } from './lib/conversationActivity'
 import { persistChatRun } from './lib/chatRunPersistence'
 import { watchWorkerHistory } from './lib/workerHistorySubscription'
@@ -650,7 +651,7 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
     if (!value || busy) return
     if (!activeModel) { setSettingsOpen(true); return }
     const now = Date.now()
-    const nextTitle = conversationId ? conversationTitle : value.replace(/\s+/g, ' ').slice(0, 28)
+    const nextTitle = conversationId ? conversationTitle : buildTemporaryTitle(value)
     if (!conversationId) setConversation({ id: nextConversationId, title: nextTitle, messages, updatedAt: now })
     setPrompt('')
     setPendingActionId(null)
@@ -671,13 +672,18 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
     })
     try {
       await saveConversationMessage(nextConversationId, nextTitle, userMessage, workspace?.id)
+      let firstResponse = ''
       await runResearchPipeline(value, (event) => {
         if (event.type === 'chunk') {
+          firstResponse += event.content
           setChatRunStatus(nextConversationId, 'streaming', null)
           appendChatRunChunk(nextConversationId, event.content)
         }
         if (event.type === 'error') setError(event.message)
       })
+      if (!conversationId && firstResponse.trim()) {
+        useAppStore.getState().renameConversation(nextConversationId, deriveSemanticTitle(value, firstResponse))
+      }
       const completed = useAppStore.getState().completedChatMessages[nextConversationId]
       if (completed) await saveConversationMessage(nextConversationId, nextTitle, completed, workspace?.id)
       setConversations(await listConversations(workspace?.id))
@@ -741,7 +747,7 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
     if (taskDispatch.executionPhase === 'clarification-required') {
       const question = taskDispatch.clarification?.question ?? '请补充本次请求需要处理的具体范围。'
       const now = Date.now()
-      const nextTitle = conversationId ? conversationTitle : value.replace(/\s+/g, ' ').slice(0, 28)
+      const nextTitle = conversationId ? conversationTitle : buildTemporaryTitle(value)
       const userMessage = {
         id: crypto.randomUUID(), role: 'user' as const, content: value, createdAt: now,
         taskRef: createTaskMessageRef(taskRequest, taskPlan, nextRequestId),
@@ -929,7 +935,7 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
       return
     }
     const now = Date.now()
-    const nextTitle = conversationId ? conversationTitle : value.replace(/\s+/g, ' ').slice(0, 28)
+    const nextTitle = conversationId ? conversationTitle : buildTemporaryTitle(value)
     if (!conversationId) setConversation({ id: nextConversationId, title: nextTitle, messages, updatedAt: now })
     setPrompt('')
     setPendingActionId(null)
@@ -1032,6 +1038,9 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
           }
           if (event.type === 'error') setError(event.message)
         }))
+        if (!conversationId && firstResponse.trim()) {
+          useAppStore.getState().renameConversation(nextConversationId, deriveSemanticTitle(value, firstResponse))
+        }
         if (editorRevision) {
           const proposal = createDiffProposal(firstResponse, { ...editorRevision, instruction: value })
           setDiffProposals([proposal])
@@ -1538,7 +1547,7 @@ export function App() {
   }, [changeContentPage, setError])
 
   const showShortcuts = useCallback(() => {
-    window.alert('快捷键\n\n⌘/Ctrl + O  添加本地项目\n⌘/Ctrl + N  新建会话\n⌘/Ctrl + R  刷新当前项目\n⌘/Ctrl + ,  打开设置\n⌘/Ctrl + S  保存当前文档\n⌘/Ctrl + W  关闭窗口\nEnter  发送消息\nShift + Enter  换行')
+    window.alert('快捷键\n\n⌘/Ctrl + K  全局搜索\n⌘/Ctrl + O  添加本地项目\n⌘/Ctrl + N  新建会话\n⌘/Ctrl + R  刷新当前项目\n⌘/Ctrl + ,  打开设置\n⌘/Ctrl + S  保存当前文档\n⌘/Ctrl + W  关闭窗口\nEnter  发送消息\nShift + Enter  换行')
   }, [])
 
   const showAbout = useCallback(() => {
@@ -1735,7 +1744,18 @@ export function App() {
     try {
       const saved = await saveDocument(document as DocumentSnapshot)
       markSaved(document.path, saved.content, saved.modifiedMs)
-    } catch (cause) { setError(`保存失败：${String(cause)}`) }
+      const invalidated = await invalidateProjectMemory([document.path])
+      if (invalidated > 0) setError(`已因源文件变化使 ${invalidated} 条项目记忆失效，请重新确认。`)
+    } catch (cause) {
+      const message = String(cause)
+      if (message.includes('其他程序修改')) {
+        const refreshed = await readDocument(document.path)
+        useAppStore.getState().openTab({ ...refreshed, savedContent: refreshed.content })
+        setError('文件已被其他程序修改，已重新加载磁盘版本，请检查内容后再次保存。')
+        return
+      }
+      setError(`保存失败：${message}`)
+    }
   }, [markSaved, setError])
 
   useEffect(() => {
@@ -1765,6 +1785,7 @@ export function App() {
     const listener = (event: KeyboardEvent) => {
       if (!event.ctrlKey && !event.metaKey) return
       const key = event.key.toLowerCase()
+      if (key === 'k') { event.preventDefault(); document.getElementById('global-search-input')?.focus(); return }
       if (key === 's') { event.preventDefault(); void saveActive(); return }
       if (isMacPlatform()) return
       if (key === 'o') { event.preventDefault(); void openWorkspaceFromMenu() }
