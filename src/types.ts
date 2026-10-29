@@ -5,7 +5,7 @@ export type ProviderKind = 'ollama' | 'openai-compatible'
 export type ThemeMode = 'dark' | 'light'
 export type AnalysisMode = 'overview' | 'focused' | 'deep'
 export type AnalysisCoverage = 'index-only' | 'targeted' | 'exhaustive'
-export type SourcePolicy = 'metadata-only' | 'local-excerpts' | 'local-chunks'
+export type SourcePolicy = 'metadata-only' | 'local-excerpts' | 'local-chunks' | 'web-metadata' | 'web-excerpts'
 
 export interface WorkspaceEntry {
   name: string
@@ -290,7 +290,7 @@ export interface TaskMessageRef {
   scope: string
   actionId?: string | null
   targets: Array<{ id: string; kind: 'document' | 'selection' | 'chapter' | 'work' }>
-  sideEffect: 'read' | 'draft' | 'proposal'
+  sideEffect: 'read' | 'draft' | 'proposal' | 'network'
 }
 
 export interface EditorSelection {

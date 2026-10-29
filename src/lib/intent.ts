@@ -18,7 +18,7 @@ export type TaskIntent =
 
 export type TaskOperation = 'segment' | 'analyze' | 'revise' | 'review' | 'chat'
 export type TaskScope = 'editor-selection' | 'selected-documents' | 'current-document' | 'workspace' | 'conversation'
-export type TaskSideEffect = 'read' | 'draft' | 'proposal'
+export type TaskSideEffect = 'read' | 'draft' | 'proposal' | 'network'
 export type DocumentAccess = 'none' | 'selected-metadata' | 'selected' | 'workspace-metadata' | 'workspace-focused' | 'workspace'
 export type DocumentSelectionMode = 'none' | 'single' | 'multiple'
 export type RevisionStrategy = 'direct' | 'bounded' | 'long' | null

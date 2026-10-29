@@ -20,6 +20,9 @@ mod long_text;
 mod model_output;
 mod models;
 mod projects;
+mod research_evidence;
+mod research_retrieval;
+mod research_sources;
 mod runtime_log;
 mod search;
 mod task_runtime;
@@ -1399,6 +1402,22 @@ pub fn run() {
             database::propose_project_memory,
             database::confirm_project_memory,
             database::reject_project_memory,
+            research_sources::list_research_sources,
+            research_sources::save_research_source,
+            research_sources::delete_research_source,
+            research_sources::restore_research_source,
+            research_sources::record_research_source_health,
+            research_sources::rollback_research_source,
+            research_sources::export_research_sources,
+            research_sources::import_research_sources,
+            research_sources::preview_research_catalog,
+            research_sources::apply_research_catalog,
+            research_evidence::prepare_research_evidence,
+            research_evidence::assemble_research_evidence,
+            research_evidence::plan_research_search,
+            research_retrieval::search_research_sources,
+            research_retrieval::verify_research_citations,
+            research_retrieval::run_research_acceptance,
             database::upsert_characters,
             database::search_characters,
             database::upsert_character_mentions,

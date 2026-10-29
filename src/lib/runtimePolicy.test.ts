@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { classifyTask } from './intent'
-import { assertRoutedTaskPolicy, assertToolResult, validateRoutedTaskPolicy } from './runtimePolicy'
+import { assertRoutedTaskPolicy, assertToolCallAllowed, assertToolResult, validateRoutedTaskPolicy } from './runtimePolicy'
 
 describe('routed task runtime policy', () => {
   it('accepts every currently routed business chain', () => {
@@ -68,5 +68,43 @@ describe('routed task runtime policy', () => {
       sourceId: 'a.md', sourceFingerprint: 'sha256', algorithmVersion: '1', cacheKey: 'a',
       sourceTokens: 2, maxTokens: 128, overlapTokens: 0, chunks: [{ id: 'chunk-1' }],
     })).toThrow('输出不符合 schema')
+  })
+
+  it('accepts an explicit network research task with registered tools', () => {
+    const plan = {
+      skill: 'research-agent' as const,
+      allowedTools: ['list_research_sources', 'search_research_sources', 'prepare_research_evidence', 'assemble_research_evidence', 'verify_research_citations', 'stream_chat'],
+      sideEffect: 'network' as const,
+      scope: 'conversation' as const,
+      requiresModel: true,
+      analysisMode: null,
+      sourcePolicy: 'web-excerpts' as const,
+    }
+    expect(validateRoutedTaskPolicy(plan)).toEqual([])
+    expect(() => assertToolCallAllowed(plan, 'verify_research_citations', {
+      inputs: [{ sourceId: 'wikipedia-zh', title: '条目', url: 'https://zh.wikipedia.org/wiki/条目', excerpt: '摘录', retrievedAt: 1 }],
+    })).not.toThrow()
+    expect(() => assertToolCallAllowed(plan, 'verify_research_citations', {
+      inputs: [{ sourceId: 'wikipedia-zh', title: '条目', url: 'https://zh.wikipedia.org/wiki/条目', excerpt: '摘录', retrievedAt: 1, extra: true }],
+    })).toThrow('Tool verify_research_citations 输入')
+    expect(() => assertToolCallAllowed(plan, 'search_research_sources', {
+      query: '测试问题', authorizeNetwork: true, sourcePolicy: 'web-excerpts',
+    })).not.toThrow()
+    expect(() => assertToolCallAllowed(plan, 'search_research_sources', {
+      query: '测试问题', sourcePolicy: 'web-excerpts',
+    })).toThrow('Tool search_research_sources 输入')
+  })
+
+  it('rejects network research routing without the network side effect', () => {
+    const plan = {
+      skill: 'research-agent' as const,
+      allowedTools: ['list_research_sources', 'search_research_sources', 'prepare_research_evidence', 'assemble_research_evidence', 'verify_research_citations', 'stream_chat'],
+      sideEffect: 'read' as const,
+      scope: 'conversation' as const,
+      requiresModel: true,
+      analysisMode: null,
+      sourcePolicy: 'web-excerpts' as const,
+    }
+    expect(validateRoutedTaskPolicy(plan)).toContain('Skill research-agent 不允许副作用 read')
   })
 })

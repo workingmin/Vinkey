@@ -100,7 +100,7 @@ export function assertToolCallAllowed(plan: RoutedTaskPolicy, toolName: string, 
   }
   if (toolName === 'stream_chat' && input && typeof input === 'object' && !Array.isArray(input)) {
     const requested = (input as Record<string, unknown>).sourcePolicy
-    const rank: Record<SourcePolicy, number> = { 'metadata-only': 0, 'local-excerpts': 1, 'local-chunks': 2 }
+    const rank: Record<SourcePolicy, number> = { 'metadata-only': 0, 'local-excerpts': 1, 'local-chunks': 2, 'web-metadata': 3, 'web-excerpts': 4 }
     if (typeof requested === 'string' && requested in rank && rank[requested as SourcePolicy] > rank[plan.sourcePolicy]) {
       throw new Error(`Tool ${toolName} 不能将来源策略从 ${plan.sourcePolicy} 升级为 ${requested}`)
     }

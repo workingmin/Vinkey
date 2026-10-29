@@ -20,12 +20,14 @@ export type SkillId =
   | 'workspace-overview'
   | 'workspace-focused-analysis'
   | 'workspace-analysis'
+  | 'research-agent'
 
 export type ToolPermission =
   | 'workspace-read'
   | 'workspace-write'
   | 'model-invoke'
   | 'memory-read'
+  | 'network-read'
   | 'analysis-artifact-write'
   | 'analysis-artifact-read'
 
@@ -136,6 +138,49 @@ const projectMemorySchema = {
   },
 } as const
 
+const researchSourceSchema = {
+  type: 'object',
+  required: ['id', 'name', 'origin', 'adapter', 'baseUrl', 'allowedHosts', 'trustLevel', 'status', 'userEnabled'],
+  additionalProperties: false,
+  properties: {
+    id: idProperty, name: { type: 'string', minLength: 1, maxLength: 120 },
+    origin: { enum: ['builtin', 'catalog', 'discovered', 'user'] },
+    adapter: { enum: ['mediawiki', 'json-api', 'rss', 'sitemap', 'opds', 'html-search', 'fetch-only'] },
+    baseUrl: { type: 'string', minLength: 1, maxLength: 500 },
+    allowedHosts: { type: 'array', items: { type: 'string', minLength: 1, maxLength: 253 } },
+    searchEndpoint: { type: ['string', 'null'] },
+    language: { type: 'array', items: { type: 'string' } },
+    region: { type: 'array', items: { type: 'string' } },
+    categories: { type: 'array', items: { type: 'string' } },
+    trustLevel: { enum: ['official', 'curated', 'community', 'custom'] },
+    status: { enum: ['candidate', 'active', 'restricted', 'unavailable', 'retired'] },
+    userEnabled: { type: 'boolean' },
+  },
+} as const
+
+const researchEvidenceSchema = {
+  type: 'object',
+  required: ['id', 'sourceId', 'title', 'url', 'retrievedAt', 'excerpt', 'contentHash', 'status'],
+  additionalProperties: false,
+  properties: {
+    id: idProperty, sourceId: idProperty, title: { type: 'string', minLength: 1, maxLength: 500 },
+    url: { type: 'string', minLength: 1, maxLength: 1_000 }, retrievedAt: { type: 'integer', minimum: 0 },
+    excerpt: { type: 'string' }, contentHash: { type: 'string', minLength: 1 },
+    status: { enum: ['supported', 'unverified'] },
+  },
+} as const
+
+const researchEvidenceInputSchema = {
+  type: 'object',
+  required: ['sourceId', 'title', 'url', 'retrievedAt', 'excerpt'],
+  additionalProperties: false,
+  properties: {
+    sourceId: idProperty, title: { type: 'string', minLength: 1, maxLength: 500 },
+    url: { type: 'string', minLength: 1, maxLength: 1_000 }, retrievedAt: { type: 'integer', minimum: 0 },
+    excerpt: { type: 'string' }, publisher: { type: ['string', 'null'] },
+  },
+} as const
+
 const toolDefinitions: ToolDefinition[] = [
   {
     name: 'get_workspace_profile', version: '1.0.0', description: '获取不含正文和绝对路径的工作区画像',
@@ -197,8 +242,8 @@ const toolDefinitions: ToolDefinition[] = [
   },
   {
     name: 'stream_chat', version: '1.0.0', description: '调用已配置的本地或兼容模型并流式返回结果',
-    inputSchema: { type: 'object', required: ['requestId', 'profileId', 'sourcePolicy', 'messages'], properties: { requestId: idProperty, profileId: idProperty, sourcePolicy: { type: 'string', enum: ['metadata-only', 'local-excerpts', 'local-chunks'] }, messages: { type: 'array', minItems: 1, items: { type: 'object', required: ['role', 'content'], properties: { role: { type: 'string', enum: ['user', 'assistant'] }, content: { type: 'string' } }, additionalProperties: false } } }, additionalProperties: false },
-    outputSchema: { 'x-streaming': true }, permission: 'model-invoke', sideEffects: ['draft'], timeoutMs: 300_000,
+    inputSchema: { type: 'object', required: ['requestId', 'profileId', 'sourcePolicy', 'messages'], properties: { requestId: idProperty, profileId: idProperty, sourcePolicy: { type: 'string', enum: ['metadata-only', 'local-excerpts', 'local-chunks', 'web-metadata', 'web-excerpts'] }, messages: { type: 'array', minItems: 1, items: { type: 'object', required: ['role', 'content'], properties: { role: { type: 'string', enum: ['user', 'assistant'] }, content: { type: 'string' } }, additionalProperties: false } } }, additionalProperties: false },
+    outputSchema: { 'x-streaming': true }, permission: 'model-invoke', sideEffects: ['draft', 'network'], timeoutMs: 300_000,
     cancellable: true, auditFields: ['requestId', 'profileId'],
   },
   {
@@ -236,6 +281,36 @@ const toolDefinitions: ToolDefinition[] = [
     outputSchema: { type: 'array', items: projectMemorySchema }, permission: 'memory-read', sideEffects: ['read'], timeoutMs: 10_000,
     cancellable: false, auditFields: ['query'],
   },
+  {
+    name: 'list_research_sources', version: '1.0.0', description: '列出可信来源注册表',
+    inputSchema: emptyObject,
+    outputSchema: { type: 'array', items: researchSourceSchema }, permission: 'network-read', sideEffects: ['read'], timeoutMs: 5_000,
+    cancellable: false, auditFields: [],
+  },
+  {
+    name: 'search_research_sources', version: '1.0.0', description: '对已启用来源执行轻量联网检索',
+    inputSchema: { type: 'object', required: ['query', 'authorizeNetwork', 'sourcePolicy'], properties: { query: { type: 'string', minLength: 1, maxLength: 2_000 }, authorizeNetwork: { type: 'boolean' }, sourcePolicy: { type: 'string', enum: ['web-metadata', 'web-excerpts'] }, sourceIds: { type: 'array', items: idProperty }, maxSources: { type: 'integer', minimum: 1, maximum: 5 } }, additionalProperties: false },
+    outputSchema: { type: 'object', required: ['query', 'evidenceInputs', 'sourceErrors'], additionalProperties: false, properties: { query: { type: 'string' }, evidenceInputs: { type: 'array', items: researchEvidenceInputSchema }, sourceErrors: { type: 'array', items: { type: 'object' } } } },
+    permission: 'network-read', sideEffects: ['network'], timeoutMs: 30_000, cancellable: true, auditFields: ['query', 'sourceIds'],
+  },
+  {
+    name: 'prepare_research_evidence', version: '1.0.0', description: '校验证据结构、域名与内容哈希',
+    inputSchema: { type: 'object', required: ['inputs'], properties: { inputs: { type: 'array', maxItems: 8, items: researchEvidenceInputSchema } }, additionalProperties: false },
+    outputSchema: { type: 'object', required: ['items', 'conflicts'], additionalProperties: false, properties: { items: { type: 'array', items: researchEvidenceSchema }, conflicts: { type: 'array', items: { type: 'object' } } } },
+    permission: 'network-read', sideEffects: ['read'], timeoutMs: 10_000, cancellable: false, auditFields: ['inputs'],
+  },
+  {
+    name: 'assemble_research_evidence', version: '1.0.0', description: '去重、排序并裁剪证据，生成模型可读上下文',
+    inputSchema: { type: 'object', required: ['question', 'inputs'], properties: { question: { type: 'string', minLength: 1, maxLength: 2_000 }, inputs: { type: 'array', maxItems: 8, items: researchEvidenceInputSchema } }, additionalProperties: false },
+    outputSchema: { type: 'object', required: ['question', 'instruction', 'items'], additionalProperties: false, properties: { question: { type: 'string' }, instruction: { type: 'string' }, items: { type: 'array', items: researchEvidenceSchema } } },
+    permission: 'model-invoke', sideEffects: ['read'], timeoutMs: 10_000, cancellable: false, auditFields: ['question', 'inputs'],
+  },
+  {
+    name: 'verify_research_citations', version: '1.0.0', description: '回访引用 URL 并校验可达性与最终域名',
+    inputSchema: { type: 'object', required: ['inputs'], properties: { inputs: { type: 'array', maxItems: 24, items: researchEvidenceInputSchema } }, additionalProperties: false },
+    outputSchema: { type: 'object', required: ['items', 'reachableCount', 'unreachableCount'], additionalProperties: false, properties: { items: { type: 'array', items: { type: 'object' } }, reachableCount: { type: 'integer', minimum: 0 }, unreachableCount: { type: 'integer', minimum: 0 } } },
+    permission: 'network-read', sideEffects: ['network'], timeoutMs: 30_000, cancellable: true, auditFields: ['inputs'],
+  },
 ]
 
 const skillDefinitions: SkillDefinition[] = [
@@ -259,6 +334,12 @@ const skillDefinitions: SkillDefinition[] = [
     name: 'general-conversation', version: '1.0.0', description: '普通对话和创作建议，不写入工作区',
     allowedTools: ['stream_chat', 'search_project_memory'], contextScopes: ['conversation'], sideEffects: ['draft'],
     approvalPolicy: 'auto', modelRequirements: 'configured', failureAndRetry: '模型错误可重试，不提交副作用。',
+  },
+  {
+    name: 'research-agent', version: '1.0.0', description: '显式联网搜索并基于外部证据回答，不自动写入本地文件',
+    allowedTools: ['list_research_sources', 'search_research_sources', 'prepare_research_evidence', 'assemble_research_evidence', 'verify_research_citations', 'stream_chat'],
+    contextScopes: ['conversation', 'editor-selection'], sideEffects: ['network', 'draft'], approvalPolicy: 'auto', modelRequirements: 'configured',
+    failureAndRetry: '单一来源失败时返回部分结果并保留未核实标记，不静默扩大联网授权。',
   },
   {
     name: 'chapter-boundary-detect', version: '1.0.0', description: '用确定性规则识别章节和场景边界并生成拆分提案',

@@ -299,6 +299,7 @@ pub fn init(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
            updated_at INTEGER NOT NULL
          );",
     )?;
+    init_research_source_schema(&connection)?;
     let _ = connection.execute(
         "ALTER TABLE model_connections ADD COLUMN credential_fingerprint TEXT NOT NULL DEFAULT 'none'",
         [],
@@ -343,6 +344,49 @@ pub fn init(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
         "CREATE UNIQUE INDEX IF NOT EXISTS model_connections_identity
          ON model_connections(base_url, credential_fingerprint)",
         [],
+    )?;
+    Ok(())
+}
+
+pub(crate) fn init_research_source_schema(connection: &Connection) -> Result<(), rusqlite::Error> {
+    connection.execute_batch(
+        "CREATE TABLE IF NOT EXISTS research_sources (
+           id TEXT PRIMARY KEY,
+           name TEXT NOT NULL,
+           origin TEXT NOT NULL CHECK(origin IN ('builtin', 'catalog', 'discovered', 'user')),
+           adapter TEXT NOT NULL CHECK(adapter IN ('mediawiki', 'json-api', 'rss', 'sitemap', 'opds', 'html-search', 'fetch-only')),
+           base_url TEXT NOT NULL,
+           allowed_hosts_json TEXT NOT NULL DEFAULT '[]',
+           search_endpoint TEXT,
+           language_json TEXT NOT NULL DEFAULT '[]',
+           region_json TEXT NOT NULL DEFAULT '[]',
+           categories_json TEXT NOT NULL DEFAULT '[]',
+           trust_level TEXT NOT NULL CHECK(trust_level IN ('official', 'curated', 'community', 'custom')),
+           status TEXT NOT NULL CHECK(status IN ('candidate', 'active', 'restricted', 'unavailable', 'retired')),
+           user_enabled INTEGER NOT NULL DEFAULT 1,
+           minimum_update_hours INTEGER NOT NULL DEFAULT 24,
+           last_checked_at INTEGER,
+           last_success_at INTEGER,
+           consecutive_failures INTEGER NOT NULL DEFAULT 0,
+           deleted INTEGER NOT NULL DEFAULT 0,
+           created_at INTEGER NOT NULL,
+           updated_at INTEGER NOT NULL
+         );
+         CREATE TABLE IF NOT EXISTS research_source_history (
+           id INTEGER PRIMARY KEY AUTOINCREMENT,
+           source_id TEXT NOT NULL,
+           action TEXT NOT NULL,
+           before_json TEXT NOT NULL,
+           after_json TEXT NOT NULL,
+           reason TEXT,
+           changed_at INTEGER NOT NULL
+         );
+         CREATE TABLE IF NOT EXISTS research_source_catalog_meta (
+           id INTEGER PRIMARY KEY CHECK(id = 1),
+           last_update_at INTEGER,
+           updated_count INTEGER NOT NULL DEFAULT 0,
+           last_cursor TEXT
+         );",
     )?;
     Ok(())
 }

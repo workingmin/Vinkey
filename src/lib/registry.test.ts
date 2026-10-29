@@ -62,4 +62,15 @@ describe('runtime capability registry', () => {
       expect(schema).not.toMatch(/"(?:content|text|chunk|preview|quote)"\s*:/u)
     }
   })
+
+  it('exposes the explicit network research toolchain and skill', () => {
+    const researchTools = ['list_research_sources', 'search_research_sources', 'prepare_research_evidence', 'assemble_research_evidence', 'verify_research_citations']
+    for (const name of researchTools) expect(getToolDefinition(name)).toBeDefined()
+    expect(getSkillDefinition('research-agent')).toMatchObject({
+      sideEffects: ['network', 'draft'],
+      modelRequirements: 'configured',
+      contextScopes: ['conversation', 'editor-selection'],
+    })
+    expect(getSkillDefinition('research-agent')?.allowedTools).toContain('stream_chat')
+  })
 })

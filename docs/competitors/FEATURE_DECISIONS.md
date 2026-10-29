@@ -23,7 +23,7 @@
 | `CF-008` | Agent 路由 | Claude Code；OpenAI Codex、Cline（设计来源） | 小任务直接处理，广域任务才升级 Agent/子 Agent | 确定性服务、单次模型、固定 Workflow、Hybrid Agent 分层 | `已参考` | [Agent 模板](../design/agent/AGENT_FLOW_TEMPLATES.md)；路由不能静默扩大权限 |
 | `CF-009` | 项目记忆 | Claude Code、Novelcrafter；GitHub Copilot（设计来源） | 项目指令、记忆和当前上下文分层 | 仅保存已确认事实，按源版本可失效；审校疑点不入记忆 | `部分参考` | `projectMemory` 与长期记忆设计；记忆候选仍需确认 |
 | `CF-010` | 人物资产 | Novelcrafter；StorySphere、graphify-novel（设计来源） | 资产卡、别名、提及索引、关系图和增量更新 | 候选→消歧→关系判定→用户确认→正式图谱 | `部分参考` | [GitHub 调研](../research/GITHUB_REFERENCE.md#人物资产提取专项调研2026-09-04)；关系需保留证据 |
-| `CF-011` | 网络研究 | Perplexity、Claude 产品的 Research 能力、ChatGPT Deep Research（均设计来源） | 搜索范围、来源和长任务结果独立呈现 | 轻量联网 Skill，默认关闭，按域名和数据发送单独授权 | `待参考` | [联网搜索设计](../research/LIGHTWEIGHT_WEB_RESEARCH.md)；来源交叉核验后才能交付 |
+| `CF-011` | 网络研究 | Perplexity、Claude 产品的 Research 能力、ChatGPT Deep Research（均设计来源） | 搜索范围、来源和长任务结果独立呈现 | 轻量联网 Skill，默认关闭，按域名和数据发送单独授权 | `已参考` | [联网搜索设计](../research/LIGHTWEIGHT_WEB_RESEARCH.md) 与 `src-tauri/src/research_sources.rs`、`src-tauri/src/research_evidence.rs`、`src-tauri/src/research_retrieval.rs`、`src/lib/registry.ts`；阶段计划见 CF-011 推进计划，正式上线仍需通过阶段 B/C 验收 |
 | `CF-012` | Skills/Tools | Codex Skills、Claude Agent Skills、MCP（均设计来源） | 能力按需加载，工具和资源有独立合同 | 采用渐进披露；ToolGateway 强制输入、权限和副作用 | `部分参考` | [Agent 与 Skill 计划](../design/agent/AGENT_SKILL_PLAN.md)；不开放任意 shell/MCP |
 | `CF-013` | 本地隐私 | NoteGen；SoloMD、Obsidian（设计来源） | 本地文件和用户自带模型降低数据外发 | 正文默认只发回环模型，远程正文需显式授权 | `已参考` | [模型隐私](../architecture/DEVELOPMENT_FRAMEWORK.md)；日志不得含正文/密钥 |
 | `CF-014` | 云端协作 | Notion、Google Docs、Claude Code on the web、Codex cloud（均设计来源） | 云同步、分享、成员和后台托管任务 | 当前不做云同步和团队权限；先完成单机可恢复闭环 | `不采用` | 产品定位与数据边界；后续若引入须另立威胁模型 |
@@ -45,6 +45,38 @@
 Vinkey 接受的设计方向是忠实展示实际任务过程，保留多轮推进的历史查阅价值，再用多层折叠控制阅读范围；文案相同不构成删减真实记录的理由。本轮不考虑合并功能，默认两层已落实，本阶段不新增跨会话展开偏好持久化。现有实现与目标态分别记录在[过程展示设计](../design/ui/TEMPORARY_INTERACTION_STATES.md#6-当前实现与目标差距)，现已推进逐事件保留、分页、保存恢复与用户折叠选择保持；默认两层已实现，Rust 原生验收仍受当前环境依赖限制。
 
 CF-006 的完整界面与文案提案见[任务过程界面与文案设计](../design/ui/TASK_PROCESS_COPY_DESIGN.md)，优先覆盖 WorkBuddy、百度搭子、千问办公的中文任务行为，以 Claude Code、Kimi 补充专项对照，另列豆包等当前界面的补证项；Cursor、OpenAI Codex 仅作为机制设计来源。各产品事实、会话内观察和 Vinkey 设计判断分别标注；提案已覆盖布局、56 项文案、状态控制和 18 项验收，仍待整体评审，新增设计未实施。
+
+## CF-011 阶段推进计划（2026-10-29）
+
+目标：按[轻量级联网搜索设计](../research/LIGHTWEIGHT_WEB_RESEARCH.md)的阶段 A～C 推进。本次将 CF-011 标记为 `已参考`，仅表示设计原则与部分实现已进入 Vinkey 代码与交互模型，不等于功能完备或已通过正式上线验收；阶段 B/C 验收继续按门槛执行。
+
+| 阶段 | 范围 | 关键交付 | 退出条件 | 状态变化 |
+| --- | --- | --- | --- | --- |
+| A 来源治理 | 来源 schema、冷启动目录、健康检查状态机 | `SourceRegistryService`、`SourceHealthService`；用户覆盖、导入导出、软停用与回滚；只保存来源元数据 | 单测与集成测试通过；状态迁移可回滚；`一键更新`不保存网页正文 | 已实施，仍缺真实网络在线目录下载 |
+| B 实时检索闭环 | 检索适配、显式授权、证据组装与引用校验 | `ResearchSearchService`、`WebEvidenceService`；`TaskPolicy.network` 显式触发；`ToolGateway` 按域名/数据范围授权；引用校验、内容哈希、冲突识别与“未核实”标记 | 阶段 B 验收：引用可回访 ≥95%，关键事实有摘录或明确未核实 ≥90%，未授权联网 100% 阻断，单源失败不拖垮任务；不建设外部正文表或全文索引 | 实现已进入代码；真实评测跑批待完成 |
+| C 质量与安全加固 | SSRF/重定向/私网、限流、Prompt Injection、回归评测 | 安全测试矩阵、来源可达性矩阵、失败恢复、固定 60 题评测集 | 安全加固通过；固定评测集达标；Go/No-Go 通过 | 上线前必须完成，不阻断本次 `已参考` 标记 |
+
+阶段 B 未通过不进入 C；若阶段 B 显示事实收益或来源覆盖不达标，先改善来源目录与适配器质量，不继续扩大 UI 或 Agent 能力。
+
+本次 `已参考` 标记依据：项目状态定义中“已参考不代表功能完备，只表示设计原则或部分实现已经进入 Vinkey”。阶段 B 真实评测与阶段 C 安全加固未完成前，CF-011 不视为可稳定交付。
+
+阶段 A 数据路径已落在 `src-tauri/src/database.rs` 与 `src-tauri/src/research_sources.rs`：来源 schema、SQLite 注册表与变更历史、内置冷启动目录、软删除/恢复、健康状态迁移、回滚、导入导出，以及 `preview_research_catalog`/`apply_research_catalog` 的 24 小时额度、候选校验、差异生成与确定性合并。候选 payload 由调用方提供；在线目录 GET 下载推迟到阶段 B 的联网授权与 SSRF 防护一并实现，当前更新路径只写元数据与历史，不保存网页正文。
+
+阶段 B 基础已落在 `src-tauri/src/research_evidence.rs`：`plan_research_search` 负责活跃来源筛选与确定性路由；`prepare_research_evidence` 负责来源/域名校验、内容哈希、重复/冲突识别及 `supported`/`unverified` 标记。真实 HTTP 检索适配器与模型证据组装仍在推进，在线 GET 将在授权边界和 SSRF 防护齐备后接入。
+
+阶段 B 已继续落在 `src-tauri/src/research_retrieval.rs`：`search_research_sources` 已接入 MediaWiki 与 JSON-API 两类检索适配器并生成 `ResearchEvidenceInput`；RSS、Sitemap、OPDS、HTML Search 与 `fetch-only` 适配器仍未接入，模型证据组装与引用回访校验待完成。
+
+阶段 B 再次推进：`search_research_sources` 已补齐 RSS、Sitemap、OPDS 与 HTML Search 适配器（`fetch-only` 明确不支持搜索），并新增 `verify_research_citations` 对引用 URL 做 HTTPS 可达性、最终域名白名单与 HTTP 状态回访校验。模型证据组装尚未接入。
+
+阶段 B 继续推进：新增 `assemble_research_evidence` 对证据去重、排序、裁剪并生成模型可读上下文；前端 `registry.ts` 已注册研究工具与 `research-agent` Skill，`network` 副作用与 `web-metadata`/`web-excerpts` 来源策略同步补上。剩余工作为阶段 B 验收指标自动化测试。
+
+阶段 B 验收测试已补：`registry.test.ts` 与 `runtimePolicy.test.ts` 覆盖研究工具注册、`research-agent` 网络副作用、未授权联网阻断与输入 schema；`research_evidence.rs` 增加证据结构校验与越界来源拒绝测试。仍然待办：真实网络下的引用可回访 ≥95% 与关键事实 ≥90% 评测集正式跑批。
+
+跑批入口已建：`tests/fixtures/research-acceptance.json` 提供 60 题固定测试集，`scripts/research/run-research-acceptance.mjs` 校验测试集并计算 Top5 相关来源、引用回访、证据覆盖、未授权阻断、单源失败恢复、p95 准备耗时与事实错误降低七项阈值；`npm run research:acceptance:validate` 可校验测试集。
+
+真实跑批采集器已加：新增 `run_research_acceptance` Rust 命令，按测试集逐题执行 `search_research_sources` 与 `verify_research_citations`，输出可被 Node 脚本消费的跑批报告；`unauthorizedNetworkBlocked` 在本批命令中作为已授权跑批入口约束记录，真实未授权阻断仍需前端负例验证。
+
+未授权负例已补：`ResearchSearchRequest` 增加 `authorizeNetwork` 与 `sourcePolicy`，`ensure_research_network_authorized` 在打开数据库或发起网络前阻断未授权/非网络来源策略请求；Rust 与 TS 均加入负例测试。
 
 ## 优先级规则
 
