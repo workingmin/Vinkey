@@ -1418,6 +1418,7 @@ pub fn run() {
             research_retrieval::search_research_sources,
             research_retrieval::verify_research_citations,
             research_retrieval::run_research_acceptance,
+            research_retrieval::fetch_research_catalog,
             database::upsert_characters,
             database::search_characters,
             database::upsert_character_mentions,

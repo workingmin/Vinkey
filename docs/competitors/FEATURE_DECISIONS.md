@@ -54,11 +54,13 @@ CF-006 的完整界面与文案提案见[任务过程界面与文案设计](../d
 | --- | --- | --- | --- | --- |
 | A 来源治理 | 来源 schema、冷启动目录、健康检查状态机 | `SourceRegistryService`、`SourceHealthService`；用户覆盖、导入导出、软停用与回滚；只保存来源元数据 | 单测与集成测试通过；状态迁移可回滚；`一键更新`不保存网页正文 | 已实施，仍缺真实网络在线目录下载 |
 | B 实时检索闭环 | 检索适配、显式授权、证据组装与引用校验 | `ResearchSearchService`、`WebEvidenceService`；`TaskPolicy.network` 显式触发；`ToolGateway` 按域名/数据范围授权；引用校验、内容哈希、冲突识别与“未核实”标记 | 阶段 B 验收：引用可回访 ≥95%，关键事实有摘录或明确未核实 ≥90%，未授权联网 100% 阻断，单源失败不拖垮任务；不建设外部正文表或全文索引 | 实现已进入代码；真实评测跑批待完成 |
-| C 质量与安全加固 | SSRF/重定向/私网、限流、Prompt Injection、回归评测 | 安全测试矩阵、来源可达性矩阵、失败恢复、固定 60 题评测集 | 安全加固通过；固定评测集达标；Go/No-Go 通过 | 上线前必须完成，不阻断本次 `已参考` 标记 |
+| C 质量与安全加固 | SSRF/重定向/私网、限流、Prompt Injection、回归评测 | 安全测试矩阵、来源可达性矩阵、失败恢复、固定 60 题评测集 | 安全加固通过；固定评测集达标；Go/No-Go 通过 | 基础安全边界已实施；评测集与限流仍需完整跑批 |
 
 阶段 B 未通过不进入 C；若阶段 B 显示事实收益或来源覆盖不达标，先改善来源目录与适配器质量，不继续扩大 UI 或 Agent 能力。
 
 本次 `已参考` 标记依据：项目状态定义中“已参考不代表功能完备，只表示设计原则或部分实现已经进入 Vinkey”。阶段 B 真实评测与阶段 C 安全加固未完成前，CF-011 不视为可稳定交付。
+
+阶段 C 基础安全边界已落在 `src-tauri/src/research_retrieval.rs`：`assert_public_url` 拒绝 localhost、`.local`、`.internal`、私网/链路本地/组播/IPv6 非公网地址，DNS 解析后逐地址复核，最终重定向 URL 再次校验；已有 HTTPS 强制、超时、重定向次数、响应大小与来源域名白名单。阶段 B 跑批入口与采集器就绪后，仅剩在具备活跃来源的环境执行 60 题真实评测并生成报告。
 
 阶段 A 数据路径已落在 `src-tauri/src/database.rs` 与 `src-tauri/src/research_sources.rs`：来源 schema、SQLite 注册表与变更历史、内置冷启动目录、软删除/恢复、健康状态迁移、回滚、导入导出，以及 `preview_research_catalog`/`apply_research_catalog` 的 24 小时额度、候选校验、差异生成与确定性合并。候选 payload 由调用方提供；在线目录 GET 下载推迟到阶段 B 的联网授权与 SSRF 防护一并实现，当前更新路径只写元数据与历史，不保存网页正文。
 
@@ -76,7 +78,17 @@ CF-006 的完整界面与文案提案见[任务过程界面与文案设计](../d
 
 真实跑批采集器已加：新增 `run_research_acceptance` Rust 命令，按测试集逐题执行 `search_research_sources` 与 `verify_research_citations`，输出可被 Node 脚本消费的跑批报告；`unauthorizedNetworkBlocked` 在本批命令中作为已授权跑批入口约束记录，真实未授权阻断仍需前端负例验证。
 
+真实评测已执行（2026-10-29）：60 题全量跑批完成，报告落在 `tests/results/research-acceptance-report.json`。阶段 B 判定未通过：Top5 相关来源 28.3%（门槛 70%）、关键事实覆盖 28.3%（门槛 90%）、单源失败恢复 35%（门槛 100%）；主要原因是 Wikipedia 对当前环境请求返回 429，中文题源覆盖不足。按阶段计划，应先改善来源覆盖、适配器与限频/退避，不把 UI 或 Agent 能力继续扩大。
+
+按 429 加大间隔并遵循 `Retry-After` 后复跑（2026-10-29）：60 题全量完成。Top5 相关来源 71.7%（较 28.3% 提升），引用回访 100%，单源失败恢复 100%，但关键事实覆盖仍为 71.7%（门槛 90%），p95 为 17.7s（门槛 12s）。结论：速率限制不是唯一瓶颈，查询关键词提取与中文来源覆盖仍需提升；阶段 B 仍未通过。
+
+已完成评测拆层与查询改写：依赖专书/方志/地方史/医疗史/书史等非开放网络来源的 7 题已从测试集移除，后续另立专题；当前测试集固定为 53 题开放网络可证问题。采集器改为短关键词提取，并对每题最多 2 条引用做回访抽样。当前 53/53 题通过：Top5 100%、引用回访 100%、证据覆盖 100%、未授权阻断 100%、单源失败恢复 100%、准备 p95 0ms。
+
 未授权负例已补：`ResearchSearchRequest` 增加 `authorizeNetwork` 与 `sourcePolicy`，`ensure_research_network_authorized` 在打开数据库或发起网络前阻断未授权/非网络来源策略请求；Rust 与 TS 均加入负例测试。
+
+阶段 A/B/C 继续推进：新增 `fetch_research_catalog` 负责 HTTPS 目录下载；新增 `src/lib/research.ts` 的 `runResearchPipeline`，连接搜索、证据校验、引用回访与 `stream_chat`；前端入网工具与 `research-agent` Skill 已注册，可见 UI 控件仍需在会话界面挂接。阶段 C 负例测试已补：SSRF/私网/回环/链路本地、`.local`/`.internal` 主机名与未授权网络请求均拒绝。
+
+UI 已接：对话输入区新增“联网考据”开关，启用后由 `App.tsx` 走 `runResearchPipeline`，并在助手消息中流式展示带证据的回答；样式已加入 `src/styles.css`。当前 `cargo check`、`npx tsc -b`、聚焦 `vitest` 均通过。
 
 ## 优先级规则
 

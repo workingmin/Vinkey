@@ -6,7 +6,10 @@ use crate::{
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::{
+    net::ToSocketAddrs,
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+};
 use tauri::State;
 
 const MAX_SOURCES: usize = 5;
@@ -154,6 +157,64 @@ fn normalize_url(value: &str) -> Result<String, String> {
     Ok(url.as_str().trim_end_matches('/').to_string())
 }
 
+fn assert_public_url(url: &reqwest::Url) -> Result<(), String> {
+    if url.scheme() != "https" {
+        return Err("引用或来源仅允许 HTTPS".into());
+    }
+    let host = url
+        .host_str()
+        .ok_or_else(|| "URL 缺少主机名".to_string())?
+        .to_ascii_lowercase();
+    if host == "localhost" || host.ends_with(".localhost") || host.ends_with(".local") || host.ends_with(".internal") {
+        return Err("不允许访问本地或内部主机名".into());
+    }
+    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+        if !ip_is_global(&ip) {
+            return Err("不允许访问非公网地址".into());
+        }
+        return Ok(());
+    }
+    let port = url.port_or_known_default().unwrap_or(443);
+    let mut resolved = false;
+    for address in (host.as_str(), port)
+        .to_socket_addrs()
+        .map_err(|_| "域名解析失败".to_string())?
+    {
+        resolved = true;
+        if !ip_is_global(&address.ip()) {
+            return Err("域名解析到非公网地址".into());
+        }
+    }
+    if !resolved {
+        return Err("域名未解析到任何地址".into());
+    }
+    Ok(())
+}
+
+fn ip_is_global(ip: &std::net::IpAddr) -> bool {
+    match ip {
+        std::net::IpAddr::V4(value) => {
+            !value.is_private()
+                && !value.is_loopback()
+                && !value.is_link_local()
+                && !value.is_multicast()
+                && !value.is_unspecified()
+                && !value.is_broadcast()
+        }
+        std::net::IpAddr::V6(value) => {
+            if let Some(v4) = value.to_ipv4() {
+                return ip_is_global(&std::net::IpAddr::V4(v4));
+            }
+            let first = value.segments()[0];
+            !value.is_loopback()
+                && !value.is_unspecified()
+                && !value.is_multicast()
+                && first & 0xfe00 != 0xfe80
+                && first & 0xfe00 != 0xfc00
+        }
+    }
+}
+
 fn make_client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
         .timeout(Duration::from_secs(12))
@@ -174,10 +235,12 @@ fn ensure_search_url(source: &crate::research_sources::ResearchSource, endpoint:
     if !source.allowed_hosts.contains(&host.to_string()) {
         return Err("搜索入口域名不在允许域名内".into());
     }
+    assert_public_url(&url)?;
     Ok(url)
 }
 
 async fn fetch_json(client: &reqwest::Client, url: reqwest::Url) -> Result<Value, String> {
+    assert_public_url(&url)?;
     let response = client.get(url).send().await.map_err(|error| error.to_string())?;
     let status = response.status();
     if !status.is_success() {
@@ -305,6 +368,7 @@ async fn search_json_api(
 }
 
 async fn fetch_text(client: &reqwest::Client, url: reqwest::Url) -> Result<String, String> {
+    assert_public_url(&url)?;
     let response = client.get(url).send().await.map_err(|error| error.to_string())?;
     let status = response.status();
     if !status.is_success() {
@@ -589,6 +653,14 @@ pub async fn search_research_sources(
     execute_research_search(request, state.inner()).await
 }
 
+#[tauri::command]
+pub async fn fetch_research_catalog(endpoint: String) -> Result<serde_json::Value, String> {
+    let url = reqwest::Url::parse(endpoint.trim()).map_err(|_| "目录地址无效".to_string())?;
+    assert_public_url(&url)?;
+    let client = make_client()?;
+    fetch_json(&client, url).await
+}
+
 async fn execute_citation_verification(
     inputs: Vec<ResearchEvidenceInput>,
     database_state: &DatabaseState,
@@ -641,7 +713,32 @@ async fn execute_citation_verification(
             });
             continue;
         }
-        match client.get(&normalized).send().await {
+        let request_url = match reqwest::Url::parse(&normalized) {
+            Ok(value) => value,
+            Err(reason) => {
+                items.push(CitationCheck {
+                    url: normalized.clone(),
+                    source_id: input.source_id,
+                    reachable: false,
+                    http_status: None,
+                    final_url: normalized,
+                    reason: Some(reason.to_string()),
+                });
+                continue;
+            }
+        };
+        if let Err(reason) = assert_public_url(&request_url) {
+            items.push(CitationCheck {
+                url: normalized.clone(),
+                source_id: input.source_id,
+                reachable: false,
+                http_status: None,
+                final_url: normalized,
+                reason: Some(reason),
+            });
+            continue;
+        }
+        match client.get(request_url).send().await {
             Ok(response) => {
                 let status = response.status();
                 let final_url = response.url().to_string();
@@ -650,7 +747,13 @@ async fn execute_citation_verification(
                     .ok()
                     .and_then(|value| value.host_str().map(str::to_string))
                     .unwrap_or_default();
-                let reachable = status.is_success() && source.allowed_hosts.contains(&final_host);
+                let final_is_public = reqwest::Url::parse(&final_url)
+                    .ok()
+                    .map(|value| assert_public_url(&value).is_ok())
+                    .unwrap_or(false);
+                let reachable = status.is_success()
+                    && source.allowed_hosts.contains(&final_host)
+                    && final_is_public;
                 items.push(CitationCheck {
                     url: normalized,
                     source_id: input.source_id,
@@ -813,5 +916,26 @@ mod tests {
             ensure_research_network_authorized(&request),
             Err("来源策略未授权外部证据读取".into())
         );
+    }
+
+    #[test]
+    fn blocks_ssrf_private_and_loopback_urls() {
+        for endpoint in [
+            "https://127.0.0.1/search",
+            "https://10.0.0.1/search",
+            "https://169.254.169.254/latest/meta-data",
+            "https://[::1]/search",
+        ] {
+            let url = reqwest::Url::parse(endpoint).unwrap();
+            assert!(assert_public_url(&url).is_err(), "{endpoint} 应当被拒绝");
+        }
+    }
+
+    #[test]
+    fn blocks_local_hostnames_before_dns() {
+        for endpoint in ["https://localhost/search", "https://x.internal/search", "https://x.local/search"] {
+            let url = reqwest::Url::parse(endpoint).unwrap();
+            assert!(assert_public_url(&url).is_err(), "{endpoint} 应当被拒绝");
+        }
     }
 }

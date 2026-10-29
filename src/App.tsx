@@ -47,6 +47,7 @@ import { normalizeServiceError } from './lib/serviceError'
 import { buildDocumentIndexMessage } from './lib/documentMetadata'
 import { buildFocusedWorkspaceMessage } from './lib/focusedAnalysis'
 import { isLoopbackModelEndpoint } from './lib/modelPrivacy'
+import { runResearchPipeline } from './lib/research'
 import { withConversationRequest } from './lib/conversationActivity'
 import { persistChatRun } from './lib/chatRunPersistence'
 import { watchWorkerHistory } from './lib/workerHistorySubscription'
@@ -563,6 +564,7 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
   const applyDiffProposal = useAppStore((state) => state.applyDiffProposal)
   const rejectDiffProposal = useAppStore((state) => state.rejectDiffProposal)
   const [prompt, setPrompt] = useState('')
+  const [researchMode, setResearchMode] = useState(false)
   const [pendingActionId, setPendingActionId] = useState<string | null>(null)
   const [analysisStatus, setAnalysisStatus] = useState<string | null>(null)
   const [pendingMemory, setPendingMemory] = useState<{ items: ProjectMemoryItem[]; sourceMessageId: string | null } | null>(null)
@@ -637,8 +639,55 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
     if (!state.workspace) { setError('请先选择项目'); return }
     const nextConversationId = conversationId ?? crypto.randomUUID()
     try {
-      await withConversationRequest(state.workspace.id, nextConversationId, Boolean(conversationId), () => sendMessage(nextConversationId))
+      await withConversationRequest(state.workspace.id, nextConversationId, Boolean(conversationId), () => (
+        researchMode ? sendResearchMessage(nextConversationId) : sendMessage(nextConversationId)
+      ))
     } catch (error) { setError(formatError(error)) }
+  }
+
+  const sendResearchMessage = async (nextConversationId: string) => {
+    const value = prompt.trim()
+    if (!value || busy) return
+    if (!activeModel) { setSettingsOpen(true); return }
+    const now = Date.now()
+    const nextTitle = conversationId ? conversationTitle : value.replace(/\s+/g, ' ').slice(0, 28)
+    if (!conversationId) setConversation({ id: nextConversationId, title: nextTitle, messages, updatedAt: now })
+    setPrompt('')
+    setPendingActionId(null)
+    setMention(null)
+    const userMessage = {
+      id: crypto.randomUUID(), role: 'user' as const, content: value, createdAt: now,
+    }
+    const assistantMessage = { id: crypto.randomUUID(), role: 'assistant' as const, content: '', createdAt: now + 1 }
+    beginChatRun({
+      conversationId: nextConversationId,
+      conversationTitle: nextTitle,
+      requestId: crypto.randomUUID(),
+      status: 'fetching',
+      statusMessage: '正在联网检索…',
+      activityLog: [],
+      userMessage,
+      assistantMessage,
+    })
+    try {
+      await saveConversationMessage(nextConversationId, nextTitle, userMessage, workspace?.id)
+      await runResearchPipeline(value, (event) => {
+        if (event.type === 'chunk') {
+          setChatRunStatus(nextConversationId, 'streaming', null)
+          appendChatRunChunk(nextConversationId, event.content)
+        }
+        if (event.type === 'error') setError(event.message)
+      })
+      const completed = useAppStore.getState().completedChatMessages[nextConversationId]
+      if (completed) await saveConversationMessage(nextConversationId, nextTitle, completed, workspace?.id)
+      setConversations(await listConversations(workspace?.id))
+    } catch (error) {
+      const message = formatError(error)
+      if (!message.includes('请求已停止')) setError(message)
+      appendChatRunChunk(nextConversationId, `\n\n> 联网考据未完成：${message}`)
+    } finally {
+      endChatRun(nextConversationId, false)
+    }
   }
 
   const sendMessage = async (nextConversationId: string) => {
@@ -1196,8 +1245,15 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
         <div className="composer-tools">
           {activeModel ? <span className="composer-model-indicator" title={`${activeModel.model} · ${activeModel.baseUrl}`}><Bot /><span>{activeModel.model}</span></span>
             : <button className="composer-model-indicator missing" onClick={() => setSettingsOpen(true)}><Bot /><span>添加模型</span></button>}
+          <button
+            className={`composer-research-toggle${researchMode ? ' active' : ''}`}
+            aria-pressed={researchMode}
+            title={researchMode ? '联网考据已开启：发送后将检索可信来源并基于证据回答' : '开启联网考据'}
+            disabled={busy}
+            onClick={() => setResearchMode((value) => !value)}
+          ><Search /><span>联网考据</span></button>
           <span className="composer-hint" title={activeStatus?.title ?? '发送后评估上下文预算'}>{analysisStatus ?? activeStatus?.label ?? 'Enter 发送'}</span>
-          <button className="send-button" aria-label={activeChatRun?.status === 'stopping' ? '正在停止' : busy ? '停止生成' : '发送'} disabled={projectTransition || !workspace || activeChatRun?.status === 'stopping' || (!prompt.trim() && !busy)} onClick={busy ? () => void stop() : () => void send()}>{busy ? <Square /> : <Send />}</button>
+          <button className="send-button" aria-label={activeChatRun?.status === 'stopping' ? '正在停止' : busy ? '停止生成' : researchMode ? '联网考据发送' : '发送'} disabled={projectTransition || !workspace || activeChatRun?.status === 'stopping' || (!prompt.trim() && !busy)} onClick={busy ? () => void stop() : () => void send()}>{busy ? <Square /> : researchMode ? <Search /> : <Send />}</button>
         </div>
       </div>
     </div>

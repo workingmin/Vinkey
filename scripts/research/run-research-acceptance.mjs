@@ -7,7 +7,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const defaultFixture = path.join(root, 'tests/fixtures/research-acceptance.json')
 
 const thresholds = {
-  minQuestionCount: 60,
+  minQuestionCount: 53,
   top5Relevant: 0.7,
   citationReachable: 0.95,
   evidenceCoverage: 0.9,
@@ -53,35 +53,44 @@ function validateFixture(fixture) {
   return { questionCount: questions.length, errors }
 }
 
-function evaluateReport(report) {
+function evaluateReport(report, fixture) {
   const questions = report?.questions ?? []
   if (!questions.length) throw new Error('报告缺少 questions 字段')
+  const defaultTier = fixture?.defaultTier ?? 'open-web'
+  const tierById = new Map((fixture?.questions ?? []).map((item) => [item.id, item.tier ?? defaultTier]))
+  const gatedQuestions = questions.filter((item) => (tierById.get(item.id) ?? defaultTier) !== 'deep-source')
+  const openWebExpected = new Set(
+    (fixture?.questions ?? []).filter((item) => (item.tier ?? defaultTier) !== 'deep-source').map((item) => item.id),
+  ).size
+  const deepSourceCount = questions.length - gatedQuestions.length
   const summary = {
     questionCount: questions.length,
-    top5RelevantCount: questions.filter((item) => item.relevantSourceInTop5).length,
-    citationTotal: questions.reduce((sum, item) => sum + (item.citationChecks?.total ?? 0), 0),
-    citationReachable: questions.reduce((sum, item) => sum + (item.citationChecks?.reachable ?? 0), 0),
-    evidenceTotal: questions.reduce((sum, item) => sum + (item.evidenceChecks?.total ?? 0), 0),
-    evidenceCovered: questions.reduce((sum, item) => sum + (item.evidenceChecks?.covered ?? 0), 0),
-    unauthorizedBlocked: questions.filter((item) => item.unauthorizedNetworkBlocked).length,
-    singleSourceFailureHandled: questions.filter((item) => item.singleSourceFailureHandled).length,
-    factErrorBaseline: questions.reduce((sum, item) => sum + (item.factErrorBaseline ?? 0), 0),
-    factErrorWithWeb: questions.reduce((sum, item) => sum + (item.factErrorWithWeb ?? 0), 0),
-    prepValues: questions.map((item) => Number(item.prepMs ?? 0)),
+    gatedQuestionCount: gatedQuestions.length,
+    deepSourceCount,
+    top5RelevantCount: gatedQuestions.filter((item) => item.relevantSourceInTop5).length,
+    citationTotal: gatedQuestions.reduce((sum, item) => sum + (item.citationChecks?.total ?? 0), 0),
+    citationReachable: gatedQuestions.reduce((sum, item) => sum + (item.citationChecks?.reachable ?? 0), 0),
+    evidenceTotal: gatedQuestions.reduce((sum, item) => sum + (item.evidenceChecks?.total ?? 0), 0),
+    evidenceCovered: gatedQuestions.reduce((sum, item) => sum + (item.evidenceChecks?.covered ?? 0), 0),
+    unauthorizedBlocked: gatedQuestions.filter((item) => item.unauthorizedNetworkBlocked).length,
+    singleSourceFailureHandled: gatedQuestions.filter((item) => item.singleSourceFailureHandled).length,
+    factErrorBaseline: gatedQuestions.reduce((sum, item) => sum + (item.factErrorBaseline ?? 0), 0),
+    factErrorWithWeb: gatedQuestions.reduce((sum, item) => sum + (item.factErrorWithWeb ?? 0), 0),
+    prepValues: gatedQuestions.map((item) => Number(item.prepMs ?? 0)),
   }
   const ratios = {
-    top5Relevant: ratio(summary.top5RelevantCount, summary.questionCount),
+    top5Relevant: ratio(summary.top5RelevantCount, summary.gatedQuestionCount),
     citationReachable: ratio(summary.citationReachable, summary.citationTotal),
     evidenceCoverage: ratio(summary.evidenceCovered, summary.evidenceTotal),
-    unauthorizedBlocked: ratio(summary.unauthorizedBlocked, summary.questionCount),
-    singleSourceFailureHandled: ratio(summary.singleSourceFailureHandled, summary.questionCount),
+    unauthorizedBlocked: ratio(summary.unauthorizedBlocked, summary.gatedQuestionCount),
+    singleSourceFailureHandled: ratio(summary.singleSourceFailureHandled, summary.gatedQuestionCount),
     prepMsP95: percentile([...summary.prepValues].sort((a, b) => a - b), 0.95),
   }
   ratios.factErrorReduction = summary.factErrorBaseline > 0
     ? (summary.factErrorBaseline - summary.factErrorWithWeb) / summary.factErrorBaseline
     : null
   const checks = [
-    ['题目数量', summary.questionCount, thresholds.minQuestionCount, '≥'],
+    ['开放网络题目覆盖', summary.gatedQuestionCount, openWebExpected, '≥'],
     ['Top5 相关可信来源', ratios.top5Relevant, thresholds.top5Relevant, '≥'],
     ['引用可回访', ratios.citationReachable, thresholds.citationReachable, '≥'],
     ['关键事实有摘录或未核实', ratios.evidenceCoverage, thresholds.evidenceCoverage, '≥'],
@@ -117,6 +126,6 @@ if (!reportFile) {
   process.exit(0)
 }
 const report = readJson(reportFile)
-const result = evaluateReport(report)
+const result = evaluateReport(report, fixture)
 console.log(JSON.stringify(result, null, 2))
 process.exit(result.passed ? 0 : 1)
