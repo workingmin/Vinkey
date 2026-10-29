@@ -96,6 +96,7 @@ async function installMacMenu(callbacks: {
   changePage: (page: ContentPage) => void
   toggleTheme: () => void
   openSettings: () => void
+  focusGlobalSearch: () => void
   showShortcuts: () => void
   showWindowDiagnostics: () => void
   showRuntimeDiagnostics: () => void
@@ -109,6 +110,7 @@ async function installMacMenu(callbacks: {
   ] })
   const conversation = await Submenu.new({ text: TITLE_BAR_MENU_LABELS.conversation, items: [
     await menuItem(TITLE_BAR_MENU_ITEM_LABELS.newConversation, callbacks.newConversation, 'CmdOrCtrl+N'),
+    await menuItem(TITLE_BAR_MENU_ITEM_LABELS.searchSessions, callbacks.focusGlobalSearch, 'CmdOrCtrl+K'),
   ] })
   const edit = await Submenu.new({ text: TITLE_BAR_MENU_LABELS.edit, items: [
     await nativeItem('Undo', TITLE_BAR_MENU_ITEM_LABELS.undo),
@@ -258,6 +260,7 @@ export function TitleBar({ onPageChange, onOpenWorkspace, onNewConversation, onR
     ] },
     { id: 'conversation', label: TITLE_BAR_MENU_LABELS.conversation, items: [
       { id: 'newConversation', label: TITLE_BAR_MENU_ITEM_LABELS.newConversation, shortcut: `${mod} N`, icon: CirclePlus, action: onNewConversation },
+      { id: 'searchSessions', label: TITLE_BAR_MENU_ITEM_LABELS.searchSessions, shortcut: `${mod} K`, icon: Search, action: () => document.getElementById('global-search-input')?.focus() },
     ] },
     { id: 'edit', label: TITLE_BAR_MENU_LABELS.edit, items: [
       { id: 'undo', label: TITLE_BAR_MENU_ITEM_LABELS.undo, shortcut: `${mod} Z`, icon: RotateCcw, disabled: !canExecuteEditCommand(editTarget, 'undo'), action: () => editAction('undo') },
@@ -1768,6 +1771,7 @@ export function App() {
       changePage: changeContentPage,
       toggleTheme: () => { const current = useAppStore.getState().theme; useAppStore.getState().setTheme(current === 'dark' ? 'light' : 'dark') },
       openSettings: () => useAppStore.getState().setSettingsOpen(true),
+      focusGlobalSearch: () => document.getElementById('global-search-input')?.focus(),
       showShortcuts,
       showWindowDiagnostics,
       showRuntimeDiagnostics: () => void showRuntimeDiagnostics(),
@@ -1798,6 +1802,26 @@ export function App() {
   }, [newConversationFromMenu, openWorkspaceFromMenu, refreshWorkspaceFromMenu, saveActive, setSettingsOpen])
 
   const hasActiveDocument = useMemo(() => tabs.some((tab) => tab.path === activePath), [activePath, tabs])
+
+  useEffect(() => {
+    if (!isDesktop() || !workspace) return
+    const refreshSavedTabs = () => {
+      for (const tab of useAppStore.getState().tabs) {
+        if (tab.content !== tab.savedContent) continue
+        void readDocument(tab.path).then((document) => {
+          if (document.content === tab.savedContent) return
+          const latest = useAppStore.getState()
+          const current = latest.tabs.find((candidate) => candidate.path === tab.path)
+          if (current && current.content === current.savedContent) {
+            latest.openTab({ ...document, savedContent: document.content })
+            latest.setError(`文件 ${document.name} 已在外部修改，已重载磁盘版本。`)
+          }
+        }).catch(() => {})
+      }
+    }
+    window.addEventListener('focus', refreshSavedTabs)
+    return () => window.removeEventListener('focus', refreshSavedTabs)
+  }, [workspace?.id])
 
   return <div className="app-frame" data-theme={theme} data-platform={isMacPlatform() ? 'mac' : 'desktop'}>
     <TitleBar onPageChange={changeContentPage} onOpenWorkspace={() => void openWorkspaceFromMenu()} onNewConversation={newConversationFromMenu} onRefreshWorkspace={() => void refreshWorkspaceFromMenu()} onShowShortcuts={showShortcuts} onShowAbout={showAbout} onShowWindowDiagnostics={showWindowDiagnostics} onShowRuntimeDiagnostics={() => void showRuntimeDiagnostics()} />

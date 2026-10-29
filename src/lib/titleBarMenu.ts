@@ -17,6 +17,7 @@ export const TITLE_BAR_MENU_ITEM_LABELS = {
   addProject: '添加本地项目…',
   refreshProject: '刷新当前项目',
   newConversation: '新建会话',
+  searchSessions: '搜索项目与会话',
   undo: '撤销',
   redo: '重做',
   cut: '剪切',
