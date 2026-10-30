@@ -1264,7 +1264,7 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
             disabled={busy}
             onClick={() => setResearchMode((value) => !value)}
           ><Search /><span>联网考据</span></button>
-          <span className="composer-hint" title={activeStatus?.title ?? '发送后评估上下文预算'}>{analysisStatus ?? activeStatus?.label ?? 'Enter 发送'}</span>
+          <span className="composer-hint" title={researchMode ? '联网考据会在发送前展示查询词和目标来源；普通聊天不会访问网络' : activeStatus?.title ?? '发送后评估上下文预算'}>{researchMode ? '联网考据 · 外部检索会单独授权' : analysisStatus ?? activeStatus?.label ?? 'Enter 发送'}</span>
           <button className="send-button" aria-label={activeChatRun?.status === 'stopping' ? '正在停止' : busy ? '停止生成' : researchMode ? '联网考据发送' : '发送'} disabled={projectTransition || !workspace || activeChatRun?.status === 'stopping' || (!prompt.trim() && !busy)} onClick={busy ? () => void stop() : () => void send()}>{busy ? <Square /> : researchMode ? <Search /> : <Send />}</button>
         </div>
       </div>
@@ -1272,7 +1272,7 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
   </main>
 }
 
-function EditorPanel({ onSave, onClose, onOpenChat }: { onSave: () => Promise<void>; onClose: () => void; onOpenChat: () => void }) {
+function EditorPanel({ onSave, onSaveAs, onClose, onOpenChat }: { onSave: () => Promise<void>; onSaveAs: () => Promise<void>; onClose: () => void; onOpenChat: () => void }) {
   const tabs = useAppStore((state) => state.tabs)
   const activePath = useAppStore((state) => state.activePath)
   const viewMode = useAppStore((state) => state.viewMode)
@@ -1341,6 +1341,7 @@ function EditorPanel({ onSave, onClose, onOpenChat }: { onSave: () => Promise<vo
     <div className="editor-toolbar">
       <span className="document-path" title={document.path}>{document.path}</span>
       {editable && <IconButton label="保存文档" onClick={() => void onSave()} disabled={!dirty}><Save /></IconButton>}
+      {editable && <IconButton label="另存为" onClick={() => void onSaveAs()}><Copy /></IconButton>}
       {editable && <IconButton label="用 AI 修改选区" onClick={reviseSelection} disabled={!editorSelection || editorSelection.path !== document.path || !editorSelection.text}><WandSparkles /></IconButton>}
       {editable && markdown && <div className="segmented" aria-label="文档视图">
         {modes.map((mode) => <button key={mode} className={viewMode === mode ? 'active' : ''} onClick={() => setViewMode(mode)}>{modeLabels[mode]}</button>)}
@@ -1363,23 +1364,24 @@ function EditorPanel({ onSave, onClose, onOpenChat }: { onSave: () => Promise<vo
   </aside>
 }
 
-function FileWorkspace({ showEditor, onOpenDocument, onToggleContext, onOpenWorkspace, onRefreshWorkspace, onSave, onCloseEditor, onOpenChat }: {
+function FileWorkspace({ showEditor, onOpenDocument, onToggleContext, onOpenWorkspace, onRefreshWorkspace, onSave, onSaveAs, onCloseEditor, onOpenChat }: {
   showEditor: boolean
   onOpenDocument: (path: string) => Promise<void>
   onToggleContext: (path: string) => Promise<void>
   onOpenWorkspace: () => void
   onRefreshWorkspace: () => Promise<void>
   onSave: () => Promise<void>
+  onSaveAs: () => Promise<void>
   onCloseEditor: () => void
   onOpenChat: () => void
 }) {
   return <div className={`file-workspace ${showEditor ? 'with-editor' : 'list-only'}`}>
     <FileBrowserPanel onOpenDocument={onOpenDocument} onToggleContext={onToggleContext} onOpenWorkspace={onOpenWorkspace} onRefreshWorkspace={onRefreshWorkspace} />
-    {showEditor && <EditorPanel onSave={onSave} onClose={onCloseEditor} onOpenChat={onOpenChat} />}
+    {showEditor && <EditorPanel onSave={onSave} onSaveAs={onSaveAs} onClose={onCloseEditor} onOpenChat={onOpenChat} />}
   </div>
 }
 
-function ContentPanel({ page, onPageChange, showFileEditor, onOpenDocument, onOpenWorkspace, onRefreshWorkspace, onSave, onCloseEditor, onToggleContext, onReviewDiff, onOpenLogSource }: {
+function ContentPanel({ page, onPageChange, showFileEditor, onOpenDocument, onOpenWorkspace, onRefreshWorkspace, onSave, onSaveAs, onCloseEditor, onToggleContext, onReviewDiff, onOpenLogSource }: {
   page: ContentPage
   onPageChange: (page: ContentPage) => void
   showFileEditor: boolean
@@ -1387,6 +1389,7 @@ function ContentPanel({ page, onPageChange, showFileEditor, onOpenDocument, onOp
   onOpenWorkspace: () => void
   onRefreshWorkspace: () => Promise<void>
   onSave: () => Promise<void>
+  onSaveAs: () => Promise<void>
   onCloseEditor: () => void
   onToggleContext: (path: string) => Promise<void>
   onReviewDiff: () => void
@@ -1413,7 +1416,7 @@ function ContentPanel({ page, onPageChange, showFileEditor, onOpenDocument, onOp
     </header>
     <div className="content-panel-body">
       {page === 'chat' && <ChatPanel onToggleContext={onToggleContext} onReviewDiff={onReviewDiff} />}
-      {page === 'file' && <FileWorkspace showEditor={showFileEditor} onOpenDocument={onOpenDocument} onToggleContext={onToggleContext} onOpenWorkspace={onOpenWorkspace} onRefreshWorkspace={onRefreshWorkspace} onSave={onSave} onCloseEditor={onCloseEditor} onOpenChat={() => onPageChange('chat')} />}
+      {page === 'file' && <FileWorkspace showEditor={showFileEditor} onOpenDocument={onOpenDocument} onToggleContext={onToggleContext} onOpenWorkspace={onOpenWorkspace} onRefreshWorkspace={onRefreshWorkspace} onSave={onSave} onSaveAs={onSaveAs} onCloseEditor={onCloseEditor} onOpenChat={() => onPageChange('chat')} />}
       {page === 'logs' && <LogCenter onOpenSource={onOpenLogSource} />}
     </div>
   </section>
@@ -1761,6 +1764,28 @@ export function App() {
     }
   }, [markSaved, setError])
 
+  const saveActiveAs = useCallback(async () => {
+    if (useAppStore.getState().projectTransition) return
+    const document = useAppStore.getState().tabs.find((tab) => tab.path === useAppStore.getState().activePath)
+    if (!document) return
+    const target = window.prompt('另存为工作区相对路径', document.path)?.trim()
+    if (!target) return
+    if (target.includes('\0') || target.startsWith('/') || target.includes('..')) {
+      setError('另存为路径必须是工作区内的相对路径。')
+      return
+    }
+    try {
+      if (target === document.path) {
+        await saveActive()
+        return
+      }
+      const created = await createDocument(target)
+      const saved = await saveDocument({ ...created, content: document.content })
+      useAppStore.getState().openTab({ ...saved, savedContent: saved.content })
+      setWorkspace(await refreshWorkspace())
+    } catch (cause) { setError(`另存为失败：${String(cause)}`) }
+  }, [setError, setWorkspace, saveActive])
+
   useEffect(() => {
     if (!isDesktop() || !isMacPlatform() || macMenuInstalled.current) return
     macMenuInstalled.current = true
@@ -1827,7 +1852,7 @@ export function App() {
     <TitleBar onPageChange={changeContentPage} onOpenWorkspace={() => void openWorkspaceFromMenu()} onNewConversation={newConversationFromMenu} onRefreshWorkspace={() => void refreshWorkspaceFromMenu()} onShowShortcuts={showShortcuts} onShowAbout={showAbout} onShowWindowDiagnostics={showWindowDiagnostics} onShowRuntimeDiagnostics={() => void showRuntimeDiagnostics()} />
     <div className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`} data-theme={theme}>
       <ProjectSessionSidebar onPageChange={changeContentPage} onOpenWorkspace={() => void openWorkspaceFromMenu()} onRefreshWorkspace={() => void refreshWorkspaceFromMenu()} onOpenDocument={openDocument} onSelectProject={selectProject} onDeleteProject={removeProject} />
-      {settingsOpen ? <SettingsPage /> : <ContentPanel key={workspace?.id ?? 'no-project'} page={contentPage} onPageChange={changeContentPage} showFileEditor={fileEditorVisible && hasActiveDocument} onOpenDocument={openDocument} onOpenWorkspace={() => void openWorkspaceFromMenu()} onRefreshWorkspace={refreshWorkspaceFromMenu} onSave={saveActive} onCloseEditor={() => setFileEditorVisible(false)} onToggleContext={toggleDocumentContext} onOpenLogSource={openLogSource} onReviewDiff={() => { setContentPage('file'); setFileEditorVisible(true); setSettingsOpen(false) }} />}
+      {settingsOpen ? <SettingsPage /> : <ContentPanel key={workspace?.id ?? 'no-project'} page={contentPage} onPageChange={changeContentPage} showFileEditor={fileEditorVisible && hasActiveDocument} onOpenDocument={openDocument} onOpenWorkspace={() => void openWorkspaceFromMenu()} onRefreshWorkspace={refreshWorkspaceFromMenu} onSave={saveActive} onSaveAs={saveActiveAs} onCloseEditor={() => setFileEditorVisible(false)} onToggleContext={toggleDocumentContext} onOpenLogSource={openLogSource} onReviewDiff={() => { setContentPage('file'); setFileEditorVisible(true); setSettingsOpen(false) }} />}
       {error && <div className="error-banner" role="alert"><span>{error}</span><button aria-label="关闭错误提示" onClick={() => setError(null)}><X /></button></div>}
     </div>
     {runtimeDiagnosticsOpen && <div className="runtime-diagnostics-backdrop" role="presentation" onClick={closeRuntimeDiagnostics}>

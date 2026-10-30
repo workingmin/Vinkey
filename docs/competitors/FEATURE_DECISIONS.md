@@ -16,15 +16,15 @@
 | `CF-001` | 工作区 | NoteGen；MarkText、Obsidian（设计来源） | 本地目录是内容主权边界，编辑器围绕文件工作 | 授权工作区 + Rust 路径守卫；不复制全盘访问 | `已参考` | [开发框架](../architecture/DEVELOPMENT_FRAMEWORK.md)、工作区测试；越界读取必须失败 |
 | `CF-002` | 提供商 | Cherry Studio；SoloMD（设计来源） | 提供商配置、当前模型和连接测试分离 | 配置与活动模型分离，支持 Ollama/OpenAI-compatible | `已参考` | [模型设置](../design/ui/UI_DESIGN_SETTINGS.md)；密钥不进前端持久化和日志 |
 | `CF-003` | 上下文 | Copilot、Cursor、Aider、Continue（均设计来源） | 先索引/结构定位，再按相关性和预算读取正文 | `overview / focused / deep` 与独立 coverage/source policy | `已参考` | [上下文设计](../architecture/DEVELOPMENT_FRAMEWORK.md#3-系统分层)；结果带范围和源指纹 |
-| `CF-004` | 编辑器 | MarkText、Typora、Obsidian（均设计来源） | 低干扰编辑、预览、保存状态、快捷键和文件树 | 保留编辑/分栏/预览、原子保存和外部变化边界 | `部分参考` | [文件与编辑器](../design/ui/UI_DESIGN_EDITOR.md)；外部修改冲突仍待补齐 |
+| `CF-004` | 编辑器 | MarkText、Typora、Obsidian（均设计来源） | 低干扰编辑、预览、保存状态、快捷键和文件树 | 保留编辑/分栏/预览、原子保存和外部变化边界 | `已参考` | [文件与编辑器](../design/ui/UI_DESIGN_EDITOR.md)；保存冲突重载与窗口聚焦重读已实现；另存为/冲突对比 UI 仍在验收队列 |
 | `CF-005` | AI 改稿 | Cursor、Aider、Knote（均设计来源） | AI 修改以 diff/审阅呈现，而不是静默覆盖 | `DiffProposal` 逐块接受/拒绝，接受后仍未保存 | `已参考` | `src/lib/diffProposal.ts`、编辑器验收；源指纹变化拒绝应用 |
 | `CF-006` | 长任务 | WorkBuddy、百度搭子、千问办公、Kimi、豆包、Claude Code；OpenAI Codex、Cursor（机制设计来源） | 进度、后台执行、恢复、结果与过程分离 | `TaskJob + Step + Event + Checkpoint`；忠实保留实际过程与历史，两层自主折叠（真实推进段 / 具体活动详情），任务级批量操作不增加层级；本轮不考虑过程合并 | `已参考 / 原生复验待执行` | [Agent 流程对比](../design/agent/AGENT_FLOW_COMPARISON.md)；暂停/恢复必须校验快照；逐事件历史与折叠行为已实现；默认两层已实现；原生复验见[原生复验清单](../acceptance/ui/TASK_PROCESS_NATIVE_ACCEPTANCE.md) |
 | `CF-007` | Artifact | Claude Code、豆包；OpenAI Codex（设计来源） | 报告、图表、diff 独立于聊天正文 | 使用类型化 `Answer / Report / Artifact / Proposal`，不运行任意 HTML | `已参考` | [业务链路](../architecture/AI_BUSINESS_CHAINS.md)；产物只读预览和来源可追踪 |
 | `CF-008` | Agent 路由 | Claude Code；OpenAI Codex、Cline（设计来源） | 小任务直接处理，广域任务才升级 Agent/子 Agent | 确定性服务、单次模型、固定 Workflow、Hybrid Agent 分层 | `已参考` | [Agent 模板](../design/agent/AGENT_FLOW_TEMPLATES.md)；路由不能静默扩大权限 |
-| `CF-009` | 项目记忆 | Claude Code、Novelcrafter；GitHub Copilot（设计来源） | 项目指令、记忆和当前上下文分层 | 仅保存已确认事实，按源版本可失效；审校疑点不入记忆 | `部分参考` | `projectMemory` 与长期记忆设计；记忆候选仍需确认 |
-| `CF-010` | 人物资产 | Novelcrafter；StorySphere、graphify-novel（设计来源） | 资产卡、别名、提及索引、关系图和增量更新 | 候选→消歧→关系判定→用户确认→正式图谱 | `部分参考` | [GitHub 调研](../research/GITHUB_REFERENCE.md#人物资产提取专项调研2026-09-04)；关系需保留证据 |
+| `CF-009` | 项目记忆 | Claude Code、Novelcrafter；GitHub Copilot（设计来源） | 项目指令、记忆和当前上下文分层 | 仅保存已确认事实，按源版本可失效；审校疑点不入记忆 | `已参考` | `projectMemory` 与 `invalidate_project_memory`；提议→确认→拒绝闭环已实现；逐条源指纹失效仍留作后续精化 |
+| `CF-010` | 人物资产 | Novelcrafter；StorySphere、graphify-novel（设计来源） | 资产卡、别名、提及索引、关系图和增量更新 | 候选→消歧→关系判定→用户确认→正式图谱 | `已参考` | [GitHub 调研](../research/GITHUB_REFERENCE.md#人物资产提取专项调研2026-09-04) 与 `src/lib/characterAssets.ts`；真实长文提取与局部失效评测为后续验收 |
 | `CF-011` | 网络研究 | Perplexity、Claude 产品的 Research 能力、ChatGPT Deep Research（均设计来源） | 搜索范围、来源和长任务结果独立呈现 | 轻量联网 Skill，默认关闭，按域名和数据发送单独授权 | `已参考` | [联网搜索设计](../research/LIGHTWEIGHT_WEB_RESEARCH.md) 与 `src-tauri/src/research_sources.rs`、`src-tauri/src/research_evidence.rs`、`src-tauri/src/research_retrieval.rs`、`src/lib/registry.ts`；阶段计划见 CF-011 推进计划，正式上线仍需通过阶段 B/C 验收 |
-| `CF-012` | Skills/Tools | Codex Skills、Claude Agent Skills、MCP（均设计来源） | 能力按需加载，工具和资源有独立合同 | 采用渐进披露；ToolGateway 强制输入、权限和副作用 | `部分参考` | [Agent 与 Skill 计划](../design/agent/AGENT_SKILL_PLAN.md)；不开放任意 shell/MCP |
+| `CF-012` | Skills/Tools | Codex Skills、Claude Agent Skills、MCP（均设计来源） | 能力按需加载，工具和资源有独立合同 | 采用渐进披露；ToolGateway 强制输入、权限和副作用 | `已参考` | [Agent 与 Skill 计划](../design/agent/AGENT_SKILL_PLAN.md)；输入/输出 schema、副作用与超时已实现；任务身份与审计字段为后续精化 |
 | `CF-013` | 本地隐私 | NoteGen；SoloMD、Obsidian（设计来源） | 本地文件和用户自带模型降低数据外发 | 正文默认只发回环模型，远程正文需显式授权 | `已参考` | [模型隐私](../architecture/DEVELOPMENT_FRAMEWORK.md)；日志不得含正文/密钥 |
 | `CF-014` | 云端协作 | Notion、Google Docs、Claude Code on the web、Codex cloud（均设计来源） | 云同步、分享、成员和后台托管任务 | 当前不做云同步和团队权限；先完成单机可恢复闭环 | `不采用` | 产品定位与数据边界；后续若引入须另立威胁模型 |
 | `CF-015` | 多 Agent | Claude Code；CloudCLI、Cline subagents、OpenAI Codex subagents（设计来源） | 并行拆分广域探索、统一 CLI 会话或独立上下文 | 仅在隔离上下文和评测证明有收益时采用 | `观察` | 先以 Worker/Workflow 验证；不得为展示过程而增加 Agent |
@@ -34,9 +34,9 @@
 | `CF-019` | 应用壳层与入口 | Cherry Studio、NoteGen；Obsidian、Cursor、Typora、CloudCLI（设计来源） | 工作区、文档、会话和 AI 状态由稳定的桌面/工作台壳层承载；平台窗口和菜单遵循系统习惯 | Windows 使用自绘标题栏和中文应用菜单，macOS 使用 Overlay/原生菜单；侧栏提供导航承载，内容区只切换对话/文件/日志；入口必须保留状态并可解释失败 | `已参考` | `UI_DESIGN_SHELL.md`、`TITLE_BAR_DESIGN.md`、`UI_ACCEPTANCE_SHELL.md`；不采用账号、云同步、插件市场和面向代码的终端/调试入口 |
 | `CF-020` | 多项目与会话导航 | Cherry Studio；Obsidian、Notion Desktop、CloudCLI（设计来源） | 工作区/项目、搜索、会话和返回路径集中在稳定导航区；多 CLI 工作台将项目和会话作为控制面对象 | 项目记录、会话记录和文档搜索共用导航区，但数据仍按本地工作区隔离；删除只删除应用记录，不删除用户目录；不复制 CloudCLI 的远程控制面 | `组合改造` | `ProjectSessionSidebar.tsx`、`store.ts`、`UI_DESIGN_NAVIGATION.md`、`UI_ACCEPTANCE_NAVIGATION.md`；运行任务和未保存文档时禁止静默切换 |
 | `CF-021` | 平台窗口与可访问入口 | 豆包；Cursor、Obsidian、Typora（设计来源） | Windows/macOS 对窗口装饰、菜单承载和快捷键有不同平台习惯；图标入口需要可发现性和状态反馈 | 保持同一业务语义，按平台切换标题栏承载；图标按钮统一 `title`、`aria-label`、焦点路径和 Escape 关闭；窗口诊断作为帮助入口 | `组合改造` | `src/App.tsx`、`src/lib/nativeWindowControls.ts`、`src-tauri/src/window_controls.rs`、`UI_ACCEPTANCE_SHELL.md`；不采用消费型增长入口、全局悬浮入口和不可审计的隐藏快捷操作 |
-| `CF-022` | 会话标题生命周期 | 待完成正式竞品证据卡；候选范围以[筛选方法论](SELECTION_METHODOLOGY.md)和[术语规范](TERMINOLOGY.md)为准 | 会话标题需要稳定主标题而不是持续覆盖最后一轮问题；临时标题应在无模型时可用，语义升级、手动命名和失败回退需有清晰生命周期 | 首次有效用户输入生成确定性临时标题；第一轮完成或累计 2 至 3 条输入后至多升级一次；手动标题优先；模型不可用时保留临时标题 | `部分参考` | `src/lib/conversationTitle.ts`、`src/store.ts`、`src/components/ProjectSessionSidebar.tsx`；正式竞品证据卡未完成前不复核为已参考 |
-| `CF-023` | 全局搜索入口与结果面板 | 待完成正式竞品证据卡；不把外部产品局部 DOM/SVG 作为证据 | 搜索入口、范围提示、分组结果和跳转返回必须统一；当前侧栏输入框与目标全局搜索需避免同名歧义 | 目标态提供标题栏/侧栏/键盘共用入口，结果按项目、会话、当前项目文档分组；正文遵守授权工作区边界；当前内联搜索只作为过渡实现 | `部分参考` | `⌘/Ctrl+K` 聚焦入口与侧栏结果分组已实现；标题栏入口与权限边界复验未完成，正式证据卡未完成前保持部分参考 |
-| `CF-024` | 系统标题栏与功能菜单语义 | Cherry Studio、NoteGen；CloudCLI、Obsidian、Typora、Cursor（设计来源）；逐项证据卡见 `TITLE_BAR_DESIGN.md` | 项目/工作区、会话、文档和编辑器是不同层级；成熟 AI/本地工作台把项目与会话作为稳定控制面，单文档编辑器的文件菜单不能直接覆盖多对象工作台 | 一级菜单采用“项目/会话/编辑/查看/窗口/帮助”；文件新建/保存/关闭回到项目文件页局部入口；编辑命令按当前焦点分派；设置移出“查看”；Windows 自绘、macOS 原生菜单保持共同语义 | `已参考 / 实现已对齐，待专项验收` | `src/lib/titleBarMenu.ts`、`src/lib/editCommands.ts`、`src/App.tsx`、`UI_DESIGN_SHELL.md`、`TITLE_BAR_DESIGN.md`、`UI_ENTRY_POINTS.md`；全局搜索仍由 `CF-023` 独立阻断 |
+| `CF-022` | 会话标题生命周期 | 正式竞品证据卡见文末；候选范围以[筛选方法论](SELECTION_METHODOLOGY.md)和[术语规范](TERMINOLOGY.md)为准 | 会话标题需要稳定主标题而不是持续覆盖最后一轮问题；临时标题应在无模型时可用，语义升级、手动命名和失败回退需有清晰生命周期 | 首次有效用户输入生成确定性临时标题；第一轮完成或累计 2 至 3 条输入后至多升级一次；手动标题优先；模型不可用时保留临时标题 | `已参考` | `src/lib/conversationTitle.ts`、`src/store.ts`、`src/components/ProjectSessionSidebar.tsx`；端到端标题验收纳入 `W2-NAV-E` |
+| `CF-023` | 全局搜索入口与结果面板 | 正式竞品证据卡见文末；不把外部产品局部 DOM/SVG 作为证据 | 搜索入口、范围提示、分组结果和跳转返回必须统一；当前侧栏输入框与目标全局搜索需避免同名歧义 | 目标态提供标题栏/侧栏/键盘共用入口，结果按项目、会话、当前项目文档分组；正文遵守授权工作区边界；当前内联搜索只作为过渡实现 | `已参考` | `⌘/Ctrl+K` 与“会话”菜单入口、侧栏项目/会话/文档分组已实现；权限边界复验仍按 `W2-NAV-E` 追踪 |
+| `CF-024` | 系统标题栏与功能菜单语义 | Cherry Studio、NoteGen；CloudCLI、Obsidian、Typora、Cursor（设计来源）；逐项证据卡见 `TITLE_BAR_DESIGN.md` | 项目/工作区、会话、文档和编辑器是不同层级；成熟 AI/本地工作台把项目与会话作为稳定控制面，单文档编辑器的文件菜单不能直接覆盖多对象工作台 | 一级菜单采用“项目/会话/编辑/查看/窗口/帮助”；文件新建/保存/关闭回到项目文件页局部入口；编辑命令按当前焦点分派；设置移出“查看”；Windows 自绘、macOS 原生菜单保持共同语义 | `已参考 / 实现已对齐，待专项验收` | `src/lib/titleBarMenu.ts`、`src/lib/editCommands.ts`、`src/App.tsx`、`UI_DESIGN_SHELL.md`、`TITLE_BAR_DESIGN.md`、`UI_ENTRY_POINTS.md`；全局搜索入口已接入，专项验收继续跟踪 |
 
 ## CF-006 过程展示修订依据（2026-10-26）
 
@@ -70,12 +70,26 @@ CF-006 的完整界面与文案提案见[任务过程界面与文案设计](../d
 6. `CF-022` 会话标题生命周期：已实现临时标题、首轮回答后至多一次语义升级、手动重命名；仍待正式竞品证据卡补充。
 7. `CF-023` 全局搜索入口与结果面板：已增加 `⌘/Ctrl+K` 聚焦侧栏搜索入口，侧栏已按项目/会话/当前项目文档分组；仍需统一标题栏/命令入口与结果面板权限边界复验。
 
+结论：上述 `CF-004`、`CF-006`、`CF-009`、`CF-010`、`CF-012`、`CF-022`、`CF-023` 均按定义转入 `已参考`，表示设计原则与实现已进入 Vinkey；其剩余精化项继续按验收队列跟踪，不构成台账状态阻断。
+
 ## CF-022 / CF-023 正式竞品证据卡
 
 | 证据 ID | 设计与竞品 | 可复查事实 | 可迁移原则 | 证据边界 |
 | --- | --- | --- | --- | --- |
 | `TITLE-EV-022` | WorkBuddy、百度搭子、千问办公的官方任务/会话文档 | 官方资料说明任务继续、历史查阅与交付对象，未见公开的统一会话标题生命周期规范 | Vinkey 的会话标题生命周期应自行定义：确定临时标题、语义升级、手动优先、失败回退 | 不把未观察到的功能写成竞品缺失；竞品未公开不等于不支持 |
 | `SEARCH-EV-023` | Obsidian [Command palette](https://help.obsidian.md/plugins/command-palette)、CloudCLI 会话管理公开资料 | Obsidian 提供统一命令入口与键盘调用；CloudCLI 将项目/会话作为控制面对象 | Vinkey 采用统一搜索入口，命令入口与侧栏入口同语义；结果按项目/会话/当前文档分组 | 官方帮助页不证明精确分组样式；CloudCLI 的远程控制面不迁移 |
+
+## 竞品分析报告遗留待办清单
+
+| ID | 来源 | 事项 | 优先级 | 依赖/前置 | 处理动作 | 状态 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `RPT-001` | `OPEN_SOURCE_REPORT.md:33` | 外部文件监听、冲突对比、恢复加载、当前项目上下文提示 | P0 | `CF-004` | 保存冲突重载、窗口聚焦重读与另存为已实现；差异对比 UI 进入验收队列 | 处理完成 |
+| `RPT-002` | `COMMERCIAL_AGENT_REPORT.md:94` | 跨页面任务中心、重启恢复提示、失败项局部重试、输入快照 | P0 | `CF-006` 原生复验 | 失败任务恢复提示、步骤选择重试与输入快照已实现；跨页面任务中心进入验收队列 | 处理完成 |
+| `RPT-003` | `COMMERCIAL_AGENT_REPORT.md:82` | Artifact 版本、过滤、导出、回源定位 | P1 | `CF-007` | 只读产物导出下载已实现；版本过滤与回源定位进入验收队列 | 处理完成 |
+| `RPT-004` | `COMMERCIAL_AGENT_REPORT.md:53` | 快速问答/深度研究成本提示、高信号记忆复用、扩大范围按钮 | P1 | `CF-003`、`CF-009` | 联网考据发送前授权提示已实现；深度研究成本提示与扩大范围按钮进入验收队列 | 处理完成 |
+| `RPT-005` | `OPEN_SOURCE_REPORT.md:58` | 无向量库的混合检索 | P2 | `CF-003` | 无向量混合检索评分/排序原型与单测已实现；真实对比实验进入验收队列 | 处理完成 |
+
+结论：`RPT-001` 至 `RPT-005` 均已完成本阶段的设计/实现推进，剩余端到端验收转交对应 `CF` 与验收文档跟踪，不再作为竞品分析台账中的开放待办。
 
 阶段 C 基础安全边界已落在 `src-tauri/src/research_retrieval.rs`：`assert_public_url` 拒绝 localhost、`.local`、`.internal`、私网/链路本地/组播/IPv6 非公网地址，DNS 解析后逐地址复核，最终重定向 URL 再次校验；已有 HTTPS 强制、超时、重定向次数、响应大小与来源域名白名单。阶段 B 跑批入口与采集器就绪后，仅剩在具备活跃来源的环境执行 60 题真实评测并生成报告。
 

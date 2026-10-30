@@ -88,6 +88,7 @@ export function ConversationTaskControls({ conversationId }: { conversationId: s
 
   return <section className="conversation-task-controls" aria-label="当前会话任务控制">
     {error && <p role="alert">{error}</p>}
+    {jobs.some((job) => job.status === 'failed') && <p className="conversation-task-snapshot">本会话存在失败任务：可直接选择步骤重试；任务 ID、步骤检查点、源指纹与执行快照已持久化，重试不会覆盖尚未保存的草稿。</p>}
     {jobs.map((job) => {
       const selectedStep = selectedSteps[job.taskId]
         ?? [...job.steps].reverse().find((step) => step.status === 'failed')?.id
@@ -104,6 +105,7 @@ export function ConversationTaskControls({ conversationId }: { conversationId: s
           {job.status === 'failed' && <>{job.steps.length > 0 && <><label htmlFor={`conversation-retry-${job.taskId}`}>从此步骤重新执行</label><select id={`conversation-retry-${job.taskId}`} value={selectedStep} disabled={job.failure?.retryable === false || busyJobId !== null} onChange={(event) => setSelectedSteps((current) => ({ ...current, [job.taskId]: event.target.value }))}>{job.steps.map((step) => <option key={step.id} value={step.id}>{stepLabel(step.id)}</option>)}</select></>}<button className="task-command" title={!isDesktop() ? '步骤重试仅在桌面应用中可用' : job.failure?.retryable === false ? '需重新发起任务' : '重试任务'} disabled={!isDesktop() || job.failure?.retryable === false || busyJobId !== null} onClick={() => void retry(job)}><RotateCcw />重试</button></>}
         </div>
         {job.status === 'failed' && <p className="conversation-task-error">{job.failure?.message || job.error || '任务执行失败'}{job.failure?.retryable === false ? ' · 需重新发起任务' : ''}</p>}
+        {job.status === 'failed' && <p className="conversation-task-snapshot">输入快照：{job.displayTitle ?? '长文本分析任务'} · 模型 {job.modelNameSnapshot ?? '未知'} · 工作区 {job.workspaceNameSnapshot ?? job.workspaceId} · 源指纹 {Object.keys(job.sourceFingerprints).length} 个</p>}
       </div>
     })}
   </section>

@@ -1,9 +1,10 @@
-import { Check, ChevronDown, ChevronRight, Clock, Copy, FileText, Pause, ShieldAlert, X } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, Clock, Copy, Download, FileText, Pause, ShieldAlert, X } from 'lucide-react'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { readAnalysisArtifact } from '../lib/desktop'
 import { processSections, workerStageLabel } from '../lib/chatActivity'
 import type { ChatActivity, ChatRunResult, ChatRunStatus } from '../types'
 import { MarkdownContent } from './MarkdownContent'
+import { downloadBytes } from './FilePreview'
 
 const PAGE_SIZE = 50
 const workerStatusLabels = { running: '执行中', paused: '已暂停', completed: '已完成', failed: '失败', cancelled: '已取消' }
@@ -197,7 +198,10 @@ export function MessageActivity({ items, active = false, taskDescription, result
       </div>
       <footer><span>只读产物</span><button type="button" disabled={preview === null} title="复制产物" aria-label="复制产物" onClick={() => {
         void navigator.clipboard.writeText(preview ?? '').then(() => setCopied(true)).catch(() => setError('复制失败'))
-      }}>{copied ? <Check /> : <Copy />}</button></footer>
+      }}>{copied ? <Check /> : <Copy />}</button><button type="button" disabled={preview === null} title="导出产物" aria-label="导出产物" onClick={() => {
+        if (preview === null) return
+        downloadBytes(new TextEncoder().encode(preview), selected.name, 'text/plain;charset=utf-8')
+      }}><Download /></button></footer>
     </dialog>}
   </div>
 }
