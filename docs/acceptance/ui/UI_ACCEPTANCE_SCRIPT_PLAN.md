@@ -50,7 +50,7 @@
 | `W2-NAV-E` | `D-NAV` 真实导航 | `W0-NAV-F`、`W2-CHAT-E` | `UI-ACC-NAV-E2E-001` | 会话状态和持久化测试待补 | 真实多项目、多轮会话、标题策略、目标全局搜索跳转 | 标题前后、刷新、搜索分组和 Escape 返回 | 阻断：`CF-022`/`CF-023` 与目标实现待完成 |
 | `W3-CONTEXT-E` | `D-CONTEXT` 上下文分析 | W0 编辑器、W1 模型、W2 对话 | `UI-ACC-CONTEXT-001` | 召回、权限、预算和来源收据测试 | 固定 fixture + 真实模型调用 | 选择文件、权限、来源和超限 | 待编写，依赖 W1/W2 |
 | `W3-REVISION-E` | `D-REVISION` AI 改稿 | W0 编辑器、W2 对话 | `UI-ACC-EDITOR-002` | 提案解析、接受/拒绝和保存测试 | 真实模型改稿、冲突和提案完整性 | DiffProposal、接受/拒绝、保存 | 待编写，不与基础编辑器混写 |
-| `W4-TASK-E` | `D-TASK-LOG` 长任务/日志 | W2 对话；分析还需 W3 上下文 | `UI-ACC-LOGS-001` | Worker/TaskJob、状态转换和恢复测试 | 长任务、暂停/失败/恢复和产物完整性 | 进度、失败、重试、产物查看 | 待编写，fixture UI 可提前 |
+| `W4-TASK-E` | `D-TASK-LOG` 长任务/日志 | W2 对话；分析还需 W3 上下文 | `UI-ACC-LOGS-001` | Worker/TaskJob、事件/段标签/终态/产物核查（`TASK-CHK-*`）与 `task-process-acceptance-cli.test.ts` 合同测试 | `scripts/task-process/`：只读核查 `.vinkey/analysis/jobs/<jobId>/` 产物与 SQLite，`--dump-manual` 生成人工回填模板 | 暂停/恢复、停止确认、折叠/自动跟随、产物预览、重启恢复、源变化拒绝、失败重试、窄栏/键盘（`TASK-UI-*`） | 已有（待本地执行） |
 | `W4-NAV-R` | `D-NAV` 跨域回归 | W2 导航、W3 改稿、W4 任务 | `UI-ACC-NAV-REGRESSION-001` | 过期响应、运行锁定和草稿保护测试待补 | 运行中任务、生成中会话、未保存文档下切换/删除 | 阻断、确认、取消、保存和恢复 | 待编写，等待依赖域 |
 | `W4-RESP-R` | `Q-RESP` 全局回归 | 各页面完成 | `UI-ACC-RESPONSIVE-REGRESSION-001` | 跨页面渲染/可访问性回归待补 | Windows/macOS 15+ 尺寸、DPI、菜单、主题和焦点复核 | 全页面无重叠、状态不丢失 | 待编写，最后执行 |
 

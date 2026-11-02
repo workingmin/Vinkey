@@ -18,6 +18,8 @@
 | [项目与会话导航回填模板](ui/UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md) | 导航本地执行记录 |
 | [模型设置专项验收](ui/UI_ACCEPTANCE_SETTINGS.md) | 设置与真实模型服务验收报告 |
 | [模型设置回填模板](ui/UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md) | 设置本地执行记录 |
+| [长任务/日志中心专项验收](ui/UI_ACCEPTANCE_TASK_PROCESS.md) | 日志/长任务真实端到端验收报告模板 |
+| [长任务/日志中心回填模板](ui/UI_ACCEPTANCE_TASK_PROCESS_RUN_TEMPLATE.md) | 长任务本地执行记录 |
 
 ## IntentRouter 验收
 

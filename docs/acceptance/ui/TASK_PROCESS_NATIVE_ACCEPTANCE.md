@@ -2,6 +2,7 @@
 
 - 状态：待执行。前端回归与 Playwright 已通过；本清单用于补齐 CF-006 的原生端复验。
 - 适用对象：Windows/macOS 桌面端，Tauri 构建依赖完整的环境。
+- 归属门槛：`W4-TASK-E` / `D-TASK-LOG`。`NT-001..NT-005` 已并入[长任务/日志中心专项验收](./UI_ACCEPTANCE_TASK_PROCESS.md)的人工 UI 用例（`TASK-UI-001/003/006/008` 等），由 `UI-ACC-LOGS-001` 脚本采集证据并回填[本地回填模板](./UI_ACCEPTANCE_TASK_PROCESS_RUN_TEMPLATE.md)。
 
 ## 前置条件
 
@@ -19,4 +20,4 @@
 | NT-004 | 两层折叠保持 | 第一层批量操作不重置第二层详情选择；公开响应位于折叠外 |
 | NT-005 | 重启恢复历史 | 重启应用并重开会话，原任务事件、产物与终态完整可见 |
 
-以上复验通过后，CF-006 原生复验风险可关闭；否则继续保留“部分参考”状态。
+以上复验通过后，CF-006 原生复验风险可关闭；否则继续保留“部分参考”状态。执行方式：使用 `npm run test:task-process-acceptance -- --dump-manual <man.json>` 生成人工观察模板，在桌面完成对应用例后以 `--manual <man.json>` 合并结果。

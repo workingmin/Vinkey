@@ -55,7 +55,7 @@
 | `W2-NAV-E` | `D-NAV` | 真实端到端 | `W0-NAV-F`、`W2-CHAT-E` | 多项目多会话、标题生命周期、刷新持久化、目标全局搜索和跳转 | `UI_ACCEPTANCE_NAVIGATION.md` |
 | `W3-CONTEXT-E` | `D-CONTEXT` | 真实端到端 | `W0-EDITOR-F`、`W1-MODEL-E`、`W2-CHAT-E` | 上下文范围、召回、预算、来源收据、权限和分析结果 | 上下文专项报告（待建立） |
 | `W3-REVISION-E` | `D-REVISION` | 真实端到端 | `W0-EDITOR-F`、`W2-CHAT-E` | 真实模型改稿、DiffProposal、接受/拒绝、冲突和保存 | `UI_ACCEPTANCE_EDITOR.md` |
-| `W4-TASK-E` | `D-TASK-LOG` | 真实端到端 | `W2-CHAT-E`；分析任务还需 `W3-CONTEXT-E` | 长任务进度、暂停/失败/恢复、步骤重试、产物和执行快照 | 日志/长任务专项报告（待建立） |
+| `W4-TASK-E` | `D-TASK-LOG` | 真实端到端 | `W2-CHAT-E`；分析任务还需 `W3-CONTEXT-E` | 长任务进度、暂停/失败/恢复、步骤重试、产物和执行快照 | [长任务/日志中心专项验收](./UI_ACCEPTANCE_TASK_PROCESS.md) |
 | `W4-NAV-R` | `D-NAV` | 跨域回归 | `W2-NAV-E`、`W3-REVISION-E`、`W4-TASK-E` | 运行中任务、生成中会话、未保存文档和过期搜索响应下的切换/删除保护 | `UI_ACCEPTANCE_NAVIGATION.md` |
 | `W4-RESP-R` | `Q-RESP` | 跨域回归 | 各页面已形成实现 | 全页面视觉、主题、焦点、DPI、平台菜单和状态保持回归 | 响应式/跨域回归记录 |
 
@@ -120,4 +120,6 @@
 - [项目与会话导航验收](./UI_ACCEPTANCE_NAVIGATION.md)
 - [标题栏菜单专项验收](./UI_ACCEPTANCE_TITLE_BAR_PLAN.md)
 - [模型设置验收](./UI_ACCEPTANCE_SETTINGS.md)
+- [长任务/日志中心验收](./UI_ACCEPTANCE_TASK_PROCESS.md)
+- [长任务/日志中心回填模板](./UI_ACCEPTANCE_TASK_PROCESS_RUN_TEMPLATE.md)
 - [验收脚本设计规范](./UI_ACCEPTANCE_SCRIPT_SPEC.md)

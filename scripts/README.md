@@ -7,12 +7,15 @@
 | `build/` | macOS、Windows 桌面应用构建与打包 |
 | `fixtures/` | 生成或更新固定测试素材；生成结果写入 `tests/fixtures/` |
 | `intent-router/` | IntentRouter 本地模型验收实现及 macOS/Linux、Windows 入口 |
+| `task-process/` | 长任务/日志中心（`W4-TASK-E`/`UI-ACC-LOGS-001`）只读核查与人工观察采集：`.vinkey/analysis/jobs/<jobId>/` 产物、SQLite 模型配置、`--dump-manual`/`--manual` 回填 |
 | `ui-shell/` | 应用壳层 Playwright 浏览器验收、截图和结果 JSON |
 
 推荐从仓库根目录通过 `package.json` 中的 npm 命令执行脚本，例如：
 
 ```bash
 npm run test:intent-router-acceptance -- --list-profiles
+npm run test:task-process-acceptance -- --dump-manual ./manual.json
+npm run test:task-process-acceptance -- --workspace <ws> --db <db> --json
 npm run fixtures:chinese-fiction
 npm run package:mac -- --no-install
 npm run test:ui-shell-acceptance -- --output /path/to/shell-evidence

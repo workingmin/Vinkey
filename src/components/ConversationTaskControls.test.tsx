@@ -46,7 +46,7 @@ describe('ConversationTaskControls', () => {
 
   it('confirms a stop with CP-49 copy before cancelling', async () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
-    const cancelTaskJob = vi.spyOn(desktop, 'cancelTaskJob').mockResolvedValue(undefined)
+    const cancelTaskJob = vi.spyOn(desktop, 'cancelTaskJob').mockResolvedValue(job())
     vi.spyOn(desktop, 'listTaskJobs').mockResolvedValue([])
     renderControls([job()])
     await screen.findByRole('button', { name: '停止任务' })
@@ -58,7 +58,7 @@ describe('ConversationTaskControls', () => {
   it('releases the action lock and reports the error when a control fails', async () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
     const cancelTaskJob = vi.spyOn(desktop, 'cancelTaskJob').mockRejectedValueOnce(new Error('后端拒绝'))
-    vi.spyOn(desktop, 'cancelTaskJob').mockResolvedValue(undefined)
+    vi.spyOn(desktop, 'cancelTaskJob').mockResolvedValue(job())
     renderControls()
     const stop = await screen.findByRole('button', { name: '停止任务' })
     fireEvent.click(stop)
