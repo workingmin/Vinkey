@@ -27,14 +27,14 @@ Vinkey 是以项目、会话和本地文档为边界的 AI 创作工作台。全
 
 ### 2.1 逐项证据卡
 
-| 证据 ID | 正式竞品与公开入口 | 可复查事实 | 对 Vinkey 的可迁移原则 | 证据边界 |
+| 证据 ID | 公开资料入口（正式竞品/设计来源） | 可复查事实 | 对 Vinkey 的可迁移原则 | 证据边界 |
 | --- | --- | --- | --- | --- |
-| `TB-EV-001` | [CloudCLI](https://github.com/siteboon/claudecodeui) README | 官方说明同时覆盖 projects、sessions、chat 和 session management，并强调从现有项目/会话继续工作 | 项目与会话是工作台控制面对象，应有独立、稳定的入口 | CloudCLI 是多 Agent CLI 工作台；不证明 Vinkey 应采用远程控制、插件或云端能力 |
+| `TB-EV-001` | [CloudCLI](https://github.com/siteboon/claudecodeui) README（设计来源） | 官方说明同时覆盖 projects、sessions、chat 和 session management，并强调从现有项目/会话继续工作 | 项目与会话是工作台控制面对象，应有独立、稳定的入口 | CloudCLI 是多 Agent CLI 工作台；不证明 Vinkey 应采用远程控制、插件或云端能力 |
 | `TB-EV-002` | [Cherry Studio](https://github.com/CherryHQ/cherry-studio) README | 官方定位包含 AI Assistants、Conversations 和 Topic Management，并把模型管理与对话组织分层 | 会话/主题不应被埋在通用文件菜单；模型设置与会话操作应分离 | 不复制多提供商、知识库和账号协作入口 |
 | `TB-EV-003` | [NoteGen](https://github.com/codexu/note-gen) README | 本地 workspace 保存普通 Markdown 文件，同时提供 AI conversation、搜索和组织能力 | 项目/工作区是稳定的数据边界，文件是项目内内容能力，AI 对话是并列工作面 | 不据此引入 NoteGen 的画布、插件或服务商体系 |
-| `TB-EV-004` | [Obsidian vault](https://help.obsidian.md/vault)、[Command palette](https://help.obsidian.md/plugins/command-palette) | Vault 是本地内容边界；命令面板把跨页面命令集中管理，命令不等同于某一篇文档 | 项目边界、命令入口和内容编辑应分层；低频命令可由命令面板/快捷键承载 | 官方帮助页不作为精确菜单顺序证据；不复制插件市场和知识图谱 |
-| `TB-EV-005` | [Typora Shortcut Keys](https://support.typora.io/Shortcut-Keys/) | 官方快捷键文档按 File、Edit、Paragraph、Format、View 分组，并包含 New/Open/Save/Close 等单文档操作 | 传统“文件”菜单适合单文档优先编辑器，可作为 Vinkey 文档局部工具栏和快捷键的反向参照 | Typora 的产品对象是单文档；不能直接证明 Vinkey 需要全局新建/保存/关闭文档菜单 |
-| `TB-EV-006` | [Cursor keyboard configuration](https://docs.cursor.com/configuration/kbd) | 官方文档把项目理解、Agent、编辑器和命令快捷键作为同一工作台中的不同操作面 | AI 工作台需要按当前上下文分派命令，代码编辑器命令不能覆盖全部应用状态 | Cursor 是开发者工作台；终端、调试、Git 等菜单不进入 Vinkey |
+| `TB-EV-004` | [Obsidian vault](https://help.obsidian.md/vault)、[Command palette](https://help.obsidian.md/plugins/command-palette)（设计来源） | Vault 是本地内容边界；命令面板把跨页面命令集中管理，命令不等同于某一篇文档 | 项目边界、命令入口和内容编辑应分层；低频命令可由命令面板/快捷键承载 | 官方帮助页不作为精确菜单顺序证据；不复制插件市场和知识图谱 |
+| `TB-EV-005` | [Typora Shortcut Keys](https://support.typora.io/Shortcut-Keys/)（设计来源） | 官方快捷键文档按 File、Edit、Paragraph、Format、View 分组，并包含 New/Open/Save/Close 等单文档操作 | 传统“文件”菜单适合单文档优先编辑器，可作为 Vinkey 文档局部工具栏和快捷键的反向参照 | Typora 的产品对象是单文档；不能直接证明 Vinkey 需要全局新建/保存/关闭文档菜单 |
+| `TB-EV-006` | [Cursor keyboard configuration](https://docs.cursor.com/configuration/kbd)（设计来源） | 官方文档把项目理解、Agent、编辑器和命令快捷键作为同一工作台中的不同操作面 | AI 工作台需要按当前上下文分派命令，代码编辑器命令不能覆盖全部应用状态 | Cursor 是开发者工作台；终端、调试、Git 等菜单不进入 Vinkey |
 
 ### 2.2 证据到决策映射
 

@@ -51,9 +51,9 @@
 
 | 设计事项 | 证据性质 | Vinkey 决策 | 追踪 |
 | --- | --- | --- | --- |
-| 本地工作区与 AI/文档共存壳层 | Obsidian、Cursor、Cherry Studio、NoteGen、Typora 等正式名录产品的公开资料 | 左侧稳定导航容器，右侧统一内容工作面；不引入账号、云同步和通用 IDE 入口 | `CF-019`，已参考/组合改造 |
-| 项目、会话与文件边界 | CloudCLI、Cherry Studio、NoteGen、Obsidian、Typora；逐项证据见 [TITLE_BAR_DESIGN.md](./TITLE_BAR_DESIGN.md#21-逐项证据卡) | 全局菜单表达项目和会话；文件编辑回到项目文件页局部入口 | `CF-024`，已实现，待专项验收 |
-| 平台窗口与菜单习惯 | Cursor、Obsidian、Typora 等正式名录产品及 Tauri 平台约束 | Windows 自绘标题栏；macOS 原生菜单/Overlay；核心命令语义一致 | `CF-021`/`CF-024`，组合改造 |
+| 本地工作区与 AI/文档共存壳层 | Cherry Studio、NoteGen（正式名录）；Obsidian、Cursor、Typora（设计来源）公开资料 | 左侧稳定导航容器，右侧统一内容工作面；不引入账号、云同步和通用 IDE 入口 | `CF-019`，已参考/组合改造 |
+| 项目、会话与文件边界 | Cherry Studio、NoteGen（正式名录）；CloudCLI、Obsidian、Typora（设计来源）；逐项证据见 [TITLE_BAR_DESIGN.md](./TITLE_BAR_DESIGN.md#21-逐项证据卡) | 全局菜单表达项目和会话；文件编辑回到项目文件页局部入口 | `CF-024`，已实现，待专项验收 |
+| 平台窗口与菜单习惯 | Cursor、Obsidian、Typora（设计来源）公开资料及 Tauri 平台约束 | Windows 自绘标题栏；macOS 原生菜单/Overlay；核心命令语义一致 | `CF-021`/`CF-024`，组合改造 |
 | 项目/会话/搜索业务 | 详见导航域，不在本表重复作为壳层证据 | 侧栏只规定位置、宽度和折叠承载；业务行为由 `D-NAV` 决定 | `CF-020`，见 [UI_DESIGN_NAVIGATION.md](./UI_DESIGN_NAVIGATION.md) |
 | Vinkey 原创安全约束 | 无单一竞品可直接证明 | 诊断脱敏、焦点恢复、入口失败保留上下文；危险操作不由壳层静默放行 | `CF-019`/`CF-021` |
 

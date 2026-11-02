@@ -33,7 +33,7 @@
 | `CF-020` | 多项目与会话导航 | Cherry Studio；Obsidian、Notion Desktop、CloudCLI（设计来源） | 工作区/项目、搜索、会话和返回路径集中在稳定导航区 | 项目、会话、文档搜索共用导航区；删除只删除应用记录，不删除用户目录 | `组合改造` | `ProjectSessionSidebar.tsx`、`store.ts` |
 | `CF-021` | 平台窗口与可访问入口 | 豆包；Cursor、Obsidian、Typora（设计来源） | Windows/macOS 遵循各自窗口装饰、菜单与快捷键习惯 | 保持同一业务语义，按平台切换标题栏承载；图标按钮统一 `title`、`aria-label` 和焦点路径 | `组合改造` | `src/App.tsx`、`nativeWindowControls.ts` |
 | `CF-022` | 会话标题生命周期 | WorkBuddy、百度搭子、千问办公的公开会话/任务资料 | 官方资料未尽公开统一标题生命周期，Vinkey 自行定义 | 临时标题、首轮后至多升级一次、手动优先、失败回退 | `已参考` | `src/lib/conversationTitle.ts`、`src/store.ts`、`ProjectSessionSidebar.tsx` |
-| `CF-023` | 全局搜索入口与结果面板 | Obsidian Command palette、CloudCLI 会话管理公开资料 | 统一入口、键盘调用、结果分组 | `⌘/Ctrl+K` 聚焦、会话菜单入口、项目/会话/当前文档分组 | `已参考` | `src/App.tsx`、`ProjectSessionSidebar.tsx` |
+| `CF-023` | 全局搜索入口与结果面板 | Obsidian Command palette、CloudCLI 会话管理公开资料（均设计来源） | 统一入口、键盘调用、结果分组 | `⌘/Ctrl+K` 聚焦、会话菜单入口、项目/会话/当前文档分组 | `已参考` | `src/App.tsx`、`ProjectSessionSidebar.tsx` |
 | `CF-024` | 系统标题栏与功能菜单语义 | Cherry Studio、NoteGen；CloudCLI、Obsidian、Typora、Cursor（设计来源） | 项目/工作区、会话、文档和编辑器是不同层级 | 一级菜单采用“项目/会话/编辑/查看/窗口/帮助”；文件操作回到文档局部入口 | `已参考 / 实现已对齐，待专项验收` | `src/lib/titleBarMenu.ts`、`src/lib/editCommands.ts`、`src/App.tsx` |
 
 ## 当前验证重点
