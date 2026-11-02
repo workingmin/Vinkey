@@ -23,7 +23,7 @@ Vinkey 是以项目、会话和本地文档为边界的 AI 创作工作台。全
 
 ## 2. 竞品证据规则
 
-本文件只把[正式竞品名录](../../competitors/COMPETITOR_CATALOG.md)中的产品作为正式竞品证据。产品公开资料用于证明信息架构原则，不用于声称其当前版本一定存在某个精确中文菜单名称。证据采集日期为 `2026-09-24`；市场资格、维护和用户反馈仍以正式名录快照为准。
+本文件只把[正式竞品名录](../../competitors/COMPETITOR_CATALOG.md)中的产品作为正式竞品证据。产品公开资料用于证明信息架构原则，不用于声称其当前版本一定存在某个精确中文菜单名称。市场资格、维护和用户反馈以正式名录为准。
 
 ### 2.1 逐项证据卡
 
@@ -219,7 +219,7 @@ macOS 的“关于 Vinkey”放在 `Vinkey` 应用菜单，不在“帮助”重
 | `TB-GAP-005` | 已实现，待文档/截图回归 | 稳定 `data-menu-id`/`data-testid`、中文文案和截图前合同守卫 | 文档交叉引用检查、Playwright/macOS 原生结果 |
 | `TB-GAP-006` | 未实现，保持独立阻断 | 完成 `CF-023` 后再启用 `⌘/Ctrl+K` 与菜单项 | 分组结果、跳转、`Escape` 返回和焦点证据 |
 
-## 8. 逐项实现审计（2026-09-24）
+## 8. 逐项实现审计
 
 审计依据为 `src/App.tsx`、`src/lib/titleBarMenu.ts`、`src/lib/editCommands.ts`、`src/components/CodeEditor.tsx` 和 `src/components/ProjectSessionSidebar.tsx` 的当前工作树。状态只描述源码现状，不代表目标设计已经验收。
 
