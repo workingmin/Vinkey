@@ -1,7 +1,7 @@
 # Vinkey 当前版本 UI 功能域验收工作计划
 
 - 版本：`0.1.0`
-- 更新日期：`2026-09-28`
+- 更新日期：`2026-11-02`
 - 适用环境：Windows/macOS 15+ 桌面环境；真实模型验收使用本地 Ollama 或已批准的兼容服务
 - 统一生命周期：[UI_DESIGN.md](../../design/ui/UI_DESIGN.md) 的“统一验收生命周期”
 - 脚本规范：[UI_ACCEPTANCE_SCRIPT_SPEC.md](./UI_ACCEPTANCE_SCRIPT_SPEC.md)

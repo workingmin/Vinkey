@@ -5,7 +5,7 @@
 - 验收对象：[UI_DESIGN_NAVIGATION.md](../../design/ui/UI_DESIGN_NAVIGATION.md)、[UI_ENTRY_POINTS.md](../../design/ui/UI_ENTRY_POINTS.md)
 - 回填模板：[UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md](./UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md)
 - 报告状态：设计与用例已建立；本地脚本、目标平台证据和人工材料待补
-- 更新日期：`2026-09-23`
+- 更新日期：`2026-11-02`
 
 ## 1. 验收边界
 
