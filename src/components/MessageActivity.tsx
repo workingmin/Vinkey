@@ -74,6 +74,43 @@ export function MessageActivity({ items, active = false, taskDescription, result
     return () => { disposed = true }
   }, [selected])
 
+  const traceRef = useRef<HTMLDivElement>(null)
+  const [pinned, setPinned] = useState(true)
+  const [hasNewRecords, setHasNewRecords] = useState(false)
+  const seenCount = useRef(items.length)
+  const stopFollow = () => setPinned(false)
+  const followLatest = () => {
+    const container = traceRef.current?.closest<HTMLElement>('.message-stream') ?? null
+    if (container) container.scrollTop = container.scrollHeight
+  }
+  const goLatest = () => {
+    setPage(lastPage)
+    setPinned(true)
+    setHasNewRecords(false)
+    requestAnimationFrame(followLatest)
+  }
+  useEffect(() => {
+    const container = traceRef.current?.closest<HTMLElement>('.message-stream') ?? null
+    if (!container) return
+    const nearBottom = () => container.scrollHeight - container.scrollTop - container.clientHeight < 48
+    const onScroll = () => {
+      if (nearBottom()) { setPinned(true); setHasNewRecords(false) }
+      else setPinned(false)
+    }
+    container.addEventListener('scroll', onScroll, { passive: true })
+    return () => container.removeEventListener('scroll', onScroll)
+  }, [])
+  useEffect(() => {
+    const grew = items.length > seenCount.current
+    seenCount.current = items.length
+    if (!grew || !active) return
+    if (pinned && currentPage === lastPage) {
+      followLatest()
+      setHasNewRecords(false)
+    } else {
+      setHasNewRecords(true)
+    }
+  }, [items.length, pinned, currentPage, lastPage, active])
   if (!items.length && !active && !historyError) return null
   const open = (jobId: string, name: string) => setSelected({ jobId, name })
   const close = () => {
@@ -99,7 +136,7 @@ export function MessageActivity({ items, active = false, taskDescription, result
   const activityTitle = (item: ChatActivity) => item.message
     ?? (item.worker ? workerStageLabel(item.worker.stage) : item.segment?.label ?? '处理中')
 
-  return <div className="execution-trace">
+  return <div className="execution-trace" ref={traceRef}>
     {taskDescription?.trim() && <div className="execution-prompt" aria-label="任务描述">
       <span aria-hidden="true">&gt;</span><span>{taskDescription.trim()}</span>
     </div>}
@@ -120,12 +157,13 @@ export function MessageActivity({ items, active = false, taskDescription, result
     {historyError && <p className="execution-history-note" role="alert">{historyError}</p>}
     {result?.error && <p className="execution-history-note" role="alert">{result.error.message}</p>}
     {active && items.length === 0 && <p className="execution-history-note">暂无可展示的过程记录</p>}
+    {hasNewRecords && <button type="button" className="execution-new-records" onClick={goLatest}>有新记录 · 查看最新记录</button>}
     <div id={disclosureId}>
       {items.length > PAGE_SIZE && <nav className="execution-pagination" aria-label="过程记录分页">
-        <button type="button" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>上一页</button>
+        <button type="button" disabled={currentPage === 0} onClick={() => { stopFollow(); setPage(currentPage - 1) }}>上一页</button>
         <span>第 {offset + 1}–{Math.min(offset + PAGE_SIZE, items.length)} 条 / 共 {items.length} 条</span>
-        <button type="button" disabled={currentPage === lastPage} onClick={() => setPage(currentPage + 1)}>下一页</button>
-        <button type="button" disabled={currentPage === lastPage} onClick={() => setPage(lastPage)}>查看最新记录</button>
+        <button type="button" disabled={currentPage === lastPage} onClick={() => { stopFollow(); setPage(currentPage + 1) }}>下一页</button>
+        <button type="button" disabled={currentPage === lastPage} onClick={goLatest}>查看最新记录</button>
       </nav>}
       {sections.map((section) => {
         const visibleEntries = section.entries.filter(({ index }) => index >= offset && index < offset + PAGE_SIZE)
@@ -136,7 +174,7 @@ export function MessageActivity({ items, active = false, taskDescription, result
         return <section className="execution-segment" key={section.id} aria-label={section.label}>
           {visibleEntries.length > 0 && <>
             <button type="button" className="execution-toggle execution-segment-toggle" aria-expanded={sectionOpen} aria-controls={sectionId}
-              onClick={() => setSectionChoices((current) => ({ ...current, [section.id]: !sectionOpen }))}>
+              onClick={() => { stopFollow(); setSectionChoices((current) => ({ ...current, [section.id]: !sectionOpen })) }}>
               {sectionOpen ? <ChevronDown /> : <ChevronRight />}
               <strong>{section.label}</strong><small>{section.entries.length} 条记录</small>
               {section.endedAt !== undefined && section.startedAt !== undefined && <small>已完成 · 耗时 {Math.max(0, Math.round((section.endedAt - section.startedAt) / 1000))} 秒</small>}
@@ -154,7 +192,7 @@ export function MessageActivity({ items, active = false, taskDescription, result
                   return <li key={key}>
                     <div className="execution-step-disclosure" data-open={detailOpen}>
                       <button type="button" className="execution-step-summary" aria-expanded={detailOpen} aria-controls={detailId}
-                        onClick={() => setDetails((current) => ({ ...current, [key]: !detailOpen }))}>
+                        onClick={() => { stopFollow(); setDetails((current) => ({ ...current, [key]: !detailOpen })) }}>
                         {failed ? <ShieldAlert className="warning" /> : running ? <span className="execution-live-dot small" aria-hidden="true" /> : worker?.status === 'paused' ? <Pause /> : worker?.status === 'completed' ? <Check /> : <Clock />}
                         <span className="execution-step-title"><strong>{index + 1}. {activityTitle(item)}</strong>
                           {worker && <span>{historicalWorkerStatusLabels[worker.status]}{!running ? '（当时）' : ''}</span>}

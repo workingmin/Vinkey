@@ -355,6 +355,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 1px
 .execution-pagination button { color: var(--accent); background: transparent; border: 1px solid var(--border); border-radius: 4px; padding: 3px 7px; cursor: pointer; }
 .execution-pagination button:disabled { color: var(--text-muted); cursor: default; }
 .execution-history-note { color: var(--text-muted); margin: 6px 0; overflow-wrap: anywhere; }
+.execution-new-records { display: inline-flex; align-items: center; margin: 4px 0 8px; padding: 5px 12px; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--bg-raised); color: var(--accent); cursor: pointer; font-size: 11px; line-height: 1.4; }
+.execution-new-records:hover { border-color: var(--accent); }
 .execution-step-title :is(span, time) { font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .execution-step-content p { margin: 4px 0; color: var(--text-muted); overflow-wrap: anywhere; }
 .execution-step-content progress { display: block; width: min(240px, 100%); height: 3px; margin: 8px 0; accent-color: var(--accent); }

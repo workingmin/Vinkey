@@ -113,6 +113,35 @@ describe('two-level process reading', () => {
     expect(screen.getByText('暂无可展示的过程记录')).toBeVisible()
   })
 
+  it('follows the latest activity while pinned to the bottom', async () => {
+    const { container, rerender } = render(<div className="message-stream"><MessageActivity items={[activity()]} active /></div>)
+    const scroller = container.querySelector('.message-stream') as HTMLElement
+    Object.defineProperty(scroller, 'scrollHeight', { value: 800, configurable: true })
+    Object.defineProperty(scroller, 'clientHeight', { value: 400, configurable: true })
+    Object.defineProperty(scroller, 'scrollTop', { value: 400, writable: true, configurable: true })
+    fireEvent.scroll(scroller)
+    rerender(<div className="message-stream"><MessageActivity items={[activity(), activity(2)]} active /></div>)
+    await waitFor(() => expect(scroller.scrollTop).toBe(800))
+    expect(screen.queryByText('有新记录 · 查看最新记录')).toBeNull()
+  })
+
+  it('shows 有新记录 when the user left the bottom, and returns to the latest on demand', async () => {
+    const items = Array.from({ length: 60 }, (_, index) => activity(index + 1))
+    const { container, rerender } = render(<div className="message-stream"><MessageActivity items={items} active /></div>)
+    const scroller = container.querySelector('.message-stream') as HTMLElement
+    Object.defineProperty(scroller, 'scrollHeight', { value: 800, configurable: true })
+    Object.defineProperty(scroller, 'clientHeight', { value: 400, configurable: true })
+    Object.defineProperty(scroller, 'scrollTop', { value: 100, writable: true, configurable: true })
+    fireEvent.scroll(scroller)
+    rerender(<div className="message-stream"><MessageActivity items={[...items, activity(61)]} active /></div>)
+    const notice = await screen.findByText('有新记录 · 查看最新记录')
+    expect(notice).toBeVisible()
+    fireEvent.click(notice)
+    await waitFor(() => expect(scroller.scrollTop).toBe(800))
+    expect(screen.getByText('第 51–61 条 / 共 61 条')).toBeTruthy()
+    expect(screen.queryByText('有新记录 · 查看最新记录')).toBeNull()
+  })
+
   it('shows segment completion and duration only on an explicit end fact', () => {
     const closed = { ...activity(), segment: { id: 'segment-a', label: '人物分析', startedAt: 1_000, endedAt: 4_000 } }
     const { rerender } = render(<MessageActivity items={[closed]} active />)
