@@ -378,7 +378,7 @@ export async function prepareLongTextWorker(
 ): Promise<LongTextWorkerOutput> {
   if (!isDesktop()) {
     let sequence = 1
-    const segment = { id: crypto.randomUUID(), label: '阅读与分块', startedAt: Date.now() }
+    const segment = { id: crypto.randomUUID(), label: '阅读与分段', startedAt: Date.now() }
     await startTaskJob({
       taskId: input.jobId,
       taskType: 'long-text-analysis',
@@ -394,10 +394,10 @@ export async function prepareLongTextWorker(
       connectionNameSnapshot: input.connectionNameSnapshot,
     })
     const manifests: ChunkManifest[] = []
-    onEvent?.({ segment, sequence: sequence++, timestamp: Date.now(), jobId: input.jobId, stage: 'chunking', status: 'running', completed: 0, total: input.documents.length, message: '浏览器演示正在准备分块' })
+    onEvent?.({ segment, sequence: sequence++, timestamp: Date.now(), jobId: input.jobId, stage: 'chunking', status: 'running', completed: 0, total: input.documents.length, message: '浏览器演示正在准备分段' })
     for (const [index, document] of input.documents.entries()) {
       manifests.push(await chunkDocument(document.path, input.maxTokens, input.overlapTokens))
-      onEvent?.({ segment, sequence: sequence++, timestamp: Date.now(), jobId: input.jobId, stage: 'chunking', status: 'running', completed: index + 1, total: input.documents.length, message: `已完成分块：${document.path}` })
+      onEvent?.({ segment, sequence: sequence++, timestamp: Date.now(), jobId: input.jobId, stage: 'chunking', status: 'running', completed: index + 1, total: input.documents.length, message: `已完成分段：${document.path}` })
     }
     await updateTaskJob({
       taskId: input.jobId,
@@ -428,7 +428,7 @@ export async function prepareLongTextWorker(
       durationMs: 0,
       completedAt: Date.now(),
     }
-    onEvent?.({ segment, sequence, timestamp: Date.now(), jobId: input.jobId, stage: 'chunking', status: 'completed', completed: manifests.length, total: manifests.length, message: '浏览器演示分块完成' })
+    onEvent?.({ segment: { ...segment, endedAt: Date.now() }, sequence, timestamp: Date.now(), jobId: input.jobId, stage: 'chunking', status: 'completed', completed: manifests.length, total: manifests.length, message: '浏览器演示分段完成' })
     return output
   }
 

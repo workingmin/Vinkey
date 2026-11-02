@@ -1033,6 +1033,7 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
         }
         let firstResponse = ''
         useAppStore.getState().beginChatSegment(nextConversationId, '生成回答')
+        setChatRunStatus(nextConversationId, 'thinking', '等待模型响应…')
         await toolGateway.call('stream_chat', modelRequest, () => streamChat(modelRequest, (event) => {
           if (event.type === 'chunk') {
             firstResponse += event.content
@@ -1090,6 +1091,7 @@ function ChatPanel({ onToggleContext, onReviewDiff }: { onToggleContext: (path: 
             sourcePolicy: 'metadata-only' as const,
             messages: [...(recoveryContext ? [{ role: 'user' as const, content: recoveryContext }] : []), ...recoveryRecent.map(({ role, content }) => ({ role, content }))],
           }
+          setChatRunStatus(nextConversationId, 'thinking', '等待模型响应…')
           await toolGateway.call('stream_chat', recoveryRequest, () => streamChat(recoveryRequest, (event) => {
             if (event.type === 'chunk') {
               setChatRunStatus(nextConversationId, 'streaming', null)

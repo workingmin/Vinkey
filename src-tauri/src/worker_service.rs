@@ -138,6 +138,8 @@ pub struct ProcessSegment {
     pub label: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub started_at: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ended_at: Option<u64>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -190,8 +192,33 @@ struct WorkerControl {
     progress: Mutex<WorkerProgress>,
 }
 
+fn stage_label(stage: &str) -> String {
+    match stage {
+        "chunking" => "阅读与分段".into(),
+        "map" => "分析文本片段".into(),
+        "chapter" => "汇总章节分析".into(),
+        "volume" => "汇总分卷分析".into(),
+        "reduce" => "汇总分析结果".into(),
+        "synthesis" => "综合分析".into(),
+        "evidence" => "核对引用".into(),
+        "lifecycle" => "任务".into(),
+        _ => "执行分析".into(),
+    }
+}
+
 impl WorkerControl {
     fn set_phase(&self, stage: &str, step_id: Option<String>, completed: usize, total: usize) {
+        self.set_phase_with_label(stage, step_id, completed, total, stage_label(stage));
+    }
+
+    fn set_phase_with_label(
+        &self,
+        stage: &str,
+        step_id: Option<String>,
+        completed: usize,
+        total: usize,
+        label: String,
+    ) {
         self.completed.store(completed, Ordering::Relaxed);
         self.total.store(total, Ordering::Relaxed);
         if let Ok(mut progress) = self.progress.lock() {
@@ -199,17 +226,8 @@ impl WorkerControl {
                 segment: Some(ProcessSegment {
                     id: uuid::Uuid::new_v4().to_string(),
                     started_at: Some(now_ms()),
-                    label: match stage {
-                        "chunking" => "阅读与分段".into(),
-                        "map" => "分析文本片段".into(),
-                        "chapter" => "汇总章节分析".into(),
-                        "volume" => "汇总分卷分析".into(),
-                        "reduce" => "汇总分析结果".into(),
-                        "synthesis" => "综合分析".into(),
-                        "evidence" => "核对引用".into(),
-                        "lifecycle" => "任务".into(),
-                        _ => "执行分析".into(),
-                    },
+                    ended_at: None,
+                    label,
                 }),
                 stage: stage.into(),
                 step_id,
@@ -226,13 +244,16 @@ impl WorkerControl {
         }
     }
 
-    fn continue_segment(&self) {
+    /// A real continuation (resume or retry) starts a fresh segment whose label
+    /// states the action: "继续…" for resume, "重新…" for a new attempt.
+    fn continue_segment(&self, prefix: &str) {
         let progress = self.snapshot();
-        self.set_phase(
+        self.set_phase_with_label(
             &progress.stage,
             progress.step_id,
             progress.completed,
             progress.total,
+            format!("{prefix}{}", stage_label(&progress.stage)),
         );
     }
 
@@ -658,8 +679,13 @@ fn publish_phase_completed(
     control: &WorkerControl,
 ) -> Result<(), String> {
     let progress = control.snapshot();
-    let label = progress
-        .segment
+    let mut segment = progress.segment;
+    if let Some(segment) = segment.as_mut() {
+        if segment.ended_at.is_none() {
+            segment.ended_at = Some(now_ms());
+        }
+    }
+    let label = segment
         .as_ref()
         .map(|segment| segment.label.as_str())
         .unwrap_or("当前步骤");
@@ -671,7 +697,7 @@ fn publish_phase_completed(
         progress.total,
         format!("{label}已完成"),
     );
-    event.segment = progress.segment;
+    event.segment = segment;
     publish(jobs_root, runtime, app, event)
 }
 
@@ -1753,7 +1779,7 @@ async fn model_text(
     for attempt in 1..=MAX_MODEL_ATTEMPTS {
         wait_for_control(control).await?;
         if attempt > 1 {
-            control.continue_segment();
+            control.continue_segment("重新");
             let progress = control.snapshot();
             publish(
                 jobs_root,
@@ -2932,7 +2958,7 @@ pub fn resume(
         .cloned();
     if let Some(control) = control {
         control.pause.store(false, Ordering::Relaxed);
-        control.continue_segment();
+        control.continue_segment("继续");
         let job = job_service::update(
             jobs_root,
             job_service::UpdateTaskJobInput {
@@ -3708,10 +3734,12 @@ mod tests {
         let first = control.snapshot().segment.unwrap();
         control.set_completed(1);
         assert_eq!(control.snapshot().segment.unwrap().id, first.id);
-        control.continue_segment();
+        control.continue_segment("继续");
         let resumed = control.snapshot().segment.unwrap();
         assert_ne!(resumed.id, first.id);
-        assert_eq!(resumed.label, first.label);
+        assert_eq!(resumed.label, format!("继续{}", first.label));
+        assert_eq!(first.ended_at, None);
+        assert_eq!(resumed.ended_at, None);
         control.set_phase("map", Some("map".into()), 0, 2);
         assert_ne!(control.snapshot().segment.unwrap().id, resumed.id);
 

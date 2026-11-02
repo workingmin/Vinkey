@@ -378,7 +378,7 @@ export async function analyzeLongText(
       taskId: jobId, stepId: 'map', stepKind: 'map', stepStatus: 'running',
       eventType: 'step.started', eventFields: { chunkCount: chunks.length },
     })
-    const mapSegment = { id: crypto.randomUUID(), label: '分析文本片段', startedAt: Date.now() }
+    const mapSegment = { id: crypto.randomUUID(), label: resumeJobId ? '继续分析文本片段' : '分析文本片段', startedAt: Date.now() }
     onProgress?.({ segment: mapSegment, stage: 'map', completed: 0, total: chunks.length, message: chunkAnalysisMessage(chunks) })
     for (const [index, chunk] of chunks.entries()) {
       await waitWhilePaused(requestId, jobId)
@@ -399,6 +399,7 @@ export async function analyzeLongText(
       onProgress?.({ segment: mapSegment, stage: 'map', completed: index + 1, total: chunks.length, message: cached === null ? `第 ${index + 1}/${chunks.length} 个文本片段分析完成（${chunk.sourceId}）` : `已复用第 ${index + 1}/${chunks.length} 个文本片段的分析结果（${chunk.sourceId}）` })
     }
     if (summaries.length === 0) throw new Error('模型没有返回可汇总的文本片段')
+    onProgress?.({ segment: { ...mapSegment, endedAt: Date.now() }, stage: 'map', completed: chunks.length, total: chunks.length, message: '文本片段分析完成' })
     await updateTaskJob({
       taskId: jobId, stepId: 'map', stepStatus: 'completed', checkpoint: `summaries:${summaries.length}`,
       eventType: 'step.completed', eventFields: { summaryCount: summaries.length },
@@ -414,7 +415,7 @@ export async function analyzeLongText(
         taskId: jobId, stepId: reduceStepId, stepKind: 'reduce', stepStatus: 'running',
         eventType: 'step.started', eventFields: { batchCount: batches.length },
       })
-      const reduceSegment = { id: crypto.randomUUID(), label: '汇总分析结果', startedAt: Date.now() }
+      const reduceSegment = { id: crypto.randomUUID(), label: resumeJobId ? '继续汇总分析结果' : '汇总分析结果', startedAt: Date.now() }
       onProgress?.({ segment: reduceSegment, stage: 'reduce', completed: 0, total: batches.length, message: `正在进行第 ${level + 1} 轮汇总，共 ${formatCount(batches.length)} 批…` })
       for (const [index, batch] of batches.entries()) {
         await waitWhilePaused(requestId, jobId)
@@ -428,6 +429,7 @@ export async function analyzeLongText(
         onProgress?.({ segment: reduceSegment, stage: 'reduce', completed: index + 1, total: batches.length, message: `已完成第 ${index + 1}/${batches.length} 批汇总` })
       }
       if (next.length === 0) throw new Error('模型没有返回可用的汇总结果')
+      onProgress?.({ segment: { ...reduceSegment, endedAt: Date.now() }, stage: 'reduce', completed: batches.length, total: batches.length, message: '汇总分析结果完成' })
       await updateTaskJob({
         taskId: jobId, stepId: reduceStepId, stepStatus: 'completed', checkpoint: `summaries:${next.length}`,
         eventType: 'step.completed', eventFields: { summaryCount: next.length },
@@ -442,7 +444,7 @@ export async function analyzeLongText(
       taskId: jobId, stepId: 'synthesis', stepKind: 'synthesis', stepStatus: 'running',
       eventType: 'step.started', eventFields: { summaryCount: current.length },
     })
-    const synthesisSegment = { id: crypto.randomUUID(), label: '综合分析', startedAt: Date.now() }
+    const synthesisSegment = { id: crypto.randomUUID(), label: resumeJobId ? '继续综合分析' : '综合分析', startedAt: Date.now() }
     onProgress?.({ segment: synthesisSegment, stage: 'synthesis', completed: 0, total: 1, message: `正在综合分析 ${formatCount(current.length)} 条汇总结果…` })
     modelInvocationCount += 1
     const content = await collectResponse(requestId, profile.id, [{ role: 'user', content: summaryPrompt(instruction, current, true, indexMessage, effectiveContextWindow) }], toolCallGuard)
@@ -465,7 +467,7 @@ export async function analyzeLongText(
       taskId: jobId, status: 'completed', stepId: 'synthesis', stepStatus: 'completed', checkpoint: 'analysis.md',
       eventType: 'task.completed', eventFields: { chunkCount: chunks.length, evidenceCount: evidence.length },
     })
-    onProgress?.({ segment: synthesisSegment, stage: 'synthesis', completed: 1, total: 1, message: '长文本任务完成' })
+    onProgress?.({ segment: { ...synthesisSegment, endedAt: Date.now() }, stage: 'synthesis', completed: 1, total: 1, message: '综合分析完成' })
     return {
       content, jobId, chunkCount: chunks.length, summaryCount: summaries.length, evidence,
       modelInvocationCount, mapCacheHits: 0, stageCacheHits: 0, jobCheckpointHits: 0,

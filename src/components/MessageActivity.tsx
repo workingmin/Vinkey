@@ -139,6 +139,7 @@ export function MessageActivity({ items, active = false, taskDescription, result
               onClick={() => setSectionChoices((current) => ({ ...current, [section.id]: !sectionOpen }))}>
               {sectionOpen ? <ChevronDown /> : <ChevronRight />}
               <strong>{section.label}</strong><small>{section.entries.length} 条记录</small>
+              {section.endedAt !== undefined && section.startedAt !== undefined && <small>已完成 · 耗时 {Math.max(0, Math.round((section.endedAt - section.startedAt) / 1000))} 秒</small>}
               <time dateTime={new Date(section.entries[0].item.timestamp).toISOString()}>{new Date(section.entries[0].item.timestamp).toLocaleTimeString('zh-CN', { hour12: false })}</time>
             </button>
             <div id={sectionId} hidden={!sectionOpen}>

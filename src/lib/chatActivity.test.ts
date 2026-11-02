@@ -92,6 +92,17 @@ describe('explicit process sections', () => {
     expect(sections[0].hasBoundary).toBe(false)
   })
 
+  it('marks a section completed only from an explicit segment-end fact', () => {
+    const open = appendWorkerActivity([], event({ segment: { id: 'a', label: '分析文本片段', startedAt: 1_000 } }))
+    const closed = appendWorkerActivity(open, event({ sequence: 2, timestamp: 3_000, segment: { id: 'a', label: '分析文本片段', startedAt: 1_000, endedAt: 3_000 } }))
+    const sections = processSections(closed)
+    expect(sections).toHaveLength(1)
+    expect(sections[0].endedAt).toBe(3_000)
+
+    const openOnly = processSections(open)
+    expect(openOnly[0].endedAt).toBeUndefined()
+  })
+
   it('preserves chronological sections around intervening records and public responses', () => {
     const first = appendWorkerActivity([], event({ segment: { id: 'a', label: '分析' } }))[0]
     const second = { ...first, id: 'second', response: '已交付的响应' }

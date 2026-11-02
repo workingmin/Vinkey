@@ -233,6 +233,8 @@ export interface ProcessSegment {
   id: string
   label: string
   startedAt?: number
+  /** Explicit segment-boundary end fact; never inferred from the last activity. */
+  endedAt?: number
 }
 
 export interface TaskWorkerEvent {

@@ -76,6 +76,8 @@ export interface ProcessSection {
   label: string
   hasBoundary: boolean
   startedAt?: number
+  /** Explicit segment-boundary end fact; absent until the executor confirms it. */
+  endedAt?: number
   entries: Array<{ item: ChatActivity; index: number; key: string }>
 }
 
@@ -100,5 +102,11 @@ export function processSections(items: ChatActivity[]): ProcessSection[] {
     sections.at(-1)!.entries.push({ item, index, key })
     previousIdentity = identity
   })
+  for (const section of sections) {
+    const ended = section.entries.reduce<number>(
+      (latest, { item }) => Math.max(latest, item.segment?.endedAt ?? item.worker?.segment?.endedAt ?? 0), 0,
+    )
+    if (ended > 0) section.endedAt = ended
+  }
   return sections
 }

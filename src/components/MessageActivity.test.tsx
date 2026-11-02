@@ -113,6 +113,14 @@ describe('two-level process reading', () => {
     expect(screen.getByText('暂无可展示的过程记录')).toBeVisible()
   })
 
+  it('shows segment completion and duration only on an explicit end fact', () => {
+    const closed = { ...activity(), segment: { id: 'segment-a', label: '人物分析', startedAt: 1_000, endedAt: 4_000 } }
+    const { rerender } = render(<MessageActivity items={[closed]} active />)
+    expect(screen.getByRole('button', { name: /人物分析.*条记录/ }).textContent).toContain('已完成 · 耗时 3 秒')
+    rerender(<MessageActivity items={[activity()]} active />)
+    expect(screen.getByRole('button', { name: /人物分析.*条记录/ }).textContent).not.toContain('耗时')
+  })
+
   it('shows a non-worker current action once without duplicating title and detail', () => {
     const pending = { id: 'pending', segment: { id: 'segment-a', label: '生成回答' }, status: 'thinking' as const, message: '生成回答', timestamp: 1_000 }
     render(<MessageActivity items={[pending]} active runStatus="thinking" />)

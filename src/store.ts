@@ -168,7 +168,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   setPendingNewFiles: (paths) => set({ pendingNewFiles: [...new Set(paths)].slice(0, 8) }),
   clearPendingNewFiles: () => set({ pendingNewFiles: [] }),
   beginChatRun: (run) => set((state) => {
-    const processSegment = run.processSegment ?? { id: crypto.randomUUID(), label: '处理请求', startedAt: Date.now() }
+    const processSegment = run.processSegment ?? { id: crypto.randomUUID(), label: '准备任务', startedAt: Date.now() }
     const activityLog = run.activityLog.length > 0
       ? run.activityLog
       : [{ id: crypto.randomUUID(), jobId: run.taskJobId ?? undefined, segment: processSegment, status: run.status, message: run.statusMessage, timestamp: Date.now() }]
