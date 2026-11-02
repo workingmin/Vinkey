@@ -432,7 +432,7 @@ export async function prepareLongTextWorker(
     return output
   }
 
-  if (!authorizationTicket) throw new Error('Rust Worker 缺少有效的 Dispatch 授权票据')
+  if (!authorizationTicket) throw new Error('缺少有效的 Dispatch 授权票据')
 
   const seenSequences = new Set<number>()
   const dispatchEvent = (event: TaskWorkerEvent) => {
@@ -464,7 +464,7 @@ export async function prepareLongTextWorker(
         const finalEvents = await invoke<TaskWorkerEvent[]>('list_task_worker_events', { jobId: input.jobId, afterSequence: null })
         finalEvents.forEach(dispatchEvent)
       }
-      if (job.status === 'failed') throw job.failure ?? new Error(job.error ?? 'Rust Worker 执行失败')
+      if (job.status === 'failed') throw job.failure ?? new Error(job.error ?? '任务执行失败')
       if (job.status === 'cancelled') throw new Error('请求已停止')
       await new Promise((resolve) => window.setTimeout(resolve, 150))
     }

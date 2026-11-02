@@ -1,11 +1,48 @@
-import type { ChatActivity, TaskWorkerEvent } from '../types'
+import type { ChatActivity, TaskJob, TaskWorkerEvent } from '../types'
+
+// Shared copy mapping for the task process area (design §5/§6). One source is
+// consumed by the message area, the composer and the control row; components
+// must not define their own parallel tables.
+export const taskStatusLabels = {
+  stopping: '正在停止…',
+  paused: '已暂停',
+  cancelled: '已停止',
+  completed: '已完成',
+  failed: '处理失败',
+  running: '处理中',
+} as const
+
+// Past-tense wording for historical activity rows (当时状态), kept separate
+// from the live task status: a finished activity interval is not a finished
+// segment or task.
+export const historicalWorkerStatusLabels = {
+  running: '执行中',
+  paused: '已暂停',
+  completed: '已完成',
+  failed: '失败',
+  cancelled: '已停止',
+} as const
+
+export const taskJobStatusLabels: Record<TaskJob['status'], string> = {
+  planned: '等待开始',
+  running: taskStatusLabels.running,
+  paused: taskStatusLabels.paused,
+  completed: taskStatusLabels.completed,
+  failed: taskStatusLabels.failed,
+  cancelled: taskStatusLabels.cancelled,
+}
 
 export function workerStageLabel(stage: string): string {
   const labels: Record<string, string> = {
-    chunking: '文档分块', map: '局部分析', chapter: '章节汇总', volume: '卷级汇总',
-    reduce: '阶段汇总', synthesis: '全书综合', evidence: '来源校验', lifecycle: '任务',
+    chunking: '阅读与分段', map: '分析文本片段', chapter: '汇总章节分析', volume: '汇总分卷分析',
+    reduce: '汇总分析结果', synthesis: '综合分析', evidence: '核对引用', lifecycle: '任务',
   }
-  return labels[stage] ?? (stage.startsWith('reduce-') ? '全书阶段汇总' : '分析')
+  return labels[stage] ?? (stage.startsWith('reduce-') ? '汇总分析结果' : '分析')
+}
+
+export function taskStepLabel(stepId: string): string {
+  if (stepId === 'reduce' || stepId.startsWith('reduce-')) return '汇总分析结果'
+  return workerStageLabel(stepId)
 }
 
 export function appendWorkerActivity(log: ChatActivity[], event: TaskWorkerEvent): ChatActivity[] {
@@ -57,7 +94,7 @@ export function processSections(items: ChatActivity[]): ProcessSection[] {
       const id = segment
         ? seenSegments.has(identity) ? `${identity}:after:${previous?.entries.at(-1)?.key}` : identity
         : `unsegmented:after:${previous?.id ?? 'start'}`
-      sections.push({ id, label: segment?.label ?? '过程记录（未提供推进边界）', hasBoundary: Boolean(segment), startedAt: segment?.startedAt, entries: [] })
+      sections.push({ id, label: segment?.label ?? '过程记录', hasBoundary: Boolean(segment), startedAt: segment?.startedAt, entries: [] })
       if (segment) seenSegments.add(identity)
     }
     sections.at(-1)!.entries.push({ item, index, key })

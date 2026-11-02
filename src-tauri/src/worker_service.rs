@@ -200,14 +200,14 @@ impl WorkerControl {
                     id: uuid::Uuid::new_v4().to_string(),
                     started_at: Some(now_ms()),
                     label: match stage {
-                        "chunking" => "阅读与分块".into(),
-                        "map" => "局部分析".into(),
-                        "chapter" => "章节汇总".into(),
-                        "volume" => "卷级汇总".into(),
-                        "reduce" => "阶段汇总".into(),
-                        "synthesis" => "全书综合".into(),
-                        "evidence" => "来源校验".into(),
-                        "lifecycle" => "任务结束".into(),
+                        "chunking" => "阅读与分段".into(),
+                        "map" => "分析文本片段".into(),
+                        "chapter" => "汇总章节分析".into(),
+                        "volume" => "汇总分卷分析".into(),
+                        "reduce" => "汇总分析结果".into(),
+                        "synthesis" => "综合分析".into(),
+                        "evidence" => "核对引用".into(),
+                        "lifecycle" => "任务".into(),
                         _ => "执行分析".into(),
                     },
                 }),
@@ -2188,7 +2188,7 @@ async fn run_pipeline_worker(
                     "completed",
                     output.chunk_count,
                     output.chunk_count,
-                    "已复用完整 Rust Worker 输出",
+                    "已复用本次任务可用的分析结果",
                 ),
             )?;
             return Ok(());
@@ -2228,7 +2228,7 @@ async fn run_pipeline_worker(
             "running",
             0,
             input.documents.len(),
-            "Rust Worker 正在校验输入快照并准备分块",
+            "正在校验输入并准备分段…",
         ),
     )?;
 
@@ -2247,7 +2247,7 @@ async fn run_pipeline_worker(
         write_json(
             &artifact_path(&jobs_root, &input.job_id, &manifest_name),
             &manifest,
-            " Worker 分块",
+            "分段清单",
         )?;
         documents.insert(source.path.clone(), document_content);
         manifests.push(manifest);
@@ -2258,7 +2258,7 @@ async fn run_pipeline_worker(
             "running",
             index + 1,
             input.documents.len(),
-            format!("Rust Worker 已校验并完成分块：{}", source.path),
+            format!("已完成分段：{}", source.path),
         );
         event.artifact = Some(manifest_name);
         publish(&jobs_root, &runtime, &app, event)?;
@@ -2288,7 +2288,7 @@ async fn run_pipeline_worker(
             "completed",
             manifests.len(),
             manifests.len(),
-            format!("Rust Worker 已生成 {} 个文本分块", chunks.len()),
+            format!("已划分为 {} 个文本片段", chunks.len()),
         ),
     )?;
 
@@ -2313,7 +2313,7 @@ async fn run_pipeline_worker(
             "running",
             0,
             chunks.len(),
-            format!("Rust Map Worker 正在分析 {} 个分块", chunks.len()),
+            format!("正在分析 {} 个文本片段", chunks.len()),
         ),
     )?;
     let mut counts = PipelineCounts::default();
@@ -2507,7 +2507,7 @@ async fn run_pipeline_worker(
             "running",
             0,
             1,
-            "正在完成全书综合",
+            "正在综合分析结果…",
         ),
     )?;
     let dependencies = current
@@ -2695,7 +2695,7 @@ fn fail_worker(
                 "cancelled",
                 progress.completed,
                 progress.total,
-                "Rust Worker 已取消",
+                "任务已停止",
             ),
         );
         return;
@@ -2909,7 +2909,7 @@ pub fn pause(
                 "paused",
                 progress.completed,
                 progress.total,
-                "Rust Worker 已暂停",
+                "已暂停后续步骤",
             ),
         )?;
     }
@@ -2958,7 +2958,7 @@ pub fn resume(
                 "running",
                 progress.completed,
                 progress.total,
-                "Rust Worker 已继续",
+                "已继续处理",
             ),
         )?;
         return Ok(job);

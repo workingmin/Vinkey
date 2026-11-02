@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { appendWorkerActivity, processSections, workerStageLabel } from './chatActivity'
+import { appendWorkerActivity, processSections, taskJobStatusLabels, taskStatusLabels, taskStepLabel, workerStageLabel } from './chatActivity'
 import type { TaskWorkerEvent } from '../types'
 
 function event(overrides: Partial<TaskWorkerEvent> = {}): TaskWorkerEvent {
@@ -50,10 +50,25 @@ describe('Worker message activity', () => {
     expect(log.map((item) => item.id)).toEqual(['worker:job-1:1', 'response'])
   })
 
-  it('labels hierarchical stages for the transcript', () => {
-    expect(workerStageLabel('chapter')).toBe('章节汇总')
-    expect(workerStageLabel('volume')).toBe('卷级汇总')
-    expect(workerStageLabel('reduce-2')).toBe('全书阶段汇总')
+  it('labels stages and steps with the shared copy mapping', () => {
+    expect(workerStageLabel('chunking')).toBe('阅读与分段')
+    expect(workerStageLabel('map')).toBe('分析文本片段')
+    expect(workerStageLabel('chapter')).toBe('汇总章节分析')
+    expect(workerStageLabel('volume')).toBe('汇总分卷分析')
+    expect(workerStageLabel('reduce')).toBe('汇总分析结果')
+    expect(workerStageLabel('reduce-2')).toBe('汇总分析结果')
+    expect(workerStageLabel('synthesis')).toBe('综合分析')
+    expect(workerStageLabel('evidence')).toBe('核对引用')
+    expect(taskStepLabel('map')).toBe('分析文本片段')
+    expect(taskStepLabel('reduce-3')).toBe('汇总分析结果')
+  })
+
+  it('exposes one task-level status copy shared by message area and controls', () => {
+    expect(taskStatusLabels.running).toBe('处理中')
+    expect(taskStatusLabels.cancelled).toBe('已停止')
+    expect(taskStatusLabels.stopping).toBe('正在停止…')
+    expect(taskJobStatusLabels.planned).toBe('等待开始')
+    expect(taskJobStatusLabels.failed).toBe('处理失败')
   })
 })
 

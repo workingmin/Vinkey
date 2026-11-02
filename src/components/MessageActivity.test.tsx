@@ -23,7 +23,7 @@ const detailButton = (sequence = 1) => screen.getByRole('button', { name: new Re
 describe('two-level process reading', () => {
   it('has segment and activity disclosures without a task-level container', () => {
     render(<MessageActivity items={[activity()]} active />)
-    expect(screen.getByLabelText('任务状态').textContent).toContain('正在处理')
+    expect(screen.getByLabelText('任务状态').textContent).toContain('处理中')
     const bulk = screen.getByRole('button', { name: '展开全部过程' })
     expect(bulk.hasAttribute('aria-expanded')).toBe(false)
     expect(segmentButton().getAttribute('aria-expanded')).toBe('true')
@@ -92,11 +92,32 @@ describe('two-level process reading', () => {
   it('shows unsegmented histories in original order without inventing boundaries', () => {
     const items = [activity(1), activity(2)].map((item) => ({ ...item, segment: undefined }))
     render(<MessageActivity items={items} active />)
-    expect(screen.getByRole('button', { name: /过程记录（未提供推进边界）/ })).toBeTruthy()
-    expect(screen.getByText('按原始顺序展示，未推测执行轮次。')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^过程记录/ })).toBeTruthy()
+    expect(screen.getByText('此记录未包含分段信息，按原始顺序展示。')).toBeTruthy()
     expect(screen.getAllByRole('listitem').map((item) => item.textContent)).toEqual([
       expect.stringContaining('1. 检索人物相关段落 1'), expect.stringContaining('2. 检索人物相关段落 2'),
     ])
+  })
+
+  it('never falls back to preparing after the first body chunk streams', () => {
+    const streamed = { id: 'streamed', segment: { id: 'segment-a', label: '生成回答' }, status: 'streaming' as const, message: null, timestamp: 2_000 }
+    render(<MessageActivity items={[streamed]} active runStatus="streaming" />)
+    expect(screen.getByLabelText('任务状态').textContent).toContain('处理中')
+    expect(screen.getByRole('status').textContent).toContain('正在生成回答…')
+    expect(screen.queryByText(/准备请求/)).toBeNull()
+  })
+
+  it('keeps a readable state row for an active run that has no records yet', () => {
+    render(<MessageActivity items={[]} active runStatus="thinking" />)
+    expect(screen.getByLabelText('任务状态').textContent).toContain('处理中')
+    expect(screen.getByText('暂无可展示的过程记录')).toBeVisible()
+  })
+
+  it('shows a non-worker current action once without duplicating title and detail', () => {
+    const pending = { id: 'pending', segment: { id: 'segment-a', label: '生成回答' }, status: 'thinking' as const, message: '生成回答', timestamp: 1_000 }
+    render(<MessageActivity items={[pending]} active runStatus="thinking" />)
+    const status = screen.getByRole('status')
+    expect(status.textContent).toBe('生成回答')
   })
 
   it('opens a read-only artifact from the activity details', async () => {

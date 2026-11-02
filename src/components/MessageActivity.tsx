@@ -1,13 +1,12 @@
 import { Check, ChevronDown, ChevronRight, Clock, Copy, Download, FileText, Pause, ShieldAlert, X } from 'lucide-react'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { readAnalysisArtifact } from '../lib/desktop'
-import { processSections, workerStageLabel } from '../lib/chatActivity'
+import { historicalWorkerStatusLabels, processSections, taskStatusLabels, workerStageLabel } from '../lib/chatActivity'
 import type { ChatActivity, ChatRunResult, ChatRunStatus } from '../types'
 import { MarkdownContent } from './MarkdownContent'
 import { downloadBytes } from './FilePreview'
 
 const PAGE_SIZE = 50
-const workerStatusLabels = { running: '执行中', paused: '已暂停', completed: '已完成', failed: '失败', cancelled: '已取消' }
 
 export function MessageActivity({ items, active = false, taskDescription, result, runStatus, completedAt, historyError }: {
   items: ChatActivity[]
@@ -75,7 +74,7 @@ export function MessageActivity({ items, active = false, taskDescription, result
     return () => { disposed = true }
   }, [selected])
 
-  if (!items.length && !historyError) return null
+  if (!items.length && !active && !historyError) return null
   const open = (jobId: string, name: string) => setSelected({ jobId, name })
   const close = () => {
     if (typeof dialog.current?.close === 'function') dialog.current.close()
@@ -85,11 +84,20 @@ export function MessageActivity({ items, active = false, taskDescription, result
   const elapsedLabel = elapsedSeconds >= 60
     ? `${Math.floor(elapsedSeconds / 60)} 分 ${elapsedSeconds % 60} 秒`
     : `${elapsedSeconds} 秒`
-  const label = status === 'failed' ? '处理失败' : status === 'cancelled' ? '已停止'
-    : status === 'paused' ? '已暂停' : status === 'stopping' ? '正在停止'
-      : active ? '正在处理' : status === 'completed' ? `已完成 · ${elapsedLabel}`
-        : completedAt ? '执行已结束 · 结果状态未记录' : '执行状态待确认'
-  const currentLabel = currentWorker ? workerStageLabel(currentWorker.stage) : lastItem?.message ?? '正在准备请求'
+  const label = status === 'failed' ? taskStatusLabels.failed : status === 'cancelled' ? taskStatusLabels.cancelled
+    : status === 'paused' ? taskStatusLabels.paused : status === 'stopping' ? taskStatusLabels.stopping
+      : active ? taskStatusLabels.running : status === 'completed' ? `已完成 · ${elapsedLabel}`
+        : completedAt ? '任务已结束，结果状态未记录' : '任务状态暂无法确认'
+  const currentAction = (() => {
+    if (currentWorker) return { title: workerStageLabel(currentWorker.stage), detail: currentWorker.message ?? undefined }
+    if (runStatus === 'streaming' || lastItem?.status === 'streaming') return { title: lastItem?.message ?? '正在生成回答…' }
+    if (lastItem?.message) return { title: lastItem.message }
+    if (runStatus === 'sending') return { title: '正在发送…' }
+    if (runStatus === 'fetching') return { title: '正在读取…' }
+    return { title: '处理中' }
+  })()
+  const activityTitle = (item: ChatActivity) => item.message
+    ?? (item.worker ? workerStageLabel(item.worker.stage) : item.segment?.label ?? '处理中')
 
   return <div className="execution-trace">
     {taskDescription?.trim() && <div className="execution-prompt" aria-label="任务描述">
@@ -98,19 +106,20 @@ export function MessageActivity({ items, active = false, taskDescription, result
     <div className="execution-feedback">
       <div className="execution-task-summary" aria-label="任务状态">
         {hasFailure ? <ShieldAlert /> : status === 'paused' ? <Pause /> : active && status === 'running' ? <span className="execution-live-dot" aria-hidden="true" /> : status === 'completed' ? <Check /> : <Clock />}
-        <span>任务反馈</span><span>{label}</span><small>{items.length} 条记录</small>
+        <span>处理过程</span><span>{label}</span><small>{items.length} 条记录</small>
       </div>
       <div className="execution-bulk-actions" aria-label="过程批量操作">
         <button type="button" aria-controls={disclosureId} onClick={() => { setSectionDefault(true); setSectionChoices({}) }}>展开全部过程</button>
         <button type="button" aria-controls={disclosureId} onClick={() => { setSectionDefault(false); setSectionChoices({}) }}>收起全部过程</button>
       </div>
-      {active && lastItem && <div className="execution-current" role="status">
-        <strong className={status === 'running' ? 'execution-live-text' : undefined}>{currentLabel}</strong><span>{currentWorker?.message ?? lastItem.message ?? '正在准备请求'}</span>
+      {active && <div className="execution-current" role="status">
+        <strong className={status === 'running' ? 'execution-live-text' : undefined}>{currentAction.title}</strong>{currentAction.detail && <span>{currentAction.detail}</span>}
       </div>}
     </div>
     {incompleteHistory && <p className="execution-history-note">此过程包含旧版或缺失记录，历史可能不完整；未补造缺失步骤。</p>}
     {historyError && <p className="execution-history-note" role="alert">{historyError}</p>}
     {result?.error && <p className="execution-history-note" role="alert">{result.error.message}</p>}
+    {active && items.length === 0 && <p className="execution-history-note">暂无可展示的过程记录</p>}
     <div id={disclosureId}>
       {items.length > PAGE_SIZE && <nav className="execution-pagination" aria-label="过程记录分页">
         <button type="button" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>上一页</button>
@@ -124,21 +133,16 @@ export function MessageActivity({ items, active = false, taskDescription, result
         if (!visibleEntries.length && !responses.length) return null
         const sectionOpen = sectionChoices[section.id] ?? sectionDefault
         const sectionId = `${disclosureId}-section-${section.entries[0].key}`
-        const latest = section.entries.at(-1)!.item
-        const segmentSeconds = section.startedAt !== undefined && latest.completedAt !== undefined
-          ? Math.max(0, Math.round((latest.completedAt - section.startedAt) / 1000)) : null
         return <section className="execution-segment" key={section.id} aria-label={section.label}>
           {visibleEntries.length > 0 && <>
             <button type="button" className="execution-toggle execution-segment-toggle" aria-expanded={sectionOpen} aria-controls={sectionId}
               onClick={() => setSectionChoices((current) => ({ ...current, [section.id]: !sectionOpen }))}>
               {sectionOpen ? <ChevronDown /> : <ChevronRight />}
               <strong>{section.label}</strong><small>{section.entries.length} 条记录</small>
-              {latest.worker && <small>最近记录：{workerStatusLabels[latest.worker.status]}</small>}
-              {segmentSeconds !== null && <small>耗时 {segmentSeconds} 秒</small>}
               <time dateTime={new Date(section.entries[0].item.timestamp).toISOString()}>{new Date(section.entries[0].item.timestamp).toLocaleTimeString('zh-CN', { hour12: false })}</time>
             </button>
             <div id={sectionId} hidden={!sectionOpen}>
-              {!section.hasBoundary && <p className="execution-history-note">按原始顺序展示，未推测执行轮次。</p>}
+              {!section.hasBoundary && <p className="execution-history-note">此记录未包含分段信息，按原始顺序展示。</p>}
               <ol className="execution-steps" start={visibleEntries[0].index + 1}>
                 {visibleEntries.map(({ item, index, key }) => {
                   const worker = item.worker
@@ -146,20 +150,19 @@ export function MessageActivity({ items, active = false, taskDescription, result
                   const failed = worker?.status === 'failed' || worker?.cacheSource === 'quarantined'
                   const detailId = `${disclosureId}-event-${key}`
                   const detailOpen = details[key] ?? false
-                  const historicalStatus = worker ? workerStatusLabels[worker.status] : item.completedAt ? '阶段记录' : '处理中'
                   return <li key={key}>
                     <div className="execution-step-disclosure" data-open={detailOpen}>
                       <button type="button" className="execution-step-summary" aria-expanded={detailOpen} aria-controls={detailId}
                         onClick={() => setDetails((current) => ({ ...current, [key]: !detailOpen }))}>
                         {failed ? <ShieldAlert className="warning" /> : running ? <span className="execution-live-dot small" aria-hidden="true" /> : worker?.status === 'paused' ? <Pause /> : worker?.status === 'completed' ? <Check /> : <Clock />}
-                        <span className="execution-step-title"><strong>{index + 1}. {item.message ?? (worker ? workerStageLabel(worker.stage) : '准备请求')}</strong>
-                          <span>{historicalStatus}{worker && !running ? '（当时）' : ''}</span>
+                        <span className="execution-step-title"><strong>{index + 1}. {activityTitle(item)}</strong>
+                          {worker && <span>{historicalWorkerStatusLabels[worker.status]}{!running ? '（当时）' : ''}</span>}
                           {worker && worker.total > 0 && <span>{Math.min(worker.completed, worker.total)} / {worker.total}</span>}
                           <time dateTime={new Date(item.timestamp).toISOString()}>{new Date(item.timestamp).toLocaleTimeString('zh-CN', { hour12: false })}</time>
                         </span>
                       </button>
                       <div id={detailId} className="execution-step-content" hidden={!detailOpen}>
-                        <p>{worker ? workerStageLabel(worker.stage) : item.message ?? '准备请求'}</p>
+                        {worker ? <p>{workerStageLabel(worker.stage)}</p> : item.message ? <p>{item.message}</p> : null}
                         {!worker && item.completedAt && <p>耗时 {Math.max(0, Math.round((item.completedAt - item.timestamp) / 1000))} 秒</p>}
                         {worker && worker.total > 0 && <progress aria-label={workerStageLabel(worker.stage)} max={worker.total} value={Math.min(worker.completed, worker.total)} />}
                         {(!!item.cacheHits || !!item.modelRequests) && <small>

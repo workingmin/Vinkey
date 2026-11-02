@@ -81,13 +81,13 @@ function range(values: number[]): [number, number] {
 function chunkingPreparationMessage(documents: ContextDocument[], maxTokens: number, overlapTokens: number): string {
   const totalChars = documents.reduce((sum, document) => sum + charCount(document.content), 0)
   const totalTokens = documents.reduce((sum, document) => sum + estimateTokens(document.content), 0)
-  return `准备分块：${documents.length} 个文档，共 ${formatCount(totalChars)} 字，约 ${formatCount(totalTokens)} tokens。策略：优先按标题、段落和句子切分，超出预算时再硬切；单块上限 ${formatCount(maxTokens)} tokens，块间保留 ${formatCount(overlapTokens)} tokens 重叠。`
+  return `准备阅读与分段：${documents.length} 个文档，共 ${formatCount(totalChars)} 字，约 ${formatCount(totalTokens)} tokens。策略：优先按标题、段落和句子切分，超出预算时再硬切；单块上限 ${formatCount(maxTokens)} tokens，块间保留 ${formatCount(overlapTokens)} tokens 重叠。`
 }
 
 function chunkAnalysisMessage(chunks: TextChunk[]): string {
   const charRange = range(chunks.map((chunk) => charCount(chunk.text)))
   const tokenRange = range(chunks.map((chunk) => chunk.estimatedTokens))
-  return `准备逐块分析：共 ${formatCount(chunks.length)} 块；每块实际约 ${formatCount(charRange[0])}-${formatCount(charRange[1])} 字、${formatCount(tokenRange[0])}-${formatCount(tokenRange[1])} tokens。`
+  return `准备分析文本片段：共 ${formatCount(chunks.length)} 个；每块实际约 ${formatCount(charRange[0])}-${formatCount(charRange[1])} 字、${formatCount(tokenRange[0])}-${formatCount(tokenRange[1])} tokens。`
 }
 
 export function cancelLongTextAnalysis(requestId: string): void {
@@ -368,7 +368,7 @@ export async function analyzeLongText(
       stage: 'chunking',
       completed: manifests.length,
       total: manifests.length,
-      message: `${chunkingPreparationMessage(documents, maxTokens, overlapTokens)} Rust Worker 已完成 ${manifests.length} 份 manifest。`,
+      message: `${chunkingPreparationMessage(documents, maxTokens, overlapTokens)} 已划分为 ${manifests.length} 个文本片段。`,
     })
 
     const chunks = manifests.flatMap((manifest) => manifest.chunks)
@@ -378,12 +378,12 @@ export async function analyzeLongText(
       taskId: jobId, stepId: 'map', stepKind: 'map', stepStatus: 'running',
       eventType: 'step.started', eventFields: { chunkCount: chunks.length },
     })
-    const mapSegment = { id: crypto.randomUUID(), label: '局部分析', startedAt: Date.now() }
+    const mapSegment = { id: crypto.randomUUID(), label: '分析文本片段', startedAt: Date.now() }
     onProgress?.({ segment: mapSegment, stage: 'map', completed: 0, total: chunks.length, message: chunkAnalysisMessage(chunks) })
     for (const [index, chunk] of chunks.entries()) {
       await waitWhilePaused(requestId, jobId)
       assertNotCancelled(requestId)
-      onProgress?.({ segment: mapSegment, stage: 'map', completed: index, total: chunks.length, message: `正在分析第 ${index + 1}/${chunks.length} 块（${chunk.sourceId}，约 ${formatCount(chunk.estimatedTokens)} tokens）…` })
+      onProgress?.({ segment: mapSegment, stage: 'map', completed: index, total: chunks.length, message: `正在分析第 ${index + 1}/${chunks.length} 个文本片段（${chunk.sourceId}，约 ${formatCount(chunk.estimatedTokens)} tokens）…` })
       const cached = resumeJobId
         ? await guardedCall('read_analysis_artifact', { jobId, name: `summary-${String(index + 1).padStart(5, '0')}.md` }, () => readAnalysisArtifact(jobId, `summary-${String(index + 1).padStart(5, '0')}.md`), toolCallGuard)
         : null
@@ -396,9 +396,9 @@ export async function analyzeLongText(
         const name = `summary-${String(index + 1).padStart(5, '0')}.md`
         await guardedCall('write_analysis_artifact', { jobId, name, content: text }, () => writeAnalysisArtifact(jobId, name, text), toolCallGuard)
       }
-      onProgress?.({ segment: mapSegment, stage: 'map', completed: index + 1, total: chunks.length, message: `${cached === null ? '已完成' : '复用已完成'}第 ${index + 1}/${chunks.length} 块（${chunk.sourceId}）` })
+      onProgress?.({ segment: mapSegment, stage: 'map', completed: index + 1, total: chunks.length, message: cached === null ? `第 ${index + 1}/${chunks.length} 个文本片段分析完成（${chunk.sourceId}）` : `已复用第 ${index + 1}/${chunks.length} 个文本片段的分析结果（${chunk.sourceId}）` })
     }
-    if (summaries.length === 0) throw new Error('模型没有返回可汇总的分块结果')
+    if (summaries.length === 0) throw new Error('模型没有返回可汇总的文本片段')
     await updateTaskJob({
       taskId: jobId, stepId: 'map', stepStatus: 'completed', checkpoint: `summaries:${summaries.length}`,
       eventType: 'step.completed', eventFields: { summaryCount: summaries.length },
@@ -414,20 +414,20 @@ export async function analyzeLongText(
         taskId: jobId, stepId: reduceStepId, stepKind: 'reduce', stepStatus: 'running',
         eventType: 'step.started', eventFields: { batchCount: batches.length },
       })
-      const reduceSegment = { id: crypto.randomUUID(), label: `第 ${level + 1} 层阶段汇总`, startedAt: Date.now() }
-      onProgress?.({ segment: reduceSegment, stage: 'reduce', completed: 0, total: batches.length, message: `正在汇总第 ${level + 1} 层摘要：${formatCount(current.length)} 条摘要分 ${formatCount(batches.length)} 批处理…` })
+      const reduceSegment = { id: crypto.randomUUID(), label: '汇总分析结果', startedAt: Date.now() }
+      onProgress?.({ segment: reduceSegment, stage: 'reduce', completed: 0, total: batches.length, message: `正在进行第 ${level + 1} 轮汇总，共 ${formatCount(batches.length)} 批…` })
       for (const [index, batch] of batches.entries()) {
         await waitWhilePaused(requestId, jobId)
         assertNotCancelled(requestId)
-        onProgress?.({ segment: reduceSegment, stage: 'reduce', completed: index, total: batches.length, message: `正在处理第 ${index + 1}/${batches.length} 批阶段汇总…` })
+        onProgress?.({ segment: reduceSegment, stage: 'reduce', completed: index, total: batches.length, message: `正在处理第 ${index + 1}/${batches.length} 批汇总…` })
         modelInvocationCount += 1
         const text = await collectResponse(requestId, profile.id, [{ role: 'user', content: summaryPrompt(instruction, batch, false, indexMessage, effectiveContextWindow) }], toolCallGuard)
         if (text) next.push({ sourceId: 'summary', chunkId: `level-${level}-${index}`, heading: null, text: clipToTokens(text, summaryClipLimit(effectiveContextWindow, indexMessage)), evidence: batch.flatMap((record) => record.evidence ?? []) })
         const name = `reduce-${level + 1}-${String(index + 1).padStart(4, '0')}.md`
         await guardedCall('write_analysis_artifact', { jobId, name, content: text }, () => writeAnalysisArtifact(jobId, name, text), toolCallGuard)
-        onProgress?.({ segment: reduceSegment, stage: 'reduce', completed: index + 1, total: batches.length, message: `已完成第 ${index + 1}/${batches.length} 批阶段汇总` })
+        onProgress?.({ segment: reduceSegment, stage: 'reduce', completed: index + 1, total: batches.length, message: `已完成第 ${index + 1}/${batches.length} 批汇总` })
       }
-      if (next.length === 0) throw new Error('模型没有返回可用的阶段汇总')
+      if (next.length === 0) throw new Error('模型没有返回可用的汇总结果')
       await updateTaskJob({
         taskId: jobId, stepId: reduceStepId, stepStatus: 'completed', checkpoint: `summaries:${next.length}`,
         eventType: 'step.completed', eventFields: { summaryCount: next.length },
@@ -442,8 +442,8 @@ export async function analyzeLongText(
       taskId: jobId, stepId: 'synthesis', stepKind: 'synthesis', stepStatus: 'running',
       eventType: 'step.started', eventFields: { summaryCount: current.length },
     })
-    const synthesisSegment = { id: crypto.randomUUID(), label: '全书综合', startedAt: Date.now() }
-    onProgress?.({ segment: synthesisSegment, stage: 'synthesis', completed: 0, total: 1, message: `正在综合 ${formatCount(current.length)} 条阶段摘要，完成最终任务…` })
+    const synthesisSegment = { id: crypto.randomUUID(), label: '综合分析', startedAt: Date.now() }
+    onProgress?.({ segment: synthesisSegment, stage: 'synthesis', completed: 0, total: 1, message: `正在综合分析 ${formatCount(current.length)} 条汇总结果…` })
     modelInvocationCount += 1
     const content = await collectResponse(requestId, profile.id, [{ role: 'user', content: summaryPrompt(instruction, current, true, indexMessage, effectiveContextWindow) }], toolCallGuard)
     const finalEvidence = verifyEvidenceReferences(parseEvidenceReferences(content), documents)

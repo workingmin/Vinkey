@@ -359,11 +359,11 @@ function IconButton({ label, active = false, children, onClick, disabled = false
 
 const chatStatusMeta: Record<ChatRunStatus, { label: string; title: string }> = {
   sending: { label: '发送中', title: 'sending · 正在提交消息' },
-  thinking: { label: '思考中', title: 'thinking · 正在理解你的请求' },
+  thinking: { label: '处理中', title: 'thinking · 正在处理请求' },
   fetching: { label: '读取资料', title: 'fetching · 正在准备文档和上下文' },
   tool_calling: { label: '执行分析', title: 'tool_calling · 正在执行分析流程' },
-  streaming: { label: '生成中', title: 'streaming · 正在返回内容' },
-  stopping: { label: '停止中', title: 'stopping · 正在等待请求结束' },
+  streaming: { label: '正在生成回答…', title: 'streaming · 正在返回内容' },
+  stopping: { label: '正在停止…', title: 'stopping · 正在等待请求结束' },
 }
 
 function FileBrowserPanel({ onOpenDocument, onToggleContext, onOpenWorkspace, onRefreshWorkspace }: {
