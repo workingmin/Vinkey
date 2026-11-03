@@ -1265,6 +1265,9 @@ fn record_runtime_event(
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            focus_main_window(app);
+        }))
         .manage(WorkspaceState::default())
         .manage(conversation_activity::ConversationActivity::default())
         .manage(models::ChatCancellation::default())
@@ -1452,22 +1455,26 @@ fn should_restore_main_window(has_visible_windows: bool) -> bool {
     !has_visible_windows
 }
 
+fn focus_main_window(app: &AppHandle) {
+    let Some(window) = app.get_webview_window("main") else {
+        eprintln!("main window is unavailable for focus restore");
+        return;
+    };
+    if let Err(error) = window.show() {
+        eprintln!("main window show failed: {error}");
+        return;
+    }
+    if let Err(error) = window.set_focus() {
+        eprintln!("main window focus failed: {error}");
+    }
+}
+
 #[cfg(target_os = "macos")]
 fn restore_main_window(app: &AppHandle, has_visible_windows: bool) {
     if !should_restore_main_window(has_visible_windows) {
         return;
     }
-    let Some(window) = app.get_webview_window("main") else {
-        eprintln!("macOS reopen failed: main window is unavailable");
-        return;
-    };
-    if let Err(error) = window.show() {
-        eprintln!("macOS reopen show failed: {error}");
-        return;
-    }
-    if let Err(error) = window.set_focus() {
-        eprintln!("macOS reopen focus failed: {error}");
-    }
+    focus_main_window(app);
 }
 
 #[cfg(test)]
