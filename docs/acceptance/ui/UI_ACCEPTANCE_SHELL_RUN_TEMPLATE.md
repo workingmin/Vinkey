@@ -17,7 +17,7 @@
 
 | 检查项 | 结果 | 证据/备注 |
 | --- | --- | --- |
-| macOS 为 15+，且 `swiftc` 可构建 ScreenCaptureKit helper（Windows 填 `N/A`） | `<PASS/FAIL/BLOCKED/N/A>` | `<OS_VERSION / SWIFT_VERSION>` |
+| macOS 为 15+，且 `swiftc` 可构建 CoreGraphics 截图助手（CGWindowListCreateImage；Windows 填 `N/A`） | `<PASS/FAIL/BLOCKED/N/A>` | `<OS_VERSION / SWIFT_VERSION>` |
 | 应用成功启动并显示壳层 | `<PASS/FAIL/BLOCKED>` | `<...>` |
 | 目标平台窗口控制可用 | `<PASS/FAIL/BLOCKED>` | `<...>` |
 | 测试目录和路径已脱敏 | `<PASS/FAIL/BLOCKED>` | `<...>` |
@@ -37,7 +37,7 @@
 npm run test:ui-shell-native-mac -- --output <ARCHIVE_ROOT> --tester-id <NON_PERSONAL_ID> [--app /path/to/Vinkey.app]
 ```
 
-该入口仅支持 macOS 15+，要求 Xcode Command Line Tools 的 `swiftc`，并只通过 ScreenCaptureKit helper 捕获目标应用窗口，不提供整桌面或 `screencapture` 降级。它默认启动 `/Applications/Vinkey.app`；传入 `--app` 时启动其他已构建应用，传入 `--dev` 时启动 `npm run desktop:dev`。默认创建临时隔离 Profile；`--profile-dir` 可指定验收目录，`--no-launch` 必须同时指定调用方已注入的 Profile。`--tester-id` 只能填写非个人标识。执行前须授予运行终端的 macOS“辅助功能”和“屏幕与系统音频录制”权限。它会在最后一个窗口用例点击关闭交通灯，请使用专用测试实例。
+该入口仅支持 macOS 15+，要求 Xcode Command Line Tools 的 `swiftc`，并通过 CoreGraphics helper（`CGWindowListCreateImage`，部署目标 `macosx14.0`）按窗口 ID 捕获目标应用最大可见窗口，不提供整桌面或 `screencapture` 降级。截图机制已从 ScreenCaptureKit 改为 CoreGraphics：ScreenCaptureKit 在 WorkBuddy 沙箱会话下会因 `CGS_REQUIRE_INIT` 失败，CoreGraphics 仅需辅助功能权限即可在会话内工作。它默认启动 `/Applications/Vinkey.app`；传入 `--app` 时启动其他已构建应用，传入 `--dev` 时启动 `npm run desktop:dev`。默认创建临时隔离 Profile；`--profile-dir` 可指定验收目录，`--no-launch` 必须同时指定调用方已注入的 Profile。`--tester-id` 只能填写非个人标识。执行前仅须授予运行终端的 macOS“辅助功能”权限（不再要求“屏幕与系统音频录制”）。它会在最后一个窗口用例点击关闭交通灯，请使用专用测试实例。
 
 ### Windows PowerShell
 

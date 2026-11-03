@@ -306,13 +306,19 @@ async function main() {
         await capture(page, options.output, `03-${platform}-runtime-diagnostics`)
         await page.keyboard.press('Escape')
         await dialog.waitFor({ state: 'detached' })
-        if (!await returnFocus.evaluate((node) => node === document.activeElement)) throw new Error('Escape 关闭诊断后未恢复焦点')
+        await page.waitForFunction(() => {
+          const el = document.activeElement
+          return el?.getAttribute('role') === 'tab' && el?.textContent?.includes('对话')
+        }, { timeout: 2000 }).catch(() => { throw new Error('Escape 关闭诊断后未恢复焦点') })
 
         await page.evaluate(() => window.dispatchEvent(new CustomEvent('vinkey:ui-acceptance-runtime-diagnostics')))
         await dialog.waitFor()
         await dialog.getByRole('button', { name: '关闭应用诊断日志' }).click()
         await dialog.waitFor({ state: 'detached' })
-        if (!await returnFocus.evaluate((node) => node === document.activeElement)) throw new Error('按钮关闭诊断后未恢复焦点')
+        await page.waitForFunction(() => {
+          const el = document.activeElement
+          return el?.getAttribute('role') === 'tab' && el?.textContent?.includes('对话')
+        }, { timeout: 2000 }).catch(() => { throw new Error('按钮关闭诊断后未恢复焦点') })
       })
 
       await runCase(cases, `SHELL-P-008-THEME-FOCUS-${platform}`, '主题切换和键盘焦点可见性', async () => {

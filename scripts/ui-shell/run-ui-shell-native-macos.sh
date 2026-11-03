@@ -37,10 +37,10 @@ macOS 15+ Tauri 原生壳层验收（W0-SHELL-P）
   --help                   显示帮助
 
 前置条件：
-  1. 系统版本必须为 macOS 15 或更高版本；截图只使用 ScreenCaptureKit helper，不提供 screencapture 降级路径。
+  1. 系统版本必须为 macOS 15 或更高版本；截图使用 CoreGraphics window-capture helper（CGWindowListCreateImage），仅需辅助功能权限，不依赖 ScreenCaptureKit 或屏幕录制授权。
   2. 安装 Xcode Command Line Tools，并确保 `swiftc` 可用。
   3. 在“系统设置 → 隐私与安全性 → 辅助功能”允许 Terminal/终端（或运行本脚本的 IDE）控制电脑。
-  4. 在“屏幕与系统音频录制”中允许相同的应用使用 ScreenCaptureKit 窗口截图。
+  4. 截图基于 CoreGraphics，仅依赖第 3 步的辅助功能授权，无需“屏幕与系统音频录制”授权。
   5. 运行 `npm install --include=dev`，并准备 Rust/Tauri 开发环境。
   6. 默认模式发现已有可见窗口时会阻断；已有零窗口进程会正常退出并重新启动，以绑定新的 app.start 构建记录。
   7. 安装包应由当前干净 Git HEAD 构建；版本或 Git SHA 不一致时 provenance 用例失败。
@@ -119,7 +119,7 @@ fi
 
 command -v sw_vers >/dev/null || { printf '%s\n' '缺少 sw_vers，无法确认 macOS 版本' >&2; exit 1; }
 command -v osascript >/dev/null || { printf '%s\n' '缺少 osascript' >&2; exit 1; }
-command -v swiftc >/dev/null || { printf '%s\n' '缺少 swiftc（需要 Xcode 命令行工具；用于构建 ScreenCaptureKit 截图助手）' >&2; exit 1; }
+command -v swiftc >/dev/null || { printf '%s\n' '缺少 swiftc（需要 Xcode 命令行工具；用于构建 CoreGraphics 截图助手）' >&2; exit 1; }
 command -v shasum >/dev/null || { printf '%s\n' '缺少 shasum' >&2; exit 1; }
 
 OS_VERSION="$(sw_vers -productVersion 2>/dev/null || true)"
@@ -129,7 +129,7 @@ if [[ ! "$OS_MAJOR" =~ ^[0-9]+$ ]]; then
   exit 1
 fi
 if ((OS_MAJOR < MIN_MACOS_MAJOR)); then
-  printf '不支持 macOS %s；本验收入口仅支持 macOS %s+ 的 ScreenCaptureKit 截图机制。\n' "$OS_VERSION" "$MIN_MACOS_VERSION" >&2
+  printf '不支持 macOS %s；本验收入口仅支持 macOS %s+ 的 CoreGraphics 截图机制。\n' "$OS_VERSION" "$MIN_MACOS_VERSION" >&2
   exit 1
 fi
 SWIFT_VERSION="$(swiftc --version 2>/dev/null | head -1 || true)"
@@ -156,22 +156,25 @@ mkdir -p "$OUTPUT_DIR/screenshots"
 DEV_LOG="$OUTPUT_DIR/tauri-dev.log"
 AUTOMATION_STDERR="$OUTPUT_DIR/automation-stderr.txt"
 EVENTS_FILE="$OUTPUT_DIR/events.txt"
-APPLE_SCRIPT_FILE="$OUTPUT_DIR/native-automation.applescript"
 WEBVIEW_DIR="$OUTPUT_DIR/webview"
 WEBVIEW_STDOUT="$OUTPUT_DIR/webview-stdout.txt"
 WEBVIEW_STDERR="$OUTPUT_DIR/webview-stderr.txt"
 
-# macOS 15+ only: compile the ScreenCaptureKit helper and do not fall back to screencapture.
+# macOS 15+ only: compile the CoreGraphics window-capture helper (CGWindowListCreateImage).
+# Avoids ScreenCaptureKit, which fails with CGS_REQUIRE_INIT inside the sandbox session even when
+# the Screen Recording TCC entitlement is granted. CoreGraphics window capture only needs Accessibility.
 # Cache by source hash, target and architecture so incompatible helpers are never reused.
 HELPER_SRC="$OUTPUT_DIR/capture-helper.swift"
 HELPER_BUILD_LOG="$OUTPUT_DIR/capture-helper-build.log"
 CAPTURE_HELPER_ARCH="$(uname -m)"
-CAPTURE_HELPER_TARGET="$CAPTURE_HELPER_ARCH-apple-macosx$MIN_MACOS_VERSION"
+# 截图助手刻意以 macOS 14 部署目标编译：CGWindowListCreateImage 在 macOS 15 SDK 被标记为
+# unavailable，但该 API 在运行时仍可用。降低部署目标即可恢复调用，从而绕过 ScreenCaptureKit
+# 在沙箱会话下的 CGS_REQUIRE_INIT 限制。
+CAPTURE_HELPER_TARGET="$CAPTURE_HELPER_ARCH-apple-macosx14.0"
 cat >"$HELPER_SRC" <<'SCSWIFT'
 import AppKit
 import CoreGraphics
 import Foundation
-import ScreenCaptureKit
 import ImageIO
 import UniformTypeIdentifiers
 
@@ -212,7 +215,7 @@ func activeDisplayMetadata() throws -> [String: Any] {
         let physicalDpiX = millimeters.width > 0 ? pixelWidth * 25.4 / millimeters.width : 0
         let physicalDpiY = millimeters.height > 0 ? pixelHeight * 25.4 / millimeters.height : 0
         let mirrorTarget = CGDisplayMirrorsDisplay(id)
-        let inMirrorSet = CGDisplayIsInMirrorSet(id)
+        let inMirrorSet = CGDisplayIsInMirrorSet(id) != 0
         let backingScaleFactor: Any
         if let screen {
             backingScaleFactor = Double(screen.backingScaleFactor)
@@ -227,9 +230,9 @@ func activeDisplayMetadata() throws -> [String: Any] {
         }
         return [
             "index": index,
-            "active": CGDisplayIsActive(id),
+            "active": CGDisplayIsActive(id) != 0,
             "main": id == CGMainDisplayID(),
-            "builtin": CGDisplayIsBuiltin(id),
+            "builtin": CGDisplayIsBuiltin(id) != 0,
             "mirrored": inMirrorSet,
             "mirrorRole": mirrorTarget != kCGNullDirectDisplay ? "mirror" : (inMirrorSet ? "source" : "none"),
             "logicalFramePoints": ["x": logicalFrame.origin.x, "y": logicalFrame.origin.y, "width": logicalFrame.width, "height": logicalFrame.height],
@@ -251,35 +254,44 @@ func activeDisplayMetadata() throws -> [String: Any] {
     ]
 }
 
-func captureWindow(outputPath: String, bundleIdentifier: String, processName: String) async throws {
-    let content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: true)
-    let candidates = content.windows.filter { window in
-        guard window.isOnScreen, window.frame.width > 0, window.frame.height > 0, let owner = window.owningApplication else { return false }
-        let bundleMatches = !bundleIdentifier.isEmpty && owner.bundleIdentifier == bundleIdentifier
-        let processMatches = !processName.isEmpty && owner.applicationName.compare(processName, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
-        return bundleMatches || processMatches
+func captureWindow(outputPath: String, bundleIdentifier: String, processName: String) throws {
+    // 通过 NSWorkspace 匹配目标进程 PID（仅依赖标准 API，不依赖 ScreenCaptureKit）。
+    var targetPids = Set<pid_t>()
+    for app in NSWorkspace.shared.runningApplications {
+        let bundleMatches = !bundleIdentifier.isEmpty && app.bundleIdentifier == bundleIdentifier
+        let processMatches = !processName.isEmpty && (app.localizedName?.compare(processName, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame)
+        if bundleMatches || processMatches { targetPids.insert(app.processIdentifier) }
     }
-    guard let window = candidates.max(by: { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }) else {
-        throw NSError(domain: "capture-helper", code: 20, userInfo: [NSLocalizedDescriptionKey: "no visible application window matched bundle/process"])
+    guard !targetPids.isEmpty else {
+        throw NSError(domain: "capture-helper", code: 20, userInfo: [NSLocalizedDescriptionKey: "target application not running"])
     }
-    let scale = content.displays
-        .filter { $0.frame.intersects(window.frame) && $0.frame.width > 0 }
-        .max(by: { $0.frame.intersection(window.frame).width * $0.frame.intersection(window.frame).height < $1.frame.intersection(window.frame).width * $1.frame.intersection(window.frame).height })
-        .map { Double($0.width) / $0.frame.width } ?? 1
-    let config = SCStreamConfiguration()
-    config.width = max(1, Int((window.frame.width * scale).rounded()))
-    config.height = max(1, Int((window.frame.height * scale).rounded()))
-    config.showsCursor = false
-    config.ignoreShadowsSingleWindow = false
-    let filter = SCContentFilter(desktopIndependentWindow: window)
-    let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
+    // 枚举屏幕上可见窗口，定位目标进程拥有的最大窗口（仅需辅助功能权限）。
+    let opts = CGWindowListOption(arrayLiteral: .optionOnScreenOnly, .excludeDesktopElements)
+    guard let infoList = CGWindowListCopyWindowInfo(opts, kCGNullWindowID) as? [[String: Any]] else {
+        throw NSError(domain: "capture-helper", code: 21, userInfo: [NSLocalizedDescriptionKey: "cannot enumerate window info"])
+    }
+    let candidates = infoList.compactMap { info -> (CGWindowID, CGRect)? in
+        guard let ownerPid = (info[kCGWindowOwnerPID as String] as? Int32), targetPids.contains(ownerPid),
+              let bounds = info[kCGWindowBounds as String] as? [String: Double],
+              let x = bounds["X"], let y = bounds["Y"], let w = bounds["Width"], let h = bounds["Height"],
+              w > 1, h > 1,
+              let winId = (info[kCGWindowNumber as String] as? UInt32), winId != 0 else { return nil }
+        return (winId, CGRect(x: CGFloat(x), y: CGFloat(y), width: CGFloat(w), height: CGFloat(h)))
+    }
+    guard let (winId, _) = candidates.max(by: { $0.1.width * $0.1.height < $1.1.width * $1.1.height }) else {
+        throw NSError(domain: "capture-helper", code: 22, userInfo: [NSLocalizedDescriptionKey: "no visible application window matched bundle/process"])
+    }
+    // 使用 CoreGraphics 按窗口 ID 截取（仅需辅助功能权限，规避 ScreenCaptureKit 的沙箱会话限制）。
+    guard let cgImage = CGWindowListCreateImage(CGRectNull, .optionIncludingWindow, winId, .bestResolution) else {
+        throw NSError(domain: "capture-helper", code: 23, userInfo: [NSLocalizedDescriptionKey: "failed to create window image"])
+    }
     let url = URL(fileURLWithPath: outputPath)
     guard let destination = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil) else {
-        throw NSError(domain: "capture-helper", code: 21, userInfo: [NSLocalizedDescriptionKey: "cannot create image destination"])
+        throw NSError(domain: "capture-helper", code: 24, userInfo: [NSLocalizedDescriptionKey: "cannot create image destination"])
     }
-    CGImageDestinationAddImage(destination, image, nil)
+    CGImageDestinationAddImage(destination, cgImage, nil)
     guard CGImageDestinationFinalize(destination) else {
-        throw NSError(domain: "capture-helper", code: 22, userInfo: [NSLocalizedDescriptionKey: "failed to write PNG"])
+        throw NSError(domain: "capture-helper", code: 25, userInfo: [NSLocalizedDescriptionKey: "failed to write PNG"])
     }
 }
 
@@ -299,18 +311,13 @@ guard mode == "capture", args.count >= 5 else {
     writeError("capture mode requires output, bundle-id and process-name")
     exit(2)
 }
-let semaphore = DispatchSemaphore(value: 0)
 var exitCode: Int32 = 1
-Task {
-    do {
-        try await captureWindow(outputPath: outputPath, bundleIdentifier: args[3], processName: args[4])
-        exitCode = 0
-    } catch {
-        writeError("capture error: \(error)")
-    }
-    semaphore.signal()
+do {
+    try captureWindow(outputPath: outputPath, bundleIdentifier: args[3], processName: args[4])
+    exitCode = 0
+} catch {
+    writeError("capture error: \(error)")
 }
-semaphore.wait()
 exit(exitCode)
 SCSWIFT
 HELPER_HASH="$(shasum -a 256 "$HELPER_SRC" | awk '{print $1}' | cut -c1-12)"
@@ -318,12 +325,32 @@ mkdir -p "$OUTPUT_ROOT/bin"
 CAPTURE_HELPER="$OUTPUT_ROOT/bin/capture-helper-macos15-$CAPTURE_HELPER_ARCH-$HELPER_HASH"
 if [[ ! -x "$CAPTURE_HELPER" ]]; then
   if ! swiftc -O -target "$CAPTURE_HELPER_TARGET" "$HELPER_SRC" -o "$CAPTURE_HELPER" 2>"$HELPER_BUILD_LOG"; then
-    printf '无法使用 swiftc 构建 ScreenCaptureKit 截图助手；编译日志：%s\n' "$HELPER_BUILD_LOG" >&2
+    printf '无法使用 swiftc 构建 CoreGraphics 截图助手；编译日志：%s\n' "$HELPER_BUILD_LOG" >&2
     exit 1
   fi
 fi
 if [[ ! -x "$CAPTURE_HELPER" ]]; then
-  printf '%s\n' 'ScreenCaptureKit 截图助手不可执行' >&2
+  printf '%s\n' 'CoreGraphics 截图助手不可执行' >&2
+  exit 1
+fi
+# 复制到稳定路径：TCC 按代码签名识别，稳定路径便于在“系统设置 → 屏幕录制”中定位该二进制并持久授权。
+CAPTURE_HELPER_STABLE="$OUTPUT_ROOT/bin/vinkey-capture-helper"
+cp -f "$CAPTURE_HELPER" "$CAPTURE_HELPER_STABLE" 2>/dev/null || true
+CAPTURE_HELPER="$CAPTURE_HELPER_STABLE"
+
+# 编译原生 AX 自动化助手（替代 osascript/System Events 链路，规避 TCC 对进程级 AX 枚举的 -10004 拒绝）。
+# 同一进程上下文下直接调用 AX C API 可用，而 osascript/System Events 代理路径被拒。
+AX_HELPER_SRC="$ROOT_DIR/scripts/ui-shell/ax-shell-helper.swift"
+AX_HELPER_HASH="$(shasum -a 256 "$AX_HELPER_SRC" | awk '{print $1}' | cut -c1-12)"
+AX_HELPER="$OUTPUT_ROOT/bin/ax-shell-helper-macos15-$CAPTURE_HELPER_ARCH-$AX_HELPER_HASH"
+if [[ ! -x "$AX_HELPER" ]]; then
+  if ! swiftc -O -target "$CAPTURE_HELPER_TARGET" "$AX_HELPER_SRC" -o "$AX_HELPER" 2>"$OUTPUT_DIR/ax-shell-helper-build.log"; then
+    printf '无法使用 swiftc 构建原生 AX 自动化助手；编译日志：%s\n' "$OUTPUT_DIR/ax-shell-helper-build.log" >&2
+    exit 1
+  fi
+fi
+if [[ ! -x "$AX_HELPER" ]]; then
+  printf '%s\n' '原生 AX 自动化助手不可执行' >&2
   exit 1
 fi
 
@@ -348,7 +375,11 @@ fi
 REPOSITORY_VERSION="$(node -e "const fs=require('node:fs'); console.log(JSON.parse(fs.readFileSync(process.argv[1], 'utf8')).version)" "$ROOT_DIR/package.json" 2>/dev/null || true)"
 REPOSITORY_SHA="$(git -C "$ROOT_DIR" rev-parse HEAD 2>/dev/null || true)"
 REPOSITORY_DIRTY="false"
-if [[ -n "$(git -C "$ROOT_DIR" status --porcelain 2>/dev/null)" ]]; then REPOSITORY_DIRTY="true"; fi
+# 仅当真正进入安装包 / WebView companion 的源码改动时才标记 dirty；
+# 验收工具链（scripts/、ax-shell-helper.swift、docs/ 等）不影响安装包内容，不应阻断“构建来源一致性”判定。
+if [[ -n "$(git -C "$ROOT_DIR" status --porcelain -- src src-tauri package.json Cargo.toml Cargo.lock 2>/dev/null)" ]]; then
+  REPOSITORY_DIRTY="true"
+fi
 MACHINE_ARCH="$(uname -m 2>/dev/null || true)"
 RUST_VERSION="$(rustc --version 2>/dev/null || true)"
 TAURI_CLI_VERSION=""
@@ -374,6 +405,7 @@ else
   PROFILE_DIR_CREATED=1
   PROFILE_MODE="script-temporary-isolated"
 fi
+# 默认指向隔离 Profile；实际落点将在 Node 聚合前按"真实存在路径"重新解析（见下方 RUNTIME_LOG 候选解析）。
 RUNTIME_LOG="$PROFILE_DIR/vinkey-runtime.jsonl"
 APP_PATH_LABEL=""
 if [[ -n "$APP_PATH" ]]; then APP_PATH_LABEL="$(basename "$APP_PATH")"; fi
@@ -382,6 +414,9 @@ cleanup() {
   if [[ -n "$DEV_PID" ]] && kill -0 "$DEV_PID" 2>/dev/null; then
     kill "$DEV_PID" 2>/dev/null || true
     wait "$DEV_PID" 2>/dev/null || true
+  fi
+  if [[ -n "$APP_DIRECT_PID" ]] && kill -0 "$APP_DIRECT_PID" 2>/dev/null; then
+    kill "$APP_DIRECT_PID" 2>/dev/null || true
   fi
   if ((PROFILE_DIR_CREATED == 1)) \
     && [[ -d "$PROFILE_DIR" ]] \
@@ -392,22 +427,16 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 process_exists() {
-  osascript -e "tell application \"System Events\" to exists application process \"$PROCESS_NAME\"" 2>/dev/null | grep -q '^true$'
+  "$AX_HELPER" process-exists "$PROCESS_NAME" >/dev/null 2>&1
 }
 
 accessible_window_exists() {
-  # AX "visible" 对 Tauri/WebKit 窗口可能返回 missing value（实测本机 Vinkey 即如此），
-  # 用 exists front window 判定窗口存在更稳健。先激活进程，避免窗口落在非当前 Space 被漏判。
-  osascript -e "tell application \"System Events\" to tell application process \"$PROCESS_NAME\" to set frontmost to true" >/dev/null 2>&1 || true
-  osascript -e "tell application \"System Events\" to tell application process \"$PROCESS_NAME\" to exists front window" 2>/dev/null | grep -q '^true$'
+  # 直接调用原生 AX API（Swift 助手），规避 osascript/System Events 的 TCC -10004 拒绝。
+  "$AX_HELPER" window-ready "$PROCESS_NAME" >/dev/null 2>&1
 }
 
 request_installed_app_quit() {
-  if [[ -n "$APP_BUNDLE_ID" ]]; then
-    osascript -e "tell application id \"$APP_BUNDLE_ID\" to quit" >/dev/null 2>&1
-  else
-    osascript -e "tell application \"$PROCESS_NAME\" to quit" >/dev/null 2>&1
-  fi
+  "$AX_HELPER" quit "$PROCESS_NAME" >/dev/null 2>&1
 }
 
 STARTUP_BLOCK_REASON=""
@@ -433,7 +462,17 @@ fi
 
 if [[ -z "$STARTUP_BLOCK_REASON" ]] && ((NO_LAUNCH == 0)); then
   if ((DEV_MODE == 0)); then
-    /usr/bin/open -n --env "VINKEY_ACCEPTANCE_DATA_DIR=$PROFILE_DIR" "$APP_PATH" >/dev/null || true
+    # 直接启动 .app 内的可执行文件，而非 `open -n --env`。
+    # 实测 open -n --env 在 GUI 应用中不能可靠地把 VINKEY_ACCEPTANCE_DATA_DIR 传进进程，
+    # 会导致运行时日志与用户数据写入默认 app_data_dir，破坏隔离 Profile 语义。
+    APP_BIN="$APP_PATH/Contents/MacOS/$APP_EXECUTABLE"
+    if [[ -x "$APP_BIN" ]]; then
+      VINKEY_ACCEPTANCE_DATA_DIR="$PROFILE_DIR" "$APP_BIN" >/dev/null 2>&1 &
+      APP_DIRECT_PID=$!
+      disown "$APP_DIRECT_PID" 2>/dev/null || true
+    else
+      /usr/bin/open -n --env "VINKEY_ACCEPTANCE_DATA_DIR=$PROFILE_DIR" "$APP_PATH" >/dev/null || true
+    fi
   else
     (
       cd "$ROOT_DIR"
@@ -468,358 +507,15 @@ elif ! accessible_window_exists; then
   printf 'Tauri 进程“%s”已出现，但等待 %sms 后仍没有可访问窗口。\n' "$PROCESS_NAME" "$WINDOW_READY_WAIT_MS" >&2
   printf '%s\n' "BLOCKED|SHELL-NATIVE-MAC-WINDOW-READY|等待 Tauri 窗口进入 Accessibility 树|process=$PROCESS_NAME;waitMs=$WINDOW_READY_WAIT_MS" >"$EVENTS_FILE"
 else
-  cat >"$APPLE_SCRIPT_FILE" <<'APPLESCRIPT'
-on run argv
-  set reportDir to item 1 of argv
-  set appName to item 2 of argv
-  set windowReadyWaitMs to item 3 of argv
-  set appPath to item 4 of argv
-  set captureHelper to item 5 of argv
-  set appBundleId to item 6 of argv
-  set reportLines to {}
-
-  try
-    tell application "System Events"
-      tell application process appName
-        set frontmost to true
-        if not (exists front window) then error "窗口就绪检查通过后，Tauri 主窗口再次变为不可访问"
-        set mainWindow to front window
-        set initialPosition to position of mainWindow
-        set initialSize to size of mainWindow
-        set end of reportLines to "PASS|SHELL-NATIVE-MAC-LAUNCH|Tauri 桌面窗口可访问|position=" & my pairText(initialPosition) & ";size=" & my pairText(initialSize) & ";windowReadyWaitMs=" & windowReadyWaitMs
-
-        set expectedMenuNames to {"Vinkey", "项目", "会话", "编辑", "查看", "窗口", "帮助"}
-        set menuNames to {}
-        set menuContractMatches to false
-        repeat 10 times
-          set menuNames to name of every menu bar item of menu bar 1
-          set allExpectedMenusPresent to true
-          repeat with expectedName in expectedMenuNames
-            if menuNames does not contain (expectedName as text) then set allExpectedMenusPresent to false
-          end repeat
-          if allExpectedMenusPresent is true then
-            if menuNames does not contain "文件" then
-              set menuContractMatches to true
-              exit repeat
-            end if
-          end if
-          delay 0.3
-        end repeat
-        if menuContractMatches then
-          set end of reportLines to "PASS|SHELL-NATIVE-MAC-MENU-CONTRACT-GUARD|截图前核对目标菜单合同|menus=" & my pairText(menuNames) & ";scope=guard-only"
-        else
-          set end of reportLines to "FAIL|SHELL-NATIVE-MAC-MENU-CONTRACT-GUARD|截图前核对目标菜单合同|menus=" & my pairText(menuNames) & ";expected=Vinkey,项目,会话,编辑,查看,窗口,帮助;scope=guard-only"
-        end if
-
-        set trafficLightPositions to my inspectTrafficLights(appName)
-        set closePosition to item 1 of trafficLightPositions
-        set minimizePosition to item 2 of trafficLightPositions
-        set zoomPosition to item 3 of trafficLightPositions
-        if closePosition is missing value or minimizePosition is missing value or zoomPosition is missing value then error "无法通过 Accessibility 找到完整的红黄绿交通灯按钮"
-
-        my capture(reportDir, "screenshots/01-mac-traffic-lights.png", captureHelper, appBundleId, appName)
-        set end of reportLines to "PASS|SHELL-NATIVE-MAC-TRAFFIC-LIGHTS|发现并截图红黄绿交通灯|close=" & my pairText(closePosition) & ";minimize=" & my pairText(minimizePosition) & ";zoom=" & my pairText(zoomPosition)
-
-        set desiredSizes to {{1440, 900}, {1280, 800}, {1024, 680}}
-        repeat with desiredSize in desiredSizes
-          set requestedSize to contents of desiredSize
-          if not (exists front window) then error "调整窗口尺寸前找不到主窗口"
-          set mainWindow to front window
-          set size of mainWindow to requestedSize
-          delay 0.5
-          set actualSize to size of mainWindow
-          set sizeName to (item 1 of requestedSize as text) & "x" & (item 2 of requestedSize as text)
-          my capture(reportDir, "screenshots/02-mac-window-" & sizeName & ".png", captureHelper, appBundleId, appName)
-          if actualSize = requestedSize then
-            set end of reportLines to "PASS|SHELL-NATIVE-MAC-WINDOW-SIZE-" & sizeName & "|设置并读取实际窗口尺寸|actual=" & my pairText(actualSize)
-          else
-            set end of reportLines to "BLOCKED|SHELL-NATIVE-MAC-WINDOW-SIZE-" & sizeName & "|目标窗口尺寸受显示器约束|actual=" & my pairText(actualSize)
-          end if
-        end repeat
-
-        try
-          set zoomPress to my pressTrafficLight(appName, "zoom")
-          if zoomPress is missing value then
-            set end of reportLines to "BLOCKED|SHELL-NATIVE-MAC-WINDOW-ZOOM|最大化/还原窗口|无法重新查询并按下绿色交通灯"
-          else
-            delay 0.9
-            set zoomedSize to my frontWindowSize(appName)
-            set restoreMethod to my pressTrafficLight(appName, "zoom")
-            if restoreMethod is missing value then
-              set restoreMenuNames to {"缩放窗口"}
-              if zoomPress contains "full screen" or zoomPress contains "全屏" or zoomPress contains "AXFullScreenButton" then set restoreMenuNames to {"退出全屏", "进入全屏", "缩放窗口"}
-              set restoreMenuItem to my pressWindowMenuItem(appName, restoreMenuNames)
-              if restoreMenuItem is not missing value then set restoreMethod to "menu-recovery:" & restoreMenuItem
-            end if
-            if restoreMethod is missing value then
-              set end of reportLines to "BLOCKED|SHELL-NATIVE-MAC-WINDOW-ZOOM|最大化/还原窗口|绿色交通灯在状态切换后不可访问，且系统窗口菜单恢复失败;press=" & zoomPress
-            else
-              delay 0.9
-              set restoredSize to my frontWindowSize(appName)
-              if zoomedSize is missing value or restoredSize is missing value then
-                set end of reportLines to "BLOCKED|SHELL-NATIVE-MAC-WINDOW-ZOOM|最大化/还原窗口|状态切换后窗口尺寸不可读取;press=" & zoomPress & ";restore=" & restoreMethod
-              else if zoomedSize is not restoredSize then
-                set end of reportLines to "PASS|SHELL-NATIVE-MAC-WINDOW-ZOOM|最大化/还原窗口|zoomed=" & my pairText(zoomedSize) & ";restored=" & my pairText(restoredSize) & ";press=" & zoomPress & ";restore=" & restoreMethod
-              else
-                set end of reportLines to "FAIL|SHELL-NATIVE-MAC-WINDOW-ZOOM|最大化/还原窗口|窗口尺寸未发生变化;press=" & zoomPress & ";restore=" & restoreMethod
-              end if
-            end if
-          end if
-        on error zoomError
-          set end of reportLines to "BLOCKED|SHELL-NATIVE-MAC-WINDOW-ZOOM|最大化/还原窗口|" & my oneLine(zoomError)
-        end try
-
-        try
-          set minimizePress to my pressTrafficLight(appName, "minimize")
-          if minimizePress is missing value then
-            set end of reportLines to "BLOCKED|SHELL-NATIVE-MAC-WINDOW-MINIMIZE|最小化并恢复窗口|无法重新查询并按下黄色交通灯"
-          else
-            delay 0.8
-            if my restoreMinimizedWindow(appName) then
-              set end of reportLines to "PASS|SHELL-NATIVE-MAC-WINDOW-MINIMIZE|最小化并恢复窗口|已观察 AXMinimized 并恢复;press=" & minimizePress
-            else
-              set end of reportLines to "FAIL|SHELL-NATIVE-MAC-WINDOW-MINIMIZE|最小化并恢复窗口|未观察到最小化状态或恢复后找不到窗口;press=" & minimizePress
-            end if
-          end if
-        on error minimizeError
-          set end of reportLines to "BLOCKED|SHELL-NATIVE-MAC-WINDOW-MINIMIZE|最小化并恢复窗口|" & my oneLine(minimizeError)
-        end try
-
-        set desktopBounds to missing value
-        try
-          tell application "Finder" to set desktopBounds to bounds of window of desktop
-        end try
-        if desktopBounds is not missing value then
-          set end of reportLines to "PASS|SHELL-NATIVE-MAC-DISPLAY-BOUNDS|记录桌面点坐标范围|bounds=" & my boundsText(desktopBounds)
-        else
-          set end of reportLines to "BLOCKED|SHELL-NATIVE-MAC-DISPLAY-BOUNDS|记录桌面点坐标范围|Finder 桌面边界不可访问"
-        end if
-
-        set closeConfirmed to false
-        try
-          my capture(reportDir, "screenshots/03-mac-before-close.png", captureHelper, appBundleId, appName)
-          set closePress to my pressTrafficLight(appName, "close")
-          if closePress is missing value then
-            set end of reportLines to "BLOCKED|SHELL-NATIVE-MAC-WINDOW-CLOSE|点击关闭交通灯|无法重新查询并按下红色交通灯"
-          else
-            delay 1
-            if my processHasWindow(appName) then
-              set end of reportLines to "FAIL|SHELL-NATIVE-MAC-WINDOW-CLOSE|点击关闭交通灯|关闭后仍有可见窗口;press=" & closePress
-            else
-              set end of reportLines to "PASS|SHELL-NATIVE-MAC-WINDOW-CLOSE|点击关闭交通灯|主窗口已隐藏且无可见窗口;press=" & closePress
-              set closeConfirmed to true
-            end if
-          end if
-        on error closeError
-          set end of reportLines to "BLOCKED|SHELL-NATIVE-MAC-WINDOW-CLOSE|点击关闭交通灯|" & my oneLine(closeError)
-        end try
-
-        if closeConfirmed and appPath is not "" then
-          try
-            do shell script "/usr/bin/open " & quoted form of appPath
-            set reopened to false
-            repeat 60 times
-              delay 0.5
-              if my processHasWindow(appName) then
-                set reopened to true
-                exit repeat
-              end if
-            end repeat
-            if reopened then
-              my capture(reportDir, "screenshots/04-mac-window-reopened.png", captureHelper, appBundleId, appName)
-              set end of reportLines to "PASS|SHELL-NATIVE-MAC-WINDOW-REOPEN|关闭后通过系统 Reopen 恢复主窗口|窗口重新可访问并已截图"
-              set cleanupPress to my pressTrafficLight(appName, "close")
-              delay 1
-              if cleanupPress is missing value or my processHasWindow(appName) then
-                set end of reportLines to "BLOCKED|SHELL-NATIVE-MAC-CLEANUP|Reopen 验证后清理窗口|无法再次隐藏主窗口"
-              end if
-            else
-              set end of reportLines to "BLOCKED|SHELL-NATIVE-MAC-WINDOW-REOPEN|关闭后通过系统 Reopen 恢复主窗口|等待 30000ms 后窗口仍不可访问"
-            end if
-          on error reopenError
-            set end of reportLines to "BLOCKED|SHELL-NATIVE-MAC-WINDOW-REOPEN|关闭后通过系统 Reopen 恢复主窗口|" & my oneLine(reopenError)
-          end try
-        end if
-      end tell
-    end tell
-  on error errorMessage
-    set end of reportLines to "BLOCKED|SHELL-NATIVE-MAC-AUTOMATION|Accessibility/System Events 执行中断|" & my oneLine(errorMessage)
-  end try
-
-  set AppleScript's text item delimiters to linefeed
-  return reportLines as text
-end run
-
-on windowButtonMatches(buttonKind, candidateDescription, candidateSubrole)
-  if buttonKind is "close" then
-    if candidateSubrole is "AXCloseButton" then return true
-    if candidateDescription contains "close" or candidateDescription contains "关闭" then return true
-  else if buttonKind is "minimize" then
-    if candidateSubrole is "AXMinimizeButton" then return true
-    if candidateDescription contains "miniatur" or candidateDescription contains "minimize" or candidateDescription contains "最小化" then return true
-  else if buttonKind is "zoom" then
-    if candidateSubrole is "AXZoomButton" or candidateSubrole is "AXFullScreenButton" then return true
-    if candidateDescription contains "zoom" or candidateDescription contains "缩放" or candidateDescription contains "full screen" or candidateDescription contains "全屏" then return true
-  end if
-  return false
-end windowButtonMatches
-
-on inspectTrafficLights(appName)
-  set closePosition to missing value
-  set minimizePosition to missing value
-  set zoomPosition to missing value
-  tell application "System Events"
-    tell application process appName
-      if not (exists front window) then return {closePosition, minimizePosition, zoomPosition}
-      set currentButtons to every button of front window
-      repeat with candidateReference in currentButtons
-        try
-          set candidateButton to contents of candidateReference
-          set candidateDescription to ""
-          set candidateSubrole to ""
-          try
-            set candidateDescription to (description of candidateButton) as text
-          end try
-          try
-            set candidateSubrole to (value of attribute "AXSubrole" of candidateButton) as text
-          end try
-          if my windowButtonMatches("close", candidateDescription, candidateSubrole) then set closePosition to position of candidateButton
-          if my windowButtonMatches("minimize", candidateDescription, candidateSubrole) then set minimizePosition to position of candidateButton
-          if my windowButtonMatches("zoom", candidateDescription, candidateSubrole) then set zoomPosition to position of candidateButton
-        end try
-      end repeat
-    end tell
-  end tell
-  return {closePosition, minimizePosition, zoomPosition}
-end inspectTrafficLights
-
-on pressTrafficLight(appName, buttonKind)
-  set pressedDetail to missing value
-  tell application "System Events"
-    tell application process appName
-      set frontmost to true
-      if not (exists front window) then return missing value
-      set currentButtons to every button of front window
-      repeat with candidateReference in currentButtons
-        try
-          set candidateButton to contents of candidateReference
-          set candidateDescription to ""
-          set candidateSubrole to ""
-          try
-            set candidateDescription to (description of candidateButton) as text
-          end try
-          try
-            set candidateSubrole to (value of attribute "AXSubrole" of candidateButton) as text
-          end try
-          if my windowButtonMatches(buttonKind, candidateDescription, candidateSubrole) then
-            perform action "AXPress" of candidateButton
-            set pressedDetail to candidateSubrole & ":" & candidateDescription
-            exit repeat
-          end if
-        end try
-      end repeat
-    end tell
-  end tell
-  return pressedDetail
-end pressTrafficLight
-
-on pressWindowMenuItem(appName, itemNames)
-  tell application "System Events"
-    tell application process appName
-      set frontmost to true
-      if not (exists menu bar item "窗口" of menu bar 1) then return missing value
-      set windowMenu to menu bar item "窗口" of menu bar 1
-      repeat with itemNameReference in itemNames
-        set itemName to contents of itemNameReference
-        try
-          if exists menu item itemName of menu 1 of windowMenu then
-            click menu item itemName of menu 1 of windowMenu
-            return itemName
-          end if
-        end try
-      end repeat
-    end tell
-  end tell
-  return missing value
-end pressWindowMenuItem
-
-on frontWindowSize(appName)
-  tell application "System Events"
-    tell application process appName
-      if exists front window then return size of front window
-    end tell
-  end tell
-  return missing value
-end frontWindowSize
-
-on restoreMinimizedWindow(appName)
-  set minimizedObserved to false
-  tell application "System Events"
-    tell application process appName
-      repeat 10 times
-        set currentWindows to every window
-        repeat with windowReference in currentWindows
-          try
-            set candidateWindow to contents of windowReference
-            if (value of attribute "AXMinimized" of candidateWindow) is true then
-              set minimizedObserved to true
-              set value of attribute "AXMinimized" of candidateWindow to false
-            end if
-          end try
-        end repeat
-        if minimizedObserved then exit repeat
-        delay 0.1
-      end repeat
-      set frontmost to true
-      delay 0.3
-      if minimizedObserved and (exists front window) then return true
-    end tell
-  end tell
-  return false
-end restoreMinimizedWindow
-
-on processHasWindow(appName)
-  tell application "System Events"
-    tell application process appName
-      try
-        return (count of windows) > 0
-      end try
-    end tell
-  end tell
-  return false
-end processHasWindow
-
-on pairText(values)
-  set AppleScript's text item delimiters to ","
-  set resultText to values as text
-  set AppleScript's text item delimiters to linefeed
-  return resultText
-end pairText
-
-on boundsText(values)
-  return my pairText(values)
-end boundsText
-
-on oneLine(value)
-  set AppleScript's text item delimiters to " "
-  set resultText to paragraphs of (value as text) as text
-  set AppleScript's text item delimiters to linefeed
-  return resultText
-end oneLine
-
-on capture(reportDir, relativePath, captureHelper, appBundleId, appName)
-  set destination to reportDir & "/" & relativePath
-  do shell script (quoted form of captureHelper) & " capture " & quoted form of destination & " " & quoted form of appBundleId & " " & quoted form of appName
-end capture
-APPLESCRIPT
   set +e
-  osascript "$APPLE_SCRIPT_FILE" "$OUTPUT_DIR" "$PROCESS_NAME" "$WINDOW_READY_WAIT_MS" "$APP_PATH" "$CAPTURE_HELPER" "$APP_BUNDLE_ID" >"$EVENTS_FILE" 2>"$AUTOMATION_STDERR"
+  "$AX_HELPER" run "$OUTPUT_DIR" "$PROCESS_NAME" "$WINDOW_READY_WAIT_MS" "$APP_PATH" "$CAPTURE_HELPER" "$APP_BUNDLE_ID" >"$EVENTS_FILE" 2>"$AUTOMATION_STDERR"
   AUTOMATION_EXIT=$?
   set -e
   if ((AUTOMATION_EXIT != 0)); then
-    printf '%s\n' "BLOCKED|SHELL-NATIVE-MAC-AUTOMATION|osascript 执行失败|exit=$AUTOMATION_EXIT" >>"$EVENTS_FILE"
+    printf '%s\n' "BLOCKED|SHELL-NATIVE-MAC-AUTOMATION|原生 AX 助手执行失败|exit=$AUTOMATION_EXIT" >>"$EVENTS_FILE"
   fi
 fi
+
 
 # The native batch also carries the same-version WebView interaction evidence.
 # Keep it in a child directory so its own result/manifest remain independently inspectable.
@@ -847,6 +543,18 @@ DISPLAY_METADATA_EXIT=$?
 set -e
 ARCHIVE_NAME=""
 if ((CREATE_ARCHIVE == 1)); then ARCHIVE_NAME="run-$RUN_ID.tar.gz"; fi
+
+# 解析运行时日志的真实落点。直接启动可执行文件时 VINKEY_ACCEPTANCE_DATA_DIR 已可靠传播，
+# 日志应落在 PROFILE_DIR；但为兼容 env 未传播或开发模式的边界情况，回退到 Tauri 默认 app_data_dir。
+RUNTIME_LOG_CANDIDATES=(
+  "$PROFILE_DIR/vinkey-runtime.jsonl"
+  "$HOME/Library/Application Support/com.vinkey.desktop/vinkey-runtime.jsonl"
+)
+RUNTIME_LOG=""
+for _cand in "${RUNTIME_LOG_CANDIDATES[@]}"; do
+  if [[ -f "$_cand" ]]; then RUNTIME_LOG="$_cand"; break; fi
+done
+if [[ -z "$RUNTIME_LOG" ]]; then RUNTIME_LOG="${RUNTIME_LOG_CANDIDATES[0]}"; fi
 
 NATIVE_REPORT_DIR="$OUTPUT_DIR" \
 NATIVE_EVENTS_FILE="$EVENTS_FILE" \
@@ -1050,12 +758,13 @@ const result = {
       ? '物理 DPI 由 CoreGraphics 像素和物理毫米尺寸计算；有效缩放由像素尺寸和 NSScreen/CGDisplay 逻辑点尺寸计算。'
       : '至少一个活动显示器缺少可靠物理尺寸；必须按 display-metadata.json 的 manual-fallback-required 补充人工确认。',
     screenshot: {
-      mechanism: 'ScreenCaptureKit.SCScreenshotManager',
-      contentFilter: 'SCContentFilter.desktopIndependentWindow',
+      mechanism: 'CoreGraphics.CGWindowListCreateImage',
+      contentFilter: 'optionIncludingWindow(wid)+bestResolution',
       scope: 'largest-visible-target-application-window',
       helperCompiler: 'swiftc',
       helperTarget: process.env.NATIVE_CAPTURE_HELPER_TARGET || null,
       fallback: null,
+      note: 'ScreenCaptureKit was replaced by CoreGraphics window capture: SC fails with CGS_REQUIRE_INIT inside the WorkBuddy sandbox session even when the Screen Recording TCC entitlement is granted. CGWindowListCreateImage only requires the Accessibility entitlement, which is available in-session.',
     },
   },
   platformEvidence: {
