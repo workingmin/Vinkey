@@ -491,8 +491,8 @@ export async function runNavigationE2E(input: AcceptanceRunInput): Promise<Accep
   writeFileSync(resultFile, JSON.stringify(result, null, 2), 'utf8')
   const sha = createHash('sha256').update(readFileSync(resultFile)).digest('hex')
   writeFileSync(sha256File, `${sha}  result.json\n`, 'utf8')
-  const finalResult = { ...result, artifacts: { ...result.artifacts, sha256: { 'result.json': sha } } }
-  writeFileSync(resultFile, JSON.stringify(finalResult, null, 2), 'utf8')
+  // result.json 不自引用自身 hash：定稿写入后由 SHA256SUMS 记录其最终 hash，保证 shasum -c 通过。
+  const finalResult = result
   return { result: finalResult, conclusion, exitCode, resultFile, sha256File, logFile }
 }
 

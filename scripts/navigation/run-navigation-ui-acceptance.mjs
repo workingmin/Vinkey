@@ -453,11 +453,15 @@ async function main() {
     artifacts: { manifestFile: 'SHA256SUMS', screenshots, sha256 },
   }
   const resultFile = path.join(outputDir, 'result.json')
+  // 截图条目使用相对批次根目录的路径；result.json 不自引用自身 hash，
+  // 定稿写入后再由 SHA256SUMS 记录其最终 hash，保证 shasum -c 全部通过。
+  result.artifacts.sha256 = Object.fromEntries(screenshots.map((name) => [`screenshots/${name}`, sha256[name]]))
   await writeFile(resultFile, JSON.stringify(result, null, 2), 'utf8')
-  sha256['result.json'] = createHash('sha256').update(await readFile(resultFile)).digest('hex')
-  result.artifacts.sha256 = sha256
-  await writeFile(resultFile, JSON.stringify(result, null, 2), 'utf8')
-  const sums = [...Object.entries(sha256).map(([name, hash]) => `${hash}  ${name}`)].sort().join('\n') + '\n'
+  const resultHash = createHash('sha256').update(await readFile(resultFile)).digest('hex')
+  const sums = [
+    ...screenshots.map((name) => `${sha256[name]}  screenshots/${name}`),
+    `${resultHash}  result.json`,
+  ].sort().join('\n') + '\n'
   await writeFile(path.join(outputDir, 'SHA256SUMS'), sums, 'utf8')
 
   const observations = [

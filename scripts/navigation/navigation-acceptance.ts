@@ -1078,14 +1078,11 @@ export function runNavigationAcceptance(input: AcceptanceRunInput): AcceptanceRu
   }, null, 2), 'utf8')
   writeFileSync(resultFile, JSON.stringify(result, null, 2), 'utf8')
 
-  const shaEntries: Array<{ file: string; hash: string }> = [{ file: 'result.json', hash: sha256OfFile(resultFile) }]
-  const manifestLines = shaEntries.map((entry) => `${entry.hash}  ${entry.file}`)
-  writeFileSync(sha256File, `${manifestLines.join('\n')}\n`, 'utf8')
-  const finalResult = {
-    ...result,
-    artifacts: { ...result.artifacts, sha256: Object.fromEntries(shaEntries.map((entry) => [entry.file, entry.hash])) },
-  }
-  writeFileSync(resultFile, JSON.stringify(finalResult, null, 2), 'utf8')
+  // result.json 不自引用自身 hash：定稿写入后由 SHA256SUMS 记录其最终 hash，
+  // 避免「写入 hash 后又重写文件」导致 shasum -c 校验失败。
+  const resultHash = sha256OfFile(resultFile)
+  writeFileSync(sha256File, `${resultHash}  result.json\n`, 'utf8')
+  const finalResult = result
 
   return {
     result: finalResult,
