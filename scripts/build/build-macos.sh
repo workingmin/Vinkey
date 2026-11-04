@@ -42,10 +42,15 @@ done
 cd "$ROOT_DIR"
 npm ci --include=dev
 npm test
-# Tauri's DMG bundler otherwise drives Finder through AppleScript. That can
-# fail on local machines without Automation permission even though the app
-# bundle is valid. CI mode skips only the Finder-based DMG layout step.
-CI=true npm run desktop:build:mac
+# Build only the .app with Tauri. Its DMG bundler shells out to create-dmg,
+# which fails in two ways on current macOS: (1) it drives Finder through
+# AppleScript and dies with -10004 when the terminal lacks Automation
+# permission, and (2) even with --skip-jenkins its find_mount_dir helper gets
+# "grep: bad regex '/dev/diskN': brackets ([ ]) not balanced" and aborts the
+# final image conversion, leaving a mounted rw.*.dmg behind. We therefore skip
+# Tauri's DMG step and wrap the .app with `hdiutil create` below, which needs
+# neither Finder nor AppleScript.
+CI=true npx tauri build --bundles app
 
 APP_SOURCE="$ROOT_DIR/src-tauri/target/release/bundle/macos/Vinkey.app"
 APP_INSTALL_PATH="/Applications/Vinkey.app"
@@ -66,6 +71,28 @@ if [[ "$INSTALL_APP" == true ]]; then
   APP_TO_OPEN="$APP_INSTALL_PATH"
   echo "已更新 ${APP_INSTALL_PATH}。"
 fi
+
+# Wrap the built .app into a DMG using hdiutil only (no Finder/AppleScript).
+APP_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_SOURCE/Contents/Info.plist" 2>/dev/null || echo 0.0.0)"
+APP_NAME="$(basename "$APP_SOURCE" .app)"
+case "$(uname -m)" in
+  arm64) DMG_ARCH=aarch64 ;;
+  x86_64) DMG_ARCH=x64 ;;
+  *) DMG_ARCH="$(uname -m)" ;;
+esac
+DMG_DIR="$ROOT_DIR/src-tauri/target/release/bundle/dmg"
+DMG_PATH="$DMG_DIR/${APP_NAME}_${APP_VERSION}_${DMG_ARCH}.dmg"
+DMG_STAGE="$(mktemp -d "${TMPDIR:-/tmp}/vinkey-dmg.XXXXXX")"
+cleanup_dmg_stage() { rm -rf "$DMG_STAGE"; }
+trap cleanup_dmg_stage EXIT
+ditto "$APP_SOURCE" "$DMG_STAGE/${APP_NAME}.app"
+ln -s /Applications "$DMG_STAGE/Applications"
+mkdir -p "$DMG_DIR"
+rm -f "$DMG_PATH"
+hdiutil create -volname "$APP_NAME" -srcfolder "$DMG_STAGE" -ov -format UDZO "$DMG_PATH" >/dev/null
+rm -rf "$DMG_STAGE"
+trap - EXIT
+echo "已生成 DMG：$DMG_PATH"
 
 if [[ "$OPEN_APP" == true ]]; then
   open -na "$APP_TO_OPEN"

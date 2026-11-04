@@ -9,8 +9,8 @@
 - 自动化入口：[Playwright 脚本](../../../scripts/ui-shell/run-ui-shell-acceptance.mjs)，命令为 `npm run test:ui-shell-acceptance`
 - macOS 原生入口：[Accessibility/System Events 脚本](../../../scripts/ui-shell/run-ui-shell-native-macos.sh)，命令为 `npm run test:ui-shell-native-mac`
 - 当前平台批次：`macOS 15+`；Windows 材料待后续独立执行并回填，不影响本节形成 macOS 阶段结论
-- 当前证据批次：合并远程 `e760392`（单实例插件）后以 `artifacts/ui-shell-native-macos/` 下**最新 PASS 批次的 `result.json`** 为准；合并前有效批次为 `run-2026-11-03T133042Z.tar.gz`（见 4.8）
-- 报告状态：**macOS 完整通过**；历史 `073118Z` 批次的四项缺口（截图同步、诊断链路、显示缩放、归档脱敏）已在 `ui-shell-native-macos@1.5.0` / `ui-shell-playwright@1.2.0` 关闭，由 `2026-11-03T115835Z` 批次首次复核确认，并在工具链改动提交 + 安装包重建后由 `2026-11-03T133042Z` 批次（HEAD `898975f…`，24/24 PASS、6 张 CoreGraphics 截图、provenance 仍 PASS）再次确认；合并远程后需重建安装包并重跑验收，最终结论以最新 PASS 批次为准
+- 当前证据批次：`artifacts/ui-shell-native-macos/run-2026-11-03T134923Z.tar.gz`（合并远程 `e760392` 后重建复核，见 4.9）
+- 报告状态：**macOS 完整通过**；历史 `073118Z` 批次的四项缺口（截图同步、诊断链路、显示缩放、归档脱敏）已在 `ui-shell-native-macos@1.5.0` / `ui-shell-playwright@1.2.0` 关闭，由 `2026-11-03T115835Z` 批次首次复核确认，并在工具链改动提交 + 安装包重建后由 `2026-11-03T133042Z` 批次（HEAD `898975f…`）复核，合并远程 `e760392` 后由 `2026-11-03T134923Z` 批次（HEAD `939afe7f…`，24/24 PASS、6 张 CoreGraphics 截图、provenance 仍 PASS）再次确认
 - 更新日期：`2026-11-03`
 
 ## 1. 验收边界
@@ -171,9 +171,25 @@ Playwright 自动化入口支持按平台运行，并在状态变化后等待双
 | provenance | `SHELL-P-BUILD-PROVENANCE=PASS`；`application.gitSha` = `repository.gitSha` = `898975fc…`，`versionMatch/gitShaMatch/repositoryClean` 全 true，`workingTreeDirtyAtBuild=false` |
 | 归档 | `run-2026-11-03T133042Z.tar.gz`；两级 SHA256SUMS 通过，`SHELL-P-ARTIFACT-PRIVACY=PASS`（10 文件 0 暴露） |
 
-> 说明：4.7 的 `115835Z` 批次构建于提交前 HEAD `6a88f4e4…`，其记录为历史事实，保留不改。本节 `133042Z` 为合并远程 `e760392` 前的有效证据；合并与后续文档提交会改变 HEAD，因此必须重建安装包并重跑验收才能保持 provenance 一致，合并后的有效证据以 `artifacts/ui-shell-native-macos/` 下最新 PASS 批次的 `result.json` 为准。
+> 说明：4.7 的 `115835Z` 批次构建于提交前 HEAD `6a88f4e4…`，其记录为历史事实，保留不改。本节 `133042Z` 为合并远程 `e760392` 前的有效证据；合并与后续文档提交会改变 HEAD，因此必须重建安装包并重跑验收才能保持 provenance 一致。
 
-## 5. 复核材料清单（已在 2026-11-03T115835Z / 133042Z 批次全部满足）
+### 4.9 合并远程后重建复核批次（2026-11-03T134923Z）
+
+网络恢复后，合并远程 `e760392`（`feat: enforce single instance on desktop via tauri-plugin-single-instance`）产生 merge commit `41ee682`，随后提交文档回填 `939afe7f9833185fcead2ebf3051a6b03d900468`（当前 HEAD）。合并引入 `tauri-plugin-single-instance v2.4.5` 及 34 个传递依赖；构建时通过 rsproxy 镜像补齐 crate 缓存（SHA256 与 `Cargo.lock` 逐一校验），在工作树 clean 下重建，`build.rs` 注入新 HEAD。
+
+| 项目 | 已核验结果 |
+| --- | --- |
+| 合并 | `git merge --no-edit origin/main`（ort 策略），无冲突；远程仅改 `src-tauri/Cargo.toml`、`Cargo.lock`、`src/lib.rs` |
+| 新应用 | `/Applications/Vinkey.app`，版本 `0.1.0`，bundle `com.vinkey.desktop`；内嵌 SHA `939afe7f9833185fcead2ebf3051a6b03d900468`，旧 SHA 已消失 |
+| 批次 | `run-2026-11-03T134923Z` |
+| 机器结果 | `PASS`，24/24 通过、0 失败、0 阻断，`exitCode=0`；6 张 CoreGraphics 截图有效 |
+| 单实例影响 | `SHELL-NATIVE-MAC-WINDOW-REOPEN=PASS`，窗口关闭/恢复链路未受单实例插件影响 |
+| provenance | `SHELL-P-BUILD-PROVENANCE=PASS`；`application.gitSha` = `repository.gitSha` = `939afe7f…`，`versionMatch/gitShaMatch/repositoryClean` 全 true，`workingTreeDirtyAtBuild=false` |
+| 归档 | `run-2026-11-03T134923Z.tar.gz`；两级 SHA256SUMS 通过，`SHELL-P-ARTIFACT-PRIVACY=PASS`（10 文件 0 暴露） |
+
+> 说明：`133042Z`（4.8）为合并前有效证据，本节 `134923Z` 为当前有效证据。为避免再次改变 HEAD 导致 provenance 失配，本节及之后的文档回填**不纳入新提交**，保留为工作树改动。
+
+## 5. 复核材料清单（已在 2026-11-03T115835Z / 133042Z / 134923Z 批次全部满足）
 
 ### 5.1 环境
 
@@ -203,18 +219,18 @@ Playwright 自动化入口支持按平台运行，并在状态变化后等待双
 
 标题栏菜单不是本报告的通过条件；若菜单设计或菜单实现存在缺口，应在 `W0-SHELL-MENU-P/F` 报告中记录，不得反向改写 `W0-SHELL-P` 的窗口/容器结论。
 
-当前综合结论：**macOS 完整通过**（`W0-SHELL-P` 子门槛）。合并远程前有效证据批次 `run-2026-11-03T133042Z`（提交后重建复核，见 4.8）机器层 24/24 PASS，原生窗口控制、WebView companion、构建溯源、隔离 Profile、显示探针与隐私扫描全部通过，6 张 CoreGraphics 截图有效，物理 DPI 已测得，归档脱敏通过，且应用/仓库 Git SHA 同为 `898975f…`、provenance 保持 PASS；`073118Z` 的四项旧缺口已由 `1.5.0` 原生入口复核关闭（见 4.7）。合并远程 `e760392` 后需重建安装包并重跑验收，最终结论以最新 PASS 批次为准。Windows 平台仍为后续独立工作；本报告不覆盖 `D-NAV` 真实业务链路或标题栏菜单专项。
+当前综合结论：**macOS 完整通过**（`W0-SHELL-P` 子门槛）。合并远程前有效证据批次 `run-2026-11-03T133042Z`（提交后重建复核，见 4.8）机器层 24/24 PASS，原生窗口控制、WebView companion、构建溯源、隔离 Profile、显示探针与隐私扫描全部通过，6 张 CoreGraphics 截图有效，物理 DPI 已测得，归档脱敏通过，且应用/仓库 Git SHA 同为 `898975f…`、provenance 保持 PASS；`073118Z` 的四项旧缺口已由 `1.5.0` 原生入口复核关闭（见 4.7）。合并远程 `e760392` 后已重建安装包，并由 `run-2026-11-03T134923Z`（见 4.9）重跑复核：24/24 PASS，应用/仓库 Git SHA 同为 `939afe7f…`、provenance 保持 PASS。Windows 平台仍为后续独立工作；本报告不覆盖 `D-NAV` 真实业务链路或标题栏菜单专项。
 
 ## 7. 测试人员回填区
 
-- 自动化层：`PASS（run-2026-11-03T133042Z：24/24；原生窗口 12、WebView 9、隔离 Profile/构建溯源/显示探针/隐私扫描 3；exitCode=0）`
+- 自动化层：`PASS（run-2026-11-03T134923Z：24/24；原生窗口 12、WebView 9、隔离 Profile/构建溯源/显示探针/隐私扫描 3；exitCode=0）`
 - Windows 桌面层：`待独立平台验收；不影响本次 macOS 阶段结论`
 - macOS 桌面层：`PASS（交通灯、三档实际窗口尺寸、最大化/还原、最小化/恢复、关闭和 Reopen、显示缩放/物理 DPI 已测得）`
 - 人工 UI 层：`PASS（内容页、错误条、焦点、稳定视口、侧栏/设置恢复、浅色/深色主题、诊断日志完整链路均通过；6 张 CoreGraphics 截图可审阅）`
-- 构建溯源：`PASS（应用/仓库 0.1.0，同一 Git SHA 898975f…，仓库和构建工作树 clean；提交后已重建安装包并复核）`
+- 构建溯源：`PASS（应用/仓库 0.1.0，同一 Git SHA 939afe7f…，仓库和构建工作树 clean；合并远程后已重建安装包并复核）`
 - 结果 JSON/日志/截图 SHA-256：`PASS（顶层与 WebView 两级 SHA256SUMS 均通过）；哈希不覆盖场景语义`
 - 材料脱敏：`PASS（窗口级 CoreGraphics 截图、隔离 Profile、相对路径、privacy-audit 10 文件 0 暴露、固定 owner tar，可作为受控分发附件）`
 - 导航域材料：`另行提交，使用 UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md`
-- 问题列表：`SHELL-EVIDENCE-001、SHELL-COVERAGE-002、SHELL-PRIVACY-001、SHELL-DISPLAY-001 已 CLOSED；WINDOWS-001 待独立平台验收；菜单缺口转由 W0-SHELL-MENU-P/F 跟踪；git pull/push 曾因环境代理 502 阻断，网络恢复后已合并远程 e760392、提交并 push；合并引入单实例插件，需重建安装包并重跑验收`
+- 问题列表：`SHELL-EVIDENCE-001、SHELL-COVERAGE-002、SHELL-PRIVACY-001、SHELL-DISPLAY-001 已 CLOSED；WINDOWS-001 待独立平台验收；菜单缺口转由 W0-SHELL-MENU-P/F 跟踪；git pull/push 曾因环境代理 502 阻断，网络恢复后已合并远程 e760392、提交并 push；合并引入单实例插件，已重建安装包并重跑验收（见 4.9）`
 - 综合结论：`macOS 完整通过（W0-SHELL-P 子门槛）`
 - 下一次复审：`Windows 平台独立验收后，或 ui-shell-native-macos 再次变更、或文档回填提交后需重建重跑时复审`
