@@ -53,7 +53,9 @@
     "test:navigation-regression-acceptance:win": "powershell -ExecutionPolicy Bypass -File scripts/navigation/run-navigation-regression-acceptance.ps1",
     "test:navigation-regression-acceptance:sh": "bash scripts/navigation/run-navigation-regression-acceptance.sh",
     "test:navigation-ui-acceptance": "node scripts/navigation/run-navigation-ui-acceptance.mjs",
-    "test:navigation-ui-acceptance:sh": "bash scripts/navigation/run-navigation-ui-acceptance.sh"
+    "test:navigation-ui-acceptance:sh": "bash scripts/navigation/run-navigation-ui-acceptance.sh",
+    "test:navigation-native-mac": "node scripts/navigation/run-navigation-native-macos.mjs",
+    "test:navigation-native-mac:sh": "bash scripts/navigation/run-navigation-native-macos.sh"
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.0",

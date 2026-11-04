@@ -53,6 +53,7 @@
 | `W4-TASK-E` | `D-TASK-LOG` 长任务/日志 | W2 对话；分析还需 W3 上下文 | `UI-ACC-LOGS-001` | Worker/TaskJob、事件/段标签/终态/产物核查（`TASK-CHK-*`）与 `task-process-acceptance-cli.test.ts` 合同测试 | `scripts/task-process/`：只读核查 `.vinkey/analysis/jobs/<jobId>/` 产物与 SQLite，`--dump-manual` 生成人工回填模板 | 暂停/恢复、停止确认、折叠/自动跟随、产物预览、重启恢复、源变化拒绝、失败重试、窄栏/键盘（`TASK-UI-*`） | 已有（待本地执行） |
 | `W4-NAV-R` | `D-NAV` 跨域回归 | W2 导航、W3 改稿、W4 任务 | `UI-ACC-NAV-REGRESSION-001` | 过期响应、运行锁定和草稿保护断言已由脚本覆盖 | `npm run test:navigation-regression-acceptance:sh`；隔离 fixture 建模生成中会话、运行任务、未保存草稿与延迟搜索响应 | 阻断、确认、取消、保存和恢复 | 已编写并执行：`NAV-R-001`~`005` 5/5 PASS、退出码 0；前置态由 `preconditionStates` 记录 |
 | `UI-ACC-NAV-UI-001` | `D-NAV` UI 材料（三档） | W0/W2/W4 机器批次 | `UI-ACC-NAV-UI-001` | Playwright 逐场景断言 | `npm run test:navigation-ui-acceptance:sh`；启动 Vite 演示层、注入隔离 localStorage fixture、真实点击导航 UI | 21 张页面级截图 + UI 观察表 + `SHA256SUMS` | 已编写并执行：19/19 PASS；**浏览器演示层页面级证据，非原生窗口证据** |
+| `UI-ACC-NAV-NATIVE-001` | `D-NAV` 原生窗口（macOS） | 已安装 `/Applications/Vinkey.app`、`ui-shell-native-macos` 已编译 CoreGraphics helper、`W0-NAV-F` fixture | `UI-ACC-NAV-NATIVE-001` | 四场景原生窗口断言 + 构建溯源 | `npm run test:navigation-native-mac:sh`；真实启动应用、隔离 `VINKEY_ACCEPTANCE_DATA_DIR`、按窗口 ID 捕获 | 4 张 CoreGraphics 原生窗口截图 + 原生观察表 + `SHA256SUMS` | 已编写并执行：4/4 PASS；与浏览器 companion 分层，互不冒充 |
 | `W4-RESP-R` | `Q-RESP` 全局回归 | 各页面完成 | `UI-ACC-RESPONSIVE-REGRESSION-001` | 跨页面渲染/可访问性回归待补 | Windows/macOS 15+ 尺寸、DPI、菜单、主题和焦点复核 | 全页面无重叠、状态不丢失 | 待编写，最后执行 |
 
 ## 4. 导航域脚本专项
@@ -73,7 +74,11 @@
 
 ### 4.4 `UI-ACC-NAV-UI-001` 截图 companion
 
-用 Playwright 启动 Vite 演示层、注入隔离 `localStorage` fixture，为三档门槛采集 21 张页面级截图并输出 UI 观察表。该证据是**浏览器演示层页面级截图**，不是 Tauri 原生窗口证据；macOS 使用系统原生菜单栏（`TitleBar` 在 `isMac` 时返回 `null`），标题栏菜单截图为 Windows 自绘标题栏的跨平台对照，原生菜单入口由 `W0-SHELL-MENU-P` 覆盖。
+用 Playwright 启动 Vite 演示层、注入隔离 `localStorage` fixture，为三档门槛采集 21 张页面级截图并输出 UI 观察表。该证据是**浏览器演示层页面级截图**，不是 Tauri 原生窗口证据；macOS 使用系统原生菜单栏（`TitleBar` 在 `isMac` 时返回 `null`），标题栏菜单截图为 Windows 自绘标题栏的跨平台对照。macOS 系统原生菜单项动作属于 `W0-SHELL-MENU-P/F` 独立专项（当前「待验收、不得假定通过」），本 companion 不覆盖、也不以其作为证据。
+
+### 4.5 `UI-ACC-NAV-NATIVE-001` 原生窗口批次
+
+复用 `ui-shell-native-macos` 已编译的 CoreGraphics helper（`CGWindowListCreateImage`）与 `W0-NAV-F` 的 SQLite fixture 生成器，真实启动 `/Applications/Vinkey.app` 并注入隔离 `VINKEY_ACCEPTANCE_DATA_DIR`，采集四组原生窗口状态：双项目登记与会话列表、切换当前项目、删除项目记录边界、无项目空态。应用构建 SHA 取自隔离 Profile 的 `vinkey-runtime.jsonl` `app.start.fields.commitSha`，并用 `src/`、`src-tauri/src/`、`index.html` 与 HEAD 的差异比较证明界面代码同版本。该批次与 §4.4 的浏览器 companion 是互补的两层证据，均不得冒充对方；与 `W0-SHELL-P` 的原生窗口证据分层方式一致（壳层同样由原生窗口用例 + Vite/Playwright companion 组成）。
 
 ## 5. 标题栏菜单脚本专项
 
