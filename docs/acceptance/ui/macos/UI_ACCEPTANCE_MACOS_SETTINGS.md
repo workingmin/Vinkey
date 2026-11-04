@@ -6,7 +6,7 @@
 - 验收对象：[UI_DESIGN_SETTINGS.md](../../../design/ui/UI_DESIGN_SETTINGS.md)
 - 执行日期：2026-09-22
 - 代码基线：`main`，版本 `0.1.0`
-- 结论：**条件通过（平台执行结果待测试人员回填）**
+- 结论：**条件通过（W1-MODEL-E 真实模型机器证据已本机 PASS，人工 UI 与系统凭据库待回填）**
 
 条件通过的含义是：模型设置的前端、桌面桥接、浏览器演示存储和自动化测试链路已通过；macOS 真机上的系统凭据库、窗口尺寸和真实服务连接仍需要发布前手工执行。测试人员执行后请使用[本地验收执行回填模板](./UI_ACCEPTANCE_MACOS_SETTINGS_RUN_TEMPLATE.md)补充机器结果和人工 UI 观察；在回填完成前，本报告不能升级为完整平台通过。
 
@@ -94,6 +94,8 @@
 ## 7. 测试人员本地执行结果（待回填）
 
 > 本节是平台和真实服务证据的占位区。请按[回填模板](./UI_ACCEPTANCE_MACOS_SETTINGS_RUN_TEMPLATE.md)填写；占位符不代表通过。
+
+> **W1-MODEL-E 机器结果（2026-11-04，本机 macOS 26.6.2 / arm64 + 本地 Ollama，默认模型 `qwen3:8b`）**：脚本 `UI-ACC-SETTINGS-001`（`npm run test:model-acceptance:sh`）已执行，`MODEL-E-001`~`MODEL-E-005` 五用例全部 PASS、退出码 0（目录发现、模型检查与最小推理、连接失败优雅处理、多模型目录、超时处理）。归档：`artifacts/model-acceptance/run-2026-11-04T11-26-30-345Z/result.json` + `SHA256SUMS`。人工 UI 观察（设置页/键盘/窗口缩放）仍按回填模板待补，不影响真实模型链路的机器 PASS 判定。
 
 ### 执行元数据
 

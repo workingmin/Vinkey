@@ -41,17 +41,18 @@
 | `W0-SHELL-P` | `D-SHELL` 应用壳层 | macOS 15+ + `swiftc` + Accessibility/屏幕录制权限，或 Windows 对应平台能力 | `UI-ACC-SHELL-001` | store、原生窗口宽度同步已有；Playwright 只覆盖壳层容器/状态，截图前核对菜单合同但不执行菜单命令 | `npm run test:ui-shell-acceptance`；macOS 原生入口仅使用 ScreenCaptureKit helper，浏览器证据与 Tauri 原生窗口证据分层 | Overlay/自绘窗口承载、侧栏/设置、内容容器、错误/空态、主题/焦点、三种视口 | 浏览器脚本已实现；macOS 15+ helper 与依赖门槛已固化，原生窗口控制、交通灯和 DPI 待桌面执行；菜单只做一致性守卫，正式验收移交 `W0-SHELL-MENU-P/F` |
 | `W0-SHELL-MENU-P` | `D-SHELL` 标题栏与功能菜单 | `W0-SHELL-P` 的桌面启动和平台权限 | `UI-ACC-TITLE-BAR-001` | `scripts/title-bar/` 机器层菜单树/查看/主题/设置/帮助/关闭焦点/中文与减法审计已有；macOS 原生 AX 菜单入口已有 | `npm run test:title-bar-p-acceptance -- --json`；macOS 原生入口 `npm run test:title-bar-native-mac` | 一级菜单树、平台窗口动作、主题、中文审计、菜单关闭 | 机器层已有（8 PASS / 1 原生阻断）；macOS 原生脚本待桌面执行 |
 | `W0-RESP-P` | `Q-RESP` 响应式/主题 | 壳层 Token | `UI-ACC-RESPONSIVE-001` | 与壳层共用 Playwright 三种视口/主题/焦点场景 | 当前由 `test:ui-shell-acceptance` 提供结构截图；窄窗口专项仍待扩展 | 三种目标尺寸、主题、焦点、无横向溢出 | 部分自动化可执行，目标桌面 DPI 待回填 |
-| `W0-NAV-F` | `D-NAV` 项目/会话导航 | 桌面桥接、SQLite、隔离 fixture | `UI-ACC-NAV-FIXTURE-001` | store、删除对话框和搜索单元证据；`scripts/navigation/` 与 `navigation-acceptance-cli.test.ts` 合同测试已有；组件直测仍需补 | `npm run test:navigation-acceptance -- --json`；脚本自建隔离临时目录、双项目、双会话、中英文文档、删除边界和当前搜索；不调用 Ollama | 切换、恢复、确认、错误重试、结果范围 | 已有（待本地执行） |
+| `W0-NAV-F` | `D-NAV` 项目/会话导航 | 桌面桥接、SQLite、隔离 fixture | `UI-ACC-NAV-FIXTURE-001` | store、删除对话框和搜索单元证据；`scripts/navigation/` 与 `navigation-acceptance-cli.test.ts` 合同测试已有；组件直测仍需补 | `npm run test:navigation-acceptance:sh`；脚本自建隔离临时目录、双项目、双会话、中英文文档、删除边界和当前搜索；不调用 Ollama | 切换、恢复、确认、错误重试、结果范围 | 已执行：`NAV-F-001`~`006` 6/6 PASS；截图材料由 `UI-ACC-NAV-UI-001` 补齐 |
 | `W0-EDITOR-F` | `D-EDITOR` 基础编辑器 | 工作区/文件桥接 | `UI-ACC-EDITOR-001` | `scripts/editor/` 复刻文档分类、读取、保存、冲突与越界保护合同；不覆盖用户文件 | `npm run test:editor-acceptance -- --json`；临时工作区含 Unicode/BOM/CRLF/二进制 fixture | 文件树、打开、编辑、保存、预览 | 已有（待本地执行） |
 | `W0-SHELL-MENU-F` | `D-SHELL` + 入口 fixture | `W0-SHELL-MENU-P`、`W0-NAV-F`、`W0-EDITOR-F`；设置使用可控 UI fixture | `UI-ACC-TITLE-BAR-FIXTURE-001` | `scripts/title-bar/` 隔离项目/会话/草稿 fixture 与 WebView 组件合同已有；不调用 Ollama | `npm run test:title-bar-acceptance -- --json`；临时目录和结果 JSON 独立记录 | 添加/刷新项目、新建会话、页面状态、编辑焦点、设置打开/返回 | 已有（待本地与目标平台执行）；不得与 P 子集混报 |
-| `W1-MODEL-E` | `D-MODEL` 模型设置 | 桌面桥接、SQLite、系统凭据库 | `UI-ACC-SETTINGS-001` | `SettingsPage.test.tsx`、硬件和隐私测试 | 设置连接/凭据冒烟脚本；确认 profile 后再执行真实模型 | 设置入口、保存、切换、删除、键盘导航 | 自动化已有；脚本待编写 |
+| `W1-MODEL-E` | `D-MODEL` 模型设置 | 桌面桥接、SQLite、系统凭据库 | `UI-ACC-SETTINGS-001` | `SettingsPage.test.tsx`、硬件和隐私测试 | 设置连接/凭据冒烟脚本；确认 profile 后再执行真实模型 | 设置入口、保存、切换、删除、键盘导航 | 已执行：2026-11-04 本机 macOS + Ollama（qwen3:8b），`MODEL-E-001`~`MODEL-E-005` 5/5 PASS；归档 `artifacts/model-acceptance/run-2026-11-04T11-26-30-345Z/` |
 | `W1-INTENT-E` | `D-INTENT` IntentRouter | 模型 profile 和真实模型 | `AGENT-ACC-INTENT-001` | `intent-router-acceptance-cli.test.ts` | `npm run test:intent-router-acceptance -- --profile-id <id> --json`；统一 JSON 外层字段待核对 | profile、日志、失败恢复 | 脚本已有；真实 Ollama 待执行 |
-| `W2-CHAT-E` | `D-CHAT` 对话 | W0 壳层、W1 模型/IntentRouter | `UI-ACC-CHAT-001` | 消息、流式、停止和运行锁定测试 | 真实短对话、停止、超时和错误恢复脚本 | 发送/停止、流式完成、模型状态、失败重试 | 待编写，依赖 W1 |
-| `W2-NAV-E` | `D-NAV` 真实导航 | `W0-NAV-F`、`W2-CHAT-E` | `UI-ACC-NAV-E2E-001` | 会话状态和持久化测试待补 | 真实多项目、多轮会话、标题策略、目标全局搜索跳转 | 标题前后、刷新、搜索分组和 Escape 返回 | 阻断：`CF-022`/`CF-023` 与目标实现待完成 |
+| `W2-CHAT-E` | `D-CHAT` 对话 | W0 壳层、W1 模型/IntentRouter | `UI-ACC-CHAT-001` | 消息、流式、停止和运行锁定测试 | 真实短对话、停止、超时和错误恢复脚本 | 发送/停止、流式完成、模型状态、失败重试 | 已执行：2026-11-04 本机 macOS + Ollama（qwen3:8b），`CHAT-E-001`~`CHAT-E-004` 4/4 PASS（单轮/多轮上下文/流式中断/失败处理）；归档 `artifacts/chat-acceptance/run-2026-11-04T11-28-38-617Z/` |
+| `W2-NAV-E` | `D-NAV` 真实导航 | `W0-NAV-F`、`W1-MODEL-E`、`W2-CHAT-E` | `UI-ACC-NAV-E2E-001` | 会话状态和持久化测试已由脚本覆盖 | `npm run test:navigation-e2e-acceptance:sh`；隔离 fixture + 本机真实 Ollama，2 项目 × 3 会话 × 2 轮、标题生命周期、刷新持久化、搜索分组跳转 | 标题前后、刷新、搜索分组和 Escape 返回 | 已编写并执行：`NAV-E-001`~`006` 6/6 PASS、退出码 0；截图由 `UI-ACC-NAV-UI-001` 补齐 |
 | `W3-CONTEXT-E` | `D-CONTEXT` 上下文分析 | W0 编辑器、W1 模型、W2 对话 | `UI-ACC-CONTEXT-001` | 召回、权限、预算和来源收据测试 | 固定 fixture + 真实模型调用 | 选择文件、权限、来源和超限 | 待编写，依赖 W1/W2 |
 | `W3-REVISION-E` | `D-REVISION` AI 改稿 | W0 编辑器、W2 对话 | `UI-ACC-EDITOR-002` | 提案解析、接受/拒绝和保存测试 | 真实模型改稿、冲突和提案完整性 | DiffProposal、接受/拒绝、保存 | 待编写，不与基础编辑器混写 |
 | `W4-TASK-E` | `D-TASK-LOG` 长任务/日志 | W2 对话；分析还需 W3 上下文 | `UI-ACC-LOGS-001` | Worker/TaskJob、事件/段标签/终态/产物核查（`TASK-CHK-*`）与 `task-process-acceptance-cli.test.ts` 合同测试 | `scripts/task-process/`：只读核查 `.vinkey/analysis/jobs/<jobId>/` 产物与 SQLite，`--dump-manual` 生成人工回填模板 | 暂停/恢复、停止确认、折叠/自动跟随、产物预览、重启恢复、源变化拒绝、失败重试、窄栏/键盘（`TASK-UI-*`） | 已有（待本地执行） |
-| `W4-NAV-R` | `D-NAV` 跨域回归 | W2 导航、W3 改稿、W4 任务 | `UI-ACC-NAV-REGRESSION-001` | 过期响应、运行锁定和草稿保护测试待补 | 运行中任务、生成中会话、未保存文档下切换/删除 | 阻断、确认、取消、保存和恢复 | 待编写，等待依赖域 |
+| `W4-NAV-R` | `D-NAV` 跨域回归 | W2 导航、W3 改稿、W4 任务 | `UI-ACC-NAV-REGRESSION-001` | 过期响应、运行锁定和草稿保护断言已由脚本覆盖 | `npm run test:navigation-regression-acceptance:sh`；隔离 fixture 建模生成中会话、运行任务、未保存草稿与延迟搜索响应 | 阻断、确认、取消、保存和恢复 | 已编写并执行：`NAV-R-001`~`005` 5/5 PASS、退出码 0；前置态由 `preconditionStates` 记录 |
+| `UI-ACC-NAV-UI-001` | `D-NAV` UI 材料（三档） | W0/W2/W4 机器批次 | `UI-ACC-NAV-UI-001` | Playwright 逐场景断言 | `npm run test:navigation-ui-acceptance:sh`；启动 Vite 演示层、注入隔离 localStorage fixture、真实点击导航 UI | 21 张页面级截图 + UI 观察表 + `SHA256SUMS` | 已编写并执行：19/19 PASS；**浏览器演示层页面级证据，非原生窗口证据** |
 | `W4-RESP-R` | `Q-RESP` 全局回归 | 各页面完成 | `UI-ACC-RESPONSIVE-REGRESSION-001` | 跨页面渲染/可访问性回归待补 | Windows/macOS 15+ 尺寸、DPI、菜单、主题和焦点复核 | 全页面无重叠、状态不丢失 | 待编写，最后执行 |
 
 ## 4. 导航域脚本专项
@@ -68,7 +69,11 @@
 
 ### 4.3 `W4-NAV-R` 跨域回归
 
-脚本需要可控地产生运行中会话、后台任务、未保存文档和延迟搜索响应，验证切换/删除的阻断或确认、保存后继续以及过期响应丢弃。只报告交叉风险，不重复完整 CRUD。
+脚本需要可控地产生运行中会话、后台任务、未保存文档和延迟搜索响应，验证切换/删除的阻断或确认、保存后继续以及过期响应丢弃。只报告交叉风险，不重复完整 CRUD。状态语义对齐 `src/lib/conversationActivity.ts`、`src/App.tsx:1430/1535/1710/1726` 与 W0 的 `applyIfMatchesActive`，在隔离 fixture 上建模，不在 Node 中引入浏览器侧 zustand store。
+
+### 4.4 `UI-ACC-NAV-UI-001` 截图 companion
+
+用 Playwright 启动 Vite 演示层、注入隔离 `localStorage` fixture，为三档门槛采集 21 张页面级截图并输出 UI 观察表。该证据是**浏览器演示层页面级截图**，不是 Tauri 原生窗口证据；macOS 使用系统原生菜单栏（`TitleBar` 在 `isMac` 时返回 `null`），标题栏菜单截图为 Windows 自绘标题栏的跨平台对照，原生菜单入口由 `W0-SHELL-MENU-P` 覆盖。
 
 ## 5. 标题栏菜单脚本专项
 

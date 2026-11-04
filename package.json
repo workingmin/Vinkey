@@ -39,7 +39,21 @@
     "test:title-bar-native-mac": "bash scripts/title-bar/run-title-bar-native-macos.sh",
     "test:editor-acceptance": "node scripts/editor/run-editor-acceptance.mjs",
     "test:editor-acceptance:win": "powershell -ExecutionPolicy Bypass -File scripts/editor/run-editor-acceptance.ps1",
-    "test:editor-acceptance:sh": "bash scripts/editor/run-editor-acceptance.sh"
+    "test:editor-acceptance:sh": "bash scripts/editor/run-editor-acceptance.sh",
+    "test:model-acceptance": "node scripts/model/run-model-acceptance.mjs",
+    "test:model-acceptance:win": "powershell -ExecutionPolicy Bypass -File scripts/model/run-model-acceptance.ps1",
+    "test:model-acceptance:sh": "bash scripts/model/run-model-acceptance.sh",
+    "test:chat-acceptance": "node scripts/chat/run-chat-acceptance.mjs",
+    "test:chat-acceptance:win": "powershell -ExecutionPolicy Bypass -File scripts/chat/run-chat-acceptance.ps1",
+    "test:chat-acceptance:sh": "bash scripts/chat/run-chat-acceptance.sh",
+    "test:navigation-e2e-acceptance": "node scripts/navigation/run-navigation-e2e-acceptance.mjs",
+    "test:navigation-e2e-acceptance:win": "powershell -ExecutionPolicy Bypass -File scripts/navigation/run-navigation-e2e-acceptance.ps1",
+    "test:navigation-e2e-acceptance:sh": "bash scripts/navigation/run-navigation-e2e-acceptance.sh",
+    "test:navigation-regression-acceptance": "node scripts/navigation/run-navigation-regression-acceptance.mjs",
+    "test:navigation-regression-acceptance:win": "powershell -ExecutionPolicy Bypass -File scripts/navigation/run-navigation-regression-acceptance.ps1",
+    "test:navigation-regression-acceptance:sh": "bash scripts/navigation/run-navigation-regression-acceptance.sh",
+    "test:navigation-ui-acceptance": "node scripts/navigation/run-navigation-ui-acceptance.mjs",
+    "test:navigation-ui-acceptance:sh": "bash scripts/navigation/run-navigation-ui-acceptance.sh"
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.0",
