@@ -1,32 +1,34 @@
-# 应用壳层与入口专项验收报告
+# 应用壳层与入口专项验收报告（macOS）
+
+> **平台说明**：本文档是 macOS 平台版；Windows 平台验收见 [UI_ACCEPTANCE_WINDOWS_SHELL.md](../windows/UI_ACCEPTANCE_WINDOWS_SHELL.md)。验收合同（设计断言与判定规则）与脚本规范跨平台一致，执行入口和证据按平台分别记录。
 
 > **审核范围说明**：本报告只保留**当前最新版本的一次验收记录**。历史批次的过程记录、升级注记和复核说明已从本文件移除；对应原始归档仍按受控方式留存于 `artifacts/ui-shell-native-macos/`，不纳入本次管理层审核清单。唯一有效证据以「本版本最终构建 HEAD 下重跑产生的最新 `run-*.tar.gz`」为准，其 `result.json` 记录批次号、生成时间与 Git SHA。由于验收批次号和 HEAD SHA 由脚本在运行时写入归档，本报告不硬编码这两项数值，避免报告提交再次改变 HEAD 导致 `SHELL-P-BUILD-PROVENANCE` 失配。
 
 - 功能域：`D-SHELL` 应用壳层与入口承载
 - 验收标识：`W0-SHELL-P`
-- 关联设计：[UI_DESIGN_SHELL.md](../../design/ui/UI_DESIGN_SHELL.md)、[TITLE_BAR_DESIGN.md](../../design/ui/TITLE_BAR_DESIGN.md)
-- 标题栏菜单专项计划：[UI_ACCEPTANCE_TITLE_BAR_PLAN.md](./UI_ACCEPTANCE_TITLE_BAR_PLAN.md)，拆分为 `W0-SHELL-MENU-P`（平台/结构）与 `W0-SHELL-MENU-F`（fixture 业务入口链路）
-- 导航业务报告：[UI_ACCEPTANCE_NAVIGATION.md](./UI_ACCEPTANCE_NAVIGATION.md)
-- 回填模板：[UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md](./UI_ACCEPTANCE_SHELL_RUN_TEMPLATE.md)
-- 自动化入口：[Playwright 脚本](../../../scripts/ui-shell/run-ui-shell-acceptance.mjs)，命令为 `npm run test:ui-shell-acceptance`
-- macOS 原生入口：[原生 AX / CoreGraphics 脚本](../../../scripts/ui-shell/run-ui-shell-native-macos.sh)，命令为 `npm run test:ui-shell-native-mac`
-- 当前平台批次：`macOS 15+`；Windows 材料待后续独立执行并回填，不影响本节形成 macOS 阶段结论
+- 关联设计：[UI_DESIGN_SHELL.md](../../../design/ui/UI_DESIGN_SHELL.md)、[TITLE_BAR_DESIGN.md](../../../design/ui/TITLE_BAR_DESIGN.md)
+- 标题栏菜单专项计划：[UI_ACCEPTANCE_MACOS_TITLE_BAR_PLAN.md](./UI_ACCEPTANCE_MACOS_TITLE_BAR_PLAN.md)，拆分为 `W0-SHELL-MENU-P`（平台/结构）与 `W0-SHELL-MENU-F`（fixture 业务入口链路）
+- 导航业务报告：[UI_ACCEPTANCE_MACOS_NAVIGATION.md](./UI_ACCEPTANCE_MACOS_NAVIGATION.md)
+- 回填模板：[UI_ACCEPTANCE_MACOS_SHELL_RUN_TEMPLATE.md](./UI_ACCEPTANCE_MACOS_SHELL_RUN_TEMPLATE.md)
+- 自动化入口：[Playwright 脚本](../../../../scripts/ui-shell/run-ui-shell-acceptance.mjs)，命令为 `npm run test:ui-shell-acceptance`
+- macOS 原生入口：[原生 AX / CoreGraphics 脚本](../../../../scripts/ui-shell/run-ui-shell-native-macos.sh)，命令为 `npm run test:ui-shell-native-mac`
+- 当前平台批次：`macOS 15+`
 - 最新证据批次：`artifacts/ui-shell-native-macos/` 下最新 `run-*.tar.gz`（唯一有效批次）
 - 报告状态：**macOS 完整通过**（`W0-SHELL-P` 子门槛），24/24 用例通过、0 失败、0 阻断
 - 更新日期：`2026-11-04`
 
 ## 1. 验收边界
 
-本报告只判定应用壳层的平台/结构承载：窗口或 Overlay、窗口控制、侧栏容器、内容页承载、设置替换、诊断/错误承载、主题、焦点和响应式基线。标题栏菜单树、菜单项动作、中文菜单审计和菜单关闭由独立的 [标题栏菜单专项计划](./UI_ACCEPTANCE_TITLE_BAR_PLAN.md) 的 `W0-SHELL-MENU-P/F` 执行；本报告不把菜单结果计入 `W0-SHELL-P`，也不把旧菜单自动化结果当作目标菜单通过。项目、会话、搜索、标题生命周期和删除边界属于 `D-NAV`，分别由 `W0-NAV-F`、`W2-NAV-E`、`W4-NAV-R` 判定；本报告不把侧栏结构截图当作导航业务通过。
+本报告只判定应用壳层的平台/结构承载：窗口或 Overlay、窗口控制、侧栏容器、内容页承载、设置替换、诊断/错误承载、主题、焦点和响应式基线。标题栏菜单树、菜单项动作、中文菜单审计和菜单关闭由独立的 [标题栏菜单专项计划](./UI_ACCEPTANCE_MACOS_TITLE_BAR_PLAN.md) 的 `W0-SHELL-MENU-P/F` 执行；本报告不把菜单结果计入 `W0-SHELL-P`，也不把旧菜单自动化结果当作目标菜单通过。项目、会话、搜索、标题生命周期和删除边界属于 `D-NAV`，分别由 `W0-NAV-F`、`W2-NAV-E`、`W4-NAV-R` 判定；本报告不把侧栏结构截图当作导航业务通过。
 
-`W0-SHELL-P` 不要求 Ollama。浏览器演示只能支持结构观察，不能替代 Windows/macOS 15+ Tauri 窗口控制、DPI 和真实尺寸证据；原生菜单不在本门槛范围内。壳层脚本在截图前仅核对目标一级菜单合同（`CONTRACT_GUARD_ONLY:OUT_OF_SCOPE:W0-SHELL-MENU-P`），菜单动作和命令焦点分派仍应在 `W0-SHELL-MENU-P/F` 中复测。
+`W0-SHELL-P` 不要求 Ollama。浏览器演示只能支持结构观察，不能替代 macOS 15+ Tauri 窗口控制、DPI 和真实尺寸证据；原生菜单不在本门槛范围内。壳层脚本在截图前仅核对一级菜单合同（`CONTRACT_GUARD_ONLY:OUT_OF_SCOPE:W0-SHELL-MENU-P`），菜单动作和命令焦点分派仍应在 `W0-SHELL-MENU-P/F` 中复测。
 
 ## 2. 设计断言矩阵
 
 | 用例 | 操作链路 | 结构断言 | 当前状态 |
 | --- | --- | --- | --- |
-| `SHELL-P-001` 应用窗口/Overlay 承载 | Windows 自绘 / macOS Overlay | 平台装饰方式正确；内容区避让标题栏安全区；不依赖菜单树 | macOS 原生交通灯、Overlay 与窗口截图通过；Windows 待执行 |
-| `SHELL-P-002` 窗口控制 | 最小化 → 最大化/还原 → 关闭 | 动作正确；状态同步；关闭遵循平台行为 | macOS 三档实际窗口尺寸、最大化/还原、最小化/恢复、关闭和 Reopen 全部 PASS；Windows 待执行 |
+| `SHELL-P-001` 应用窗口/Overlay 承载 | macOS Overlay | 平台装饰方式正确；内容区避让标题栏安全区；不依赖菜单树 | macOS 原生交通灯、Overlay 与窗口截图通过 |
+| `SHELL-P-002` 窗口控制 | 最小化 → 最大化/还原 → 关闭 | 动作正确；状态同步；关闭遵循平台行为 | macOS 三档实际窗口尺寸、最大化/还原、最小化/恢复、关闭和 Reopen 全部 PASS |
 | `SHELL-P-003` 侧栏容器 | 展开 ↔ 52px 折叠 → 恢复 | 品牌、全局入口承载和设置入口不丢；macOS Overlay 不遮挡 | PASS；companion 等待 `52px/288px` 连续稳定帧后取证 |
 | `SHELL-P-004` 内容页容器 | 对话 ↔ 文件 ↔ 日志 | 内容区互斥切换，容器尺寸稳定；业务状态由各域负责 | PASS；三页切换及无工作区空态通过 |
 | `SHELL-P-005` 设置替换 | 任意内容页 → 设置 → 返回 | 设置不是第四内容页；返回恢复进入前页面和壳层状态 | PASS；设置打开/返回后断言最终侧栏宽度 |
@@ -48,7 +50,7 @@ Playwright 自动化入口支持按平台运行，并在状态变化后等待双
 | `scripts/ui-shell/ax-shell-helper.swift` | 原生 AX 窗口控制（交通灯、尺寸、缩放、最小化、关闭/Reopen）与菜单合同守卫 | 需 `swiftc` 与辅助功能权限 |
 | `scripts/ui-shell/run-ui-shell-native-macos.sh` | macOS 15+ 原生窗口操作、CoreGraphics 窗口级截图、隔离 Profile、结构化缩放/DPI、Playwright companion、构建溯源、隐私审计和标准化归档 | Linux/CI 只能做合同验证；物理毫米尺寸缺失时阻断并转人工 fallback |
 
-壳层脚本不得通过菜单选择器断言标题栏设计已完成；菜单名称、菜单动作和编辑焦点命令使用 [UI_ACCEPTANCE_TITLE_BAR_PLAN.md](./UI_ACCEPTANCE_TITLE_BAR_PLAN.md) 的专项脚本和人工证据。壳层脚本只验证菜单无关的窗口、容器和页面状态。
+壳层脚本不得通过菜单选择器断言标题栏设计已完成；菜单名称、菜单动作和编辑焦点命令使用 [UI_ACCEPTANCE_MACOS_TITLE_BAR_PLAN.md](./UI_ACCEPTANCE_MACOS_TITLE_BAR_PLAN.md) 的专项脚本和人工证据。壳层脚本只验证菜单无关的窗口、容器和页面状态。
 
 本次版本重建在干净工作树上执行 `npm test`（52 个测试文件 / 340 个测试全部通过）、`npm run build`（`tsc -b` + Vite 生产构建通过）、`npx tauri build --bundles app` 与 `hdiutil create` DMG 打包（UDZO），产物安装至 `/Applications/Vinkey.app` 并生成 `Vinkey_0.1.0_aarch64.dmg`。构建脚本不再调用 Finder/AppleScript 或 `create-dmg`，避免自动化权限与挂载残留导致的打包失败。
 
@@ -92,7 +94,7 @@ Playwright 自动化入口支持按平台运行，并在状态变化后等待双
 
 ### 4.5 子门槛结论
 
-原生窗口用例、批次文件完整性、应用构建可追溯性、系统环境元数据（含物理 DPI）、上传材料脱敏、WebView/人工 UI 链路六项前置条件在 macOS 侧全部满足。`W0-SHELL-P` macOS 子门槛结论为 **通过（完整）**。Windows 桌面平台仍为后续独立验收范围；标题栏菜单专项 `W0-SHELL-MENU-P/F` 与 `D-NAV` 业务链路不在本报告结论内。
+原生窗口用例、批次文件完整性、应用构建可追溯性、系统环境元数据（含物理 DPI）、上传材料脱敏、WebView/人工 UI 链路六项前置条件在 macOS 侧全部满足。`W0-SHELL-P` macOS 子门槛结论为 **通过（完整）**。Windows 桌面平台验收见 [UI_ACCEPTANCE_WINDOWS_SHELL.md](../windows/UI_ACCEPTANCE_WINDOWS_SHELL.md)，属独立验收范围；标题栏菜单专项 `W0-SHELL-MENU-P/F` 与 `D-NAV` 业务链路不在本报告结论内。
 
 ## 5. 复核材料清单（本批次全部满足）
 
@@ -113,7 +115,7 @@ Playwright 自动化入口支持按平台运行，并在状态变化后等待双
 6. `04-mac-window-reopened.png`：已满足。
 7. 应用诊断日志打开、刷新、复制、关闭和焦点返回：已满足（`SHELL-P-006-DIAGNOSTICS-darwin` PASS）。
 
-项目、会话、搜索结果、删除确认和多轮对话材料转入 [UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md](./UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md)，不要在本报告重复回填。
+项目、会话、搜索结果、删除确认和多轮对话材料转入 [UI_ACCEPTANCE_MACOS_NAVIGATION_RUN_TEMPLATE.md](./UI_ACCEPTANCE_MACOS_NAVIGATION_RUN_TEMPLATE.md)，不要在本报告重复回填。
 
 ## 6. 判定规则与当前综合结论
 
@@ -124,18 +126,18 @@ Playwright 自动化入口支持按平台运行，并在状态变化后等待双
 
 标题栏菜单不是本报告的通过条件；若菜单设计或菜单实现存在缺口，应在 `W0-SHELL-MENU-P/F` 报告中记录，不得反向改写 `W0-SHELL-P` 的窗口/容器结论。
 
-当前综合结论：**macOS 完整通过**（`W0-SHELL-P` 子门槛）。本版本唯一有效证据批次在最终构建 HEAD 下重跑，机器层 24/24 PASS、0 失败、0 阻断、`exitCode=0`；原生窗口控制、WebView companion、构建溯源、隔离 Profile、显示探针（物理 DPI `133`）与隐私扫描全部通过，6 张 CoreGraphics 窗口截图有效，两级哈希清单与归档脱敏通过，应用与仓库 Git SHA 一致且工作树 clean。Windows 平台仍为后续独立工作；本报告不覆盖 `D-NAV` 真实业务链路或标题栏菜单专项。
+当前综合结论：**macOS 完整通过**（`W0-SHELL-P` 子门槛）。本版本唯一有效证据批次在最终构建 HEAD 下重跑，机器层 24/24 PASS、0 失败、0 阻断、`exitCode=0`；原生窗口控制、WebView companion、构建溯源、隔离 Profile、显示探针（物理 DPI `133`）与隐私扫描全部通过，6 张 CoreGraphics 窗口截图有效，两级哈希清单与归档脱敏通过，应用与仓库 Git SHA 一致且工作树 clean。Windows 平台验收见 [UI_ACCEPTANCE_WINDOWS_SHELL.md](../windows/UI_ACCEPTANCE_WINDOWS_SHELL.md)；本报告不覆盖 `D-NAV` 真实业务链路或标题栏菜单专项。
 
 ## 7. 测试人员回填区
 
 - 自动化层：`PASS（最新批次：24/24；原生窗口 12、WebView 9、隔离 Profile/构建溯源/隐私扫描 3；exitCode=0）`
-- Windows 桌面层：`待独立平台验收；不影响本次 macOS 阶段结论`
+- Windows 桌面层：`见 UI_ACCEPTANCE_WINDOWS_SHELL.md（Windows 平台版报告），不在本报告回填`
 - macOS 桌面层：`PASS（交通灯、三档实际窗口尺寸、最大化/还原、最小化/恢复、关闭和 Reopen、显示缩放/物理 DPI 已测得）`
 - 人工 UI 层：`PASS（内容页、错误条、焦点、稳定视口、侧栏/设置恢复、浅色/深色主题、诊断日志完整链路均通过；6 张 CoreGraphics 截图可审阅）`
 - 构建溯源：`PASS（应用/仓库 0.1.0，同一 Git SHA，仓库和构建工作树 clean；报告提交推送后已按最终 HEAD 重建并重跑）`
 - 结果 JSON/日志/截图 SHA-256：`PASS（顶层与 WebView 两级 SHA256SUMS 均通过）；哈希不覆盖场景语义`
 - 材料脱敏：`PASS（窗口级截图、隔离 Profile、相对路径、privacy-audit 10 文件 0 暴露、固定 owner tar，可作为受控分发附件）`
-- 导航域材料：`另行提交，使用 UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md`
-- 问题列表：`本批次无未关闭问题；Windows 平台验收与标题栏菜单专项为独立后续工作`
+- 导航域材料：`另行提交，使用 UI_ACCEPTANCE_MACOS_NAVIGATION_RUN_TEMPLATE.md`
+- 问题列表：`本批次无未关闭问题；标题栏菜单专项为独立后续工作`
 - 综合结论：`macOS 完整通过（W0-SHELL-P 子门槛）`
-- 下一次复审：`Windows 平台独立验收后，或 ui-shell-native-macos / 构建脚本 / 壳层源码再次变更需重建重跑时复审`
+- 下一次复审：`ui-shell-native-macos / 构建脚本 / 壳层源码再次变更需重建重跑时复审`

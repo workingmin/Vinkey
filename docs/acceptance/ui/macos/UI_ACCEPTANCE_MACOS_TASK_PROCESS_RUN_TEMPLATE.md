@@ -1,6 +1,6 @@
-# 长任务/日志中心本地验收回填模板
+# 长任务/日志中心本地验收回填模板（macOS）
 
-本模板供测试人员执行 `W4-TASK-E` / `UI-ACC-LOGS-001`。所有 `<...>` 均为待填占位符；未执行或缺少必要证据时不得填写 `PASS`。
+本模板供测试人员在 macOS 桌面环境执行 `W4-TASK-E` / `UI-ACC-LOGS-001`。所有 `<...>` 均为待填占位符；未执行或缺少必要证据时不得填写 `PASS`。Windows 平台请使用 [UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_RUN_TEMPLATE.md](../windows/UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_RUN_TEMPLATE.md)。
 
 ## 1. 执行元数据
 
@@ -25,20 +25,13 @@
 
 ## 3. 脚本执行记录
 
-### macOS/Linux shell
+### macOS shell
 
 ```bash
 npm run test:task-process-acceptance -- --list-profiles --db "<DB>"
 npm run test:task-process-acceptance -- --dump-manual "<man.json>"
 npm run test:task-process-acceptance -- --workspace "<WS>" --db "<DB>" --tester-id "<ID>" --json
 npm run test:task-process-acceptance -- --workspace "<WS>" --db "<DB>" --manual "<man.json>" --output "<OUT_DIR>" --json
-```
-
-### Windows PowerShell
-
-```powershell
-npm run test:task-process-acceptance:win -Db "<DB>" -Workspace "<WS>" -TesterId "<ID>" -Json
-npm run test:task-process-acceptance:win -Workspace "<WS>" -Db "<DB>" -Manual "<man.json>" -Output "<OUT_DIR>" -Json
 ```
 
 - 退出码：`<EXIT_CODE>`（应与 `result.json.exitCode` 一致）
@@ -84,7 +77,7 @@ npm run test:task-process-acceptance:win -Workspace "<WS>" -Db "<DB>" -Manual "<
 建议归档：
 
 ```text
-task-process-<YYYYMMDD>-<platform>-<profile-safe-name>/
+task-process-<YYYYMMDD>-macos-<profile-safe-name>/
 ├── environment.md
 ├── result.json
 ├── SHA256SUMS

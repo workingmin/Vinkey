@@ -2,7 +2,7 @@
 
 - 状态：待执行。前端回归与 Playwright 已通过；本清单用于补齐 CF-006 的原生端复验。
 - 适用对象：Windows/macOS 桌面端，Tauri 构建依赖完整的环境。
-- 归属门槛：`W4-TASK-E` / `D-TASK-LOG`。`NT-001..NT-005` 已并入[长任务/日志中心专项验收](./UI_ACCEPTANCE_TASK_PROCESS.md)的人工 UI 用例（`TASK-UI-001/003/006/008` 等），由 `UI-ACC-LOGS-001` 脚本采集证据并回填[本地回填模板](./UI_ACCEPTANCE_TASK_PROCESS_RUN_TEMPLATE.md)。
+- 归属门槛：`W4-TASK-E` / `D-TASK-LOG`。`NT-001..NT-005` 已并入长任务/日志中心专项验收（[macOS 版](./macos/UI_ACCEPTANCE_MACOS_TASK_PROCESS.md) / [Windows 版](./windows/UI_ACCEPTANCE_WINDOWS_TASK_PROCESS.md)）的人工 UI 用例（`TASK-UI-001/003/006/008` 等），由 `UI-ACC-LOGS-001` 脚本采集证据并回填本地回填模板（[macOS](./macos/UI_ACCEPTANCE_MACOS_TASK_PROCESS_RUN_TEMPLATE.md) / [Windows](./windows/UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_RUN_TEMPLATE.md)）。
 
 ## 前置条件
 

@@ -1,6 +1,6 @@
-# 项目与会话导航本地验收回填模板
+# 项目与会话导航本地验收回填模板（Windows）
 
-本模板供测试人员分阶段执行 `W0-NAV-F`、`W2-NAV-E` 和 `W4-NAV-R`。所有 `<...>` 均为待填占位符；未执行或缺少必要证据时不得填写 `PASS`。
+本模板供测试人员在 Windows 桌面环境分阶段执行 `W0-NAV-F`、`W2-NAV-E` 和 `W4-NAV-R`。所有 `<...>` 均为待填占位符；未执行或缺少必要证据时不得填写 `PASS`。macOS 平台请使用 [UI_ACCEPTANCE_MACOS_NAVIGATION_RUN_TEMPLATE.md](../macos/UI_ACCEPTANCE_MACOS_NAVIGATION_RUN_TEMPLATE.md)。
 
 ## 1. 执行元数据
 
@@ -45,12 +45,6 @@
 | 可控延迟搜索/加载 | `<YES/NO/BLOCKED>` | `<...>` |
 
 ## 3. 脚本执行记录
-
-### macOS/Linux shell
-
-```bash
-<COMMAND_USED>
-```
 
 ### Windows PowerShell
 

@@ -43,20 +43,20 @@
 
 | 验收标识 | 功能域 | 门槛含义 | 前置依赖 | 可证明范围 | 主要产出与报告 |
 | --- | --- | --- | --- | --- | --- |
-| `W0-SHELL-P` | `D-SHELL` | 平台/结构 | 无；能启动桌面或浏览器演示 | 应用窗口/Overlay、窗口控制、侧栏容器、内容页切换、设置/诊断承载、主题/焦点和响应式结构；不判定菜单树或菜单命令 | `UI_ACCEPTANCE_SHELL.md` |
-| `W0-SHELL-MENU-P` | `D-SHELL` | 平台/结构 | `W0-SHELL-P`；目标桌面包和平台权限 | 目标一级菜单树、平台菜单承载、窗口动作、主题、Escape/外部点击、中文审计；不证明业务数据链路 | `UI_ACCEPTANCE_TITLE_BAR_PLAN.md`（P 子集） |
+| `W0-SHELL-P` | `D-SHELL` | 平台/结构 | 无；能启动桌面或浏览器演示 | 应用窗口/Overlay、窗口控制、侧栏容器、内容页切换、设置/诊断承载、主题/焦点和响应式结构；不判定菜单树或菜单命令 | `macos/UI_ACCEPTANCE_MACOS_SHELL.md` / `windows/UI_ACCEPTANCE_WINDOWS_SHELL.md` |
+| `W0-SHELL-MENU-P` | `D-SHELL` | 平台/结构 | `W0-SHELL-P`；目标桌面包和平台权限 | 目标一级菜单树、平台菜单承载、窗口动作、主题、Escape/外部点击、中文审计；不证明业务数据链路 | `macos/UI_ACCEPTANCE_MACOS_TITLE_BAR_PLAN.md` / `windows/UI_ACCEPTANCE_WINDOWS_TITLE_BAR_PLAN.md`（P 子集） |
 | `W0-RESP-P` | `Q-RESP` | 平台/结构 | `D-SHELL` 布局和 Token | `1440x900`、`1280x800`、`1024x680`、窄窗口、焦点、主题和无重叠基线 | 响应式专项记录（待建立） |
-| `W0-NAV-F` | `D-NAV` | fixture/合同 | 桌面桥接、SQLite、隔离临时目录 | 多项目、多会话、切换、删除边界、当前侧栏搜索和错误重试；不要求 Ollama | `UI_ACCEPTANCE_NAVIGATION.md` |
+| `W0-NAV-F` | `D-NAV` | fixture/合同 | 桌面桥接、SQLite、隔离临时目录 | 多项目、多会话、切换、删除边界、当前侧栏搜索和错误重试；不要求 Ollama | `macos/UI_ACCEPTANCE_MACOS_NAVIGATION.md` / `windows/UI_ACCEPTANCE_WINDOWS_NAVIGATION.md` |
 | `W0-EDITOR-F` | `D-EDITOR` | fixture/合同 | 工作区/文件桥接 | 文件树、打开、编辑、保存、Unicode 路径、保存错误和越界 | `UI_ACCEPTANCE_EDITOR.md` |
-| `W0-SHELL-MENU-F` | `D-SHELL` + 入口 fixture | fixture/合同 | `W0-SHELL-MENU-P`、`W0-NAV-F`、`W0-EDITOR-F`；设置入口使用可控 UI fixture | 项目添加/刷新、新建会话、查看页面状态保持、编辑焦点命令、设置打开/返回；不要求 Ollama 或真实多轮会话 | `UI_ACCEPTANCE_TITLE_BAR_PLAN.md`（F 子集） |
-| `W1-MODEL-E` | `D-MODEL` | 真实端到端 | `D-SHELL`、桌面桥接、SQLite、系统凭据库 | profile、服务、连接测试、活动模型、凭据边界、硬件提示和真实 Ollama | `UI_ACCEPTANCE_SETTINGS.md` |
+| `W0-SHELL-MENU-F` | `D-SHELL` + 入口 fixture | fixture/合同 | `W0-SHELL-MENU-P`、`W0-NAV-F`、`W0-EDITOR-F`；设置入口使用可控 UI fixture | 项目添加/刷新、新建会话、查看页面状态保持、编辑焦点命令、设置打开/返回；不要求 Ollama 或真实多轮会话 | `macos/UI_ACCEPTANCE_MACOS_TITLE_BAR_PLAN.md` / `windows/UI_ACCEPTANCE_WINDOWS_TITLE_BAR_PLAN.md`（F 子集） |
+| `W1-MODEL-E` | `D-MODEL` | 真实端到端 | `D-SHELL`、桌面桥接、SQLite、系统凭据库 | profile、服务、连接测试、活动模型、凭据边界、硬件提示和真实 Ollama | `macos/UI_ACCEPTANCE_MACOS_SETTINGS.md` / `windows/UI_ACCEPTANCE_WINDOWS_SETTINGS.md` |
 | `W1-INTENT-E` | `D-INTENT` | 真实端到端 | `D-MODEL` 与真实模型 | IntentRouter 真实输出、schema、失败归因和准入日志 | `acceptance/intent-router/TEST_ACCEPTANCE.md` |
 | `W2-CHAT-E` | `D-CHAT` | 真实端到端 | `D-SHELL`、`D-MODEL`、`D-INTENT` | 多轮发送、流式完成、停止、超时、失败恢复和活动模型快照 | 对话专项报告（待建立） |
-| `W2-NAV-E` | `D-NAV` | 真实端到端 | `W0-NAV-F`、`W2-CHAT-E` | 多项目多会话、标题生命周期、刷新持久化、目标全局搜索和跳转 | `UI_ACCEPTANCE_NAVIGATION.md` |
+| `W2-NAV-E` | `D-NAV` | 真实端到端 | `W0-NAV-F`、`W2-CHAT-E` | 多项目多会话、标题生命周期、刷新持久化、目标全局搜索和跳转 | `macos/UI_ACCEPTANCE_MACOS_NAVIGATION.md` / `windows/UI_ACCEPTANCE_WINDOWS_NAVIGATION.md` |
 | `W3-CONTEXT-E` | `D-CONTEXT` | 真实端到端 | `W0-EDITOR-F`、`W1-MODEL-E`、`W2-CHAT-E` | 上下文范围、召回、预算、来源收据、权限和分析结果 | 上下文专项报告（待建立） |
 | `W3-REVISION-E` | `D-REVISION` | 真实端到端 | `W0-EDITOR-F`、`W2-CHAT-E` | 真实模型改稿、DiffProposal、接受/拒绝、冲突和保存 | `UI_ACCEPTANCE_EDITOR.md` |
-| `W4-TASK-E` | `D-TASK-LOG` | 真实端到端 | `W2-CHAT-E`；分析任务还需 `W3-CONTEXT-E` | 长任务进度、暂停/失败/恢复、步骤重试、产物和执行快照 | [长任务/日志中心专项验收](./UI_ACCEPTANCE_TASK_PROCESS.md) |
-| `W4-NAV-R` | `D-NAV` | 跨域回归 | `W2-NAV-E`、`W3-REVISION-E`、`W4-TASK-E` | 运行中任务、生成中会话、未保存文档和过期搜索响应下的切换/删除保护 | `UI_ACCEPTANCE_NAVIGATION.md` |
+| `W4-TASK-E` | `D-TASK-LOG` | 真实端到端 | `W2-CHAT-E`；分析任务还需 `W3-CONTEXT-E` | 长任务进度、暂停/失败/恢复、步骤重试、产物和执行快照 | [长任务/日志中心专项验收（macOS）](./macos/UI_ACCEPTANCE_MACOS_TASK_PROCESS.md) / [Windows](./windows/UI_ACCEPTANCE_WINDOWS_TASK_PROCESS.md) |
+| `W4-NAV-R` | `D-NAV` | 跨域回归 | `W2-NAV-E`、`W3-REVISION-E`、`W4-TASK-E` | 运行中任务、生成中会话、未保存文档和过期搜索响应下的切换/删除保护 | `macos/UI_ACCEPTANCE_MACOS_NAVIGATION.md` / `windows/UI_ACCEPTANCE_WINDOWS_NAVIGATION.md` |
 | `W4-RESP-R` | `Q-RESP` | 跨域回归 | 各页面已形成实现 | 全页面视觉、主题、焦点、DPI、平台菜单和状态保持回归 | 响应式/跨域回归记录 |
 
 ### 3.1 “模型设置”与“应用壳层”的排序论证
@@ -117,9 +117,14 @@
 - [UI 设计总览](../../design/ui/UI_DESIGN.md)
 - [应用壳层设计](../../design/ui/UI_DESIGN_SHELL.md)
 - [项目与会话导航设计](../../design/ui/UI_DESIGN_NAVIGATION.md)
-- [项目与会话导航验收](./UI_ACCEPTANCE_NAVIGATION.md)
-- [标题栏菜单专项验收](./UI_ACCEPTANCE_TITLE_BAR_PLAN.md)
-- [模型设置验收](./UI_ACCEPTANCE_SETTINGS.md)
-- [长任务/日志中心验收](./UI_ACCEPTANCE_TASK_PROCESS.md)
-- [长任务/日志中心回填模板](./UI_ACCEPTANCE_TASK_PROCESS_RUN_TEMPLATE.md)
+- [项目与会话导航验收（macOS）](./macos/UI_ACCEPTANCE_MACOS_NAVIGATION.md)
+- [项目与会话导航验收（Windows）](./windows/UI_ACCEPTANCE_WINDOWS_NAVIGATION.md)
+- [标题栏菜单专项验收（macOS）](./macos/UI_ACCEPTANCE_MACOS_TITLE_BAR_PLAN.md)
+- [标题栏菜单专项验收（Windows）](./windows/UI_ACCEPTANCE_WINDOWS_TITLE_BAR_PLAN.md)
+- [模型设置验收（macOS）](./macos/UI_ACCEPTANCE_MACOS_SETTINGS.md)
+- [模型设置验收（Windows）](./windows/UI_ACCEPTANCE_WINDOWS_SETTINGS.md)
+- [长任务/日志中心验收（macOS）](./macos/UI_ACCEPTANCE_MACOS_TASK_PROCESS.md)
+- [长任务/日志中心验收（Windows）](./windows/UI_ACCEPTANCE_WINDOWS_TASK_PROCESS.md)
+- [长任务/日志中心回填模板（macOS）](./macos/UI_ACCEPTANCE_MACOS_TASK_PROCESS_RUN_TEMPLATE.md)
+- [长任务/日志中心回填模板（Windows）](./windows/UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_RUN_TEMPLATE.md)
 - [验收脚本设计规范](./UI_ACCEPTANCE_SCRIPT_SPEC.md)

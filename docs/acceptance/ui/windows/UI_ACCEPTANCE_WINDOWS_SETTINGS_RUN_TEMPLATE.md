@@ -1,6 +1,6 @@
-# 模型设置本地验收执行回填模板
+# 模型设置本地验收执行回填模板（Windows）
 
-本文件供测试人员在 macOS/Windows + Ollama（或 OpenAI-compatible 服务）环境执行后填写。复制本模板内容或直接将结果填入[模型设置专项验收报告](./UI_ACCEPTANCE_SETTINGS.md)的“测试人员本地执行结果”区。
+本文件供测试人员在 Windows + Ollama（或 OpenAI-compatible 服务）环境执行后填写。复制本模板内容或直接将结果填入[模型设置专项验收报告](./UI_ACCEPTANCE_WINDOWS_SETTINGS.md)的“测试人员本地执行结果”区。macOS 平台请使用 [UI_ACCEPTANCE_MACOS_SETTINGS_RUN_TEMPLATE.md](../macos/UI_ACCEPTANCE_MACOS_SETTINGS_RUN_TEMPLATE.md)。
 
 > 占位符 `<...>` 不是通过结果。任何字段未填写时，报告结论必须保持“待回填”或“条件通过”。
 
@@ -8,8 +8,8 @@
 
 - 执行人：`<TESTER_NAME>`
 - 执行日期：`<YYYY-MM-DD HH:mm TZ>`
-- 操作系统：`<macOS VERSION / Windows VERSION>`
-- CPU/架构：`<arm64 / x64>`
+- 操作系统：`<Windows VERSION>`
+- CPU/架构：`<x64|arm64>`
 - Vinkey 版本：`<VINKEY_VERSION>`
 - Git SHA：`<GIT_SHA>`
 - Node.js：`<NODE_VERSION>`
@@ -33,13 +33,7 @@
 
 ## 3. 脚本执行记录
 
-### 3.1 macOS/Linux
-
-```bash
-<COMMAND_USED>
-```
-
-### 3.2 Windows PowerShell
+### 3.1 Windows PowerShell
 
 ```powershell
 <COMMAND_USED>
@@ -52,7 +46,7 @@
 - 诊断日志：`<LOG_FILE>`
 - SHA-256 清单：`<SHA256SUMS_FILE>`
 
-### 3.3 机器结果摘要
+### 3.2 机器结果摘要
 
 ```json
 {

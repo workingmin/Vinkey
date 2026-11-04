@@ -114,7 +114,7 @@ Vinkey 是深色、安静、AI 对话优先的本地文学创作工作台。主�
 
 ## 统一验收生命周期
 
-所有功能域均按“功能域 → 竞品证据 → 设计决策 → 前后端实现 → 自动化测试代码 → 本地环境验收脚本 → 测试人员执行与证据回传 → 验收报告 → 遗留项复审”追踪。该生命周期保留设计追踪价值，并补上真实 Ollama、系统凭据库、平台窗口和人工观察所需的证据节点。跨域总计划见 [UI_ACCEPTANCE_PLAN.md](../../acceptance/ui/UI_ACCEPTANCE_PLAN.md)，脚本契约见 [UI_ACCEPTANCE_SCRIPT_SPEC.md](../../acceptance/ui/UI_ACCEPTANCE_SCRIPT_SPEC.md)；模型设置的首个实例见 [acceptance/UI_ACCEPTANCE_SETTINGS.md](../../acceptance/ui/UI_ACCEPTANCE_SETTINGS.md)，执行回填见 [acceptance/UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md](../../acceptance/ui/UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md)。
+所有功能域均按“功能域 → 竞品证据 → 设计决策 → 前后端实现 → 自动化测试代码 → 本地环境验收脚本 → 测试人员执行与证据回传 → 验收报告 → 遗留项复审”追踪。该生命周期保留设计追踪价值，并补上真实 Ollama、系统凭据库、平台窗口和人工观察所需的证据节点。跨域总计划见 [UI_ACCEPTANCE_PLAN.md](../../acceptance/ui/UI_ACCEPTANCE_PLAN.md)，脚本契约见 [UI_ACCEPTANCE_SCRIPT_SPEC.md](../../acceptance/ui/UI_ACCEPTANCE_SCRIPT_SPEC.md)；模型设置的首个实例见 [acceptance/UI_ACCEPTANCE_MACOS_SETTINGS.md](../../acceptance/ui/macos/UI_ACCEPTANCE_MACOS_SETTINGS.md) / [UI_ACCEPTANCE_WINDOWS_SETTINGS.md](../../acceptance/ui/windows/UI_ACCEPTANCE_WINDOWS_SETTINGS.md)，执行回填见 [acceptance/UI_ACCEPTANCE_MACOS_SETTINGS_RUN_TEMPLATE.md](../../acceptance/ui/macos/UI_ACCEPTANCE_MACOS_SETTINGS_RUN_TEMPLATE.md) / [UI_ACCEPTANCE_WINDOWS_SETTINGS_RUN_TEMPLATE.md](../../acceptance/ui/windows/UI_ACCEPTANCE_WINDOWS_SETTINGS_RUN_TEMPLATE.md)。
 
 竞品证据只能支持设计判断，不能替代 Vinkey 自身的可用性、隐私和业务验收。每个功能域必须把设计来源标记为“直接参考”“组合改造”“Vinkey 原创”或“暂不采用”，并为每条已参考决策关联正式竞品名录、功能决策编号、实现位置和测试证据。
 

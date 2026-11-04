@@ -1,12 +1,14 @@
-# 模型设置专项验收报告
+# 模型设置专项验收报告（Windows）
+
+> **平台说明**：本文档是 Windows 平台版；macOS 平台验收见 [UI_ACCEPTANCE_MACOS_SETTINGS.md](../macos/UI_ACCEPTANCE_MACOS_SETTINGS.md)。验收合同、测试矩阵与设计断言跨平台一致，仅平台真机执行与证据按平台分别记录。
 
 - 功能域：模型设置
-- 验收对象：[UI_DESIGN_SETTINGS.md](../../design/ui/UI_DESIGN_SETTINGS.md)
+- 验收对象：[UI_DESIGN_SETTINGS.md](../../../design/ui/UI_DESIGN_SETTINGS.md)
 - 执行日期：2026-09-22
 - 代码基线：`main`，版本 `0.1.0`
 - 结论：**条件通过（平台执行结果待测试人员回填）**
 
-条件通过的含义是：模型设置的前端、桌面桥接、浏览器演示存储和自动化测试链路已通过；Windows/macOS 真机上的系统凭据库、窗口尺寸和真实服务连接仍需要发布前手工执行。测试人员执行后请使用[本地验收执行回填模板](./UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md)补充机器结果和人工 UI 观察；在回填完成前，本报告不能升级为完整平台通过。
+条件通过的含义是：模型设置的前端、桌面桥接、浏览器演示存储和自动化测试链路已通过；Windows 真机上的系统凭据库、窗口尺寸和真实服务连接仍需要发布前手工执行。测试人员执行后请使用[本地验收执行回填模板](./UI_ACCEPTANCE_WINDOWS_SETTINGS_RUN_TEMPLATE.md)补充机器结果和人工 UI 观察；在回填完成前，本报告不能升级为完整平台通过。
 
 ## 1. 功能范围与业务入口
 
@@ -22,7 +24,7 @@
 
 ## 2. 竞品证据与设计决策
 
-正式名称和产品层级遵循[竞品术语规范](../../competitors/TERMINOLOGY.md)。以下分类防止把竞品存在误写成 Vinkey 必须集成：
+正式名称和产品层级遵循[竞品术语规范](../../../competitors/TERMINOLOGY.md)。以下分类防止把竞品存在误写成 Vinkey 必须集成：
 
 | 设计事项 | 证据来源 | 证据类别 | Vinkey 决策 | 追踪 |
 | --- | --- | --- | --- | --- |
@@ -38,11 +40,11 @@
 
 | 层级 | 实现位置 | 本轮核对内容 |
 | --- | --- | --- |
-| 前端页面 | [`SettingsPage.tsx`](../../../src/components/SettingsPage.tsx) | 入口、模型选择器、服务表单、目录状态、删除确认、硬件信息和响应式布局 |
-| 桌面/演示桥接 | [`desktop.ts`](../../../src/lib/desktop.ts) | 浏览器模拟数据、模型发现、准入检查、连接和模型持久化调用 |
-| 本机硬件 | [`hardwareProfile.ts`](../../../src/lib/hardwareProfile.ts)、`src-tauri/src/hardware.rs` | 统一内存/独立显存、最低/标准/推荐档位、未知硬件状态 |
+| 前端页面 | [`SettingsPage.tsx`](../../../../src/components/SettingsPage.tsx) | 入口、模型选择器、服务表单、目录状态、删除确认、硬件信息和响应式布局 |
+| 桌面/演示桥接 | [`desktop.ts`](../../../../src/lib/desktop.ts) | 浏览器模拟数据、模型发现、准入检查、连接和模型持久化调用 |
+| 本机硬件 | [`hardwareProfile.ts`](../../../../src/lib/hardwareProfile.ts)、`src-tauri/src/hardware.rs` | 统一内存/独立显存、最低/标准/推荐档位、未知硬件状态 |
 | 后端模型边界 | `src-tauri/src/models.rs` | 地址规范化、凭据指纹、唯一索引、密钥系统凭据库、删除和模型关联 |
-| 应用状态 | [`store.ts`](../../../src/store.ts) | 活动模型、运行中锁定、删除后的活动模型校正和会话状态 |
+| 应用状态 | [`store.ts`](../../../../src/store.ts) | 活动模型、运行中锁定、删除后的活动模型校正和会话状态 |
 
 ## 4. 测试矩阵与执行结果
 
@@ -50,11 +52,11 @@
 
 | 层级 | 测试文件 | 覆盖内容 | 结果 |
 | --- | --- | --- | --- |
-| UI 组件/业务链路 | [`SettingsPage.test.tsx`](../../../src/components/SettingsPage.test.tsx) | 硬件档位、远程表单、发现与选择、删除校正、失败/缓存、上下展开、去重和密钥不落浏览器存储 | 14/14 通过 |
-| 硬件纯逻辑 | [`hardwareProfile.test.ts`](../../../src/lib/hardwareProfile.test.ts) | 统一内存、独立显存、未知与低配、回环服务策略 | 通过 |
-| 模型准入 | [`modelEvaluation.test.ts`](../../../src/lib/modelEvaluation.test.ts) | 延迟、吞吐、质量基线和回归约束 | 通过 |
-| 隐私 | [`modelPrivacy.test.ts`](../../../src/lib/modelPrivacy.test.ts) | 正文/密钥不进入不应持久化或发送的边界 | 通过 |
-| Store/桌面数据 | [`store.test.ts`](../../../src/store.test.ts)、[`desktop.test.ts`](../../../src/lib/desktop.test.ts) | 活动模型和连接/会话数据行为 | 通过 |
+| UI 组件/业务链路 | [`SettingsPage.test.tsx`](../../../../src/components/SettingsPage.test.tsx) | 硬件档位、远程表单、发现与选择、删除校正、失败/缓存、上下展开、去重和密钥不落浏览器存储 | 14/14 通过 |
+| 硬件纯逻辑 | [`hardwareProfile.test.ts`](../../../../src/lib/hardwareProfile.test.ts) | 统一内存、独立显存、未知与低配、回环服务策略 | 通过 |
+| 模型准入 | [`modelEvaluation.test.ts`](../../../../src/lib/modelEvaluation.test.ts) | 延迟、吞吐、质量基线和回归约束 | 通过 |
+| 隐私 | [`modelPrivacy.test.ts`](../../../../src/lib/modelPrivacy.test.ts) | 正文/密钥不进入不应持久化或发送的边界 | 通过 |
+| Store/桌面数据 | [`store.test.ts`](../../../../src/store.test.ts)、[`desktop.test.ts`](../../../../src/lib/desktop.test.ts) | 活动模型和连接/会话数据行为 | 通过 |
 | Rust 数据层 | `src-tauri/src/models.rs`、`database.rs` 内置测试 | 凭据指纹、迁移、唯一身份、历史重复连接处理 | `cargo test --manifest-path src-tauri/Cargo.toml` 被宿主系统库阻断；列为目标平台待办 |
 
 ### 4.2 命令执行
@@ -66,7 +68,7 @@
 | `npm run build` | TypeScript 和 Vite 构建通过；仅有产物 chunk 大小提示 |
 | `cargo test --manifest-path src-tauri/Cargo.toml` | 未完成：宿主 `glib-2.0` 为 2.68.4，依赖要求 ≥2.70；同时缺少 `gdk-3.0` pkg-config 条目 |
 
-此前直接执行 `npm test` 在外部 `NODE_ENV=production` 下触发 `React.act is not a function`，属于 React 生产构建与 Testing Library 的环境兼容问题，不是业务断言失败。新增 [`vitest.config.ts`](../../../vitest.config.ts) 和 [`src/test/setup.ts`](../../../src/test/setup.ts) 固定测试环境后，复核通过。
+此前直接执行 `npm test` 在外部 `NODE_ENV=production` 下触发 `React.act is not a function`，属于 React 生产构建与 Testing Library 的环境兼容问题，不是业务断言失败。新增 [`vitest.config.ts`](../../../../vitest.config.ts) 和 [`src/test/setup.ts`](../../../../src/test/setup.ts) 固定测试环境后，复核通过。
 
 ## 5. UI 业务链路验收
 
@@ -83,7 +85,7 @@
 
 ## 6. 遗留风险与发布前动作
 
-1. 在 Windows 和 macOS 真机执行系统凭据库读写、删除密钥、窗口缩放和键盘导航；浏览器模拟不能替代这些验证。
+1. 在 Windows 真机执行系统凭据库读写、删除密钥、窗口缩放和键盘导航；浏览器模拟不能替代这些验证。macOS 平台材料见 [macOS 版报告](../macos/UI_ACCEPTANCE_MACOS_SETTINGS.md)。
 2. 在配置完整 GTK/GLib 依赖的 Linux CI 或目标 Windows/macOS 构建环境执行 `cargo test --manifest-path src-tauri/Cargo.toml`，确认迁移、唯一索引和凭据指纹测试通过；当前宿主阻断原因已记录在上表。
 3. 以真实 Ollama 与 OpenAI-compatible 服务各执行一次目录发现、准入检查、失败恢复和超时；记录服务版本、模型名和是否有正文外发。
 4. 补充未保存表单按 Escape/返回按钮退出时的确认交互自动化测试，并确认对话生成、分析运行期间的禁用范围。
@@ -91,13 +93,13 @@
 
 ## 7. 测试人员本地执行结果（待回填）
 
-> 本节是平台和真实服务证据的占位区。请按[回填模板](./UI_ACCEPTANCE_SETTINGS_RUN_TEMPLATE.md)填写；占位符不代表通过。
+> 本节是平台和真实服务证据的占位区。请按[回填模板](./UI_ACCEPTANCE_WINDOWS_SETTINGS_RUN_TEMPLATE.md)填写；占位符不代表通过。
 
 ### 执行元数据
 
 - 执行人：`<TESTER_NAME>`
 - 执行日期：`<YYYY-MM-DD HH:mm TZ>`
-- 操作系统：`<macOS VERSION / Windows VERSION>`
+- 操作系统：`<Windows VERSION>`
 - CPU/架构：`<ARCH>`
 - Vinkey 版本 / Git SHA：`<VERSION> / <GIT_SHA>`
 - Node.js / Rust / Ollama：`<NODE_VERSION> / <RUST_VERSION_OR_NA> / <OLLAMA_VERSION>`

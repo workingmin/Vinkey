@@ -1,9 +1,11 @@
-# 项目与会话导航专项验收报告
+# 项目与会话导航专项验收报告（Windows）
+
+> **平台说明**：本文档是 Windows 平台版；macOS 平台验收见 [UI_ACCEPTANCE_MACOS_NAVIGATION.md](../macos/UI_ACCEPTANCE_MACOS_NAVIGATION.md)。验收合同、用例矩阵与设计断言跨平台一致，仅执行入口、脚本命令和平台证据按平台分别记录。
 
 - 功能域：`D-NAV` 项目与会话导航
 - 验收标识：`W0-NAV-F`、`W2-NAV-E`、`W4-NAV-R`
-- 验收对象：[UI_DESIGN_NAVIGATION.md](../../design/ui/UI_DESIGN_NAVIGATION.md)、[UI_ENTRY_POINTS.md](../../design/ui/UI_ENTRY_POINTS.md)
-- 回填模板：[UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md](./UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md)
+- 验收对象：[UI_DESIGN_NAVIGATION.md](../../../design/ui/UI_DESIGN_NAVIGATION.md)、[UI_ENTRY_POINTS.md](../../../design/ui/UI_ENTRY_POINTS.md)
+- 回填模板：[UI_ACCEPTANCE_WINDOWS_NAVIGATION_RUN_TEMPLATE.md](./UI_ACCEPTANCE_WINDOWS_NAVIGATION_RUN_TEMPLATE.md)
 - 报告状态：设计与用例已建立；本地脚本、目标平台证据和人工材料待补
 - 更新日期：`2026-11-02`
 
@@ -50,7 +52,7 @@
 
 ## 4. `W2-NAV-E` 验收矩阵
 
-前置：`W1-MODEL-E`、`W1-INTENT-E` 和 `W2-CHAT-E` 的必要链路通过；测试人员在 Windows/macOS 配置真实 Ollama 或批准的兼容服务。
+前置：`W1-MODEL-E`、`W1-INTENT-E` 和 `W2-CHAT-E` 的必要链路通过；测试人员在 Windows 配置真实 Ollama 或批准的兼容服务。
 
 | 用例 | 操作/断言 | 所需材料 | 当前阻断/结论 |
 | --- | --- | --- | --- |
@@ -81,7 +83,7 @@
 | `UI-ACC-NAV-E2E-001` | `W2-NAV-E` | profile/model、会话 ID 摘要、标题阶段、搜索跳转、失败归因 | 待编写；等待目标设计实现 |
 | `UI-ACC-NAV-REGRESSION-001` | `W4-NAV-R` | 任务/草稿状态、阻断结果、恢复动作、过期响应断言 | 待编写 |
 
-脚本必须遵循 [UI_ACCEPTANCE_SCRIPT_SPEC.md](UI_ACCEPTANCE_SCRIPT_SPEC.md)。fixture 脚本需要 `.sh`、`.ps1` 和统一 TypeScript 核心入口；从仓库外目录可重复执行，并保证清理范围只包含本次生成的临时目录。
+脚本必须遵循 [UI_ACCEPTANCE_SCRIPT_SPEC.md](../UI_ACCEPTANCE_SCRIPT_SPEC.md)。fixture 脚本需要 `.sh`、`.ps1` 和统一 TypeScript 核心入口；从仓库外目录可重复执行，并保证清理范围只包含本次生成的临时目录。
 
 ## 7. 测试人员必须回传的材料
 
@@ -105,7 +107,7 @@
 - 切换/删除的实际提示、用户选择、最终目标和源状态完整性。
 - 延迟搜索或加载响应被丢弃的机器断言或诊断日志。
 
-不得回传 API Key、完整作品正文、系统用户名或未脱敏绝对路径。测试人员使用[导航本地验收回填模板](./UI_ACCEPTANCE_NAVIGATION_RUN_TEMPLATE.md)填写；未执行项保持 `待回填` 或 `BLOCKED`。
+不得回传 API Key、完整作品正文、系统用户名或未脱敏绝对路径。测试人员使用[导航本地验收回填模板](./UI_ACCEPTANCE_WINDOWS_NAVIGATION_RUN_TEMPLATE.md)填写；未执行项保持 `待回填` 或 `BLOCKED`。
 
 ## 8. 当前结论
 

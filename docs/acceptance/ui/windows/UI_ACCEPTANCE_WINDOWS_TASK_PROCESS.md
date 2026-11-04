@@ -1,11 +1,13 @@
-# 长任务/日志中心专项验收报告模板
+# 长任务/日志中心专项验收报告模板（Windows）
+
+> **平台说明**：本文档是 Windows 平台版；macOS 平台验收见 [UI_ACCEPTANCE_MACOS_TASK_PROCESS.md](../macos/UI_ACCEPTANCE_MACOS_TASK_PROCESS.md)。验收合同、用例矩阵与设计断言跨平台一致，仅执行入口（`.sh` / PowerShell）、脚本命令和平台证据按平台分别记录。
 
 - 功能域：`D-TASK-LOG` 日志中心与长任务
 - 验收标识：`W4-TASK-E`
-- 验收对象：[TASK_PROCESS_COPY_DESIGN.md](../../design/ui/TASK_PROCESS_COPY_DESIGN.md)（§4 任务过程拆解、§5 文案目录、§7 状态依据、§8 评审示例、§9.2 UX 验收清单）
+- 验收对象：[TASK_PROCESS_COPY_DESIGN.md](../../../design/ui/TASK_PROCESS_COPY_DESIGN.md)（§4 任务过程拆解、§5 文案目录、§7 状态依据、§8 评审示例、§9.2 UX 验收清单）
 - 验收脚本：`UI-ACC-LOGS-001`（`scripts/task-process/`，入口 `npm run test:task-process-acceptance`）
-- 回填模板：[UI_ACCEPTANCE_TASK_PROCESS_RUN_TEMPLATE.md](./UI_ACCEPTANCE_TASK_PROCESS_RUN_TEMPLATE.md)
-- 关联原生复验：[TASK_PROCESS_NATIVE_ACCEPTANCE.md](./TASK_PROCESS_NATIVE_ACCEPTANCE.md)（`NT-001..NT-005`）
+- 回填模板：[UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_RUN_TEMPLATE.md](./UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_RUN_TEMPLATE.md)
+- 关联原生复验：[TASK_PROCESS_NATIVE_ACCEPTANCE.md](../TASK_PROCESS_NATIVE_ACCEPTANCE.md)（`NT-001..NT-005`）
 - 报告状态：设计结论与实现基线已定稿，脚本与回填模板已就绪；真实桌面执行与人工观察材料待回填
 - 更新日期：`2026-11-02`
 
@@ -100,15 +102,15 @@ A/B/C 三个阶段均已落地（提交 `97c4e18`、`6f6990e`、`a30c80f`）：
 | `UI-ACC-LOGS-001` | `W4-TASK-E` | `scripts/task-process/task-process-acceptance.ts`（TS 核心）、`run-task-process-acceptance.{mjs,sh,ps1}`（入口） | `result.json`、`SHA256SUMS`、诊断日志、人工观察模板 | 脚本已有，待本地执行 |
 | 合同测试 | `W4-TASK-E` | `tests/task-process/task-process-acceptance-cli.test.ts` | 参数/退出码/`--json` 单文档/字段稳定性 | 已有 |
 
-脚本遵循 [UI_ACCEPTANCE_SCRIPT_SPEC.md](./UI_ACCEPTANCE_SCRIPT_SPEC.md)：只读 SQLite 与任务产物；`--workspace` 缺省时仅在系统临时目录生成 fixture 本地文件，不写入用户项目；stdout 固定四行，`--json` 只输出单个 JSON 文档；退出码 `0`（机器层通过/待人工）、`1`（参数或基础设施异常）、`2`（业务断言失败）。
+脚本遵循 [UI_ACCEPTANCE_SCRIPT_SPEC.md](../UI_ACCEPTANCE_SCRIPT_SPEC.md)：只读 SQLite 与任务产物；`--workspace` 缺省时仅在系统临时目录生成 fixture 本地文件，不写入用户项目；stdout 固定四行，`--json` 只输出单个 JSON 文档；退出码 `0`（机器层通过/待人工）、`1`（参数或基础设施异常）、`2`（业务断言失败）。Windows 使用 `run-task-process-acceptance.ps1` 入口（`npm run test:task-process-acceptance:win`），参数名为 `-Workspace`、`-Db`、`-TesterId`、`-Manual`、`-Output`、`-ListProfiles`、`-DumpManual`、`-Json`。
 
 测试人员执行顺序：
 
-1. `npm run test:task-process-acceptance -- --list-profiles --db <vinkey.sqlite3>` 确认模型 profile。
-2. `npm run test:task-process-acceptance -- --dump-manual <man.json>` 生成人工观察回填模板。
+1. `npm run test:task-process-acceptance:win -ListProfiles -Db <vinkey.sqlite3>` 确认模型 profile。
+2. `npm run test:task-process-acceptance:win -DumpManual <man.json>` 生成人工观察回填模板。
 3. 在 Vinkey 中对脚本给出的 fixture 工作区（或指定 `--workspace`）发起长文本分析，等待完成。
-4. 执行 `npm run test:task-process-acceptance -- --workspace <ws> --db <db> --json`，机器核查任务产物。
-5. 测试人员按回填模板在桌面完成人工用例，填写 `<man.json>` 后以 `--manual <man.json>` 重新执行合并。
+4. 执行 `npm run test:task-process-acceptance:win -Workspace <ws> -Db <db> -Json`，机器核查任务产物。
+5. 测试人员按回填模板在桌面完成人工用例，填写 `<man.json>` 后以 `-Manual <man.json>` 重新执行合并。
 
 ## 5. 测试人员必须回传的材料
 

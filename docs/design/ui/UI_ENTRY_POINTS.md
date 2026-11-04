@@ -10,7 +10,7 @@
 本文件是业务功能点和跨页面入口的唯一设计索引，回答“用户从哪里开始一项业务操作、需要什么前置条件、操作后到哪里”。它不替代页面设计文档中的组件登记和验收内容：
 
 - `UI_INVENTORY.md` 记录当前已有的页面、源码组件和交互事实。
-- `acceptance/UI_ACCEPTANCE_TITLE_BAR_PLAN.md` 记录标题栏菜单逐项验收用例、平台证据和结果输出边界。
+- `acceptance/ui/macos/UI_ACCEPTANCE_MACOS_TITLE_BAR_PLAN.md` 与 `acceptance/ui/windows/UI_ACCEPTANCE_WINDOWS_TITLE_BAR_PLAN.md` 按平台记录标题栏菜单逐项验收用例、平台证据和结果输出边界。
 - `UI_ENTRY_POINTS.md` 为业务功能点分配稳定的 `BF-*` 编号，为业务入口分配稳定的 `EP-*` 编号。
 - `UI_DESIGN_*.md` 记录对应页面或交互域的布局、详细步骤、组件映射、状态、隐私边界和验收标准，并为组件分配 `UI-*` 编号。
 - `UI_DESIGN.md` 只维护信息架构、跨域原则和文档索引。
