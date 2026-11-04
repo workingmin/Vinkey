@@ -1,7 +1,7 @@
 # UI 测试验收脚本编写工作计划
 
 - 计划基线：当前版本 `0.1.0`
-- 更新日期：`2026-09-28`
+- 更新日期：`2026-11-04`
 - 脚本规范：[UI_ACCEPTANCE_SCRIPT_SPEC.md](./UI_ACCEPTANCE_SCRIPT_SPEC.md)
 - 总验收计划：[UI_ACCEPTANCE_PLAN.md](./UI_ACCEPTANCE_PLAN.md)
 
@@ -41,7 +41,7 @@
 | `W0-SHELL-P` | `D-SHELL` 应用壳层 | macOS 15+ + `swiftc` + Accessibility/屏幕录制权限，或 Windows 对应平台能力 | `UI-ACC-SHELL-001` | store、原生窗口宽度同步已有；Playwright 只覆盖壳层容器/状态，截图前核对菜单合同但不执行菜单命令 | `npm run test:ui-shell-acceptance`；macOS 原生入口仅使用 ScreenCaptureKit helper，浏览器证据与 Tauri 原生窗口证据分层 | Overlay/自绘窗口承载、侧栏/设置、内容容器、错误/空态、主题/焦点、三种视口 | 浏览器脚本已实现；macOS 15+ helper 与依赖门槛已固化，原生窗口控制、交通灯和 DPI 待桌面执行；菜单只做一致性守卫，正式验收移交 `W0-SHELL-MENU-P/F` |
 | `W0-SHELL-MENU-P` | `D-SHELL` 标题栏与功能菜单 | `W0-SHELL-P` 的桌面启动和平台权限 | `UI-ACC-TITLE-BAR-001` | `App.titleBar.test.tsx`、`titleBarMenu.test.ts`、`editCommands.test.ts`、壳层截图前合同守卫；原生菜单仍需专项取证 | `docs/acceptance/ui/macos/UI_ACCEPTANCE_MACOS_TITLE_BAR_PLAN.md`、`docs/acceptance/ui/windows/UI_ACCEPTANCE_WINDOWS_TITLE_BAR_PLAN.md`；Windows UI Automation/macOS Accessibility | 一级菜单树、平台窗口动作、主题、中文审计、菜单关闭 | 目标实现已对齐；组件/合同自动化已有，双平台专项执行待完成，不得假定通过 |
 | `W0-RESP-P` | `Q-RESP` 响应式/主题 | 壳层 Token | `UI-ACC-RESPONSIVE-001` | 与壳层共用 Playwright 三种视口/主题/焦点场景 | 当前由 `test:ui-shell-acceptance` 提供结构截图；窄窗口专项仍待扩展 | 三种目标尺寸、主题、焦点、无横向溢出 | 部分自动化可执行，目标桌面 DPI 待回填 |
-| `W0-NAV-F` | `D-NAV` 项目/会话导航 | 桌面桥接、SQLite、隔离 fixture | `UI-ACC-NAV-FIXTURE-001` | store、删除对话框和搜索单元证据；组件直测仍需补 | 临时目录、多项目、多会话、删除边界和当前搜索；不调用 Ollama | 切换、恢复、确认、错误重试、结果范围 | 待编写，可先行 |
+| `W0-NAV-F` | `D-NAV` 项目/会话导航 | 桌面桥接、SQLite、隔离 fixture | `UI-ACC-NAV-FIXTURE-001` | store、删除对话框和搜索单元证据；`scripts/navigation/` 与 `navigation-acceptance-cli.test.ts` 合同测试已有；组件直测仍需补 | `npm run test:navigation-acceptance -- --json`；脚本自建隔离临时目录、双项目、双会话、中英文文档、删除边界和当前搜索；不调用 Ollama | 切换、恢复、确认、错误重试、结果范围 | 已有（待本地执行） |
 | `W0-EDITOR-F` | `D-EDITOR` 基础编辑器 | 工作区/文件桥接 | `UI-ACC-EDITOR-001` | 文件 API、保存、越界测试 | 临时工作区、保存冲突和 Unicode 路径；不得覆盖用户文件 | 文件树、打开、编辑、保存、预览 | 待编写，可并行 |
 | `W0-SHELL-MENU-F` | `D-SHELL` + 入口 fixture | `W0-SHELL-MENU-P`、`W0-NAV-F`、`W0-EDITOR-F`；设置使用可控 UI fixture | `UI-ACC-TITLE-BAR-FIXTURE-001` | 通过隔离项目/文档 fixture 验证菜单动作到页面和状态保持；不调用 Ollama | 同一标题栏专项计划的 F 子集；临时目录和结果 JSON 必须独立记录 | 添加/刷新项目、新建会话、页面状态、编辑焦点、设置打开/返回 | 计划已建立；需等待关联 fixture 门槛，不得与 P 子集混报 |
 | `W1-MODEL-E` | `D-MODEL` 模型设置 | 桌面桥接、SQLite、系统凭据库 | `UI-ACC-SETTINGS-001` | `SettingsPage.test.tsx`、硬件和隐私测试 | 设置连接/凭据冒烟脚本；确认 profile 后再执行真实模型 | 设置入口、保存、切换、删除、键盘导航 | 自动化已有；脚本待编写 |
@@ -58,7 +58,9 @@
 
 ### 4.1 `W0-NAV-F` fixture 合同
 
-脚本必须生成并清理自有临时目录，至少包含两个项目、每项目两条会话和中英文文档。用例覆盖添加/去重、项目切换、会话恢复/删除、删除不触碰文件、当前搜索边界、加载失败和重试。结果必须包含 `fixtureManifest`、项目/会话计数、数据库摘要、文件 SHA-256 和退出码。禁止把真实用户目录作为 fixture。
+实现入口：`scripts/navigation/`（`navigation-acceptance.ts` 核心、`run-navigation-acceptance.mjs`/`.sh`/`.ps1` 包装、`tests/navigation/navigation-acceptance-cli.test.ts` 合同测试），通过 `npm run test:navigation-acceptance`（macOS/Linux 加 `:sh`、Windows 加 `:win`）执行。
+
+脚本生成并清理自有临时目录，至少包含两个项目、每项目两条会话和中英文文档。用例覆盖添加/去重（`NAV-F-001`）、项目切换/隔离（`NAV-F-002`）、会话恢复/删除（`NAV-F-003`）、删除不触碰文件（`NAV-F-004`）、当前搜索边界（`NAV-F-005`）、加载失败和重试（`NAV-F-006`）。结果包含 `fixtureManifest`、项目/会话计数、数据库摘要、文件 SHA-256 和退出码。禁止把真实用户目录作为 fixture。
 
 ### 4.2 `W2-NAV-E` 真实端到端
 

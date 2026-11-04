@@ -26,7 +26,10 @@
     "package:mac": "bash scripts/build/build-macos.sh",
     "test:task-process-acceptance": "node scripts/task-process/run-task-process-acceptance.mjs",
     "test:task-process-acceptance:win": "powershell -ExecutionPolicy Bypass -File scripts/task-process/run-task-process-acceptance.ps1",
-    "test:task-process-acceptance:sh": "bash scripts/task-process/run-task-process-acceptance.sh"
+    "test:task-process-acceptance:sh": "bash scripts/task-process/run-task-process-acceptance.sh",
+    "test:navigation-acceptance": "node scripts/navigation/run-navigation-acceptance.mjs",
+    "test:navigation-acceptance:win": "powershell -ExecutionPolicy Bypass -File scripts/navigation/run-navigation-acceptance.ps1",
+    "test:navigation-acceptance:sh": "bash scripts/navigation/run-navigation-acceptance.sh"
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.0",

@@ -6,8 +6,8 @@
 - 验收标识：`W0-NAV-F`、`W2-NAV-E`、`W4-NAV-R`
 - 验收对象：[UI_DESIGN_NAVIGATION.md](../../../design/ui/UI_DESIGN_NAVIGATION.md)、[UI_ENTRY_POINTS.md](../../../design/ui/UI_ENTRY_POINTS.md)
 - 回填模板：[UI_ACCEPTANCE_WINDOWS_NAVIGATION_RUN_TEMPLATE.md](./UI_ACCEPTANCE_WINDOWS_NAVIGATION_RUN_TEMPLATE.md)
-- 报告状态：设计与用例已建立；本地脚本、目标平台证据和人工材料待补
-- 更新日期：`2026-11-02`
+- 报告状态：`W0-NAV-F` fixture 脚本已就绪（`npm run test:navigation-acceptance:win`）；目标平台执行证据和人工材料待补
+- 更新日期：`2026-11-04`
 
 ## 1. 验收边界
 
@@ -79,7 +79,7 @@
 
 | 脚本 ID | 门槛 | 计划输出 | 状态 |
 | --- | --- | --- | --- |
-| `UI-ACC-NAV-FIXTURE-001` | `W0-NAV-F` | fixture manifest、逐用例结果、数据库/文件边界摘要、`result.json`、`SHA256SUMS` | 待编写 |
+| `UI-ACC-NAV-FIXTURE-001` | `W0-NAV-F` | fixture manifest、逐用例结果、数据库/文件边界摘要、`result.json`、`SHA256SUMS` | 已有；入口 `npm run test:navigation-acceptance:win`，待目标平台执行 |
 | `UI-ACC-NAV-E2E-001` | `W2-NAV-E` | profile/model、会话 ID 摘要、标题阶段、搜索跳转、失败归因 | 待编写；等待目标设计实现 |
 | `UI-ACC-NAV-REGRESSION-001` | `W4-NAV-R` | 任务/草稿状态、阻断结果、恢复动作、过期响应断言 | 待编写 |
 
@@ -111,7 +111,7 @@
 
 ## 8. 当前结论
 
-- `W0-NAV-F`：待脚本和本地 fixture 证据，当前不可判定通过。
+- `W0-NAV-F`：fixture 脚本已就绪，本地可重复生成/清理隔离 fixture 并通过 `NAV-F-001`~`NAV-F-006` 机器断言；仍待测试人员在目标平台执行并回填证据，当前不可判定通过。
 - `W2-NAV-E`：`CF-022`、`CF-023` 已标记“已参考”且实现已落地；仍因缺少真实模型/目标平台端到端证据而阻断。
 - `W4-NAV-R`：等待对话、编辑器和长任务域形成可复现前置状态。
 - `D-NAV` 综合结论：**未完成验收**。当前源码基线可作为脚本设计依据，不能替代三个门槛的执行证据。
