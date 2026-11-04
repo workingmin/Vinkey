@@ -337,6 +337,36 @@ func focusInput(_ app: AXUIElement, roleName: String, index: Int) -> [String: An
     return ["ok": true, "role": roleName, "index": index, "matched": matches.count, "stateAfter": readState(app)]
 }
 
+/// 把目标应用切到前台。未激活时 CGEvent 点击不会落到 WebView，
+/// kAXFocusedUIElementAttribute 也可能返回空，导致焦点前置条件无法建立。
+func activateApp(_ pid: pid_t) -> Bool {
+    guard let running = NSRunningApplication(processIdentifier: pid) else { return false }
+    return running.activate(options: [.activateAllWindows])
+}
+
+/// 只关闭「帮助/诊断」类弹窗的关闭按钮；避免误按主界面其他「关闭」按钮。
+func dismissHelpDialog(_ app: AXUIElement) -> [String: Any] {
+    var target: AXUIElement?
+    var label = ""
+    func walk(_ el: AXUIElement, _ depth: Int) {
+        guard target == nil, depth <= 14 else { return }
+        if role(of: el) == "AXButton" {
+            let text = "\(title(of: el) ?? "") \(description(of: el) ?? "")"
+            if text.contains("关闭") && (text.contains("诊断") || text.contains("快捷键") || text.contains("关于")) {
+                target = el
+                label = text.trimmingCharacters(in: .whitespaces)
+                return
+            }
+        }
+        for child in children(of: el) { walk(child, depth + 1) }
+    }
+    if let win = frontWindow(app) { walk(win, 0) }
+    guard let button = target else { return ["ok": false, "reason": "no-help-dialog"] }
+    let ok = performPress(button)
+    usleep(250_000)
+    return ["ok": ok, "dismissed": label, "stateAfter": readState(app)]
+}
+
 // MARK: - 输出
 
 func writeJSON(_ payload: [String: Any], to path: String) {
@@ -436,6 +466,16 @@ case "texts":
     let texts = readTexts(app, limit: limit)
     payload["texts"] = texts
     payload["textCount"] = texts.count
+case "activate":
+    let activated = activateApp(found.pid)
+    usleep(350_000)
+    payload["activated"] = activated
+    payload["stateAfter"] = readState(app)
+case "dismiss":
+    let r = dismissHelpDialog(app)
+    payload["dismiss"] = r
+    payload["ok"] = r["ok"] as? Bool ?? false
+    payload["stateAfter"] = r["stateAfter"]
 case "focus":
     if args.count < 4 {
         payload = ["ok": false, "error": "usage: focus <out> <role> [index]"]

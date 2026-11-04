@@ -150,6 +150,32 @@ function helper(command, args = [], outName = null, timeout = 20000) {
     return { ok: false, error: `bad-json: ${messageOf(cause)}` }
   }
 }
+let activationCounter = 0
+function activateApp(tag) {
+  activationCounter += 1
+  return helper('activate', [], `activate-${tag}-${activationCounter}.json`)
+}
+/**
+ * 计划 §4.1 步骤 5：焦点命令必须先在输入控件建立真实 WebView 焦点。
+ * 未激活应用时 CGEvent 点击可能落空、kAXFocusedUIElementAttribute 返回空；
+ * 因此激活 + 点击 + 读回焦点，最多 4 次；仍读不到就交给人工观察，不判 FAIL。
+ */
+async function establishFocus(tag, primaryName) {
+  let result = null
+  for (let attempt = 1; attempt <= 4; attempt += 1) {
+    const outName = attempt === 1 ? primaryName : primaryName.replace(/\.json$/, `-retry${attempt}.json`)
+    activateApp(`${tag}-${attempt}`)
+    const f = helper('focus', ['AXTextArea', '0'], outName)
+    const role = f.focus?.stateAfter?.focusedElement?.role || ''
+    result = { ...f, verifiedRole: role, attempts: attempt }
+    if (/^AX(TextArea|TextField|WebArea)$/.test(role)) break
+    await sleep(600)
+  }
+  if (!/^AX(TextArea|TextField|WebArea)$/.test(result.verifiedRole)) {
+    issues.push(`焦点前置条件无法建立：${tag} 在 ${result.attempts} 次「激活 + 点击」重试后 focus=${result.verifiedRole || 'unknown'}；按计划 §4.1 步骤 5 转人工观察，不据此判 FAIL 或 PASS。`)
+  }
+  return result
+}
 async function capture(name, mode = 'window') {
   const file = join(screenshotDir, name)
   let result
@@ -188,6 +214,8 @@ async function startApp(profile) {
         }
         logEvent(`APP provenance app.start=${appRuntimeStart?.commitSha ? 'observed' : 'UNAVAILABLE'}`)
       }
+      const activated = activateApp('startup')
+      logEvent(`APP activated=${activated.activated} focus=${activated.stateAfter?.focusedElement?.role || 'unknown'}`)
       logEvent(`APP started pid=${appChild.pid} profile=${profile.split('/').pop()} wait=${i + 1}s`)
       return true
     }
@@ -351,7 +379,7 @@ async function runWithProjectPhase(temporaryDirectory) {
     // ---- TB-MENU-004（F；依赖 W0-EDITOR-F）----
     helper('click', ['查看', '对话工作台'], 'edit-back-to-chat.json')
     await sleep(500)
-    const focusChat = helper('focus', ['AXTextArea', '0'], 'focus-chat-input.json')
+    const focusChat = await establishFocus('edit', 'focus-chat-input.json')
     await sleep(300)
     const editCommands = ['撤销', '重做', '剪切', '复制', '粘贴', '全选']
     const editObservations = []
@@ -365,7 +393,7 @@ async function runWithProjectPhase(temporaryDirectory) {
     setCase('TB-MENU-004', {
       status: 'BLOCKED',
       action: '在对话输入框建立 AX 焦点后逐项执行原生编辑菜单命令，读取焦点与页面文本；三类输入（对话/文件编辑器/搜索或设置）完整组合需 W0-EDITOR-F',
-      actual: `焦点建立 ok=${focusChat.ok}（${focusChat.focus?.stateAfter?.focusedElement?.title || ''}）；命令观察：${editObservations.join('；')}。W0-EDITOR-F 在脚本计划矩阵仍为「待编写」，按计划 §1/§7 第 19/114 行，F 子门槛缺该依赖必须单独 BLOCKED；本用例不因局部动作可达而写 PASS。`,
+      actual: `焦点建立 ok=${focusChat.ok}，读回角色=${focusChat.verifiedRole || 'unknown'}（激活+点击重试 ${focusChat.attempts} 次）；命令观察：${editObservations.join('；')}。W0-EDITOR-F 在脚本计划矩阵仍为「待编写」，按计划 §1/§7 第 19/114 行，F 子门槛缺该依赖必须单独 BLOCKED；本用例不因局部动作可达而写 PASS。`,
       evidence: [focusChat._evidence, editShot, 'states/edit-0-state.json', editTexts._evidence].filter(Boolean),
       exitCode: 0,
     })
@@ -450,9 +478,12 @@ async function runWithProjectPhase(temporaryDirectory) {
       await sleep(400)
       const s = helper('state', [], `help-${index}-state.json`)
       const shot = await capture(`14-help-${index}.png`, 'window')
-      helpObservations.push(`${label}:trigger=${r.ok},windows=${s.state?.windowCount ?? '?'}`)
-      if (shot) helpEvidence.push(shot)
       helper('key', ['escape'], `help-${index}-escape.json`)
+      // 低保真诊断弹窗有时 Escape 不关闭，残留弹窗会抢走后续用例的 WebView 焦点
+      const dismissed = helper('dismiss', [], `help-${index}-dismiss.json`)
+      activateApp(`help-${index}`)
+      helpObservations.push(`${label}:trigger=${r.ok},windows=${s.state?.windowCount ?? '?'},dialogDismissed=${dismissed.ok}`)
+      if (shot) helpEvidence.push(shot)
     }
     const aboutInApp = itemsOf('Vinkey').includes('关于 Vinkey')
     setCase('TB-MENU-009', {
@@ -468,7 +499,7 @@ async function runWithProjectPhase(temporaryDirectory) {
     // 先切回对话页并显式建立 WebView 输入焦点，才能验证「菜单关闭后焦点恢复」
     helper('click', ['查看', '对话工作台'], 'menu-close-back-to-chat.json')
     await sleep(500)
-    const focusBeforeClose = helper('focus', ['AXTextArea', '0'], 'menu-close-focus-before.json')
+    const focusBeforeClose = await establishFocus('menu-close', 'menu-close-focus-before.json')
     await sleep(300)
     const opened = helper('open', ['查看'], 'menu-close-open.json')
     const expandedBefore = helper('state', [], 'menu-close-expanded.json')
@@ -479,13 +510,14 @@ async function runWithProjectPhase(temporaryDirectory) {
     const expandedListBefore = opened.stateAfter?.expandedMenus || expandedBefore.state?.expandedMenus || []
     const expandedList = expandedAfter.state?.expandedMenus || []
     const focusedRole = expandedAfter.state?.focusedElement?.role || ''
-    const okClose = expandedListBefore.includes('查看')
-      && expandedList.length === 0
-      && /^AX(WebArea|Text|TextArea|TextField|Group)/.test(focusedRole)
+    const focusEstablished = /^AX(TextArea|TextField|WebArea)$/.test(focusBeforeClose.verifiedRole || '')
+    const menuClosed = expandedListBefore.includes('查看') && expandedList.length === 0
+    const focusRestored = /^AX(WebArea|Text|TextArea|TextField|Group)/.test(focusedRole)
+    const okClose = menuClosed && focusRestored
     setCase('TB-MENU-010', {
-      status: okClose ? 'PASS' : 'FAIL',
-      action: '先切回对话页并在输入区建立 WebView 焦点，再用 AX press 展开「查看」菜单，读取展开态后 Escape 关闭，再读展开态与 kAXFocusedUIElementAttribute，保留展开/关闭两张截图',
-      actual: `前置焦点建立 ok=${focusBeforeClose.ok}（${focusBeforeClose.focus?.stateAfter?.focusedElement?.role || 'unknown'}）；展开 press ok=${opened.ok}；关闭前 expanded=${JSON.stringify(expandedListBefore)}（本机以 AXSelected 等价表示，见 states/menu-attrs.json 属性清单）；关闭后 expanded=${JSON.stringify(expandedList)}，焦点 role=${focusedRole}。断言与截图同时归档，非无条件写 PASS。`,
+      status: !focusEstablished ? 'BLOCKED' : (okClose ? 'PASS' : 'FAIL'),
+      action: '先切回对话页，激活应用并读回验证 WebView 输入焦点，再用 AX press 展开「查看」菜单，读取展开态后 Escape 关闭，再读展开态与 kAXFocusedUIElementAttribute，保留展开/关闭两张截图',
+      actual: `前置焦点建立 ok=${focusBeforeClose.ok}，读回角色=${focusBeforeClose.verifiedRole || 'unknown'}（激活+点击重试 ${focusBeforeClose.attempts} 次），前置可判定=${focusEstablished}；展开 press ok=${opened.ok}；关闭前 expanded=${JSON.stringify(expandedListBefore)}（本机以 AXSelected 等价表示，见 states/menu-attrs.json 属性清单）；关闭后 expanded=${JSON.stringify(expandedList)}，焦点 role=${focusedRole}；菜单已关闭=${menuClosed}、焦点已恢复=${focusRestored}。${focusEstablished ? '断言与截图同时归档，非无条件写 PASS。' : '前置焦点无法建立/读取，按计划 §4.1 步骤 5 记为 BLOCKED 并转人工观察，不判 FAIL、也不判 PASS。'}`,
       evidence: [expandedShot, closeShot, focusBeforeClose._evidence, expandedAfter._evidence, expandedBefore._evidence, 'states/menu-attrs.json'].filter(Boolean),
       exitCode: 0,
     })
@@ -557,16 +589,15 @@ async function runWithProjectPhase(temporaryDirectory) {
     const closeHidden = (closeState.state?.windowCount ?? 0) === 0
       || closeState.state?.frontWindow?.title === ''
     setCase('TB-MENU-008', {
-      status: missing.length === 0 && windowActionsOk && minimized
-        ? (fullScreenValue ? 'PASS' : 'BLOCKED')
-        : 'FAIL',
-      action: 'AX 读取窗口菜单项；依次 press 最小化/缩放/全屏/关闭按钮并读取 AXMinimized、窗口尺寸与 AXFullScreen',
-      actual: `窗口菜单必需项=${JSON.stringify(requiredWindowItems)}，缺失=${JSON.stringify(missing)}；AX 交通灯最小化后 AXMinimized=${minimized}；菜单恢复 ok=${restoreViaMenu.ok}；AX 缩放按钮 ok=${zoom.ok}，缩放后尺寸=${JSON.stringify(zoomedSize)}；菜单「进入全屏」ok=${fullscreen.ok}、实际按下项=${fullscreen.click?.pressedItemTitle || ''}，AXFullScreen=${fullScreenValue}；菜单「关闭窗口」ok=${closeWin.ok}、实际按下项=${closeWin.click?.pressedItemTitle || ''}，关闭后窗口数=${closeState.state?.windowCount ?? '?'}、无可见主窗口=${closeHidden}（macOS 关闭隐藏主窗口并保留进程）。${fullScreenValue ? '' : '全屏状态未被 AX 确认（窗口尺寸仍为原始值），按计划 §3 第 45 行记为 BLOCKED 并转人工目视复核，不无条件写 PASS。'}Reopen 恢复的 Dock 激活依赖系统交互，按计划 §4.1 步骤 6 同样记为人工观察。`,
+      status: missing.length === 0 && windowActionsOk && minimized ? 'BLOCKED' : 'FAIL',
+      action: 'AX 读取窗口菜单项；依次 press 最小化/缩放/全屏/关闭按钮并读取 AXMinimized、窗口尺寸与 AXFullScreen；Reopen 恢复保留为人工观察',
+      actual: `窗口菜单必需项=${JSON.stringify(requiredWindowItems)}，缺失=${JSON.stringify(missing)}；AX 交通灯最小化后 AXMinimized=${minimized}；菜单恢复 ok=${restoreViaMenu.ok}；AX 缩放按钮 ok=${zoom.ok}，缩放后尺寸=${JSON.stringify(zoomedSize)}；菜单「进入全屏」ok=${fullscreen.ok}、实际按下项=${fullscreen.click?.pressedItemTitle || ''}，AXFullScreen=${fullScreenValue}；菜单「关闭窗口」ok=${closeWin.ok}、实际按下项=${closeWin.click?.pressedItemTitle || ''}，关闭后窗口数=${closeState.state?.windowCount ?? '?'}、无可见主窗口=${closeHidden}（本批次关闭后是否隐藏主窗口以该读数为准，跨批次不稳定，需人工目视复核）。全屏 AXFullScreen=${fullScreenValue}（跨批次曾出现 true/false，不作为自动通过依据）；Reopen 恢复依赖 Dock 激活，按计划 §4.1 步骤 6 保留人工观察。因计划 §3 要求「全屏、关闭隐藏及 Reopen 恢复」整体成立，而 Reopen 未自动验证，本用例恒定保留 BLOCKED，不因某次 AXFullScreen=true 就宣称窗口动作全部通过。`,
       evidence: [windowBeforeShot, windowBeforeCloseShot, minimize._evidence, zoom._evidence, fullscreen._evidence, fullscreenState._evidence, closeWin._evidence, closeState._evidence].filter(Boolean),
       exitCode: 0,
     })
     if (!windowActionsOk || !minimized) issues.push('窗口动作存在未通过项，详见 TB-MENU-008。')
-    if (!fullScreenValue) issues.push('「窗口 > 进入全屏」菜单动作已触发，但 AXFullScreen 仍为 false 且窗口尺寸未变；按计划 §3 记为 BLOCKED，需人工目视复核全屏状态，不得据此宣称窗口动作全部通过。')
+    if (!fullScreenValue) issues.push('「窗口 > 进入全屏」菜单动作已触发，但本批次 AXFullScreen 仍为 false；全屏状态跨批次不稳定，需人工目视复核，不得据此宣称窗口动作全部通过。')
+    issues.push('TB-MENU-008 恒定保留 BLOCKED：计划 §3 要求全屏、关闭隐藏与 Reopen 恢复整体成立，其中 Reopen 依赖 Dock 激活，脚本未自动验证；AXFullScreen=true 的单次观察不足以把该用例升为 PASS。')
     issues.push('macOS「关闭窗口」后的 Dock/系统 Reopen 恢复需人工目视确认，脚本已采集关闭后状态但未自动激活 Dock。')
   } finally {
     await stopApp()
@@ -775,7 +806,7 @@ async function main() {
         'Windows 平台（M5/W0-SHELL-MENU Windows 专项）尚未执行，不得宣称跨平台发布通过',
         `W0-SHELL-MENU-F = ${fSubsetConclusion}（缺 W0-EDITOR-F）`,
         '帮助/诊断弹窗为低保真实现，按 §6 计入条件通过遗留项',
-        '「窗口 > 进入全屏」的 AXFullScreen 未能确认为 true，TB-MENU-008 记为 BLOCKED 并转人工目视复核，不宣称窗口动作全部通过',
+        'TB-MENU-008 记为 BLOCKED：全屏 AXFullScreen 跨批次不稳定，关闭窗口后的 Dock/Reopen 恢复需人工目视复核，不宣称窗口动作全部通过',
         'macOS 关闭窗口后的 Dock/系统 Reopen 恢复需人工目视确认',
         ...(provenanceStatus === 'REVIEW'
           ? [`provenance.status=REVIEW：appSha=${applicationSha ?? 'unknown'}、srcIdentical=${sourceIdentical}、repositoryClean=${!dirty}；报告需按最终 HEAD 复跑后才能定稿`]

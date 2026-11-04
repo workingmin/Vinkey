@@ -38,7 +38,7 @@
 | 目标应用 | `/Applications/Vinkey.app`，bundle `com.vinkey.desktop`，进程 `Vinkey`；版本与构建号取自 `Contents/Info.plist`，嵌入 Git SHA 取自隔离 Profile 的 `vinkey-runtime.jsonl` 的 `app.start.fields.commitSha`（计划 §2 溯源前置） |
 | 溯源 | `result.json.application.gitSha` / `gitShaEvidence` / `buildTimeEpochMs` / `workingTreeDirtyAtBuild` / `sourceIdenticalToHead`；`result.json.provenance.status` 为 `PASS` 或 `REVIEW`，`repositoryClean` 记录工作树状态。构建 SHA 与 HEAD 不同时，以 `src/`、`src-tauri/src/`、`index.html` 零差异证明界面代码同版本 |
 | 平台 | macOS `26.6.2` / arm64（满足计划 §2 的 macOS 15+ 下限），Node `v22.22.2`，Swift `6.3.2` |
-| 权限路径 | `osascript` + `System Events` 在本会话返回 `-10004` 权限违例，按计划 §4.1 改走**纯 Accessibility AX C API**（`AXIsProcessTrusted()`、`kAXMenuBarAttribute`、`AXUIElementPerformAction`、`CGEvent`）；helper 源码为 `scripts/title-bar/menu-ax-helper.swift`，同批归档为 `native-automation.swift` |
+| 权限路径 | `osascript` + `System Events` 在本会话返回 `-10004` 权限违例，按计划 §4.1 改走**纯 Accessibility AX C API**（`AXIsProcessTrusted()`、`kAXMenuBarAttribute`、`AXUIElementPerformAction`、`CGEvent`）；helper 源码为 `scripts/title-bar/menu-ax-helper.swift`，同批归档为 `native-automation.swift`。helper 另提供 `activate`（把应用切到前台）与 `dismiss`（只关闭帮助/诊断类弹窗）命令，见 §10 |
 | 截图机制 | 窗口截图由 `CGWindowListCreateImage` 按窗口 ID 捕获；菜单展开截图用 `screencapture -R0,0,760,190` 只截系统菜单栏与下拉菜单区域；`display-info.txt` + `display-metadata.json` 记录显示器/缩放原始信息 |
 | 应用状态 | 两阶段：无项目空隔离 Profile；复用 `W0-NAV-F` fixture 的已打开项目 Profile（`VINKEY_ACCEPTANCE_DATA_DIR` 注入），不触碰用户真实数据 |
 | 模型 | 按计划 §2，Ollama / profile / 真实会话**不是**本专项前置条件，记为 `N/A`，不因未启动模型判菜单结构失败 |
@@ -58,9 +58,9 @@
 | `TB-MENU-005` | 查看页面切换 | P | 已打开项目 | 对话工作台 / 项目文件 / 任务与日志三次点击成功，页面文本签名去重后 3 种；同一隔离 fixture 保持基础容器状态 | PASS | `screenshots/08-view-chat.png`~`10-view-logs.png`、`states/view-*-texts.json` |
 | `TB-MENU-006` | 主题菜单 | P | 已打开项目 | 切换前后窗口截图像素内容变化；切换后仍有 12 条 WebView 文本，业务选择未清空 | PASS | `screenshots/11-theme-before.png`、`12-theme-after.png`、`states/click-theme.json` |
 | `TB-MENU-007` | 设置归属 | P | 已打开项目 | `Vinkey` 应用菜单含「设置…」；「查看」不含设置；菜单点击与 `Cmd+,` 均可达，设置页文本 31 条 | PASS | `screenshots/13-settings-open.png`、`states/click-settings.json`、`states/key-cmd-comma.json` |
-| `TB-MENU-008` | 窗口控制 | P | 已打开项目 | 窗口菜单必需项齐全；最小化后 `AXMinimized=true` 并可恢复；缩放后尺寸 `[1710,1107]`；「进入全屏」已触发但 `AXFullScreen=false` 且尺寸未变；「关闭窗口」后窗口数 0、无可见主窗口 | **BLOCKED** | `states/window-minimize.json`、`window-zoom.json`、`window-fullscreen-state.json`、`window-after-close.json`、`screenshots/16-before-window-actions.png` |
+| `TB-MENU-008` | 窗口控制 | P | 已打开项目 | 窗口菜单必需项齐全；最小化后 `AXMinimized=true` 并可恢复；缩放后尺寸 `[1710,1107]`；「进入全屏」已触发，但 `AXFullScreen` 跨批次出现过 `false`/`true`；「关闭窗口」已触发，关闭后窗口是否隐藏也跨批次不稳定。全屏目视复核与 Dock/Reopen 恢复均依赖人工观察，故该用例**恒定 `BLOCKED`**，不因某次 `AXFullScreen=true` 升级为 PASS | **BLOCKED** | `states/window-minimize.json`、`window-zoom.json`、`window-fullscreen-state.json`、`window-after-close.json`、`screenshots/16-before-window-actions.png` |
 | `TB-MENU-009` | 帮助和诊断 | P | 已打开项目 | 快捷键 / 窗口诊断信息 / 应用诊断日志三项均可触发并 Escape 关闭；「关于 Vinkey」位于应用菜单；`window.alert` 仅计「动作可触发」 | PASS | `screenshots/14-help-0.png`~`14-help-2.png`、`menu-tree.json` |
-| `TB-MENU-010` | 菜单关闭与焦点 | P | 已打开项目 | 先切回对话页并 `focus AXTextArea`；展开「查看」后展开态 `["查看"]`，Escape 后 `expanded=[]` 且焦点回到 `AXTextArea`；断言与截图同时归档 | PASS | `screenshots/15a-menu-expanded-state.png`、`15b-menu-closed-focus.png`、`states/menu-close-final.json` |
+| `TB-MENU-010` | 菜单关闭与焦点 | P | 已打开项目 | 激活应用后点击对话输入框并**读回验证**焦点为 `AXTextArea`；展开「查看」后展开态 `["查看"]`，Escape 后 `expanded=[]` 且焦点回到 `AXTextArea`；断言与截图同时归档 | PASS | `screenshots/15a-menu-expanded-state.png`、`15b-menu-closed-focus.png`、`states/menu-close-final.json` |
 | `TB-MENU-011` | 中文菜单审计 | P | 已打开项目 | 自有菜单项英文残留 `[]`；系统注入服务项单独标记 13 条（`Quit and Keep Windows`、`AutoFill`、`Start Dictation…`、`Minimize All` 等），品牌/格式/协议字段按计划允许保留 | PASS | `menu-tree.json` |
 | `TB-MENU-012` | 首版菜单减法审计 | P | 已打开项目 | 菜单中禁止项 `[]`（无全局停止生成、侧栏折叠、文档保存/关闭）；降级入口由 M3 companion 复核存在 | PASS | `webview/result.json`、`menu-tree.json` |
 
@@ -95,7 +95,7 @@ P 子集 9 个用例（13 项扣除 4 个 F 归属用例）：`8 PASS / 0 FAIL /
 | 计划要求 | 本批次 |
 | --- | --- |
 | `result.json` | 有；含用例全字段、覆盖率、子集结论、环境与 `provenance` |
-| `SHA256SUMS` | 有；102 条，`shasum -c` 全部 `OK`、0 `FAILED`；`webview/SHA256SUMS` 自身亦校验通过 |
+| `SHA256SUMS` | 有；批次内所有文件（含 `result.json` 与 `webview/` 子目录）逐条登记，`shasum -c` 全部 `OK`、0 `FAILED`；`webview/SHA256SUMS` 自身亦校验通过 |
 | `screenshots/` | 20 张原生窗口/菜单区域截图 |
 | `events.txt` | 有；按时间顺序记录初始化、helper 调用、截图、溯源与用例结论 |
 | `automation-stderr.txt` | 有；空文件按计划保留 |
@@ -103,7 +103,7 @@ P 子集 9 个用例（13 项扣除 4 个 F 归属用例）：`8 PASS / 0 FAIL /
 | `native-automation.*` | `native-automation.swift`（AX C API helper 源码）；计划写的是 AppleScript 操作源，本机 `System Events` 不可用，故按 §4.1 走纯 Accessibility，此处为**平台实现偏差并如实记录** |
 | `webview/` | 有；M3 companion `result.json` + `SHA256SUMS` + 9 张截图，4/4 PASS |
 
-额外归档：`menu-tree.json`（完整原生菜单树）、`states/`（65 份 AX 状态 JSON）、`app-runtime.log`。stdout 只输出套件结论、`Results:`、`SHA256SUMS:`、`exit=<n>` 四行；详细用例与环境信息以 `result.json` 为准。
+额外归档：`menu-tree.json`（完整原生菜单树）、`states/`（逐次 AX 状态 JSON，含 `activate-*` 应用激活、`focus-*` 焦点读回验证、`help-*-dismiss.json` 弹窗关闭记录）、`app-runtime.log`。stdout 只输出套件结论、`Results:`、`SHA256SUMS:`、`exit=<n>` 四行；详细用例与环境信息以 `result.json` 为准。
 
 ### 5.2 证据层级（不得扩大解释）
 
@@ -119,7 +119,7 @@ P 子集 9 个用例（13 项扣除 4 个 F 归属用例）：`8 PASS / 0 FAIL /
 
 1. **`CF-023` / `TB-GAP-006` 实现偏差（重点）**：`FEATURE_DECISIONS.md` 中 `CF-023` 状态为 `已参考`，文件第 5 行明确「`已参考` 不表示功能完备」；`TITLE_BAR_DESIGN.md` 的 `TB-GAP-006` 仍为「未实现，保持独立阻断」，§5 审计表要求 `CF-023` 前「无原生菜单项」。但 macOS 原生「会话」菜单已提前挂载「搜索项目与会话 ⌘K」（`src/App.tsx` 的 `installMacMenu` + `searchSessions`），其 `focusGlobalSearch` 只执行 `document.getElementById('global-search-input')?.focus()`，而该 id 是 `ProjectSessionSidebar.tsx` 的**侧栏搜索框**（`class=sidebar-search`），并非设计 §3.2 的统一搜索结果面板。这正是计划 §1 禁止的「侧栏搜索冒充全局搜索」。本专项**没有删除用例、没有改写计划、没有写 PASS**，而是把 `TB-MENU-003-GLOBAL-SEARCH` 保留为 `NOT_APPLICABLE` 遗留项并在 `result.json.issues` 记录偏差。
 2. **跨文档口径需产品/设计复核**：`UI_ACCEPTANCE_PLAN.md` §7 第 112 行与导航报告 §2 第 36 行把「全局搜索入口/结果面板」描述为已实现；导航报告 `NAV-E-005` 的 PASS 实际证明的是当前工作区「项目/会话/文档」三类分组搜索与跳转（`scripts/navigation/navigation-e2e-acceptance.ts` 的 `grouped` 断言），**不等于** `CF-023` 统一面板完成。本专项不改变 `D-NAV` 结论，也不借用其 PASS 为 `CF-023` 背书；两处描述的一致性需另行复核，不在本专项里修改测试范围。
-3. **`TB-MENU-008` 窗口动作未全通过**：「进入全屏」已触发但 `AXFullScreen=false` 且窗口尺寸未变；Dock/系统 Reopen 恢复未自动激活。两项转人工目视复核，不宣称窗口动作全部通过。
+3. **`TB-MENU-008` 窗口动作未全通过**：「进入全屏」已触发，但 `AXFullScreen` 在不同批次出现 `false` / `true`；「关闭窗口」后主窗口是否隐藏也跨批次不稳定；Dock/系统 Reopen 恢复从未自动激活。全屏目视复核、关闭隐藏复核与 Reopen 恢复全部转人工观察，因此该用例**恒定 `BLOCKED`**，不因某次 `AXFullScreen=true` 就宣称窗口动作全部通过（见 §10）。
 4. **低保真诊断弹窗**：快捷键/窗口诊断/应用诊断日志由 `window.alert` 或简易弹窗承载，按计划 §6 只计「动作可触发」，计入条件通过遗留项。
 5. **`W0-EDITOR-F` 待编写**：`F` 子门槛硬依赖缺失，`TB-MENU-004` 保持 `BLOCKED`；M3 companion 的 WebView 结构证据不能替代。
 6. **Windows M5 未执行**：`decision.windowsPlatform=NOT_EXECUTED`，不得宣称跨平台发布通过；Windows 自绘菜单、窗口控制、DPI 与截图仍待目标桌面执行。
@@ -150,7 +150,18 @@ P 子集 9 个用例（13 项扣除 4 个 F 归属用例）：`8 PASS / 0 FAIL /
 - `W0-SHELL-MENU-P`：`条件通过（含待人工复核项）`；证据见 `artifacts/title-bar-acceptance/` 最新 `title-bar-w0-p-*` 批次的 `result.json` + `SHA256SUMS` + `screenshots/`（20 张原生截图）+ `states/` + `menu-tree.json`。
 - `W0-SHELL-MENU-F`：`BLOCKED`；依赖状态见 `result.json.subsets['W0-SHELL-MENU-F'].dependency`；解阻条件为 `W0-EDITOR-F` 完成并使 `TB-MENU-004` 具备三类输入控件完整组合。
 - M3 companion：`4/4 PASS`；证据见同批次 `webview/result.json` + `webview/SHA256SUMS` + 9 张截图；**仅为 WebView 结构证据**。
-- 人工复核清单：`<① 全屏状态目视确认（AXFullScreen 未确认）；② 关闭窗口后 Dock/系统 Reopen 恢复；③ 目录选择取消/失败后原状态保留；④ 低保真诊断弹窗视觉质量与焦点返回；⑤ Windows M5 目标桌面执行>`
+- 人工复核清单：`<① 全屏状态目视确认（AXFullScreen 跨批次不稳定）；② 关闭窗口后主窗口隐藏状态与 Dock/系统 Reopen 恢复；③ 目录选择取消/失败后原状态保留；④ 低保真诊断弹窗视觉质量与焦点返回；⑤ Windows M5 目标桌面执行>`
 - 问题列表：`<① CF-023/TB-GAP-006 实现偏差（原生菜单项提前挂载、只聚焦侧栏搜索）；② TB-MENU-008 全屏与 Reopen 待人工确认；③ 诊断弹窗低保真；④ W0-EDITOR-F 待编写；⑤ Windows 未执行；⑥ 跨文档 CF-023 口径待产品/设计复核>`
 - 综合结论：`<条件通过 — P 条件通过（含待人工复核项）、F 阻断；13/13 用例覆盖；不得宣称专项通过或跨平台发布通过>`
 - 下一次复审版本/日期：`<W0-EDITOR-F 完成、CF-023 全局搜索面板实现、Windows M5 执行、Vinkey 版本发布，或菜单树/设计合同变更时>`
+
+## 10. 本版修正记录（自动化稳定性，非放宽断言）
+
+1. **首次按最终 HEAD 复跑出现 `1 FAIL`**：`TB-MENU-010` 因 `kAXFocusedUIElementAttribute` 全程返回空对象而失败，`TB-MENU-004` 焦点为 `unknown`；同时 `TB-MENU-008` 因 `AXFullScreen=true` 被写成 PASS。该批次结论为「不通过」，归档保留在 `artifacts/title-bar-acceptance/` 对应 `title-bar-w0-p-*` 目录中，**未删除、未改写**。
+2. **根因**：目标应用未切到前台时，`CGEvent` 点击不会落到 WebView，AX 焦点读回为空；低保真「应用诊断日志」弹窗有时 Escape 不关闭，残留弹窗继续抢占焦点。窗口动作的 `AXFullScreen`、关闭后窗口是否隐藏同样受前台状态影响，跨批次不稳定。
+3. **修正方式（只加固前置条件，不改判定规则、不删用例）**：
+   - helper 新增 `activate`（`NSRunningApplication.activate`）与 `dismiss`（只按「关闭 + 诊断/快捷键/关于」匹配弹窗关闭按钮）；启动阶段与焦点敏感用例前均激活应用。
+   - 新增 `establishFocus()`：激活 → 点击 `AXTextArea` → **读回验证**焦点角色，最多 4 次；`TB-MENU-004`、`TB-MENU-010` 都以此建立可判定的前置状态。
+   - 若前置焦点始终无法建立，`TB-MENU-010` 记 `BLOCKED` 并转人工观察（计划 §4.1 步骤 5），而不是把「无法判定」误写成产品 FAIL；**前置已建立但菜单关闭或焦点恢复断言失败时仍判 `FAIL`**。
+   - `TB-MENU-008` 改为**恒定 `BLOCKED`**：计划 §3 要求全屏、关闭隐藏与 Reopen 恢复整体成立，而 Reopen 依赖 Dock 激活、脚本从未自动验证；单次 `AXFullScreen=true` 不足以把用例升为 PASS。
+4. **修正后结果**：加固批次 `conclusion=条件通过`、`exitCode=0`、`10 PASS / 0 FAIL / 2 BLOCKED / 1 N/A`、13/13 覆盖；`TB-MENU-010` 读回焦点 `AXTextArea` 后 PASS，`TB-MENU-008` 保持 BLOCKED。报告结论与最新批次一致；先前 FAIL 批次作为自动化稳定性问题的原始证据保留，不作为最终结论依据，也不被抹去。

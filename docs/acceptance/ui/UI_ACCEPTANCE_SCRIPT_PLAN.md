@@ -105,6 +105,7 @@ macOS 原生入口：`scripts/title-bar/run-title-bar-native-macos.sh`（配套 
 - **M3 companion**：计划要求的 Playwright/WebView 结构证据，4/4 PASS、9 张截图；只在 Win32 上下文渲染自绘标题栏，**不能**证明 macOS 原生菜单、交通灯或物理 DPI，也**不能**升级 `BLOCKED` 用例或 `F` 子门槛。
 - **忠实判定**：`conclusion=条件通过`、`exitCode=0`、`13/13` 覆盖；`W0-SHELL-MENU-P=条件通过（含待人工复核项）`（`TB-MENU-008` 全屏/Reopen 待人工复核），`W0-SHELL-MENU-F=BLOCKED`（缺 `W0-EDITOR-F`）；`TB-MENU-003-GLOBAL-SEARCH=NOT_APPLICABLE`（`CF-023` 未完成，保留遗留项）；`windowsPlatform=NOT_EXECUTED`。结果与 [macOS 专项报告](./macos/UI_ACCEPTANCE_MACOS_TITLE_BAR.md) 逐条对照计划判定规则。
 - **实现偏差**：`CF-023` 状态为「已参考」（不表示功能完备）、`TB-GAP-006` 未实现，但 macOS 原生「会话」菜单已挂载「搜索项目与会话 ⌘K」，动作只聚焦侧栏搜索框。批次在 `issues` 中如实记录，未删除用例、未改写计划、未写 PASS。
+- **自动化稳定性**：首次按最终 HEAD 复跑曾因应用未前台激活、低保真诊断弹窗残留导致 AX 焦点读回为空，`TB-MENU-010` 出现一次 `FAIL`，`TB-MENU-008` 的 `AXFullScreen` 跨批次不稳定。已在 helper 增加 `activate` / `dismiss`、在 runner 增加 `establishFocus()`（激活 → 点击 → 读回验证焦点，最多 4 次），并把 `TB-MENU-008` 固定为 `BLOCKED`（Reopen 恢复未自动验证）。**判定规则与用例清单未放宽**；原始 FAIL 批次保留归档，修正记录见专项报告 §10。
 
 ## 6. 编辑器脚本专项
 
