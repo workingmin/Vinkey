@@ -114,6 +114,8 @@
 | 全局搜索面板 | 标题栏菜单与 `⌘/Ctrl+K` 入口已实现并按项目/会话/文档分组；`CF-023` 已参考，目标面板跳转用例阻断 |
 | 真实模型链路 | 依赖测试人员在 macOS 15+/Windows + Ollama/profile 环境回传 |
 
+> 本表是计划基线时的阻断摘要，各专项最新状态以专项报告和 [脚本编写计划](./UI_ACCEPTANCE_SCRIPT_PLAN.md) 矩阵为准。其中「全局搜索面板」一行描述的是当前工作区「项目/会话/文档」分组搜索；`CF-023` 统一面板仍未完成（`FEATURE_DECISIONS.md` 状态为「已参考」，不表示功能完备），macOS 原生菜单项提前挂载的实现偏差见 [标题栏与功能菜单专项验收报告（macOS）](./macos/UI_ACCEPTANCE_MACOS_TITLE_BAR.md) §6。本计划的功能域与用例范围不因执行结果调整。
+
 ## 附录：相关文档
 
 - [UI 设计总览](../../design/ui/UI_DESIGN.md)
@@ -121,8 +123,9 @@
 - [项目与会话导航设计](../../design/ui/UI_DESIGN_NAVIGATION.md)
 - [项目与会话导航验收（macOS）](./macos/UI_ACCEPTANCE_MACOS_NAVIGATION.md)
 - [项目与会话导航验收（Windows）](./windows/UI_ACCEPTANCE_WINDOWS_NAVIGATION.md)
-- [标题栏菜单专项验收（macOS）](./macos/UI_ACCEPTANCE_MACOS_TITLE_BAR_PLAN.md)
-- [标题栏菜单专项验收（Windows）](./windows/UI_ACCEPTANCE_WINDOWS_TITLE_BAR_PLAN.md)
+- [标题栏菜单专项验收计划（macOS）](./macos/UI_ACCEPTANCE_MACOS_TITLE_BAR_PLAN.md)
+- [标题栏菜单专项验收报告（macOS）](./macos/UI_ACCEPTANCE_MACOS_TITLE_BAR.md)
+- [标题栏菜单专项验收计划（Windows）](./windows/UI_ACCEPTANCE_WINDOWS_TITLE_BAR_PLAN.md)
 - [模型设置验收（macOS）](./macos/UI_ACCEPTANCE_MACOS_SETTINGS.md)
 - [模型设置验收（Windows）](./windows/UI_ACCEPTANCE_WINDOWS_SETTINGS.md)
 - [长任务/日志中心验收（macOS）](./macos/UI_ACCEPTANCE_MACOS_TASK_PROCESS.md)

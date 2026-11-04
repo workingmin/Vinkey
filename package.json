@@ -37,6 +37,8 @@
     "test:title-bar-p-acceptance:win": "powershell -ExecutionPolicy Bypass -File scripts/title-bar/run-title-bar-menu-p-acceptance.ps1",
     "test:title-bar-p-acceptance:sh": "bash scripts/title-bar/run-title-bar-menu-p-acceptance.sh",
     "test:title-bar-native-mac": "bash scripts/title-bar/run-title-bar-native-macos.sh",
+    "test:title-bar-native-acceptance": "node scripts/title-bar/run-title-bar-native-acceptance.mjs",
+    "test:title-bar-native-acceptance:sh": "bash scripts/title-bar/run-title-bar-native-acceptance.sh",
     "test:editor-acceptance": "node scripts/editor/run-editor-acceptance.mjs",
     "test:editor-acceptance:win": "powershell -ExecutionPolicy Bypass -File scripts/editor/run-editor-acceptance.ps1",
     "test:editor-acceptance:sh": "bash scripts/editor/run-editor-acceptance.sh",

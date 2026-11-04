@@ -12,8 +12,8 @@
 | --- | --- |
 | [UI 验收工作计划](ui/UI_ACCEPTANCE_PLAN.md) | 功能域、波次、依赖和验收范围 |
 | [UI 验收脚本编写计划](ui/UI_ACCEPTANCE_SCRIPT_PLAN.md) | 脚本建设与执行安排 |
-| [标题栏与功能菜单专项验收计划（macOS）](ui/macos/UI_ACCEPTANCE_MACOS_TITLE_BAR_PLAN.md) | 菜单平台与业务入口验收（macOS） |
-| [标题栏与功能菜单专项验收计划（Windows）](ui/windows/UI_ACCEPTANCE_WINDOWS_TITLE_BAR_PLAN.md) | 菜单平台与业务入口验收（Windows） |
+| [标题栏与功能菜单专项验收计划（macOS）](ui/macos/UI_ACCEPTANCE_MACOS_TITLE_BAR_PLAN.md) | 菜单平台与业务入口验收（macOS；已执行一次，结论见专项报告） |
+| [标题栏与功能菜单专项验收计划（Windows）](ui/windows/UI_ACCEPTANCE_WINDOWS_TITLE_BAR_PLAN.md) | 菜单平台与业务入口验收（Windows；M5 待执行） |
 
 ### 回填模板
 
@@ -39,6 +39,7 @@
 | 文档 | 用途 |
 | --- | --- |
 | [应用壳层与入口专项验收（macOS）](ui/macos/UI_ACCEPTANCE_MACOS_SHELL.md) | 壳层平台与结构验收报告（macOS，完整通过） |
+| [标题栏与功能菜单专项验收（macOS）](ui/macos/UI_ACCEPTANCE_MACOS_TITLE_BAR.md) | 标题栏/原生菜单与窗口命令验收报告（macOS，**条件通过**；`W0-SHELL-MENU-P` 含待人工复核项、`W0-SHELL-MENU-F` 阻断；13/13 计划用例覆盖） |
 | [应用壳层与入口专项验收（Windows）](ui/windows/UI_ACCEPTANCE_WINDOWS_SHELL.md) | 壳层平台与结构验收报告（Windows，待执行） |
 | [项目与会话导航专项验收（macOS）](ui/macos/UI_ACCEPTANCE_MACOS_NAVIGATION.md) | 导航合同、端到端和回归验收报告（macOS，完整通过；含真实应用原生窗口证据） |
 | [项目与会话导航专项验收（Windows）](ui/windows/UI_ACCEPTANCE_WINDOWS_NAVIGATION.md) | 导航合同、端到端和回归验收（Windows） |
@@ -47,6 +48,8 @@
 | [长任务/日志中心专项验收（macOS）](ui/macos/UI_ACCEPTANCE_MACOS_TASK_PROCESS.md) | 日志/长任务真实端到端验收报告模板（macOS） |
 | [长任务/日志中心专项验收（Windows）](ui/windows/UI_ACCEPTANCE_WINDOWS_TASK_PROCESS.md) | 日志/长任务真实端到端验收报告模板（Windows） |
 | [长任务过程原生复验清单](ui/TASK_PROCESS_NATIVE_ACCEPTANCE.md) | Windows/macOS 桌面通用的原生复验清单 |
+
+> 标题栏与功能菜单专项的 Windows 报告尚未建立，M5 未执行（`NOT_EXECUTED`），当前仅有 [Windows 版计划](ui/windows/UI_ACCEPTANCE_WINDOWS_TITLE_BAR_PLAN.md)。macOS 报告结论为「条件通过」、`W0-SHELL-MENU-F` 阻断，**不得**据此宣称专项通过或跨平台发布通过；审核结论以专项报告及实际执行证据为准。
 
 ## IntentRouter 验收
 
