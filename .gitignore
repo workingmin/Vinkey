@@ -78,7 +78,3 @@ artifacts/
 
 # WorkBuddy local project data (session-scoped, never committed)
 .workbuddy/
-
-# Competitor screenshots/assets must never be stored in this repository.
-# Repository-wide policy (including renamed/encoded copies): see AGENTS.md.
-/docs/competitors/assets/
