@@ -29,7 +29,17 @@
     "test:task-process-acceptance:sh": "bash scripts/task-process/run-task-process-acceptance.sh",
     "test:navigation-acceptance": "node scripts/navigation/run-navigation-acceptance.mjs",
     "test:navigation-acceptance:win": "powershell -ExecutionPolicy Bypass -File scripts/navigation/run-navigation-acceptance.ps1",
-    "test:navigation-acceptance:sh": "bash scripts/navigation/run-navigation-acceptance.sh"
+    "test:navigation-acceptance:sh": "bash scripts/navigation/run-navigation-acceptance.sh",
+    "test:title-bar-acceptance": "node scripts/title-bar/run-title-bar-acceptance.mjs",
+    "test:title-bar-acceptance:win": "powershell -ExecutionPolicy Bypass -File scripts/title-bar/run-title-bar-acceptance.ps1",
+    "test:title-bar-acceptance:sh": "bash scripts/title-bar/run-title-bar-acceptance.sh",
+    "test:title-bar-p-acceptance": "node scripts/title-bar/run-title-bar-menu-p-acceptance.mjs",
+    "test:title-bar-p-acceptance:win": "powershell -ExecutionPolicy Bypass -File scripts/title-bar/run-title-bar-menu-p-acceptance.ps1",
+    "test:title-bar-p-acceptance:sh": "bash scripts/title-bar/run-title-bar-menu-p-acceptance.sh",
+    "test:title-bar-native-mac": "bash scripts/title-bar/run-title-bar-native-macos.sh",
+    "test:editor-acceptance": "node scripts/editor/run-editor-acceptance.mjs",
+    "test:editor-acceptance:win": "powershell -ExecutionPolicy Bypass -File scripts/editor/run-editor-acceptance.ps1",
+    "test:editor-acceptance:sh": "bash scripts/editor/run-editor-acceptance.sh"
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.0",

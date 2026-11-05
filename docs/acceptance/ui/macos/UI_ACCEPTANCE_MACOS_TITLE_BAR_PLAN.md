@@ -8,9 +8,9 @@
 - 设计依据：[TITLE_BAR_DESIGN.md](../../../design/ui/TITLE_BAR_DESIGN.md)
 - 壳层报告：[UI_ACCEPTANCE_MACOS_SHELL.md](./UI_ACCEPTANCE_MACOS_SHELL.md)；Windows 平台版：[UI_ACCEPTANCE_WINDOWS_TITLE_BAR_PLAN.md](../windows/UI_ACCEPTANCE_WINDOWS_TITLE_BAR_PLAN.md)
 - 入口总表：[UI_ENTRY_POINTS.md](../../../design/ui/UI_ENTRY_POINTS.md)
-- 计划更新：`2026-11-04`
+- 计划更新：`2026-11-05`
 
-> 实现基线：目标菜单树、设置归属、焦点命令桥接和菜单选择器已实现。当前状态为“待验收”，不是 `W0-SHELL-MENU-P/F` 已通过。
+> 实现基线：目标菜单树、设置归属、焦点命令桥接和菜单选择器已实现。`W0-SHELL-MENU-F` 的机器 fixture 脚本（`UI-ACC-TITLE-BAR-FIXTURE-001`）与 `W0-SHELL-MENU-P` 的机器层脚本（`UI-ACC-TITLE-BAR-001`）已就绪，当前仍为“待验收”，不是 `W0-SHELL-MENU-P/F` 已通过。
 
 ## 1. 目的与边界
 
@@ -106,9 +106,9 @@ webview/                 # 同批次 Playwright companion 结果（如执行）
 | --- | --- | --- | --- |
 | M1 | 设计和源码审计 | `TITLE_BAR_DESIGN.md` 审计表、缺口清单 | 产品/设计/开发 |
 | M2 | 菜单迁移和焦点桥接 | 项目/会话菜单、设置归属、编辑命令实现 | 开发；已完成，待验收 |
-| M3 | Playwright/WebView companion | `TB-MENU-004`、`TB-MENU-005`、`TB-MENU-010` 结构证据 | 开发/测试 |
-| M4 | macOS 原生执行 | Accessibility 菜单、交通灯、窗口动作、哈希归档 | 测试人员 |
+| M3 | Playwright/WebView companion 与 fixture 脚本 | `TB-MENU-004`、`TB-MENU-005`、`TB-MENU-010` 结构证据；`scripts/title-bar/` 生成 `W0-SHELL-MENU-F` 与 `W0-SHELL-MENU-P` 机器证据 | 开发/测试；脚本已实现，待本地执行 |
+| M4 | macOS 原生执行 | Accessibility 菜单、交通灯、窗口动作、哈希归档；入口 `npm run test:title-bar-native-mac` | 测试人员 |
 | M5 | Windows 桌面执行 | 自绘菜单、窗口控制、DPI 和截图；见 [Windows 版计划](../windows/UI_ACCEPTANCE_WINDOWS_TITLE_BAR_PLAN.md) | 测试人员 |
 | M6 | 报告复审 | 逐项结果、遗留项和最终结论 | 测试/产品 |
 
-执行顺序建议为 `M1 → M2 → M3 → W0-SHELL-MENU-P → W0-NAV-F/W0-EDITOR-F → W0-SHELL-MENU-F → M4 → M6`（macOS 版；Windows 执行见 M5 对应计划）。`W0-SHELL-MENU-P` 可以先于业务 fixture 执行；`W0-SHELL-MENU-F` 必须等待 `W0-NAV-F`、`W0-EDITOR-F` 的必要用例通过。它们同属 W0 大批次，但报告中必须分别给出 P/F 结论。
+执行顺序建议为 `M1 → M2 → M3 → W0-SHELL-MENU-P → W0-NAV-F/W0-EDITOR-F → W0-SHELL-MENU-F → M4 → M6`（macOS 版；Windows 执行见 M5 对应计划）。`W0-SHELL-MENU-P` 可以先于业务 fixture 执行；`W0-SHELL-MENU-F` 必须等待 `W0-NAV-F`、`W0-EDITOR-F` 的必要用例通过。`W0-SHELL-MENU-F` 的机器 fixture 证据由 `npm run test:title-bar-acceptance` 单独归档，不得与 P 子集或导航脚本混报；目标平台原生菜单仍需 M4 桌面执行。

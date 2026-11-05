@@ -1,7 +1,7 @@
 # Vinkey 当前版本 UI 功能域验收工作计划
 
 - 版本：`0.1.0`
-- 更新日期：`2026-11-02`
+- 更新日期：`2026-11-05`
 - 适用环境：Windows/macOS 15+ 桌面环境；真实模型验收使用本地 Ollama 或已批准的兼容服务
 - 统一生命周期：[UI_DESIGN.md](../../design/ui/UI_DESIGN.md) 的“统一验收生命周期”
 - 脚本规范：[UI_ACCEPTANCE_SCRIPT_SPEC.md](./UI_ACCEPTANCE_SCRIPT_SPEC.md)
@@ -107,7 +107,9 @@
 | 项目 | 当前状态 |
 | --- | --- |
 | 壳层结构 | 已有实现和历史单元测试；目标平台截图、直接渲染覆盖仍待补 |
-| 导航 fixture | 计划已定义；脚本和隔离本地执行材料待补 |
+| 导航 fixture | `W0-NAV-F` 脚本已就绪（`UI-ACC-NAV-FIXTURE-001`）；目标平台执行与人工材料待回传 |
+| 编辑器 fixture | `W0-EDITOR-F` 脚本已就绪（`UI-ACC-EDITOR-001`）；目标平台 WebView/人工材料待回传 |
+| 标题栏菜单 fixture | `W0-SHELL-MENU-F` 机器脚本已就绪（`UI-ACC-TITLE-BAR-FIXTURE-001`）；`W0-SHELL-MENU-P` 机器层已覆盖 8 项可自动化断言，窗口控制与 macOS 原生菜单证据待桌面执行 |
 | 会话语义标题 | 临时标题/语义升级/手动重命名已实现（`conversationTitle.ts`、侧栏入口）；`CF-022` 已参考，`W2-NAV-E` 真实模型端到端用例阻断 |
 | 全局搜索面板 | 标题栏菜单与 `⌘/Ctrl+K` 入口已实现并按项目/会话/文档分组；`CF-023` 已参考，目标面板跳转用例阻断 |
 | 真实模型链路 | 依赖测试人员在 macOS 15+/Windows + Ollama/profile 环境回传 |

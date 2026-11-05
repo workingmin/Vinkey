@@ -9,6 +9,8 @@
 | `intent-router/` | IntentRouter 本地模型验收实现及 macOS/Linux、Windows 入口 |
 | `navigation/` | 项目/会话导航（`W0-NAV-F`/`UI-ACC-NAV-FIXTURE-001`）fixture 合同验收：脚本自建隔离临时目录的双项目、双会话与中英文文档，验证登记/去重、切换/隔离、会话 CRUD、删除边界、当前搜索与状态恢复；不调用 Ollama |
 | `task-process/` | 长任务/日志中心（`W4-TASK-E`/`UI-ACC-LOGS-001`）只读核查与人工观察采集：`.vinkey/analysis/jobs/<jobId>/` 产物、SQLite 模型配置、`--dump-manual`/`--manual` 回填 |
+| `title-bar/` | 标题栏与功能菜单：`W0-SHELL-MENU-F` 自建隔离 fixture 验证业务链路；`W0-SHELL-MENU-P` 机器层验证菜单树/查看/主题/设置/帮助/焦点/审计；macOS 原生 AX 入口（`run-title-bar-native-macos.sh`）读取完整菜单树并按压窗口/查看/帮助菜单项 |
+| `editor/` | 基础编辑器（`W0-EDITOR-F`/`UI-ACC-EDITOR-001`）fixture 合同验收：脚本自建隔离工作区的 Markdown/代码/文本/环境文件/二进制文档，复刻文档分类、读取、保存、冲突、新建与越界保护；不覆盖用户文件 |
 | `ui-shell/` | 应用壳层 Playwright 浏览器验收、截图和结果 JSON |
 
 推荐从仓库根目录通过 `package.json` 中的 npm 命令执行脚本，例如：
@@ -19,6 +21,12 @@ npm run test:task-process-acceptance -- --dump-manual ./manual.json
 npm run test:task-process-acceptance -- --workspace <ws> --db <db> --json
 npm run test:navigation-acceptance -- --json
 npm run test:navigation-acceptance:sh -- --workspace /tmp/nav-fixture --keep-fixture
+npm run test:title-bar-acceptance -- --json
+npm run test:title-bar-acceptance:sh -- --workspace /tmp/tb-fixture --keep-fixture
+npm run test:title-bar-p-acceptance -- --json
+npm run test:title-bar-native-mac -- --output /path/to/native-menu-evidence
+npm run test:editor-acceptance -- --json
+npm run test:editor-acceptance:sh -- --workspace /tmp/editor-fixture --keep-fixture
 npm run fixtures:chinese-fiction
 npm run package:mac -- --no-install
 npm run test:ui-shell-acceptance -- --output /path/to/shell-evidence
