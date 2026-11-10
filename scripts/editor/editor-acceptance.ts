@@ -199,10 +199,21 @@ export function validateRelative(relativePath: string): string {
   return nativeRelative(relativePath)
 }
 
+// 授权根与目标必须走同一套 realpath 归一。macOS 的 /var 是 /private/var 的符号链接，
+// 临时工作区常落在 /var/folders/...；若只把 target 归一而 root 仍用 resolve()，
+// 合法 fixture 会被误判为越界（越界保护本身不变，只是比较基准不一致）。
+function safeRealpath(path: string): string {
+  try {
+    return realpathSync(path)
+  } catch {
+    return path
+  }
+}
+
 export function resolveExisting(workspaceRoot: string, relativePath: string): string {
   const clean = validateRelative(relativePath)
   const target = resolve(workspaceRoot, clean)
-  const resolvedRoot = resolve(workspaceRoot)
+  const resolvedRoot = safeRealpath(resolve(workspaceRoot))
   const canonical = safeRealpath(target)
   if (!canonical.startsWith(resolvedRoot + sep) && canonical !== resolvedRoot) throw new Error('路径超出已授权工作区')
   return canonical
@@ -211,7 +222,7 @@ export function resolveExisting(workspaceRoot: string, relativePath: string): st
 export function resolveForCreate(workspaceRoot: string, relativePath: string): string {
   const clean = validateRelative(relativePath)
   const target = resolve(workspaceRoot, clean)
-  const resolvedRoot = resolve(workspaceRoot)
+  const resolvedRoot = safeRealpath(resolve(workspaceRoot))
   let existing = dirname(target)
   while (!existsSync(existing)) {
     const parent = dirname(existing)
@@ -221,14 +232,6 @@ export function resolveForCreate(workspaceRoot: string, relativePath: string): s
   const canonicalParent = safeRealpath(existing)
   if (!canonicalParent.startsWith(resolvedRoot + sep) && canonicalParent !== resolvedRoot) throw new Error('路径超出已授权工作区')
   return target
-}
-
-function safeRealpath(path: string): string {
-  try {
-    return realpathSync(path)
-  } catch {
-    return path
-  }
 }
 
 export function modifiedMs(path: string): number {
@@ -546,12 +549,12 @@ export function runEditorAcceptance(input: AcceptanceRunInput): AcceptanceRunOut
     cases: allCases.map((item) => ({ caseId: item.caseId, category: item.category, status: item.status, detail: item.detail })),
   }, null, 2), 'utf8')
   writeFileSync(resultFile, JSON.stringify(result, null, 2), 'utf8')
+  // result.json 定稿后不再改写：SHA256SUMS 在定稿文件上计算，避免出现「把自身哈希写回自身」的循环导致 shasum -c 失败。
+  // artifacts.sha256 因此不自引用 result.json（计划 §6 要求哈希清单可核验）。
   const entries = [{ file: 'result.json', hash: sha256OfFile(resultFile) }]
   writeFileSync(sha256File, `${entries.map((entry) => `${entry.hash}  ${entry.file}`).join('\n')}\n`, 'utf8')
-  const finalResult = { ...result, artifacts: { ...result.artifacts, sha256: Object.fromEntries(entries.map((entry) => [entry.file, entry.hash])) } }
-  writeFileSync(resultFile, JSON.stringify(finalResult, null, 2), 'utf8')
 
-  return { result: finalResult, conclusion, exitCode, outputDir, resultFile, sha256File, logFile }
+  return { result, conclusion, exitCode, outputDir, resultFile, sha256File, logFile }
 }
 
 function stderrProgress(cases: CaseResult[]): void {

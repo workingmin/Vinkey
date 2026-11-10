@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * UI-ACC-TITLE-BAR-001 — W0-SHELL-MENU-P / W0-SHELL-MENU-F（macOS）
+ * UI-ACC-TITLE-BAR-001 — W0-SHELL-MENU-P（macOS 原生判定）
+ * F 子门槛由独立脚本 UI-ACC-TITLE-BAR-FIXTURE-001 单独归档，本 runner 只记为 DEFERRED。
  *
  * 严格按 docs/acceptance/ui/macos/UI_ACCEPTANCE_MACOS_TITLE_BAR_PLAN.md：
  *   - §3 用例清单 TB-MENU-001 ~ TB-MENU-012 + TB-MENU-003-GLOBAL-SEARCH 遗留项
@@ -714,9 +715,14 @@ async function main() {
   const pFail = pCases.filter((c) => c.status === 'FAIL').length
   const pBlocked = pCases.filter((c) => c.status === 'BLOCKED').length
   const naCount = cases.filter((c) => c.status === 'NOT_APPLICABLE').length
-  // W0-EDITOR-F 在脚本计划矩阵中为「待编写」，F 子门槛硬依赖缺失
-  const editorFStatus = 'BLOCKED（W0-EDITOR-F 待编写，见 UI_ACCEPTANCE_SCRIPT_PLAN.md §3）'
-  const fSubsetConclusion = 'BLOCKED'
+  // 计划 §1 第 19 行 / §7 第 114 行：F 必须由独立脚本单独归档，不得与 P 子集混报。
+  // UI-ACC-TITLE-BAR-FIXTURE-001 已建立后，本 runner 只做 macOS 原生 AX / CoreGraphics
+  // 的 P 子集判定；F 归属用例在本批次的观察仅作过程证据，不重新判定、不写死结论，
+  // 避免同一 HEAD 下两个 runner 给出互相矛盾的 F 结论。
+  const fGateSuite = 'UI-ACC-TITLE-BAR-FIXTURE-001'
+  const fGateCommand = 'npm run test:title-bar-fixture-acceptance:sh'
+  const fGateArtifactRoot = 'artifacts/title-bar-fixture-acceptance/'
+  const fSubsetConclusion = 'DEFERRED'
   const notExecuted = cases.filter((c) => c.actual.includes('本批次未执行')).length
   const pSubsetConclusion = pFail > 0 ? 'FAIL'
     : (blockers.length || notExecuted >= cases.length - 1) ? 'BLOCKED'
@@ -790,12 +796,19 @@ async function main() {
       'W0-SHELL-MENU-P': {
         conclusion: pSubsetConclusion,
         caseCount: pCases.length, passed: pPass, failed: pFail, blocked: pBlocked,
-        detail: 'P 子集只证明壳层和平台能力；不因 F 子集阻断而降格，也不吸收 F 结果。',
+        detail: 'P 子集只证明壳层和平台能力；不因 F 子集的独立结论而降格，也不吸收 F 结果。',
       },
       'W0-SHELL-MENU-F': {
         conclusion: fSubsetConclusion,
-        dependency: { 'W0-NAV-F': 'PASS（本机已执行）', 'W0-EDITOR-F': editorFStatus },
-        detail: '按计划 §1 第 19 行与 §7 第 114 行：F 不是 P 的自动附属 PASS，缺少 W0-EDITOR-F 时必须单独记 BLOCKED。本批次仍逐项执行了可观察的菜单动作，仅作为过程证据，不构成 F 通过。',
+        deferredTo: {
+          suite: fGateSuite,
+          command: fGateCommand,
+          artifactRoot: fGateArtifactRoot,
+          authoritativeResult: `${fGateArtifactRoot}<最新批次>/result.json`,
+        },
+        dependsOn: ['W0-NAV-F', 'W0-EDITOR-F'],
+        observedFCaseIds: fCases.map((c) => c.caseId),
+        detail: '按计划 §1 第 19 行与 §7 第 114 行：F 不是 P 的自动附属 PASS，F 的机器 fixture 证据由 UI-ACC-TITLE-BAR-FIXTURE-001 单独归档并判定，本 runner（UI-ACC-TITLE-BAR-001）不重新判定 F。本批次仍逐项执行了可观察的 F 归属菜单动作，仅作为原生过程证据，不构成 F 通过或阻断；依赖门槛状态由独立脚本读取真实批次 result.json。',
       },
     },
     decision: {
@@ -804,7 +817,7 @@ async function main() {
       reasons: [
         `全局搜索 TB-MENU-003-GLOBAL-SEARCH = NOT_APPLICABLE（CF-023 未完成），按 §6 只能条件通过`,
         'Windows 平台（M5/W0-SHELL-MENU Windows 专项）尚未执行，不得宣称跨平台发布通过',
-        `W0-SHELL-MENU-F = ${fSubsetConclusion}（缺 W0-EDITOR-F）`,
+        `W0-SHELL-MENU-F 已交由独立脚本 ${fGateSuite} 单独判定（本批次 ${fSubsetConclusion}，权威结论见 ${fGateArtifactRoot}最新批次 result.json）；专项整体结论仍受 P 子集 BLOCKED / NOT_APPLICABLE / Windows 未执行约束`,
         '帮助/诊断弹窗为低保真实现，按 §6 计入条件通过遗留项',
         'TB-MENU-008 记为 BLOCKED：全屏 AXFullScreen 跨批次不稳定，关闭窗口后的 Dock/Reopen 恢复需人工目视复核，不宣称窗口动作全部通过',
         'macOS 关闭窗口后的 Dock/系统 Reopen 恢复需人工目视确认',
@@ -881,7 +894,7 @@ async function main() {
   writeFileSync(join(outputDir, 'SHA256SUMS'), sums, 'utf8')
 
   // 计划 §5：stdout 仅四行
-  console.log(`W0-SHELL-MENU-P acceptance: ${conclusion} (${summary.passed}/${summary.caseCount} passed, ${summary.failed} failed, ${summary.blocked} blocked, ${summary.notApplicable} N/A; P=${pSubsetConclusion}, F=${fSubsetConclusion})`)
+  console.log(`W0-SHELL-MENU-P acceptance: ${conclusion} (${summary.passed}/${summary.caseCount} passed, ${summary.failed} failed, ${summary.blocked} blocked, ${summary.notApplicable} N/A; P=${pSubsetConclusion}, F=${fSubsetConclusion}→${fGateSuite})`)
   console.log(`Results: ${resultFile.replace(root + '/', '')}`)
   console.log(`SHA256SUMS: ${join(outputDir, 'SHA256SUMS').replace(root + '/', '')}`)
   console.log(`exit=${exitCode}`)

@@ -42,8 +42,8 @@
 | `W0-SHELL-MENU-P` | `D-SHELL` 标题栏与功能菜单 | `W0-SHELL-P` 的桌面启动和平台权限 | `UI-ACC-TITLE-BAR-001` | `scripts/title-bar/` 机器层菜单树/查看/主题/设置/帮助/关闭焦点/中文与减法审计已有；macOS 原生 AX 菜单入口已有 | `npm run test:title-bar-p-acceptance -- --json`；macOS 原生入口 `npm run test:title-bar-native-mac` | 一级菜单树、平台窗口动作、主题、中文审计、菜单关闭 | **已执行（macOS）**：`UI-ACC-TITLE-BAR-001` 原生批次，P 子集 9 项 `8 PASS / 0 FAIL / 1 BLOCKED`（`TB-MENU-008` 全屏与 Reopen 待人工复核），结论 **条件通过（含待人工复核项）**；Windows M5 未执行；详见 [macOS 专项报告](./macos/UI_ACCEPTANCE_MACOS_TITLE_BAR.md)。**不得记为专项通过或完整通过** |
 | `W0-RESP-P` | `Q-RESP` 响应式/主题 | 壳层 Token | `UI-ACC-RESPONSIVE-001` | 与壳层共用 Playwright 三种视口/主题/焦点场景 | 当前由 `test:ui-shell-acceptance` 提供结构截图；窄窗口专项仍待扩展 | 三种目标尺寸、主题、焦点、无横向溢出 | 部分自动化可执行，目标桌面 DPI 待回填 |
 | `W0-NAV-F` | `D-NAV` 项目/会话导航 | 桌面桥接、SQLite、隔离 fixture | `UI-ACC-NAV-FIXTURE-001` | store、删除对话框和搜索单元证据；`scripts/navigation/` 与 `navigation-acceptance-cli.test.ts` 合同测试已有；组件直测仍需补 | `npm run test:navigation-acceptance:sh`；脚本自建隔离临时目录、双项目、双会话、中英文文档、删除边界和当前搜索；不调用 Ollama | 切换、恢复、确认、错误重试、结果范围 | 已执行：`NAV-F-001`~`006` 6/6 PASS；截图材料由 `UI-ACC-NAV-UI-001` 补齐 |
-| `W0-EDITOR-F` | `D-EDITOR` 基础编辑器 | 工作区/文件桥接 | `UI-ACC-EDITOR-001` | `scripts/editor/` 复刻文档分类、读取、保存、冲突与越界保护合同；不覆盖用户文件 | `npm run test:editor-acceptance -- --json`；临时工作区含 Unicode/BOM/CRLF/二进制 fixture | 文件树、打开、编辑、保存、预览 | 已有（待本地执行） |
-| `W0-SHELL-MENU-F` | `D-SHELL` + 入口 fixture | `W0-SHELL-MENU-P`、`W0-NAV-F`、`W0-EDITOR-F`；设置使用可控 UI fixture | `UI-ACC-TITLE-BAR-FIXTURE-001` | `scripts/title-bar/` 隔离项目/会话/草稿 fixture 与 WebView 组件合同已有；不调用 Ollama | `npm run test:title-bar-acceptance -- --json`；临时目录和结果 JSON 独立记录 | 添加/刷新项目、新建会话、页面状态、编辑焦点、设置打开/返回 | **已逐项执行但门槛 BLOCKED**：`W0-NAV-F` PASS、`W0-EDITOR-F` 待本地执行；`TB-MENU-004` BLOCKED、`TB-MENU-003-GLOBAL-SEARCH` NOT_APPLICABLE（`CF-023` 未完成）。**不得与 P 子集混报，不得写成 F 已通过** |
+| `W0-EDITOR-F` | `D-EDITOR` 基础编辑器 | 工作区/文件桥接 | `UI-ACC-EDITOR-001` | `scripts/editor/` 复刻文档分类、读取、保存、冲突与越界保护合同；不覆盖用户文件 | `npm run test:editor-acceptance -- --json`；临时工作区含 Unicode/BOM/CRLF/二进制 fixture | 文件树、打开、编辑、保存、预览 | **本机已执行**：CLI `EDIT-F-001`~`006` 6/6 PASS、合同测试 10/10 PASS；修复 macOS `/var/folders` 符号链接导致的路径守卫误判与 `result.json` 自引用 hash。目标平台 WebView/人工材料仍待回传，见 [基础编辑器报告](./UI_ACCEPTANCE_EDITOR.md) |
+| `W0-SHELL-MENU-F` | `D-SHELL` + 入口 fixture | `W0-SHELL-MENU-P`、`W0-NAV-F`、`W0-EDITOR-F`；设置使用可控 UI fixture | `UI-ACC-TITLE-BAR-FIXTURE-001` | **独立门槛脚本已建立**：`scripts/title-bar/title-bar-fixture-acceptance.ts` + runner/`.sh`/`.ps1`，独立批次 `artifacts/title-bar-fixture-acceptance/title-bar-w0-f-*`；内部调用 `title-bar-acceptance.ts` 产出 `machine/`，读取三个依赖批次的真实 `result.json`；不调用 Ollama | `npm run test:title-bar-fixture-acceptance:sh`（Windows 用 `:win`）；合同测试 `tests/title-bar/title-bar-fixture-acceptance-cli.test.ts` 6/6 | 添加/刷新项目、新建会话、页面状态、编辑焦点、设置打开/返回 | **已独立执行：`F=PASS`**。`W0-NAV-F` PASS、`W0-EDITOR-F` 本机 PASS；13/13 用例覆盖、依赖不硬编码、`SHA256SUMS` 全 OK。**F 通过不等于专项通过**：`TB-MENU-008` BLOCKED、`TB-MENU-003-GLOBAL-SEARCH` NOT_APPLICABLE（`CF-023` 未完成）、Windows M5 未执行，`specialityPass=false` / `overallConclusion=条件通过`。不得与 P 子集混报 |
 | `W1-MODEL-E` | `D-MODEL` 模型设置 | 桌面桥接、SQLite、系统凭据库 | `UI-ACC-SETTINGS-001` | `SettingsPage.test.tsx`、硬件和隐私测试 | 设置连接/凭据冒烟脚本；确认 profile 后再执行真实模型 | 设置入口、保存、切换、删除、键盘导航 | 已执行：2026-11-04 本机 macOS + Ollama（qwen3:8b），`MODEL-E-001`~`MODEL-E-005` 5/5 PASS；归档 `artifacts/model-acceptance/run-2026-11-04T11-26-30-345Z/` |
 | `W1-INTENT-E` | `D-INTENT` IntentRouter | 模型 profile 和真实模型 | `AGENT-ACC-INTENT-001` | `intent-router-acceptance-cli.test.ts` | `npm run test:intent-router-acceptance -- --profile-id <id> --json`；统一 JSON 外层字段待核对 | profile、日志、失败恢复 | 脚本已有；真实 Ollama 待执行 |
 | `W2-CHAT-E` | `D-CHAT` 对话 | W0 壳层、W1 模型/IntentRouter | `UI-ACC-CHAT-001` | 消息、流式、停止和运行锁定测试 | 真实短对话、停止、超时和错误恢复脚本 | 发送/停止、流式完成、模型状态、失败重试 | 已执行：2026-11-04 本机 macOS + Ollama（qwen3:8b），`CHAT-E-001`~`CHAT-E-004` 4/4 PASS（单轮/多轮上下文/流式中断/失败处理）；归档 `artifacts/chat-acceptance/run-2026-11-04T11-28-38-617Z/` |
@@ -74,7 +74,7 @@
 
 ### 4.4 `UI-ACC-NAV-UI-001` 截图 companion
 
-用 Playwright 启动 Vite 演示层、注入隔离 `localStorage` fixture，为三档门槛采集 21 张页面级截图并输出 UI 观察表。该证据是**浏览器演示层页面级截图**，不是 Tauri 原生窗口证据；macOS 使用系统原生菜单栏（`TitleBar` 在 `isMac` 时返回 `null`），标题栏菜单截图为 Windows 自绘标题栏的跨平台对照。macOS 系统原生菜单项动作属于 `W0-SHELL-MENU-P/F` 独立专项，本 companion 不覆盖、也不以其作为证据。该专项现已在 macOS 执行一次，结论为 `W0-SHELL-MENU-P` **条件通过（含待人工复核项）**、`W0-SHELL-MENU-F` **BLOCKED**，仍不是「已通过」；详见 [macOS 标题栏菜单专项报告](./macos/UI_ACCEPTANCE_MACOS_TITLE_BAR.md)。
+用 Playwright 启动 Vite 演示层、注入隔离 `localStorage` fixture，为三档门槛采集 21 张页面级截图并输出 UI 观察表。该证据是**浏览器演示层页面级截图**，不是 Tauri 原生窗口证据；macOS 使用系统原生菜单栏（`TitleBar` 在 `isMac` 时返回 `null`），标题栏菜单截图为 Windows 自绘标题栏的跨平台对照。macOS 系统原生菜单项动作属于 `W0-SHELL-MENU-P/F` 独立专项，本 companion 不覆盖、也不以其作为证据。该专项现已在 macOS 执行，结论为 `W0-SHELL-MENU-P` **条件通过（含待人工复核项）**、`W0-SHELL-MENU-F` **PASS（独立脚本 `UI-ACC-TITLE-BAR-FIXTURE-001`）**，专项整体仍为**条件通过**、不是「已通过」；详见 [macOS 标题栏菜单专项报告](./macos/UI_ACCEPTANCE_MACOS_TITLE_BAR.md)。
 
 ### 4.5 `UI-ACC-NAV-NATIVE-001` 原生窗口批次
 
@@ -84,7 +84,7 @@
 
 ### 5.1 `W0-SHELL-MENU-F` fixture 合同
 
-实现入口：`scripts/title-bar/`（`title-bar-acceptance.ts` 核心、`run-title-bar-acceptance.mjs`/`.sh`/`.ps1` 包装、`tests/title-bar/title-bar-acceptance-cli.test.ts` 合同测试），通过 `npm run test:title-bar-acceptance`（macOS/Linux 加 `:sh`、Windows 加 `:win`）执行。
+实现入口（机器合同层）：`scripts/title-bar/`（`title-bar-acceptance.ts` 核心、`run-title-bar-acceptance.mjs`/`.sh`/`.ps1` 包装、`tests/title-bar/title-bar-acceptance-cli.test.ts` 合同测试），通过 `npm run test:title-bar-acceptance`（macOS/Linux 加 `:sh`、Windows 加 `:win`）执行。**注意**：该入口只产出 F 的机器合同子证据，不读取依赖门槛、不覆盖 13 项用例、不单独归档；`W0-SHELL-MENU-F` 的权威判定由 §5.4 的独立门槛脚本 `UI-ACC-TITLE-BAR-FIXTURE-001` 承担。
 
 脚本自建并清理隔离临时目录，包含一个已登记项目、两条会话和一个未保存草稿文档；机器用例 `TB-MENU-001`～`TB-MENU-007` 覆盖一级菜单树合同、项目添加/刷新去重与状态保持、新建会话到对话状态、编辑焦点命令分派、查看页面切换不混入设置、设置进入/返回的状态保持。结果包含 `fixtureManifest`、项目/会话/草稿 SHA-256、`result.json` 与 `SHA256SUMS`，且不读写真实应用数据目录。macOS 原生菜单树、交通灯与系统窗口证据仍属于 `W0-SHELL-MENU-P`，必须由测试人员在 macOS 15+ 桌面执行。
 
@@ -98,14 +98,24 @@ macOS 原生入口：`scripts/title-bar/run-title-bar-native-macos.sh`（配套 
 
 ### 5.3 `UI-ACC-TITLE-BAR-001` macOS 原生批次执行结果
 
-入口：`scripts/title-bar/run-title-bar-acceptance.mjs` + `.sh`，`npm run test:title-bar-acceptance:sh`；原生自动化器 `scripts/title-bar/menu-ax-helper.swift`（ApplicationServices AX C API），M3 companion 为 `scripts/title-bar/run-title-bar-companion.mjs`。计划与判定规则见 [macOS 标题栏菜单专项计划](./macos/UI_ACCEPTANCE_MACOS_TITLE_BAR_PLAN.md) 与 [专项报告](./macos/UI_ACCEPTANCE_MACOS_TITLE_BAR.md)。
+入口：`scripts/title-bar/run-title-bar-native-acceptance.mjs` + `.sh`，`npm run test:title-bar-native-acceptance`；原生自动化器 `scripts/title-bar/menu-ax-helper.swift`（ApplicationServices AX C API），M3 companion 为 `scripts/title-bar/run-title-bar-companion.mjs`。该 runner 只判定 P 子门槛，F 记为 `DEFERRED` 并指向 §5.4 的独立脚本。计划与判定规则见 [macOS 标题栏菜单专项计划](./macos/UI_ACCEPTANCE_MACOS_TITLE_BAR_PLAN.md) 与 [专项报告](./macos/UI_ACCEPTANCE_MACOS_TITLE_BAR.md)。
 
 - **覆盖率基线**：`result.json.coverage.plannedCaseIds` 与 `executedCaseIds` 完全一致，共 13 项（`TB-MENU-001`~`TB-MENU-012` + `TB-MENU-003-GLOBAL-SEARCH` 遗留项），未删减、未合并、未改名。`P`/`F` 归属按计划 §3「关联缺口」列，两个子门槛分别给结论。
 - **原生证据**：真实启动 `/Applications/Vinkey.app`，注入隔离 `VINKEY_ACCEPTANCE_DATA_DIR`，按「无项目 / 已打开项目」两阶段执行；`CGWindowListCreateImage` 捕获 20 张窗口截图，菜单展开用 `screencapture -R0,0,760,190` 只截系统菜单栏与下拉菜单区域。应用版本、构建号与嵌入 Git SHA 取自 `Info.plist` 与隔离 Profile 的 `app.start.fields.commitSha`，`provenance.status` 记录仓库/源码一致性（计划 §2）。
 - **M3 companion**：计划要求的 Playwright/WebView 结构证据，4/4 PASS、9 张截图；只在 Win32 上下文渲染自绘标题栏，**不能**证明 macOS 原生菜单、交通灯或物理 DPI，也**不能**升级 `BLOCKED` 用例或 `F` 子门槛。
-- **忠实判定**：`conclusion=条件通过`、`exitCode=0`、`13/13` 覆盖；`W0-SHELL-MENU-P=条件通过（含待人工复核项）`（`TB-MENU-008` 全屏/Reopen 待人工复核），`W0-SHELL-MENU-F=BLOCKED`（缺 `W0-EDITOR-F`）；`TB-MENU-003-GLOBAL-SEARCH=NOT_APPLICABLE`（`CF-023` 未完成，保留遗留项）；`windowsPlatform=NOT_EXECUTED`。结果与 [macOS 专项报告](./macos/UI_ACCEPTANCE_MACOS_TITLE_BAR.md) 逐条对照计划判定规则。
+- **忠实判定**：`conclusion=条件通过`、`exitCode=0`、`13/13` 覆盖；`W0-SHELL-MENU-P=条件通过（含待人工复核项）`（`TB-MENU-008` 全屏/Reopen 待人工复核），`W0-SHELL-MENU-F=DEFERRED`（不在此判定，权威结论见 §5.4 的独立 F 批次 `F=PASS`）；`TB-MENU-003-GLOBAL-SEARCH=NOT_APPLICABLE`（`CF-023` 未完成，保留遗留项）；`windowsPlatform=NOT_EXECUTED`。结果与 [macOS 专项报告](./macos/UI_ACCEPTANCE_MACOS_TITLE_BAR.md) 逐条对照计划判定规则。
 - **实现偏差**：`CF-023` 状态为「已参考」（不表示功能完备）、`TB-GAP-006` 未实现，但 macOS 原生「会话」菜单已挂载「搜索项目与会话 ⌘K」，动作只聚焦侧栏搜索框。批次在 `issues` 中如实记录，未删除用例、未改写计划、未写 PASS。
 - **自动化稳定性**：首次按最终 HEAD 复跑曾因应用未前台激活、低保真诊断弹窗残留导致 AX 焦点读回为空，`TB-MENU-010` 出现一次 `FAIL`，`TB-MENU-008` 的 `AXFullScreen` 跨批次不稳定。已在 helper 增加 `activate` / `dismiss`、在 runner 增加 `establishFocus()`（激活 → 点击 → 读回验证焦点，最多 4 次），并把 `TB-MENU-008` 固定为 `BLOCKED`（Reopen 恢复未自动验证）。**判定规则与用例清单未放宽**；原始 FAIL 批次保留归档，修正记录见专项报告 §10。
+
+### 5.4 `UI-ACC-TITLE-BAR-FIXTURE-001` 独立 F 门槛（计划 §7 第 114 行「单独归档」）
+
+实现入口：`scripts/title-bar/title-bar-fixture-acceptance.ts` 核心、`run-title-bar-fixture-acceptance.mjs`/`.sh`/`.ps1` 包装、`tests/title-bar/title-bar-fixture-acceptance-cli.test.ts` 合同测试；命令 `npm run test:title-bar-fixture-acceptance`（macOS/Linux 加 `:sh`、Windows 加 `:win`）。独立批次目录 `artifacts/title-bar-fixture-acceptance/title-bar-w0-f-*`，批次号格式与 P 原生 runner 统一为 `YYYYMMDDTHHMMSSZ`。
+
+- **依赖不硬编码**：从 `artifacts/navigation-acceptance/run-*`（`W0-NAV-F`）、`artifacts/editor-acceptance/run-*`（`W0-EDITOR-F`）、`artifacts/title-bar-acceptance/title-bar-w0-p-*`（`W0-SHELL-MENU-P`）读取最新 `result.json` 的 `conclusion` / `gitSha` / `provenanceStatus` / `repositoryClean`，并在 `dependencies/` 归档快照与原文。缺任一依赖 PASS 时 `F` 保持 `BLOCKED`，`TB-MENU-004` 也保持 `BLOCKED`。
+- **范围不缩水**：`PLANNED_CASE_IDS` 与计划 §3 完全一致，共 13 项（`TB-MENU-001`~`012` + `TB-MENU-003-GLOBAL-SEARCH`）；`coverage.idsMatch=true`。F 归属 4 项由本脚本判定，P 归属 9 项引用 `UI-ACC-TITLE-BAR-001` 最新原生批次并标注来源，不重复判定、不混入 F 证据。
+- **分层不冒充**：本脚本是机器 fixture / 组件合同层，内部调用 `npm run test:title-bar-acceptance` 产出 `machine/result.json`；引用 P 批次 `webview/result.json` 作为 M3 结构证据快照；**不产出**原生窗口截图，也不证明 macOS 原生菜单、交通灯或系统窗口动作。
+- **忠实判定**：`W0-SHELL-MENU-F=PASS`；`decision.specialityPass=false`、`overallConclusion=条件通过`、`windowsPlatform=NOT_EXECUTED`。F 通过不会自动升级专项；`SHA256SUMS` 在 `result.json` 定稿后计算且不自引用。
+- **与 P runner 的分工**：`run-title-bar-native-acceptance.mjs` 已移除写死的 `F=BLOCKED（W0-EDITOR-F 待编写）`，改记 `DEFERRED` + `deferredTo`（独立脚本 ID / 命令 / 归档目录），只把 F 归属菜单动作作为原生过程证据，避免同一 HEAD 下两套 runner 结论矛盾。
 
 ## 6. 编辑器脚本专项
 
@@ -114,6 +124,8 @@ macOS 原生入口：`scripts/title-bar/run-title-bar-native-macos.sh`（配套 
 实现入口：`scripts/editor/`（`editor-acceptance.ts` 核心、`run-editor-acceptance.mjs`/`.sh`/`.ps1` 包装、`tests/editor/editor-acceptance-cli.test.ts` 合同测试），通过 `npm run test:editor-acceptance`（macOS/Linux 加 `:sh`、Windows 加 `:win`）执行。
 
 脚本自建并清理隔离临时工作区，包含 Markdown/代码/文本/环境文件/二进制文档 fixture；机器用例 `EDIT-F-001`～`EDIT-F-006` 复刻 `src-tauri/src/lib.rs` 的文档分类、打开与读取、保存与行尾/BOM 保真、修改时间冲突拒绝、新建与路径越界保护和边界隔离合同。报告入口：`docs/acceptance/ui/UI_ACCEPTANCE_EDITOR.md`。
+
+本机执行状态（2026-11-10）：CLI 6/6 PASS、合同测试 10/10 PASS，批次归档在 `artifacts/editor-acceptance/run-*`。修复了两处真实缺陷：`resolveExisting()` / `resolveForCreate()` 的 `resolvedRoot` 未做 `realpath` 归一，导致 macOS `/var/folders` → `/private/var/folders` 符号链接下的合法 fixture 被误判「路径超出已授权工作区」（越界保护断言未放宽）；以及 `result.json` 自引用 hash 循环导致 `shasum -c` 报 `result.json: FAILED`。该 PASS 只覆盖 fixture / 文件桥接合同，目标平台 WebView 与人工材料仍待回传。
 
 ## 7. 模型设置与真实模型执行顺序
 

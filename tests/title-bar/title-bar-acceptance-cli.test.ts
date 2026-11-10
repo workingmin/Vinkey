@@ -119,7 +119,9 @@ describe('title-bar acceptance CLI', () => {
     expect(readProjectCount(fixture)).toBe(before)
   })
 
-  it('runs all six F-subset machine cases and archives a passing result', async () => {
+  // 该用例在进程内生成隔离 SQLite fixture 并跑完 6 个机器用例，本机耗时通常 >5s；
+  // 与同文件的 CLI spawn 用例一致显式放宽超时，不放宽任何断言。
+  it('runs all six F-subset machine cases and archives a passing result', { timeout: 30_000 }, async () => {
     const output = await runOnFixture(generateFixture(fixtureRoot()))
     const result = output.result as {
       acceptance: { id: string; domainId: string; gate: string }

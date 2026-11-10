@@ -765,16 +765,11 @@ export async function runTitleBarAcceptance(input: AcceptanceRunInput): Promise<
     })),
   }, null, 2), 'utf8')
   writeFileSync(resultFile, JSON.stringify(result, null, 2), 'utf8')
-
+  // result.json 定稿后不再改写：SHA256SUMS 在定稿文件上计算，避免出现「把自身哈希写回自身」的循环导致 shasum -c 失败。
   const shaEntries: Array<{ file: string; hash: string }> = [{ file: 'result.json', hash: sha256OfFile(resultFile) }]
   writeFileSync(sha256File, `${shaEntries.map((entry) => `${entry.hash}  ${entry.file}`).join('\n')}\n`, 'utf8')
-  const finalResult = {
-    ...result,
-    artifacts: { ...result.artifacts, sha256: Object.fromEntries(shaEntries.map((entry) => [entry.file, entry.hash])) },
-  }
-  writeFileSync(resultFile, JSON.stringify(finalResult, null, 2), 'utf8')
 
-  return { result: finalResult, conclusion, exitCode, outputDir, resultFile, sha256File, logFile }
+  return { result, conclusion, exitCode, outputDir, resultFile, sha256File, logFile }
 }
 
 function stderrProgress(cases: CaseResult[]): void {

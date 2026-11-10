@@ -108,8 +108,8 @@
 | --- | --- |
 | 壳层结构 | 已有实现和历史单元测试；目标平台截图、直接渲染覆盖仍待补 |
 | 导航 fixture | `W0-NAV-F` 脚本已就绪（`UI-ACC-NAV-FIXTURE-001`）；目标平台执行与人工材料待回传 |
-| 编辑器 fixture | `W0-EDITOR-F` 脚本已就绪（`UI-ACC-EDITOR-001`）；目标平台 WebView/人工材料待回传 |
-| 标题栏菜单 fixture | `W0-SHELL-MENU-F` 机器脚本已就绪（`UI-ACC-TITLE-BAR-FIXTURE-001`）；`W0-SHELL-MENU-P` 机器层已覆盖 8 项可自动化断言，窗口控制与 macOS 原生菜单证据待桌面执行 |
+| 编辑器 fixture | `W0-EDITOR-F`（`UI-ACC-EDITOR-001`）本机已执行：CLI 6/6 + 合同测试 10/10；目标平台 WebView/人工材料仍待回传 |
+| 标题栏菜单 fixture | `W0-SHELL-MENU-F` 独立门槛脚本 `UI-ACC-TITLE-BAR-FIXTURE-001` 已建立并执行，`F=PASS`；`W0-SHELL-MENU-P` macOS 原生批次已执行，P 结论为条件通过（含待人工复核项）。专项整体仍为**条件通过**：`TB-MENU-008` BLOCKED、全局搜索用例 NOT_APPLICABLE、Windows M5 未执行 |
 | 会话语义标题 | 临时标题/语义升级/手动重命名已实现（`conversationTitle.ts`、侧栏入口）；`CF-022` 已参考，`W2-NAV-E` 真实模型端到端用例阻断 |
 | 全局搜索面板 | 标题栏菜单与 `⌘/Ctrl+K` 入口已实现并按项目/会话/文档分组；`CF-023` 已参考，目标面板跳转用例阻断 |
 | 真实模型链路 | 依赖测试人员在 macOS 15+/Windows + Ollama/profile 环境回传 |

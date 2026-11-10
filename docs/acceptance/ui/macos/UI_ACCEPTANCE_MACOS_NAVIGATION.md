@@ -72,7 +72,7 @@
 
 > 机器证据：`npm run test:navigation-e2e-acceptance:sh`（`UI-ACC-NAV-E2E-001`），`NAV-E-001`~`NAV-E-006` 6/6 PASS、退出码 0；真实模型固定参数 `temperature=0 / num_predict=64 / think=false`，结果中记录 `selectedModel`、`inferenceParams` 与 `sessionManifest`。
 > UI 材料：`11`~`18` 号截图（侧栏展开/折叠入口、标题栏菜单、⌘K 键盘入口、结果分组与文档跳转、Escape 返回、重命名、刷新持久化）。
-> 平台说明：macOS 使用系统原生菜单栏（`TitleBar` 在 `isMac` 时返回 `null`），浏览器演示层不渲染自绘标题栏；标题栏菜单截图为 Windows 自绘标题栏的跨平台 UI 对照。macOS 系统原生菜单项动作属于独立 `W0-SHELL-MENU-P/F` 专项范围；该专项现已在 macOS 执行一次，结论为 `W0-SHELL-MENU-P` **条件通过（含待人工复核项）**、`W0-SHELL-MENU-F` **BLOCKED**（见 [标题栏与功能菜单专项验收报告](./UI_ACCEPTANCE_MACOS_TITLE_BAR.md) 与脚本计划矩阵），**仍不是「已通过」**；**本报告不以其作为证据来源，也不把它计入 `D-NAV` 结论**。本专项覆盖的全局搜索入口为侧栏入口与 ⌘K 键盘入口；键盘入口已由 `ui-run-*` 批次断言聚焦生效，侧栏/折叠入口与结果分组、跳转、Escape 返回均有截图。
+> 平台说明：macOS 使用系统原生菜单栏（`TitleBar` 在 `isMac` 时返回 `null`），浏览器演示层不渲染自绘标题栏；标题栏菜单截图为 Windows 自绘标题栏的跨平台 UI 对照。macOS 系统原生菜单项动作属于独立 `W0-SHELL-MENU-P/F` 专项范围；该专项现已在 macOS 执行，结论为 `W0-SHELL-MENU-P` **条件通过（含待人工复核项）**、`W0-SHELL-MENU-F` **PASS**（由独立脚本 `UI-ACC-TITLE-BAR-FIXTURE-001` 解锁；见 [标题栏与功能菜单专项验收报告](./UI_ACCEPTANCE_MACOS_TITLE_BAR.md) 与脚本计划矩阵），但专项整体**仍为「条件通过」、不是「已通过」**；**本报告不以其作为证据来源，也不把它计入 `D-NAV` 结论**。本专项覆盖的全局搜索入口为侧栏入口与 ⌘K 键盘入口；键盘入口已由 `ui-run-*` 批次断言聚焦生效，侧栏/折叠入口与结果分组、跳转、Escape 返回均有截图。
 
 ## 5. `W4-NAV-R` 验收矩阵
 
@@ -157,7 +157,7 @@
 - 上一版曾以「沿用已完整通过的 `W0-SHELL-P` / `W0-SHELL-MENU-P`」填补本专项的原生窗口与菜单证据缺口，属**无效引用**：壳层报告第 97 行明确声明「`D-NAV` 业务链路不在本报告结论内」，其 6 张原生截图只覆盖窗口尺寸/交通灯/Reopen；`W0-SHELL-MENU-P/F` 则在当时的脚本计划中标注为「待验收、不得假定通过」。两处引用已删除。
 - 本版补做 `UI-ACC-NAV-NATIVE-001`，用本专项自己的真实应用运行批次提供原生窗口证据；修正前「本沙箱无法运行完整 Tauri GUI」的判断不成立——同一台机器当天已由 `W0-SHELL-P` 真实启动应用并通过 24/24 用例。
 - 壳层验收本身也采用分层证据：12 个原生 AX 窗口用例 + 6 张 CoreGraphics 原生窗口截图，另有 9 个 WebView companion 用例 + 14 张 Vite/Playwright 浏览器截图。本专项的两层截图结构与之一致。
-- **后续补记**：菜单专项此后已在 macOS 真实执行一次（`UI-ACC-TITLE-BAR-001`），13/13 计划用例覆盖，结论为 `W0-SHELL-MENU-P` 条件通过（含待人工复核项）、`W0-SHELL-MENU-F` BLOCKED、Windows 未执行，见 [标题栏与功能菜单专项验收报告](./UI_ACCEPTANCE_MACOS_TITLE_BAR.md)。该专项仍不是「已通过」，因此本节的无效引用删除、`D-NAV` 结论与「不把菜单专项计入 `D-NAV`」的边界**继续有效**，无需改写。
+- **后续补记**：菜单专项此后已在 macOS 真实执行（`UI-ACC-TITLE-BAR-001` 原生 P 批次 + `UI-ACC-TITLE-BAR-FIXTURE-001` 独立 F 批次），两套批次均 13/13 计划用例覆盖，结论为 `W0-SHELL-MENU-P` 条件通过（含待人工复核项）、`W0-SHELL-MENU-F` PASS、Windows 未执行，专项整体仍为**条件通过**，见 [标题栏与功能菜单专项验收报告](./UI_ACCEPTANCE_MACOS_TITLE_BAR.md)。该专项仍不是「已通过」，因此本节的无效引用删除、`D-NAV` 结论与「不把菜单专项计入 `D-NAV`」的边界**继续有效**，无需改写。
 
 ## 9. 测试人员回填区
 
