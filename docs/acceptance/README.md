@@ -39,7 +39,7 @@
 | 文档 | 用途 |
 | --- | --- |
 | [应用壳层与入口专项验收（macOS）](ui/macos/UI_ACCEPTANCE_MACOS_SHELL.md) | 壳层平台与结构验收报告（macOS，完整通过） |
-| [标题栏与功能菜单专项验收（macOS）](ui/macos/UI_ACCEPTANCE_MACOS_TITLE_BAR.md) | 标题栏/原生菜单与窗口命令验收报告（macOS，**条件通过**；`W0-SHELL-MENU-P` 含待人工复核项、`W0-SHELL-MENU-F` 由独立脚本 `UI-ACC-TITLE-BAR-FIXTURE-001` 解锁为 PASS，但专项未通过；13/13 计划用例覆盖） |
+| [标题栏与功能菜单专项验收（macOS）](ui/macos/UI_ACCEPTANCE_MACOS_TITLE_BAR.md) | 标题栏/原生菜单与窗口命令验收报告（macOS，**条件通过**；`W0-SHELL-MENU-P` 含待客观人工复核项 `TB-MENU-008` 全屏/Reopen、`W0-SHELL-MENU-F` 由独立脚本 `UI-ACC-TITLE-BAR-FIXTURE-001` 解锁为 PASS，但专项未通过；诊断弹窗视觉质量已登记 `DEFER-UI-001` 延后至后续版本；13/13 计划用例覆盖） |
 | [应用壳层与入口专项验收（Windows）](ui/windows/UI_ACCEPTANCE_WINDOWS_SHELL.md) | 壳层平台与结构验收报告（Windows，待执行） |
 | [项目与会话导航专项验收（macOS）](ui/macos/UI_ACCEPTANCE_MACOS_NAVIGATION.md) | 导航合同、端到端和回归验收报告（macOS，完整通过；含真实应用原生窗口证据） |
 | [项目与会话导航专项验收（Windows）](ui/windows/UI_ACCEPTANCE_WINDOWS_NAVIGATION.md) | 导航合同、端到端和回归验收（Windows） |

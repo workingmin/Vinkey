@@ -20,7 +20,7 @@
 | 本地环境脚本 | 是或读取真实本机配置 | Ollama/兼容服务响应、SQLite 配置、版本和退出码 | 测试人员的 macOS 15+/Windows |
 | 人工 UI 验收 | 由测试人员观察 | 入口链路、视觉状态、键盘操作、截图/录屏和备注 | 测试人员的 macOS 15+/Windows |
 
-本规范覆盖 UI 组件测试的辅助入口、跨模块验收、本地 Ollama 验收和人工 UI 验收的证据归档。脚本不得为了“绿色”而改写业务结果、跳过失败用例或把环境阻断标记为通过。
+本规范覆盖 UI 组件测试的辅助入口、跨模块验收、本地 Ollama 验收和人工 UI 验收的证据归档。脚本不得为了“绿色”而改写业务结果、跳过失败用例或把环境阻断标记为通过。人工 UI 验收中的主观观感类项目（视觉质量、交互完成度、专家/用户调研判断）按 [UI 验收工作计划](./UI_ACCEPTANCE_PLAN.md) §8 登记为 `DEFER-UI-*`，属后续版本验收，不计入 Alpha 的条件通过原因，亦不作为脚本阻断项。
 
 ## 2. 与统一生命周期的关系
 
@@ -255,6 +255,6 @@ exit=<exitCode>
 
 macOS 原生入口在隐私扫描通过后，默认于运行目录旁生成 `run-<timestamp>.tar.gz`；扫描失败时保留本地诊断但不得生成 tar。归档成员只包含同名运行目录，owner/group 固定且不携带扩展属性；helper 二进制缓存不进入归档。归档必须在文本脱敏、隐私扫描和 `SHA256SUMS` 完成后生成。截图必须是目标应用窗口级画面，禁止把完整桌面作为可分发验收证据。
 
-回传给验收报告的最小集合是：`result.json`、`SHA256SUMS`、执行命令、人工 UI 观察表、截图/录屏索引和该平台实际产生的原始诊断文件。报告按功能域和平台使用对应模板回填：模型设置使用 [`UI_ACCEPTANCE_MACOS_SETTINGS_RUN_TEMPLATE.md`](./macos/UI_ACCEPTANCE_MACOS_SETTINGS_RUN_TEMPLATE.md) / [`UI_ACCEPTANCE_WINDOWS_SETTINGS_RUN_TEMPLATE.md`](./windows/UI_ACCEPTANCE_WINDOWS_SETTINGS_RUN_TEMPLATE.md)，壳层使用 [`UI_ACCEPTANCE_MACOS_SHELL_RUN_TEMPLATE.md`](./macos/UI_ACCEPTANCE_MACOS_SHELL_RUN_TEMPLATE.md) / [`UI_ACCEPTANCE_WINDOWS_SHELL_RUN_TEMPLATE.md`](./windows/UI_ACCEPTANCE_WINDOWS_SHELL_RUN_TEMPLATE.md)，项目/会话导航使用 [`UI_ACCEPTANCE_MACOS_NAVIGATION_RUN_TEMPLATE.md`](./macos/UI_ACCEPTANCE_MACOS_NAVIGATION_RUN_TEMPLATE.md) / [`UI_ACCEPTANCE_WINDOWS_NAVIGATION_RUN_TEMPLATE.md`](./windows/UI_ACCEPTANCE_WINDOWS_NAVIGATION_RUN_TEMPLATE.md)。未提供原始 JSON 或人工观察时，结论保持“待回填”或“条件通过”。
+回传给验收报告的最小集合是：`result.json`、`SHA256SUMS`、执行命令、人工 UI 观察表、截图/录屏索引和该平台实际产生的原始诊断文件。人工 UI 观察表中的主观观感类条目（视觉质量、交互完成度、专家/用户调研判断）按总计划 §8 登记为 `DEFER-UI-*`，属后续版本验收；回填时不得将其作为 Alpha 的条件通过阻断项，也不得改写为 `PASS`。报告按功能域和平台使用对应模板回填：模型设置使用 [`UI_ACCEPTANCE_MACOS_SETTINGS_RUN_TEMPLATE.md`](./macos/UI_ACCEPTANCE_MACOS_SETTINGS_RUN_TEMPLATE.md) / [`UI_ACCEPTANCE_WINDOWS_SETTINGS_RUN_TEMPLATE.md`](./windows/UI_ACCEPTANCE_WINDOWS_SETTINGS_RUN_TEMPLATE.md)，壳层使用 [`UI_ACCEPTANCE_MACOS_SHELL_RUN_TEMPLATE.md`](./macos/UI_ACCEPTANCE_MACOS_SHELL_RUN_TEMPLATE.md) / [`UI_ACCEPTANCE_WINDOWS_SHELL_RUN_TEMPLATE.md`](./windows/UI_ACCEPTANCE_WINDOWS_SHELL_RUN_TEMPLATE.md)，项目/会话导航使用 [`UI_ACCEPTANCE_MACOS_NAVIGATION_RUN_TEMPLATE.md`](./macos/UI_ACCEPTANCE_MACOS_NAVIGATION_RUN_TEMPLATE.md) / [`UI_ACCEPTANCE_WINDOWS_NAVIGATION_RUN_TEMPLATE.md`](./windows/UI_ACCEPTANCE_WINDOWS_NAVIGATION_RUN_TEMPLATE.md)。未提供原始 JSON 或人工观察时，结论保持“待回填”或“条件通过”。
 
 测试人员可以上传完整附件，也可以在协作平台只粘贴脱敏摘要并提供文件 SHA-256。任何上传前必须检查 API Key、正文、用户目录和系统凭据是否已脱敏。

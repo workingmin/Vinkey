@@ -8,7 +8,8 @@
 - 设计依据：[TITLE_BAR_DESIGN.md](../../../design/ui/TITLE_BAR_DESIGN.md)
 - 壳层报告：[UI_ACCEPTANCE_MACOS_SHELL.md](./UI_ACCEPTANCE_MACOS_SHELL.md)；Windows 平台版：[UI_ACCEPTANCE_WINDOWS_TITLE_BAR_PLAN.md](../windows/UI_ACCEPTANCE_WINDOWS_TITLE_BAR_PLAN.md)
 - 入口总表：[UI_ENTRY_POINTS.md](../../../design/ui/UI_ENTRY_POINTS.md)
-- 计划更新：`2026-11-05`
+- 计划更新：`2026-11-10`
+- 适用阶段：Alpha（`0.1.0`）；主观类验收项按 [总验收计划 §8](../UI_ACCEPTANCE_PLAN.md) 划到后续版本，本文件只引用、不另建清单
 
 > 实现基线：目标菜单树、设置归属、焦点命令桥接和菜单选择器已实现。`W0-SHELL-MENU-F` 的机器 fixture 脚本（`UI-ACC-TITLE-BAR-FIXTURE-001`）与 `W0-SHELL-MENU-P` 的机器层脚本（`UI-ACC-TITLE-BAR-001`）已就绪，当前仍为“待验收”，不是 `W0-SHELL-MENU-P/F` 已通过。
 
@@ -61,6 +62,11 @@ Ollama、模型 profile 和真实会话不是本专项前置条件。测试人�
 
 `TB-MENU-003` 的全局搜索仅在 `CF-023` 完成后增加独立的 `TB-MENU-003-GLOBAL-SEARCH` 用例；在此之前应标记 `NOT_APPLICABLE`，不能用侧栏搜索代替。
 
+> **Alpha 范围声明**：上表 12 个用例加 `TB-MENU-003-GLOBAL-SEARCH` 共 13 个 ID，**一个都不删、不合并、不改名、不放宽断言**。仅用例内部的「主观判断部分」按 [总验收计划 §8](../UI_ACCEPTANCE_PLAN.md) 划到后续版本：
+> - `TB-MENU-009` 的弹窗**视觉质量/交互完成度**划出（`DEFER-UI-001`），触发、关闭、焦点返回、脱敏与构建溯源仍须验；
+> - `TB-MENU-011` 的文案**语义得体性**、`TB-MENU-012` 的减法**产品价值判断**划出（`DEFER-UI-010`），英文残留字符串审计与禁止项存在性检查仍是客观断言；
+> - `TB-MENU-008` 的「全屏目视复核」划出（`DEFER-UI-005`），但全屏 AX/CG 状态、Reopen 恢复、关闭后隐藏仍是客观项，必须留在 Alpha 并继续推进自动化，不得借延期跳过。
+
 ## 4. 平台执行步骤（macOS）
 
 ### 4.1 macOS
@@ -94,9 +100,16 @@ webview/                 # 同批次 Playwright companion 结果（如执行）
 ## 6. 判定规则
 
 - **专项通过**：`TB-MENU-001` 至 `TB-MENU-012` 中所有适用用例均 `PASS`；全局搜索在 `CF-023` 尚未完成时可标记 `NOT_APPLICABLE`，但必须在报告中保留该遗留项；macOS 至少一次目标平台证据；`result.json.exitCode=0` 且哈希清单可核验。
-- **条件通过**：菜单结构和核心动作通过，但目标平台尚未执行、全局搜索为 `NOT_APPLICABLE` 或帮助弹窗仍是低保真实现；必须列出遗留项，不能宣称跨平台发布通过。
+- **条件通过**：菜单结构和核心动作通过，但目标平台尚未执行、全局搜索为 `NOT_APPLICABLE`，或存在其它**客观**遗留项；必须列出遗留项，不能宣称跨平台发布通过。帮助弹窗的低保真实现只按 `TB-MENU-009` 的客观断言（触发、关闭、焦点返回、脱敏、构建溯源）判定，其**视觉质量与交互完成度**属 `DEFER-UI-001`，不计入 Alpha 的条件通过原因。
 - **不通过**：仍出现旧“文件”一级菜单、设置仍在“查看”、编辑命令作用于错误焦点、菜单关闭断言与截图冲突，或窗口动作失败。
 - **阻断**：应用包无法启动、平台权限缺失、结果文件不完整或无法证明结果来自目标包。
+
+**Alpha 判定补充**（仅调整前置条件，不修改上述四条判定规则的通过条件）：
+
+1. 按 [总验收计划 §8](../UI_ACCEPTANCE_PLAN.md) 登记的 `DEFER-UI-001`、`DEFER-UI-005`、`DEFER-UI-010`、`DEFER-UI-011`、`DEFER-UI-012` 等主观项，在 Alpha 内**不作为结论前置条件**；它们不参与「所有适用用例均 PASS」的计数，也不得写成 `PASS` 或从报告删除。
+2. 客观遗留项不因本节消失：`TB-MENU-008` 的 `BLOCKED`、`TB-MENU-003-GLOBAL-SEARCH` 的 `NOT_APPLICABLE`（`CF-023` 未完成）、Windows 平台未执行，仍按原规则逐项列出并阻断「专项通过」。
+3. 因此本次调整**不把任何现有结论升级**：最新权威批次的 `条件通过`、P 的 `条件通过（含待人工复核项）`、`F=PASS`、`specialityPass=false` 均保持原样；不宣称专项通过、完整通过或跨平台发布通过。
+4. 发布说明须同时列明客观遗留项与总计划 §8.3 全表。
 
 标题栏专项通过不会自动代表 `D-NAV`、`D-CHAT`、`D-EDITOR` 通过；反之，导航或模型域失败也不应掩盖已独立确认的菜单结构结果。
 
@@ -109,6 +122,15 @@ webview/                 # 同批次 Playwright companion 结果（如执行）
 | M3 | Playwright/WebView companion 与 fixture 脚本 | `TB-MENU-004`、`TB-MENU-005`、`TB-MENU-010` 结构证据；`scripts/title-bar/` 生成 `W0-SHELL-MENU-F` 与 `W0-SHELL-MENU-P` 机器证据 | 开发/测试；脚本已实现，待本地执行 |
 | M4 | macOS 原生执行 | Accessibility 菜单、交通灯、窗口动作、哈希归档；入口 `npm run test:title-bar-native-mac` | 测试人员 |
 | M5 | Windows 桌面执行 | 自绘菜单、窗口控制、DPI 和截图；见 [Windows 版计划](../windows/UI_ACCEPTANCE_WINDOWS_TITLE_BAR_PLAN.md) | 测试人员 |
-| M6 | 报告复审 | 逐项结果、遗留项和最终结论 | 测试/产品 |
+| M6 | 报告复审（Alpha） | 逐项结果、客观遗留项与延期登记完整性；**不含**对主观项的专家签字 | 测试/产品 |
+| M7 | 后续版本主观验收（**非 Alpha**） | 按 [总验收计划 §8.3](../UI_ACCEPTANCE_PLAN.md) 完成 `DEFER-UI-*` 的视觉评审、专家判断、用户调研与签字；未完成项继续延期 | 产品/设计/用户研究/测试 |
 
-执行顺序建议为 `M1 → M2 → M3 → W0-SHELL-MENU-P → W0-NAV-F/W0-EDITOR-F → W0-SHELL-MENU-F → M4 → M6`（macOS 版；Windows 执行见 M5 对应计划）。`W0-SHELL-MENU-P` 可以先于业务 fixture 执行；`W0-SHELL-MENU-F` 必须等待 `W0-NAV-F`、`W0-EDITOR-F` 的必要用例通过。`W0-SHELL-MENU-F` 的机器 fixture 证据由 `npm run test:title-bar-acceptance` 单独归档，不得与 P 子集或导航脚本混报；目标平台原生菜单仍需 M4 桌面执行。
+执行顺序建议为 `M1 → M2 → M3 → W0-SHELL-MENU-P → W0-NAV-F/W0-EDITOR-F → W0-SHELL-MENU-F → M4 → M6`（macOS 版；Windows 执行见 M5 对应计划）。`W0-SHELL-MENU-P` 可以先于业务 fixture 执行；`W0-SHELL-MENU-F` 必须等待 `W0-NAV-F`、`W0-EDITOR-F` 的必要用例通过。`W0-SHELL-MENU-F` 的机器 fixture 证据由 `npm run test:title-bar-acceptance` 单独归档，不得与 P 子集或导航脚本混报；目标平台原生菜单仍需 M4 桌面执行。**M7 不计入 Alpha 执行顺序，不构成 Alpha 发布前置。**
+
+## 8. Alpha 延期边界（引用）
+
+本专项不另建延期清单，统一引用 [总验收计划 §8](../UI_ACCEPTANCE_PLAN.md) 的唯一权威登记表。
+
+- 与本专项直接相关：`DEFER-UI-001`（弹窗视觉质量/交互完成度）、`DEFER-UI-005`（发布前目视手续）、`DEFER-UI-010`（中文文案语义与减法价值判断）、`DEFER-UI-011`（跨文档 `CF-023` 口径复核）、`DEFER-UI-012`（M6 中针对主观项的签字）。其余各项按总计划 §8.3 全局生效。
+- 本专项**不划出**：13 个 `TB-MENU-*` 用例 ID、`P` / `F` 子门槛分离规则、全部机器断言与哈希清单、`TB-MENU-008` 的客观窗口行为、`TB-MENU-011` 英文残留审计、`TB-MENU-006` 主题像素比对、Windows 平台执行、`CF-023` 实现偏差记录。
+- 本次只改计划：`scripts/title-bar/` 的判定逻辑、`artifacts/title-bar-acceptance/` 与 `artifacts/title-bar-fixture-acceptance/` 既有批次的 `result.json` 结论**不追溯改写**；[专项报告](./UI_ACCEPTANCE_MACOS_TITLE_BAR.md) 中把视觉质量列为条件通过原因的表述已于 2026-11-10 按总计划 §8 同步为 `DEFER-UI-001`（见 §6 条件通过规则与专项报告 §4.1/§5.2/§6/§8/§9）。

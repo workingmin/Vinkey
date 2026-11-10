@@ -71,13 +71,13 @@
 
 计数（按上述复合判定，与 F 独立批次 `summary` 一致）：`caseCount=13`、`passed=11`、`failed=0`、`blocked=1`（`TB-MENU-008`）、`notApplicable=1`（`TB-MENU-003-GLOBAL-SEARCH`）；`result.json.exitCode=0`，进程退出码与之一致。P 原生批次自身仍为 `10 PASS / 0 FAIL / 2 BLOCKED / 1 N/A`，两批均保留归档、互不覆盖。
 
-> **关于「F 门槛 PASS 不等于专项 PASS」**：`W0-SHELL-MENU-F` 由计划 §1 第 19 行与 §7 第 114 行独立判定，只有 `W0-NAV-F`、`W0-EDITOR-F` 均真实 PASS 且 F 归属适用用例无 FAIL/BLOCKED 时才解锁；它不是由 P 结果或 M3 companion 升级而来。反过来，F 通过也**不得**自动升级专项：按计划 §6，`TB-MENU-008` 仍 `BLOCKED`、`TB-MENU-003-GLOBAL-SEARCH` 仍 `NOT_APPLICABLE`、Windows M5 未执行、帮助弹窗低保真，专项整体依然只能是「条件通过」。
+> **关于「F 门槛 PASS 不等于专项 PASS」**：`W0-SHELL-MENU-F` 由计划 §1 第 19 行与 §7 第 114 行独立判定，只有 `W0-NAV-F`、`W0-EDITOR-F` 均真实 PASS 且 F 归属适用用例无 FAIL/BLOCKED 时才解锁；它不是由 P 结果或 M3 companion 升级而来。反过来，F 通过也**不得**自动升级专项：按计划 §6，`TB-MENU-008` 仍 `BLOCKED`、`TB-MENU-003-GLOBAL-SEARCH` 仍 `NOT_APPLICABLE`、Windows M5 未执行，专项整体依然只能是「条件通过」。帮助弹窗的视觉质量/交互完成度已按总计划 §8 登记为 `DEFER-UI-001`（后续版本验收），不再作为 Alpha 的条件通过原因。
 
 ## 4. 子门槛判定
 
 ### 4.1 `W0-SHELL-MENU-P` — 条件通过（含待人工复核项）
 
-P 子集 9 个用例（13 项扣除 4 个 F 归属用例）：`8 PASS / 0 FAIL / 1 BLOCKED`（`TB-MENU-008`）。唯一阻断项是窗口控制：全屏状态未被 AX 确认、Dock/系统 Reopen 恢复需人工目视复核。
+P 子集 9 个用例（13 项扣除 4 个 F 归属用例）：`8 PASS / 0 FAIL / 1 BLOCKED`（`TB-MENU-008`）。唯一阻断项是窗口控制：全屏状态未被 AX 确认、Dock/系统 Reopen 恢复需人工目视复核。此处「含待人工复核项」指 `TB-MENU-008` 全屏/Reopen 的**客观**人工验证；诊断弹窗的视觉质量/交互完成度已按总计划 §8 登记为 `DEFER-UI-001`，不再视为 Alpha 的条件通过阻断项。
 
 - 不因 `F` 阻断而降格，也**不吸收** `F` 结果；P 只证明壳层与平台承载能力。
 - 不反向把 P 结论写入 `W0-SHELL-P` 或 `D-NAV`；壳层报告 §1 与导航报告 §8 的边界继续有效。
@@ -117,7 +117,7 @@ P 子集 9 个用例（13 项扣除 4 个 F 归属用例）：`8 PASS / 0 FAIL /
 
 1. **原生证据**：真实启动 `/Applications/Vinkey.app`，AX C API 直接读取/点击 `AXMenuBar` / `AXMenuItem`，`CGWindowListCreateImage` 按窗口 ID 捕获 20 张原生截图。这是本专项结论的主要依据。
 2. **M3 WebView companion**：Playwright 在 Win32 上下文渲染自绘标题栏（`macOS` 下 `TitleBar` 返回 `null`），为 `TB-MENU-004`、`TB-MENU-005`、`TB-MENU-010`、`TB-MENU-012` 提供结构证据，4/4 PASS、9 张截图。它**不能**证明 macOS 原生菜单、交通灯、系统窗口按钮或物理 DPI，也**不能**升级任何 `BLOCKED` 用例或 `F` 子门槛。
-3. **人工观察**：目录选择取消/失败保留原状态、全屏状态目视复核、关闭窗口后 Dock/系统 Reopen 恢复、低保真诊断弹窗视觉质量与焦点返回，均保留为人工观察或条件通过遗留项，未被写成 PASS。
+3. **人工观察**：目录选择取消/失败保留原状态、全屏状态目视复核、关闭窗口后 Dock/系统 Reopen 恢复、诊断弹窗的**焦点返回**（客观，已由 `TB-MENU-010` 读回验证）均保留为人工观察或条件通过遗留项，未被写成 PASS。诊断弹窗的**视觉质量/交互完成度**按总计划 §8 登记为 `DEFER-UI-001`，属后续版本验收，不再作为 Alpha 的条件通过原因。
 
 ### 5.3 `provenance`
 
@@ -143,8 +143,8 @@ P 子集 9 个用例（13 项扣除 4 个 F 归属用例）：`8 PASS / 0 FAIL /
 1. **`CF-023` / `TB-GAP-006` 实现偏差（重点）**：`FEATURE_DECISIONS.md` 中 `CF-023` 状态为 `已参考`，文件第 5 行明确「`已参考` 不表示功能完备」；`TITLE_BAR_DESIGN.md` 的 `TB-GAP-006` 仍为「未实现，保持独立阻断」，§5 审计表要求 `CF-023` 前「无原生菜单项」。但 macOS 原生「会话」菜单已提前挂载「搜索项目与会话 ⌘K」（`src/App.tsx` 的 `installMacMenu` + `searchSessions`），其 `focusGlobalSearch` 只执行 `document.getElementById('global-search-input')?.focus()`，而该 id 是 `ProjectSessionSidebar.tsx` 的**侧栏搜索框**（`class=sidebar-search`），并非设计 §3.2 的统一搜索结果面板。这正是计划 §1 禁止的「侧栏搜索冒充全局搜索」。本专项**没有删除用例、没有改写计划、没有写 PASS**，而是把 `TB-MENU-003-GLOBAL-SEARCH` 保留为 `NOT_APPLICABLE` 遗留项并在 `result.json.issues` 记录偏差。
 2. **跨文档口径需产品/设计复核**：`UI_ACCEPTANCE_PLAN.md` §7 第 112 行与导航报告 §2 第 36 行把「全局搜索入口/结果面板」描述为已实现；导航报告 `NAV-E-005` 的 PASS 实际证明的是当前工作区「项目/会话/文档」三类分组搜索与跳转（`scripts/navigation/navigation-e2e-acceptance.ts` 的 `grouped` 断言），**不等于** `CF-023` 统一面板完成。本专项不改变 `D-NAV` 结论，也不借用其 PASS 为 `CF-023` 背书；两处描述的一致性需另行复核，不在本专项里修改测试范围。
 3. **`TB-MENU-008` 窗口动作未全通过**：「进入全屏」已触发，但 `AXFullScreen` 在不同批次出现 `false` / `true`；「关闭窗口」后主窗口是否隐藏也跨批次不稳定；Dock/系统 Reopen 恢复从未自动激活。全屏目视复核、关闭隐藏复核与 Reopen 恢复全部转人工观察，因此该用例**恒定 `BLOCKED`**，不因某次 `AXFullScreen=true` 就宣称窗口动作全部通过（见 §10）。
-4. **低保真诊断弹窗**：快捷键/窗口诊断/应用诊断日志由 `window.alert` 或简易弹窗承载，按计划 §6 只计「动作可触发」，计入条件通过遗留项。
-5. **F 门槛已解锁，但专项遗留项未清**：`W0-EDITOR-F` 本机已执行并 PASS，独立 `UI-ACC-TITLE-BAR-FIXTURE-001` 已建立且 `F=PASS`；这**不解除**下列任何遗留项：`TB-MENU-008` BLOCKED、`TB-MENU-003-GLOBAL-SEARCH` NOT_APPLICABLE、帮助弹窗低保真、Windows 未执行、人工目视复核。`specialityPass` 仍为 `false`。
+4. **诊断弹窗（客观部分）**：快捷键/窗口诊断/应用诊断日志由 `window.alert` 或简易弹窗承载，`TB-MENU-009` 仅按客观断言计「动作可触发 / 可关闭 / 焦点返回 / 脱敏 / 构建溯源」，这些仍计入条件通过的依据。**其视觉质量/交互完成度按总计划 §8 登记为 `DEFER-UI-001`，属后续版本验收，不再作为 Alpha 的条件通过原因或专项通过的阻断项**（与客观行为分开：不删除、不改写为 PASS）。
+5. **F 门槛已解锁，但专项遗留项未清**：`W0-EDITOR-F` 本机已执行并 PASS，独立 `UI-ACC-TITLE-BAR-FIXTURE-001` 已建立且 `F=PASS`；这**不解除**下列**客观**遗留项：`TB-MENU-008` BLOCKED、`TB-MENU-003-GLOBAL-SEARCH` NOT_APPLICABLE、Windows 未执行、人工目视复核（仅 `TB-MENU-008` 全屏/Reopen 的客观验证）。诊断弹窗视觉质量已转 `DEFER-UI-001`（见 §6.4），不在此列。`specialityPass` 仍为 `false`。
 6. **Windows M5 未执行**：`decision.windowsPlatform=NOT_EXECUTED`，不得宣称跨平台发布通过；Windows 自绘菜单、窗口控制、DPI 与截图仍待目标桌面执行。
 7. **平台自动化偏差**：`System Events` 权限违例、`AXExpanded` 缺失、菜单展开区域截图收窄、helper 由 AppleScript 改为 Swift AX C API，均已在 `result.json.environment` / `privacy` 与本报告 §2 如实记录。
 8. **`W0-EDITOR-F` 的目标平台边界仍在**：其 PASS 只覆盖隔离 fixture / 文件桥接合同与合同测试，目标平台 WebView 的文件树、编辑器、保存状态栏与预览截图/人工观察仍未回传；该边界见 [基础编辑器专项验收报告](../UI_ACCEPTANCE_EDITOR.md)，本专项不代为判定。
@@ -162,7 +162,7 @@ P 子集 9 个用例（13 项扣除 4 个 F 归属用例）：`8 PASS / 0 FAIL /
 
 | §6 判定 | 是否满足 | 依据 |
 | --- | --- | --- |
-| **专项通过** | **否** | 要求所有适用用例均 PASS；`TB-MENU-008` 仍为 `BLOCKED`（全屏/Reopen 待人工复核），`TB-MENU-003-GLOBAL-SEARCH` 仍为 `NOT_APPLICABLE`（`CF-023` 未完成），Windows 未执行，帮助弹窗低保真。`decision.specialityPass=false` |
+| **专项通过** | **否** | 要求所有适用用例均 PASS；`TB-MENU-008` 仍为 `BLOCKED`（全屏/Reopen 待客观人工复核），`TB-MENU-003-GLOBAL-SEARCH` 仍为 `NOT_APPLICABLE`（`CF-023` 未完成），Windows 未执行。诊断弹窗视觉质量已按总计划 §8 登记为 `DEFER-UI-001`，属后续版本验收，不计入本 Alpha 的条件通过原因。`decision.specialityPass=false` |
 | **条件通过** | **是（本次结论）** | 菜单结构与核心动作通过、macOS 目标平台证据已采集、F 门槛独立解锁为 PASS、`exitCode=0`、两套批次哈希清单均可核验；按 §6 必须列出遗留项且**不能宣称跨平台发布通过** |
 | **不通过** | 否 | `failed=0`；无旧「文件」一级菜单、设置不在「查看」、编辑命令未作用于错误焦点、菜单关闭断言与截图一致、最小化/缩放/关闭窗口动作成功 |
 | **阻断** | 否 | 应用包可启动、平台权限具备、结果文件完整且可证明来自目标包；`W0-EDITOR-F` 已本机执行并 PASS，F 子门槛不再 `BLOCKED`。历史 F 阻断批次保留，但不作为最终结论 |
@@ -174,15 +174,15 @@ P 子集 9 个用例（13 项扣除 4 个 F 归属用例）：`8 PASS / 0 FAIL /
 - `W0-SHELL-MENU-P`：`条件通过（含待人工复核项）`；证据见 `artifacts/title-bar-acceptance/` 最新 `title-bar-w0-p-*` 批次的 `result.json` + `SHA256SUMS` + `screenshots/`（20 张原生截图）+ `states/` + `menu-tree.json`。
 - `W0-SHELL-MENU-F`：`PASS`；权威记录为 `artifacts/title-bar-fixture-acceptance/` 最新 `title-bar-w0-f-*` 批次的 `result.json` + `SHA256SUMS` + `dependencies/` + `machine/`；依赖状态见 `result.json.dependencies` 与 `subsets['W0-SHELL-MENU-F'].dependency`（`W0-NAV-F=PASS`、`W0-EDITOR-F=PASS`、`W0-SHELL-MENU-P=条件通过（含待人工复核项）`）。
 - M3 companion：`4/4 PASS`；证据见 P 批次 `webview/result.json` + `webview/SHA256SUMS` + 9 张截图；**仅为 WebView 结构证据**。
-- 人工复核清单：`<① 全屏状态目视确认（AXFullScreen 跨批次不稳定）；② 关闭窗口后主窗口隐藏状态与 Dock/系统 Reopen 恢复；③ 目录选择取消/失败后原状态保留；④ 低保真诊断弹窗视觉质量与焦点返回；⑤ Windows M5 目标桌面执行；⑥ W0-EDITOR-F 目标平台 WebView/人工材料回传>`
-- 问题列表：`<① CF-023/TB-GAP-006 实现偏差（原生菜单项提前挂载、只聚焦侧栏搜索）；② TB-MENU-008 全屏与 Reopen 待人工确认；③ 诊断弹窗低保真；④ Windows 未执行；⑤ 跨文档 CF-023 口径待产品/设计复核>`
+- 人工复核清单：`<① 全屏状态客观确认（AX/CG 多信号交叉，跨批次一致）；② 关闭窗口后主窗口隐藏状态与 Dock/系统 Reopen 恢复；③ 目录选择取消/失败后原状态保留；④ 诊断弹窗焦点返回（客观，TB-MENU-010 已 PASS）与全屏/Reopen 的客观验证；其视觉质量/交互完成度属 DEFER-UI-001（后续版本）；⑤ Windows M5 目标桌面执行；⑥ W0-EDITOR-F 目标平台 WebView/人工材料回传>`
+- 问题列表：`<① CF-023/TB-GAP-006 实现偏差（原生菜单项提前挂载、只聚焦侧栏搜索）；② TB-MENU-008 全屏与 Reopen 待客观人工确认；③ 诊断弹窗视觉质量/交互完成度属 DEFER-UI-001（客观触发/关闭/焦点返回仍验，不阻断 Alpha）；④ Windows 未执行；⑤ 跨文档 CF-023 口径待产品/设计复核>`
 - 综合结论：`<条件通过 — P 条件通过（含待人工复核项）、F 门槛 PASS 但专项未通过；13/13 用例覆盖；不得宣称专项通过、完整通过或跨平台发布通过>`
 - 下一次复审版本/日期：`<CF-023 全局搜索面板实现、TB-MENU-008 人工复核完成、Windows M5 执行、W0-EDITOR-F 目标平台材料回传、Vinkey 版本发布，或菜单树/设计合同变更时>`
 
 ## 10. 本版修正记录（自动化稳定性，非放宽断言）
 
 1. **首次按最终 HEAD 复跑出现 `1 FAIL`**：`TB-MENU-010` 因 `kAXFocusedUIElementAttribute` 全程返回空对象而失败，`TB-MENU-004` 焦点为 `unknown`；同时 `TB-MENU-008` 因 `AXFullScreen=true` 被写成 PASS。该批次结论为「不通过」，归档保留在 `artifacts/title-bar-acceptance/` 对应 `title-bar-w0-p-*` 目录中，**未删除、未改写**。
-2. **根因**：目标应用未切到前台时，`CGEvent` 点击不会落到 WebView，AX 焦点读回为空；低保真「应用诊断日志」弹窗有时 Escape 不关闭，残留弹窗继续抢占焦点。窗口动作的 `AXFullScreen`、关闭后窗口是否隐藏同样受前台状态影响，跨批次不稳定。
+2. **根因**：目标应用未切到前台时，`CGEvent` 点击不会落到 WebView，AX 焦点读回为空；低保真「应用诊断日志」弹窗（其视觉质量/交互完成度属 `DEFER-UI-001`）有时 Escape 不关闭，残留弹窗继续抢占焦点。窗口动作的 `AXFullScreen`、关闭后窗口是否隐藏同样受前台状态影响，跨批次不稳定。
 3. **修正方式（只加固前置条件，不改判定规则、不删用例）**：
    - helper 新增 `activate`（`NSRunningApplication.activate`）与 `dismiss`（只按「关闭 + 诊断/快捷键/关于」匹配弹窗关闭按钮）；启动阶段与焦点敏感用例前均激活应用。
    - 新增 `establishFocus()`：激活 → 点击 `AXTextArea` → **读回验证**焦点角色，最多 4 次；`TB-MENU-004`、`TB-MENU-010` 都以此建立可判定的前置状态。
