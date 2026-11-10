@@ -138,7 +138,7 @@ export function ProjectSessionSidebar({ onPageChange, onOpenWorkspace, onRefresh
           <button className="icon-button" title="添加项目" aria-label="添加项目" disabled={busy} onClick={onOpenWorkspace}><FolderOpen /></button>
           <button className="icon-button" title="刷新项目列表" aria-label="刷新项目列表" disabled={busy} onClick={() => { setRevision((n) => n + 1); onRefreshWorkspace() }}><RefreshCw /></button>
         </div>
-        <label className="sidebar-search"><Search /><input id="global-search-input" aria-label="搜索项目、会话或当前项目文档" placeholder="搜索项目或会话" value={query} onChange={(event) => setQuery(event.target.value)} />{query && <button type="button" aria-label="清除搜索" onClick={() => setQuery('')}><X /></button>}</label>
+        <label className="sidebar-search"><Search /><input id="global-search-input" aria-label="快速筛选项目、会话或当前项目文档" placeholder="快速筛选…" value={query} onChange={(event) => setQuery(event.target.value)} />{query && <button type="button" aria-label="清除筛选" onClick={() => setQuery('')}><X /></button>}</label>
       </header>
       <div className="session-sidebar-body" id="session-sidebar-body">
         <div className="sidebar-section-label"><span>{value ? '匹配项目' : '项目'}</span><small>{visibleProjects.length}</small></div>

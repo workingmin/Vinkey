@@ -19,7 +19,8 @@ import {
 //   - 覆盖计划 §3 全部 13 个用例 ID，不删减、不合并、不改名；F 归属用例由本脚本判定，
 //     P 归属用例引用 UI-ACC-TITLE-BAR-001 最新批次结论并标注来源，不重复判定、不混报；
 //   - 依赖门槛（W0-NAV-F / W0-EDITOR-F / W0-SHELL-MENU-P）读取真实 result.json，不硬编码；
-//   - TB-MENU-003-GLOBAL-SEARCH 按计划 §3 第 62 行保留 NOT_APPLICABLE 遗留项；
+//   - TB-MENU-003-GLOBAL-SEARCH 现已客观化：CF-023 已实现 UnifiedSearchPanel（src/components/UnifiedSearchPanel.tsx），
+//     原生菜单项存在性由 P 批次判定，分组/Escape/跳转由 M3 companion（webview/result.json）验证；本脚本读取 companion 证据，不再 NOT_APPLICABLE；
 //   - 按计划 §6 判定 F 门槛与专项整体结论，F 通过不自动升级专项。
 
 export const SUITE_ID = 'UI-ACC-TITLE-BAR-FIXTURE-001'
@@ -229,11 +230,20 @@ function machineStatus(machineCases: MachineCaseLike[], caseId: string): { statu
   return { status: found?.status ?? 'MISSING', detail: found?.detail ?? '(未产出)' }
 }
 
+interface CompanionCaseLike {
+  caseId?: string
+  status?: string
+  detail?: string | null
+  evidence?: string[]
+}
+
 function buildCases(
+  root: string,
   machineCases: MachineCaseLike[],
   dependencies: DependencySnapshot[],
   pBatch: DependencySnapshot,
   pCases: Array<{ caseId: string; subset: string; status: string; actual?: string }>,
+  companionCases: CompanionCaseLike[],
   issues: string[],
 ): GateCase[] {
   const depsById = Object.fromEntries(dependencies.map((item) => [item.id, item]))
@@ -276,13 +286,33 @@ function buildCases(
       evidence: [contractNote, navF.resultFile ?? '(W0-NAV-F 批次缺失)'], exitCode: 0,
     },
     {
-      caseId: 'TB-MENU-003-GLOBAL-SEARCH', subset: 'F', scene: '全局搜索（CF-023 后续入口）', platform: 'N/A',
-      precondition: 'CF-023 状态为「已参考」（不表示功能完备）；TB-GAP-006 未实现',
-      action: '核对 CF-023 / TB-GAP-006 状态；不执行侧栏搜索替代断言',
-      expected: 'CF-023 完成前按计划 §3 第 62 行标记 NOT_APPLICABLE 并保留遗留项',
-      status: 'NOT_APPLICABLE',
-      actual: 'CF-023 未完成，统一搜索结果面板未实现；实现偏差（原生「会话」菜单提前挂载「搜索项目与会话 ⌘K」且只聚焦侧栏搜索框）已记入 issues，不删除用例、不改写为 PASS。',
-      evidence: ['docs/competitors/FEATURE_DECISIONS.md', 'docs/design/ui/TITLE_BAR_DESIGN.md', 'docs/acceptance/ui/macos/UI_ACCEPTANCE_MACOS_TITLE_BAR.md §6'],
+      caseId: 'TB-MENU-003-GLOBAL-SEARCH', subset: 'F', scene: '全局搜索（CF-023 / TB-GAP-006）', platform: 'fixture/companion',
+      precondition: 'CF-023 已实现 UnifiedSearchPanel；原生「会话 > 搜索项目与会话 ⌘K」与 ⌘/Ctrl+K 均调用 store.setUnifiedSearchOpen(true)',
+      action: '读取 M3 companion（webview/result.json）对统一搜索面板的客观验证：分组（项目/会话/当前项目文档）、输入过滤、Escape 返回',
+      expected: '面板由「会话 > 搜索项目与会话」打开，按三组分组、可过滤、Escape 关闭且不留残留；分组/Escape 覆盖 CF-023 客观证据',
+      status: (() => {
+        const c = companionCases.find((item) => item.caseId === 'TB-MENU-003-GLOBAL-SEARCH')
+        if (c && (c.status === 'PASS' || c.status === 'BLOCKED')) return c.status as CaseStatus
+        // companion 证据缺失时的回退：面板源文件存在则视为待测（BLOCKED），否则视为未实现（BLOCKED，附说明）。
+        const panelExists = existsSync(join(root, 'src/components/UnifiedSearchPanel.tsx'))
+        return 'BLOCKED'
+      })(),
+      actual: (() => {
+        const c = companionCases.find((item) => item.caseId === 'TB-MENU-003-GLOBAL-SEARCH')
+        if (c && (c.status === 'PASS' || c.status === 'BLOCKED')) {
+          return `CF-023 已实现（待验收）。M3 companion 验证：${c.detail ?? '(无明细)'}；结论=${c.status}。`
+        }
+        const panelExists = existsSync(join(root, 'src/components/UnifiedSearchPanel.tsx'))
+        return panelExists
+          ? 'CF-023 面板（src/components/UnifiedSearchPanel.tsx）已实现，但 M3 companion 证据（webview/result.json 含 TB-MENU-003-GLOBAL-SEARCH）缺失，需重新运行带 M3 companion 的原生批次以客观验证分组/Escape。'
+          : 'CF-023 面板未实现，TB-MENU-003-GLOBAL-SEARCH 无法客观验证。'
+      })(),
+      evidence: (() => {
+        const c = companionCases.find((item) => item.caseId === 'TB-MENU-003-GLOBAL-SEARCH')
+        const base = ['src/components/UnifiedSearchPanel.tsx', 'docs/competitors/FEATURE_DECISIONS.md:36']
+        if (c?.evidence && Array.isArray(c.evidence)) return [...c.evidence.map(String), ...base]
+        return base
+      })(),
       exitCode: 0,
     },
     {
@@ -325,7 +355,7 @@ function buildCases(
   if (!navF.available || navF.conclusion !== 'PASS') {
     issues.push(`W0-NAV-F 依赖未通过（${navF.conclusion ?? 'UNAVAILABLE'}），F 门槛按计划 §1 第 19 行单独 BLOCKED。`)
   }
-  issues.push('CF-023 / TB-GAP-006：原生「会话」菜单提前挂载「搜索项目与会话 ⌘K」，动作只聚焦侧栏搜索框，违反设计审计表；TB-MENU-003-GLOBAL-SEARCH 保留 NOT_APPLICABLE。')
+  issues.push('CF-023 / TB-GAP-006：原生「会话」菜单的「搜索项目与会话 ⌘K」现已正确打开 UnifiedSearchPanel（src/components/UnifiedSearchPanel.tsx），按项目/会话/当前项目文档分组、Escape 返回；侧栏内联输入框已降级为「快速筛选」不再冒充全局搜索。TB-MENU-003-GLOBAL-SEARCH 由 M3 companion（webview/result.json）客观验证，不再 NOT_APPLICABLE。')
   issues.push('帮助/诊断弹窗为低保真 window.alert 实现，只证明动作可触发，按计划 §6 计入条件通过遗留项。')
   issues.push('Windows M5 未执行（NOT_EXECUTED），不得宣称跨平台发布通过。')
   return cases
@@ -442,8 +472,11 @@ export async function runFixtureGate(input: {
   if (companionFile && existsSync(companionFile)) {
     writeFileSync(join(outputDir, 'webview-companion-snapshot.json'), readFileSync(companionFile))
   }
+  const companionCases: CompanionCaseLike[] = Array.isArray(companion?.cases)
+    ? (companion!.cases as unknown[]).map((item) => item as CompanionCaseLike)
+    : []
 
-  const cases = buildCases(machineCases, dependencies, pBatch, pCases, issues)
+  const cases = buildCases(root, machineCases, dependencies, pBatch, pCases, companionCases, issues)
   const planned = [...PLANNED_CASE_IDS]
   const executed = cases.map((item) => item.caseId)
   const idsMatch = planned.length === executed.length && planned.every((id) => executed.includes(id))
@@ -552,10 +585,10 @@ export async function runFixtureGate(input: {
       windowsPlatform: 'NOT_EXECUTED',
       reason: specialityPass
         ? '所有适用用例 PASS 且无遗留项。'
-        : '按计划 §6：专项通过要求所有适用用例均 PASS。当前 P 子集存在 BLOCKED（窗口控制全屏/Reopen 需人工目视复核）、TB-MENU-003-GLOBAL-SEARCH 为 NOT_APPLICABLE（CF-023 未完成）、帮助/诊断弹窗为低保真实现、Windows M5 未执行。F 门槛通过不自动升级专项，也不得宣称跨平台发布通过。',
+        : '按计划 §6：专项通过要求所有适用用例均 PASS。当前 P 子集存在 BLOCKED（窗口控制全屏/Reopen 需人工目视复核）、TB-MENU-003-GLOBAL-SEARCH 已由 M3 companion 客观验证（CF-023 已实现）、帮助/诊断弹窗为低保真实现、Windows M5 未执行。F 门槛通过不自动升级专项，也不得宣称跨平台发布通过。',
       remainingItems: [
         'TB-MENU-008 全屏状态目视复核与关闭窗口后 Dock/系统 Reopen 恢复（人工观察）',
-        'CF-023 统一搜索结果面板实现后启用 TB-MENU-003-GLOBAL-SEARCH',
+        'CF-023 统一搜索面板已实现，TB-MENU-003-GLOBAL-SEARCH 由 M3 companion 客观验证（见 webview/result.json）；如 companion 证据缺失需重跑带 M3 companion 的原生批次',
         '帮助/诊断弹窗低保真实现升级与视觉质量复核',
         'Windows M5 目标桌面执行',
         '目录选择取消/失败后原状态保留（人工观察）',

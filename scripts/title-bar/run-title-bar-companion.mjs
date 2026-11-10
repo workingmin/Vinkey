@@ -33,13 +33,18 @@ let browser = null
 function fixtureInitScript() {
   return () => {
     localStorage.clear()
+    // 以 demo-workspace 为活动项目，使 UnifiedSearchPanel 的「当前项目文档」分组有正文可检索；
+    // 并预置一条会话，使「会话」分组非空，从而客观验证 CF-023 的三类分组。
     localStorage.setItem('vinkey.demo.projects', JSON.stringify({
       projects: [
-        { id: 'p-a', name: 'project-a', pathLabel: 'x/a' },
+        { id: 'demo-workspace', name: 'project-a', pathLabel: 'x/a' },
         { id: 'p-b', name: 'project-b', pathLabel: 'x/b' },
       ],
-      activeId: 'p-a',
+      activeId: 'demo-workspace',
     }))
+    localStorage.setItem('vinkey.demo.conversations', JSON.stringify([
+      { id: 'c-global-1', title: '雾港来信大纲', updatedAt: Date.now(), messages: [] },
+    ]))
     localStorage.setItem('vinkey.theme', 'light')
   }
 }
@@ -184,6 +189,50 @@ async function main() {
         `侧栏折叠按钮=${collapse}；对话输入区发送/停止按钮=${send}；项目文件页工具栏=${fileToolbar}。三者均可从局部入口到达，不需要全局菜单项。`, evidence)
     } catch (cause) {
       push('TB-MENU-012', '首版减法审计的降级入口存在性', 'BLOCKED', `companion 执行异常：${String(cause)}`, [])
+    } finally { await context.close() }
+  }
+
+  // ---- TB-MENU-003-GLOBAL-SEARCH 统一搜索面板（CF-023 / TB-GAP-006）----
+  {
+    const { context, page } = await newContext()
+    try {
+      const observations = []
+      const evidence = []
+      // 通过「会话 > 搜索项目与会话」打开统一搜索面板
+      await openMenu(page, 'conversation')
+      await clickMenuItem(page, 'conversation', 'searchSessions')
+      await page.waitForTimeout(300)
+      const panelVisible = await page.locator('[data-testid="unified-search-panel"]').count()
+      observations.push(`统一搜索面板出现=${panelVisible === 1}`)
+      evidence.push(await shot(page, 'm3-global-search-open'))
+
+      const groupLabels = await page.locator('[data-testid="unified-search-panel"] .unified-search-group-label').allInnerTexts()
+      const hasProjects = groupLabels.some((text) => text.startsWith('项目') && !text.startsWith('当前项目文档'))
+      const hasSessions = groupLabels.some((text) => text.startsWith('会话'))
+      const hasCurrentDoc = groupLabels.some((text) => text.startsWith('当前项目文档'))
+      const initialItems = await page.locator('[data-testid="unified-search-panel"] .unified-search-item').count()
+      observations.push(`分组标签: 项目=${hasProjects} 会话=${hasSessions} 文档=${hasCurrentDoc}; 初始结果项=${initialItems}`)
+
+      // 输入过滤（按项目名）
+      const input = page.locator('#unified-search-panel-input')
+      await input.fill('project-a')
+      await page.waitForTimeout(300)
+      const filteredItems = await page.locator('[data-testid="unified-search-panel"] .unified-search-item').count()
+      observations.push(`过滤 "project-a" 后结果项=${filteredItems}`)
+      evidence.push(await shot(page, 'm3-global-search-filter'))
+
+      // Escape 返回
+      await input.press('Escape')
+      await page.waitForTimeout(200)
+      const panelAfterEsc = await page.locator('[data-testid="unified-search-panel"]').count()
+      observations.push(`Escape 后面板残留=${panelAfterEsc}`)
+      evidence.push(await shot(page, 'm3-global-search-closed'))
+
+      const ok = panelVisible === 1 && hasProjects && hasSessions && hasCurrentDoc && initialItems >= 3 && filteredItems >= 1 && panelAfterEsc === 0
+      push('TB-MENU-003-GLOBAL-SEARCH', '统一搜索面板（CF-023 / TB-GAP-006）', ok ? 'PASS' : 'BLOCKED',
+        `${observations.join('；')}。面板由「会话 > 搜索项目与会话」打开，按项目/会话/当前项目文档分组，输入过滤并 Escape 返回；分组/Escape 覆盖 CF-023 客观证据。`, evidence)
+    } catch (cause) {
+      push('TB-MENU-003-GLOBAL-SEARCH', '统一搜索面板（CF-023 / TB-GAP-006）', 'BLOCKED', `companion 执行异常：${String(cause)}`, [])
     } finally { await context.close() }
   }
 

@@ -550,6 +550,36 @@ button.composer-model-indicator:hover { background: var(--bg-selected); color: v
 .runtime-diagnostics-empty { min-height: 220px; display: grid; place-items: center; color: var(--text-muted); font-size: 11px; }
 .runtime-diagnostics-modal > footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--border); }
 
+/* 统一搜索面板（CF-023）：按项目 / 会话 / 当前项目文档 分组 */
+.unified-search-backdrop { position: fixed; inset: 0; display: grid; place-items: start center; padding-top: 12vh; background: #070b0d99; z-index: 40; }
+.unified-search-panel { width: min(640px, 92vw); max-height: 70vh; display: flex; flex-direction: column; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--bg-panel); color: var(--text); box-shadow: 0 24px 80px #000c; overflow: hidden; animation: unified-search-in 120ms ease; }
+@keyframes unified-search-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+.unified-search-header { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.unified-search-field { display: flex; align-items: center; gap: 9px; padding: 0 10px; height: 38px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-main); }
+.unified-search-field:focus-within { border-color: var(--border-strong); }
+.unified-search-field > svg { width: 15px; flex: 0 0 auto; color: var(--text-muted); }
+.unified-search-input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text); font-size: 13px; }
+.unified-search-input::placeholder { color: var(--text-muted); }
+.unified-search-body { padding: 8px 6px 10px; overflow-y: auto; }
+.unified-search-empty { padding: 28px 18px; text-align: center; color: var(--text-muted); font-size: 12px; }
+.unified-search-hint { padding: 10px 14px 4px; color: var(--text-muted); font-size: 11px; }
+.unified-search-group-empty { padding: 4px 14px 8px; color: var(--text-muted); font-size: 10px; opacity: 0.7; }
+.unified-search-minor { padding: 6px 14px 2px; color: var(--text-muted); font-size: 10px; }
+.unified-search-group { margin-bottom: 6px; }
+.unified-search-group-label { display: flex; align-items: center; gap: 6px; padding: 6px 12px 4px; color: var(--text-muted); font-size: 10px; text-transform: none; }
+.unified-search-group-label > svg { width: 12px; color: var(--text-muted); }
+.unified-search-group-label small { margin-left: auto; font-size: 10px; }
+.unified-search-list { list-style: none; margin: 0; padding: 0; }
+.unified-search-item { display: flex; align-items: center; gap: 9px; padding: 7px 12px; border-radius: 6px; cursor: pointer; }
+.unified-search-item.active { background: var(--bg-selected); }
+.unified-search-item > svg { width: 14px; flex: 0 0 auto; color: var(--text-muted); }
+.unified-search-item-text { min-width: 0; flex: 1; display: flex; flex-direction: column; }
+.unified-search-item-text b { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.unified-search-item-text small { font-size: 10px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.unified-search-item-enter { width: 13px; flex: 0 0 auto; color: var(--accent); }
+.unified-search-footer { display: flex; gap: 16px; padding: 9px 14px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 10px; }
+.unified-search-footer kbd { display: inline-block; min-width: 15px; margin: 0 1px; padding: 1px 4px; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--bg-raised); font: 9px ui-monospace, SFMono-Regular, Menlo, monospace; text-align: center; }
+
 .settings-page { grid-column: 2 / -1; min-width: 0; display: flex; flex-direction: column; background: var(--bg-main); overflow: hidden; }
 .settings-toolbar { height: 64px; flex: 0 0 64px; display: flex; align-items: center; gap: 12px; padding: 0 18px 0 22px; border-bottom: 1px solid var(--border); }
 .settings-toolbar > div { min-width: 0; flex: 1; }

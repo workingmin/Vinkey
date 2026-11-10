@@ -15,6 +15,7 @@
 //   menu-ax-helper window <out.json> <minimize|zoom|fullscreen|close>
 import AppKit
 import ApplicationServices
+import CoreGraphics
 import Darwin
 import Foundation
 
@@ -367,6 +368,99 @@ func dismissHelpDialog(_ app: AXUIElement) -> [String: Any] {
     return ["ok": ok, "dismissed": label, "stateAfter": readState(app)]
 }
 
+// MARK: - 多信号全屏判定（TB-MENU-008 客观自动化）
+
+func pidOf(_ el: AXUIElement) -> pid_t? {
+    var pid = pid_t()
+    guard AXUIElementGetPid(el, &pid) == .success else { return nil }
+    return pid
+}
+
+/// 多信号交叉判定全屏：AXFullScreen 属性 + AX 窗口尺寸 + CoreGraphics 窗口边界，
+/// 三者与主显示器尺寸比较（4px 容差）。返回每个信号及综合 verdict，供 runner 消费。
+func fullscreenState(_ app: AXUIElement) -> [String: Any] {
+    guard let win = frontWindow(app) else {
+        return ["available": false, "reason": "no-front-window"]
+    }
+    let axFullScreen = boolAttr(win, "AXFullScreen") ?? false
+    var p: CGPoint = .zero
+    var s: CGSize = .zero
+    if let pv: AXValue = axAttr(win, kAXPositionAttribute), AXValueGetType(pv) == .cgPoint { AXValueGetValue(pv, .cgPoint, &p) }
+    if let sv: AXValue = axAttr(win, kAXSizeAttribute), AXValueGetType(sv) == .cgSize { AXValueGetValue(sv, .cgSize, &s) }
+    // CoreGraphics 窗口边界（按本进程 PID 过滤，取最大可见窗口）
+    var cgBounds: [String: Double]? = nil
+    let opts = CGWindowListOption(arrayLiteral: .optionOnScreenOnly, .excludeDesktopElements)
+    if let pid = pidOf(app), let infoList = CGWindowListCopyWindowInfo(opts, kCGNullWindowID) as? [[String: Any]] {
+        let matches = infoList.compactMap { info -> [String: Double]? in
+            guard let ownerPid = info[kCGWindowOwnerPID as String] as? Int32, ownerPid == pid,
+                  let bounds = info[kCGWindowBounds as String] as? [String: Double],
+                  let w = bounds["Width"], let h = bounds["Height"], w > 1, h > 1
+            else { return nil }
+            return ["x": bounds["X"] ?? 0, "y": bounds["Y"] ?? 0, "width": w, "height": h]
+        }
+        cgBounds = matches.max(by: { ($0["width"]! * $0["height"]!) < ($1["width"]! * $1["height"]!) })
+    }
+    let mainId = CGMainDisplayID()
+    let disp = CGDisplayBounds(mainId)
+    let mainDisplay: [String: Double] = [
+        "x": Double(disp.origin.x), "y": Double(disp.origin.y),
+        "width": Double(disp.width), "height": Double(disp.height),
+    ]
+    let tol: Double = 4
+    let axSizeMatches = abs(s.width - mainDisplay["width"]!) <= tol && abs(s.height - mainDisplay["height"]!) <= tol
+    let cgBoundsMatches = cgBounds.map { abs($0["width"]! - mainDisplay["width"]!) <= tol && abs($0["height"]! - mainDisplay["height"]!) <= tol } ?? false
+    let score = [axFullScreen, axSizeMatches, cgBoundsMatches].filter { $0 }.count
+    let fullscreen = axFullScreen && (axSizeMatches || cgBoundsMatches)
+    return [
+        "available": true,
+        "axFullScreen": axFullScreen,
+        "axPosition": ["x": Double(p.x), "y": Double(p.y)],
+        "axSize": ["width": Double(s.width), "height": Double(s.height)],
+        "cgBounds": cgBounds.map { $0 as Any } ?? NSNull(),
+        "mainDisplay": mainDisplay,
+        "signals": [
+            "axFullScreen": axFullScreen,
+            "axSizeMatchesDisplay": axSizeMatches,
+            "cgBoundsMatchesDisplay": cgBoundsMatches,
+        ],
+        "fullscreen": fullscreen,
+        "score": score,
+    ]
+}
+
+// MARK: - 目录选择对话框取消（TB-MENU-002 客观自动化）
+
+/// 检测并取消一个打开的面板/表单（NSOpenPanel / NSAlert sheet），优先 Escape。
+func cancelPanel(_ app: AXUIElement) -> [String: Any] {
+    func hasCancel(_ el: AXUIElement) -> Bool {
+        if role(of: el) == "AXButton" {
+            let txt = "\(title(of: el) ?? "") \(description(of: el) ?? "")"
+            return txt.contains("取消")
+        }
+        return children(of: el).contains { hasCancel($0) }
+    }
+    func walk(_ el: AXUIElement, _ depth: Int) {
+        guard foundPanel == nil, depth <= 16 else { return }
+        let r = role(of: el) ?? ""
+        if (r == "AXWindow" || r == "AXPanel" || r == "AXSheet") && hasCancel(el) {
+            foundPanel = el
+            return
+        }
+        for child in children(of: el) { walk(child, depth + 1) }
+    }
+    var foundPanel: AXUIElement?
+    if let win = frontWindow(app) { walk(win, 0) }
+    for w in windows(of: app) where foundPanel == nil { walk(w, 0) }
+    let before = windows(of: app).count
+    guard foundPanel != nil else {
+        return ["ok": false, "reason": "no-cancel-panel-found", "windowCountBefore": before]
+    }
+    postKey(53, [])
+    usleep(450_000)
+    let after = windows(of: app).count
+    return ["ok": true, "canceled": true, "method": "escape", "windowCountBefore": before, "windowCountAfter": after]
+}
+
 // MARK: - 输出
 
 func writeJSON(_ payload: [String: Any], to path: String) {
@@ -485,6 +579,17 @@ case "focus":
         payload["ok"] = r["ok"] as? Bool ?? false
         payload["texts"] = readTexts(app, limit: 60)
     }
+case "fullscreen-state":
+    payload["fullscreen"] = fullscreenState(app)
+case "openapp":
+    let activated = activateApp(found.pid)
+    usleep(700_000)
+    payload["activated"] = activated
+    payload["stateAfter"] = readState(app)
+case "cancel-panel":
+    let r = cancelPanel(app)
+    payload["cancelPanel"] = r
+    payload["ok"] = r["ok"] as? Bool ?? false
 default:
     payload = ["ok": false, "error": "unknown-command", "command": command]
 }

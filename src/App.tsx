@@ -19,6 +19,7 @@ import { MessageActivity } from './components/MessageActivity'
 import { TaskRequestSummary } from './components/TaskRequestSummary'
 import { MarkdownContent } from './components/MarkdownContent'
 import { ProjectSessionSidebar } from './components/ProjectSessionSidebar'
+import { UnifiedSearchPanel } from './components/UnifiedSearchPanel'
 import { WorkspaceTree, workspaceActions } from './components/WorkspaceTree'
 import {
   activateProject, deleteProject, listProjects,
@@ -260,7 +261,7 @@ export function TitleBar({ onPageChange, onOpenWorkspace, onNewConversation, onR
     ] },
     { id: 'conversation', label: TITLE_BAR_MENU_LABELS.conversation, items: [
       { id: 'newConversation', label: TITLE_BAR_MENU_ITEM_LABELS.newConversation, shortcut: `${mod} N`, icon: CirclePlus, action: onNewConversation },
-      { id: 'searchSessions', label: TITLE_BAR_MENU_ITEM_LABELS.searchSessions, shortcut: `${mod} K`, icon: Search, action: () => document.getElementById('global-search-input')?.focus() },
+      { id: 'searchSessions', label: TITLE_BAR_MENU_ITEM_LABELS.searchSessions, shortcut: `${mod} K`, icon: Search, action: () => useAppStore.getState().setUnifiedSearchOpen(true) },
     ] },
     { id: 'edit', label: TITLE_BAR_MENU_LABELS.edit, items: [
       { id: 'undo', label: TITLE_BAR_MENU_ITEM_LABELS.undo, shortcut: `${mod} Z`, icon: RotateCcw, disabled: !canExecuteEditCommand(editTarget, 'undo'), action: () => editAction('undo') },
@@ -1554,6 +1555,17 @@ export function App() {
     changeContentPage('chat')
   }, [changeContentPage, setError])
 
+  const openConversationFromSearch = useCallback(async (projectId: string, conversationId: string) => {
+    const ok = await selectProject(projectId)
+    if (!ok) return
+    try {
+      const conversation = await loadConversation(conversationId, projectId)
+      if (useAppStore.getState().workspace?.id !== projectId) return
+      useAppStore.getState().setConversation(conversation)
+      changeContentPage('chat')
+    } catch (cause) { setError(String(cause)) }
+  }, [selectProject, changeContentPage, setError])
+
   const showShortcuts = useCallback(() => {
     window.alert('快捷键\n\n⌘/Ctrl + K  全局搜索\n⌘/Ctrl + O  添加本地项目\n⌘/Ctrl + N  新建会话\n⌘/Ctrl + R  刷新当前项目\n⌘/Ctrl + ,  打开设置\n⌘/Ctrl + S  保存当前文档\n⌘/Ctrl + W  关闭窗口\nEnter  发送消息\nShift + Enter  换行')
   }, [])
@@ -1798,7 +1810,7 @@ export function App() {
       changePage: changeContentPage,
       toggleTheme: () => { const current = useAppStore.getState().theme; useAppStore.getState().setTheme(current === 'dark' ? 'light' : 'dark') },
       openSettings: () => useAppStore.getState().setSettingsOpen(true),
-      focusGlobalSearch: () => document.getElementById('global-search-input')?.focus(),
+      focusGlobalSearch: () => useAppStore.getState().setUnifiedSearchOpen(true),
       showShortcuts,
       showWindowDiagnostics,
       showRuntimeDiagnostics: () => void showRuntimeDiagnostics(),
@@ -1816,7 +1828,7 @@ export function App() {
     const listener = (event: KeyboardEvent) => {
       if (!event.ctrlKey && !event.metaKey) return
       const key = event.key.toLowerCase()
-      if (key === 'k') { event.preventDefault(); document.getElementById('global-search-input')?.focus(); return }
+      if (key === 'k') { event.preventDefault(); useAppStore.getState().setUnifiedSearchOpen(true); return }
       if (key === 's') { event.preventDefault(); void saveActive(); return }
       if (isMacPlatform()) return
       if (key === 'o') { event.preventDefault(); void openWorkspaceFromMenu() }
@@ -1867,5 +1879,11 @@ export function App() {
         </>}
       </section>
     </div>}
+    <UnifiedSearchPanel
+      onOpenProject={selectProject}
+      onOpenConversation={openConversationFromSearch}
+      onOpenDocument={openDocument}
+      onChangePage={changeContentPage}
+    />
   </div>
 }

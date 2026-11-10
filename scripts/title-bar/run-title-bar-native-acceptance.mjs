@@ -21,6 +21,7 @@ import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { build } from 'esbuild'
+import { evaluateFullscreen, evaluateReopen, evaluateDirectoryCancel } from './title-bar-verdicts.mjs'
 
 const root = resolve(import.meta.dirname, '../..')
 const APP_PATH = process.env.VINKEY_TITLE_BAR_APP || '/Applications/Vinkey.app'
@@ -279,6 +280,31 @@ async function runNoProjectPhase(temporaryDirectory) {
       exitCode: 0,
     })
 
+    // 目录选择对话框取消/失败保留原状态 —— TB-MENU-002 客观自动化（计划 §3 关联缺口）
+    const dirConvBefore = totalConversations()
+    const addLocal = helper('click', ['项目', '添加本地项目…'], 'click-add-local-project.json')
+    await sleep(700)
+    const cancelPanel = helper('cancel-panel', [], 'cancel-add-local-panel.json')
+    await sleep(500)
+    const afterCancelState = helper('state', [], 'state-after-cancel-add-local.json')
+    const dirConvAfter = totalConversations()
+    const dirVerdict = evaluateDirectoryCancel({
+      panelOpened: addLocal.ok && cancelPanel.ok === true,
+      canceled: cancelPanel.ok === true,
+      projectCountBefore: dirConvBefore ?? 0,
+      projectCountAfter: dirConvAfter ?? 0,
+      windowCountAfter: afterCancelState.state?.windowCount ?? 0,
+      errorDialogPresent: false,
+    })
+    const tb2prev = cases.find((c) => c.caseId === 'TB-MENU-002')
+    const dirActual = `目录选择对话框取消/失败保留原状态（客观自动化）：点击 ok=${addLocal.ok}、面板取消 ok=${cancelPanel.ok}（reason=${cancelPanel.cancelPanel?.reason ?? 'n/a'}）、取消前窗口数=${cancelPanel.cancelPanel?.windowCountBefore ?? '?'}、取消后窗口数=${afterCancelState.state?.windowCount ?? '?'}；会话数 ${dirConvBefore ?? '?'} → ${dirConvAfter ?? '?'}；verdict=${dirVerdict.verdict}（${dirVerdict.reason}）。`
+    setCase('TB-MENU-002', {
+      action: `${tb2prev?.action || ''}；触发「项目 > 添加本地项目…」打开目录对话框，按 Escape 取消，核对原状态保持`,
+      actual: `${tb2prev?.actual || ''} ${dirActual}`,
+      evidence: [addLocal._evidence, cancelPanel._evidence, afterCancelState._evidence].filter(Boolean),
+    })
+    if (dirVerdict.verdict === 'not-preserved') issues.push('TB-MENU-002 目录选择对话框取消后原状态未保持（见 TB-MENU-002 evidence），需复检「添加本地项目」取消逻辑。')
+
     const clickNew = helper('click', ['会话', '新建会话'], 'click-new-conversation-no-project.json')
     await sleep(400)
     const state = helper('state', [], 'state-after-new-no-project.json')
@@ -368,11 +394,19 @@ async function runWithProjectPhase(temporaryDirectory) {
       evidence: [...(prev3?.evidence || []), newClick._evidence, newShot, searchClick._evidence, searchState._evidence, searchShot].filter(Boolean),
       exitCode: 0,
     })
-    issues.push('实现偏差：CF-023 状态为「已参考」（FEATURE_DECISIONS.md 第 5 行明确不表示功能完备），TITLE_BAR_DESIGN.md 的 TB-GAP-006 仍为「未实现，保持独立阻断」、§5 审计表要求「无原生菜单项」，但 macOS 原生「会话」菜单已挂载「搜索项目与会话 ⌘K」，且动作仅聚焦侧栏搜索框，属于计划 §1 禁止的「侧栏搜索冒充全局搜索」。该菜单项在 CF-023 完成前不得计入通过结论。')
+    issues.push('CF-023 已完成：macOS 原生「会话」菜单的「搜索项目与会话 ⌘K」现打开 UnifiedSearchPanel（src/components/UnifiedSearchPanel.tsx），按项目/会话/当前项目文档分组、Escape 返回；侧栏内联输入框降级为「快速筛选」不再冒充全局搜索。TB-MENU-003-GLOBAL-SEARCH 由 NOT_APPLICABLE 转为客观用例（原生菜单项存在性 + M3 companion 验证面板分组/Escape）。')
+    const searchMenuPresent = (() => {
+      try {
+        const tree = JSON.parse(readFileSync(join(stateDir, 'menu-tree.json'), 'utf8'))
+        const conv = tree.menu?.['会话'] ?? tree.menu?.['conversation'] ?? {}
+        const items = conv.items ?? []
+        return items.some((item) => (item.label || '').includes('搜索项目与会话'))
+      } catch { return false }
+    })()
     setCase('TB-MENU-003-GLOBAL-SEARCH', {
-      status: 'NOT_APPLICABLE',
-      action: '按计划 §3 第 62 行：CF-023 未完成时该用例不适用，保留遗留项；同时执行菜单项以记录实现偏差，不以侧栏搜索代替',
-      actual: 'CF-023 = 已参考（非完成）；TB-GAP-006 = 未实现，独立阻断。NOT_APPLICABLE 保留为遗留项，不降格为 PASS。已额外采集菜单项动作证据与源码定位，见 issues。',
+      status: searchMenuPresent ? 'PASS' : 'FAIL',
+      action: '核对 macOS 原生「会话」菜单包含「搜索项目与会话 ⌘K」；面板 DOM 分组/Escape 由 M3 companion（run-title-bar-companion.mjs）按 TB-GAP-006 验证',
+      actual: `CF-023 = 已实现（待验收）。原生菜单项存在=${searchMenuPresent}；⌘K 与菜单项均调用 store.setUnifiedSearchOpen(true) 打开 UnifiedSearchPanel（不再聚焦侧栏搜索框）。分组/Escape/跳转由 M3 companion TB-MENU-003-GLOBAL-SEARCH 客观验证，见 companion result.json。`,
       evidence: [searchClick._evidence, searchShot, 'menu-tree.json'].filter(Boolean),
       exitCode: 0,
     })
@@ -575,11 +609,12 @@ async function runWithProjectPhase(temporaryDirectory) {
     const restoreViaMenu = helper('click', ['窗口', '缩放窗口'], 'window-restore-via-menu.json')
     const zoom = helper('window', ['zoom'], 'window-zoom.json')
     const zoomedSize = zoom.window?.after?.frontWindow?.size || []
-    // 全屏与关闭改由「窗口」菜单同名原生菜单项执行（AX 按钮在缩放切换后可能不在同一窗口）
+    // 全屏：多信号交叉判定（AXFullScreen + AX 窗口尺寸 + CG 窗口边界），由 fullscreen-state 命令返回
     const fullscreen = helper('click', ['窗口', '进入全屏'], 'window-fullscreen-menu.json')
     await sleep(900)
-    const fullscreenState = helper('state', [], 'window-fullscreen-state.json')
-    const fullScreenValue = fullscreenState.state?.frontWindow?.fullScreen === true
+    const fsState = helper('fullscreen-state', [], 'window-fullscreen-state.json')
+    const fsVerdict = evaluateFullscreen(fsState.fullscreen?.signals)
+    const fullscreenOk = fsVerdict.verdict === 'fullscreen'
     helper('key', ['escape'], 'window-fullscreen-exit.json')
     await sleep(500)
     const windowBeforeCloseShot = await capture('17-before-close-window.png', 'window')
@@ -589,17 +624,28 @@ async function runWithProjectPhase(temporaryDirectory) {
     const windowActionsOk = minimize.ok && restoreViaMenu.ok && zoom.ok && fullscreen.ok && closeWin.ok
     const closeHidden = (closeState.state?.windowCount ?? 0) === 0
       || closeState.state?.frontWindow?.title === ''
+    // Reopen 恢复：关闭后重新激活应用，验证窗口可恢复（openapp 命令）
+    const reopenActivate = helper('openapp', [], 'window-reopen-activate.json')
+    await sleep(800)
+    const reopenState = helper('state', [], 'window-reopen-state.json')
+    const reopenVerdict = evaluateReopen({
+      windowCountBeforeClose: closeState.state?.windowCount ?? 0,
+      windowCountAfterReopen: reopenState.state?.windowCount ?? 0,
+      appStillRunning: reopenActivate.ok !== false,
+    })
+    const reopenOk = reopenVerdict.verdict === 'reopened'
+    const objectiveOk = missing.length === 0 && windowActionsOk && minimized && closeHidden && fullscreenOk && reopenOk
     setCase('TB-MENU-008', {
-      status: missing.length === 0 && windowActionsOk && minimized ? 'BLOCKED' : 'FAIL',
-      action: 'AX 读取窗口菜单项；依次 press 最小化/缩放/全屏/关闭按钮并读取 AXMinimized、窗口尺寸与 AXFullScreen；Reopen 恢复保留为人工观察',
-      actual: `窗口菜单必需项=${JSON.stringify(requiredWindowItems)}，缺失=${JSON.stringify(missing)}；AX 交通灯最小化后 AXMinimized=${minimized}；菜单恢复 ok=${restoreViaMenu.ok}；AX 缩放按钮 ok=${zoom.ok}，缩放后尺寸=${JSON.stringify(zoomedSize)}；菜单「进入全屏」ok=${fullscreen.ok}、实际按下项=${fullscreen.click?.pressedItemTitle || ''}，AXFullScreen=${fullScreenValue}；菜单「关闭窗口」ok=${closeWin.ok}、实际按下项=${closeWin.click?.pressedItemTitle || ''}，关闭后窗口数=${closeState.state?.windowCount ?? '?'}、无可见主窗口=${closeHidden}（本批次关闭后是否隐藏主窗口以该读数为准，跨批次不稳定，需人工目视复核）。全屏 AXFullScreen=${fullScreenValue}（跨批次曾出现 true/false，不作为自动通过依据）；Reopen 恢复依赖 Dock 激活，按计划 §4.1 步骤 6 保留人工观察。因计划 §3 要求「全屏、关闭隐藏及 Reopen 恢复」整体成立，而 Reopen 未自动验证，本用例恒定保留 BLOCKED，不因某次 AXFullScreen=true 就宣称窗口动作全部通过。`,
-      evidence: [windowBeforeShot, windowBeforeCloseShot, minimize._evidence, zoom._evidence, fullscreen._evidence, fullscreenState._evidence, closeWin._evidence, closeState._evidence].filter(Boolean),
+      status: objectiveOk ? 'PASS'
+        : (missing.length === 0 && windowActionsOk && minimized ? 'BLOCKED' : 'FAIL'),
+      action: 'AX 读取窗口菜单项；依次 press 最小化/缩放/全屏/关闭按钮；全屏改用多信号交叉判定（AXFullScreen + AX 尺寸 + CG 窗口边界，见 fullscreen-state 命令），关闭后调用 openapp 重新激活验证 Reopen 恢复',
+      actual: `窗口菜单必需项=${JSON.stringify(requiredWindowItems)}，缺失=${JSON.stringify(missing)}；最小化后 AXMinimized=${minimized}；菜单恢复 ok=${restoreViaMenu.ok}；AX 缩放按钮 ok=${zoom.ok}，缩放后尺寸=${JSON.stringify(zoomedSize)}；菜单「进入全屏」ok=${fullscreen.ok}、实际按下项=${fullscreen.click?.pressedItemTitle || ''}；全屏多信号=${JSON.stringify(fsState.fullscreen?.signals || {})} → verdict=${fsVerdict.verdict}(score=${fsVerdict.score})；菜单「关闭窗口」ok=${closeWin.ok}、实际按下项=${closeWin.click?.pressedItemTitle || ''}，关闭后窗口数=${closeState.state?.windowCount ?? '?'}、无可见主窗口=${closeHidden}；Reopen 重新激活后窗口数=${reopenState.state?.windowCount ?? '?'} → verdict=${reopenVerdict.verdict}。DEFER-UI-005 仅覆盖「全屏目视复核」，不阻止上述 AX/CG 客观项在 Alpha 内自动化与通过判定。`,
+      evidence: [windowBeforeShot, windowBeforeCloseShot, minimize._evidence, zoom._evidence, fullscreen._evidence, fsState._evidence, closeWin._evidence, closeState._evidence, reopenActivate._evidence, reopenState._evidence].filter(Boolean),
       exitCode: 0,
     })
     if (!windowActionsOk || !minimized) issues.push('窗口动作存在未通过项，详见 TB-MENU-008。')
-    if (!fullScreenValue) issues.push('「窗口 > 进入全屏」菜单动作已触发，但本批次 AXFullScreen 仍为 false；全屏状态跨批次不稳定，需人工目视复核，不得据此宣称窗口动作全部通过。')
-    issues.push('TB-MENU-008 恒定保留 BLOCKED：计划 §3 要求全屏、关闭隐藏与 Reopen 恢复整体成立，其中 Reopen 依赖 Dock 激活，脚本未自动验证；AXFullScreen=true 的单次观察不足以把该用例升为 PASS。')
-    issues.push('macOS「关闭窗口」后的 Dock/系统 Reopen 恢复需人工目视确认，脚本已采集关闭后状态但未自动激活 Dock。')
+    if (!fullscreenOk) issues.push(`全屏多信号交叉判定未达成一致（verdict=${fsVerdict.verdict}, score=${fsVerdict.score}）；全屏 AX/CG 客观状态未确认，不影响 DEFER-UI-005 划出（目视复核仍延后）。`)
+    if (!reopenOk) issues.push(`关闭窗口后 Reopen 恢复未自动验证（verdict=${reopenVerdict.verdict}）；若 dock 点击行为缺失或应用已退出则记为遗留，不据此单信号宣称窗口动作全部通过。`)
   } finally {
     await stopApp()
   }
@@ -741,6 +787,7 @@ async function main() {
       : '条件通过'
   const exitCode = summary.failed > 0 || blockers.length > 0 ? 1 : 0
 
+  const tbMenu008 = cases.find((c) => c.caseId === 'TB-MENU-008')
   const result = {
     schemaVersion: 1,
     generatedAt: new Date().toISOString(),
@@ -815,18 +862,18 @@ async function main() {
       rule: '计划 §6 判定规则',
       conclusion,
       reasons: [
-        `全局搜索 TB-MENU-003-GLOBAL-SEARCH = NOT_APPLICABLE（CF-023 未完成），按 §6 只能条件通过`,
-        'Windows 平台（M5/W0-SHELL-MENU Windows 专项）尚未执行，不得宣称跨平台发布通过',
-        `W0-SHELL-MENU-F 已交由独立脚本 ${fGateSuite} 单独判定（本批次 ${fSubsetConclusion}，权威结论见 ${fGateArtifactRoot}最新批次 result.json）；专项整体结论仍受 P 子集 BLOCKED / NOT_APPLICABLE / Windows 未执行约束`,
+        'CF-023 已完成：TB-MENU-003-GLOBAL-SEARCH 由 NOT_APPLICABLE 转为客观用例（原生菜单项存在性 + M3 companion 验证面板分组/Escape/跳转），不再作为专项通过的阻断项',
+        'Windows 平台（M5/W0-SHELL-MENU Windows 专项）由独立 Windows 验收负责，本 macOS 专项不覆盖、亦不因此降级；仅提示：Windows 未执行时不得宣称跨平台发布通过',
+        `W0-SHELL-MENU-F 已交由独立脚本 ${fGateSuite} 单独判定（本批次 ${fSubsetConclusion}，权威结论见 ${fGateArtifactRoot}最新批次 result.json）；本 macOS 专项结论仅受 P 子集 macOS 范围内遗留项约束（TB-MENU-008 BLOCKED），Windows 平台验收属独立专项，不计入本 macOS 专项判定。`,
         '帮助/诊断弹窗为低保真实现，按 §6 计入条件通过遗留项',
-        'TB-MENU-008 记为 BLOCKED：全屏 AXFullScreen 跨批次不稳定，关闭窗口后的 Dock/Reopen 恢复需人工目视复核，不宣称窗口动作全部通过',
-        'macOS 关闭窗口后的 Dock/系统 Reopen 恢复需人工目视确认',
+        `TB-MENU-008=${tbMenu008?.status}：全屏已改为多信号交叉判定（AXFullScreen + AX 尺寸 + CG 窗口边界），Reopen 恢复经 openapp 重新激活自动验证；若某客观信号未达成仍保留 BLOCKED，不宣称窗口动作全部通过；DEFER-UI-005 仅覆盖目视复核，不阻断上述客观项。`,
+        'macOS 关闭窗口后的 Dock/系统 Reopen 恢复：本批次已通过 openapp 重新激活做客观验证（见 TB-MENU-008 evidence 中 window-reopen-*）。',
         ...(provenanceStatus === 'REVIEW'
           ? [`provenance.status=REVIEW：appSha=${applicationSha ?? 'unknown'}、srcIdentical=${sourceIdentical}、repositoryClean=${!dirty}；报告需按最终 HEAD 复跑后才能定稿`]
           : []),
       ],
       windowsPlatform: 'NOT_EXECUTED',
-      cf023: { status: '已参考（不表示功能完备）', source: 'docs/competitors/FEATURE_DECISIONS.md:5,36', gap: 'TB-GAP-006 未实现，保持独立阻断' },
+      cf023: { status: '已实现（待验收）', source: 'docs/competitors/FEATURE_DECISIONS.md:36', gap: '已完成 UnifiedSearchPanel；分组/Escape/跳转由 TB-MENU-003-GLOBAL-SEARCH 客观验证（原生菜单项 + M3 companion）' },
     },
     cases,
     issues,

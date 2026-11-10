@@ -33,6 +33,7 @@ interface AppState {
   sidebarCollapsed: boolean
   settingsSidebarBeforeOpen: boolean | null
   settingsSidebarUserOverride: boolean
+  unifiedSearchOpen: boolean
   theme: ThemeMode
   viewMode: ViewMode
   error: string | null
@@ -67,6 +68,7 @@ interface AppState {
   setActiveModelId: (id: string | null) => void
   setSidebarCollapsed: (collapsed: boolean) => void
   setSettingsOpen: (open: boolean) => void
+  setUnifiedSearchOpen: (open: boolean) => void
   setTheme: (theme: ThemeMode) => void
   setError: (error: string | null) => void
   setEditorSelection: (selection: EditorSelection | null) => void
@@ -143,6 +145,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeModelId: null,
   settingsOpen: false,
   sidebarCollapsed: localStorage.getItem('vinkey.sidebarCollapsed') === 'true',
+  unifiedSearchOpen: false,
   settingsSidebarBeforeOpen: null,
   settingsSidebarUserOverride: false,
   theme: localStorage.getItem('vinkey.theme') === 'light' ? 'light' : 'dark',
@@ -348,6 +351,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   }),
   setTheme: (theme) => { localStorage.setItem('vinkey.theme', theme); set({ theme }) },
+  setUnifiedSearchOpen: (unifiedSearchOpen) => set({ unifiedSearchOpen }),
   setError: (error) => set({ error }),
   setEditorSelection: (editorSelection) => set({ editorSelection }),
   prepareEditorRevision: (pendingEditorRevision) => set({ pendingEditorRevision }),
