@@ -45,7 +45,7 @@ Ollama、模型 profile 和真实会话不是本专项前置条件。测试人�
 
 状态值使用 `PASS`、`FAIL`、`BLOCKED`、`NOT_APPLICABLE` 四态，**不新增状态值**（[脚本计划 §8](../UI_ACCEPTANCE_SCRIPT_PLAN.md)：`result.json` 的 `cases[].status` 只用这四种取值）。每个用例必须记录平台、前置状态、动作、预期、实际结果、证据文件和退出码。
 
-> `NOT_APPLICABLE` 有两种互不混用的语义：① **用例本身不适用**（如 `CF-023` 未实现时的 `TB-MENU-003-GLOBAL-SEARCH`），仍按 §6 计入专项阻断；② **批次归属不适用**——F 归属用例在 `W0-SHELL-MENU-P` 原生批次中记 `NOT_APPLICABLE`，表示该批次不判定该用例，权威结论由 `W0-SHELL-MENU-F` 独立门槛给出。② 不改变用例适用性、不作为专项阻断项，必须在 `actual` 与引用字段中写明权威批次。两种语义不得互相替代或用来凑 PASS。
+> `NOT_APPLICABLE` 有两种互不混用的语义：① **用例本身不适用**（用例在当前版本无适用对象），仍按 §6 计入专项阻断；② **批次归属不适用**——F 归属用例在 `W0-SHELL-MENU-P` 原生批次中记 `NOT_APPLICABLE`，表示该批次不判定该用例，权威结论由 `W0-SHELL-MENU-F` 独立门槛给出。② 不改变用例适用性、不作为专项阻断项，必须在 `actual` 与引用字段中写明权威批次。两种语义不得互相替代或用来凑 PASS。
 
 | 用例 ID | 场景 | macOS | 核心断言 | 关联缺口 |
 | --- | --- | --- | --- | --- |
@@ -62,7 +62,7 @@ Ollama、模型 profile 和真实会话不是本专项前置条件。测试人�
 | `TB-MENU-011` | 中文菜单审计 | 自有菜单和快捷键说明无 File/View/Settings 等英文残留；系统注入服务项单独标记 | 品牌、格式、协议字段可保留原文 | P；`TB-GAP-005` |
 | `TB-MENU-012` | 首版菜单减法审计 | 不出现全局停止生成、侧栏折叠、文档保存/关闭 | 降级入口仍可从对话/侧栏/文件页到达 | P/F：入口存在性为 P，局部动作可达性依赖对应域 |
 
-`TB-MENU-003` 的全局搜索仅在 `CF-023` 完成后增加独立的 `TB-MENU-003-GLOBAL-SEARCH` 用例；在此之前应标记 `NOT_APPLICABLE`，不能用侧栏搜索代替。
+`TB-MENU-003` 的全局搜索由独立的 `TB-MENU-003-GLOBAL-SEARCH` 用例判定：`CF-023` 统一搜索面板已落地，该用例为客观 `PASS`；侧栏内联输入框只作「快速筛选」，不能代替全局搜索。
 
 > **Alpha 范围声明**：上表 12 个用例加 `TB-MENU-003-GLOBAL-SEARCH` 共 13 个 ID，**一个都不删、不合并、不改名、不放宽断言**。仅用例内部的「主观判断部分」按 [总验收计划 §8](../UI_ACCEPTANCE_PLAN.md) 划到后续版本：
 > - `TB-MENU-009` 的弹窗**视觉质量/交互完成度**划出（`DEFER-UI-001`），触发、关闭、焦点返回、脱敏与构建溯源仍须验；
@@ -102,15 +102,15 @@ webview/                 # 同批次 Playwright companion 结果（如执行）
 ## 6. 判定规则
 
 - **专项通过**：`TB-MENU-001` 至 `TB-MENU-012` 中所有适用用例均 `PASS`；全局搜索 `TB-MENU-003-GLOBAL-SEARCH` 在 `CF-023` 完成后已转为客观 `PASS`（由原生菜单项存在性 + M3 companion 面板分组/Escape 验证），不再标记 `NOT_APPLICABLE`；macOS 至少一次目标平台证据；`result.json.exitCode=0` 且哈希清单可核验。
-- **条件通过**：菜单结构和核心动作通过，且 macOS 目标平台证据已采集（本批次已实机执行）；但存在其它**客观**遗留项（如 `TB-MENU-008` BLOCKED）时，仍只能条件通过；必须列出遗留项，不能宣称跨平台发布通过。Windows 平台执行属独立 Windows 专项，不计入本 macOS 专项判定。帮助弹窗的低保真实现只按 `TB-MENU-009` 的客观断言（触发、关闭、焦点返回、脱敏、构建溯源）判定，其**视觉质量与交互完成度**属 `DEFER-UI-001`，不计入 Alpha 的条件通过原因。
+- **条件通过**：菜单结构和核心动作通过，且 macOS 目标平台证据已采集（本批次已实机执行）；但存在其它**客观**遗留项（如 `W0-EDITOR-F` 目标平台 WebView/人工材料未回传、目录取消保态 `not-observed`）时，仍只能条件通过；必须列出遗留项，不能宣称跨平台发布通过。Windows 平台执行属独立 Windows 专项，不计入本 macOS 专项判定。帮助弹窗的低保真实现只按 `TB-MENU-009` 的客观断言（触发、关闭、焦点返回、脱敏、构建溯源）判定，其**视觉质量与交互完成度**属 `DEFER-UI-001`，不计入 Alpha 的条件通过原因。
 - **不通过**：仍出现旧“文件”一级菜单、设置仍在“查看”、编辑命令作用于错误焦点、菜单关闭断言与截图冲突，或窗口动作失败。
 - **阻断**：应用包无法启动、平台权限缺失、结果文件不完整或无法证明结果来自目标包。
 
 **Alpha 判定补充**（仅调整前置条件，不修改上述四条判定规则的通过条件）：
 
 1. 按 [总验收计划 §8](../UI_ACCEPTANCE_PLAN.md) 登记的 `DEFER-UI-001`、`DEFER-UI-005`、`DEFER-UI-010`、`DEFER-UI-011`、`DEFER-UI-012` 等主观项，在 Alpha 内**不作为结论前置条件**；它们不参与「所有适用用例均 PASS」的计数，也不得写成 `PASS` 或从报告删除。
-2. 客观遗留项不因本节消失：`TB-MENU-008` 的 `BLOCKED` 仍按原规则逐项列出并阻断「macOS 专项通过」；`TB-MENU-003-GLOBAL-SEARCH` 在 `CF-023` 完成后已转为客观 `PASS`，不再作为遗留项。Windows 平台执行属独立 Windows 专项（见本计划 §1 与专项报告平台说明），不计入本 macOS 专项判定，其未执行不压低本 macOS 结论，仅作为跨平台发布提示。
-3. 因此本次调整**不把任何现有结论升级**：最新权威批次的 `条件通过`、P 的 `条件通过（含待人工复核项）`、`F=PASS`、`specialityPass=false` 均保持原样；不宣称专项通过、完整通过或跨平台发布通过。
+2. 客观遗留项不因本节消失：`W0-EDITOR-F` 目标平台 WebView/人工材料未回传、目录取消保态 `not-observed` 仍按原规则逐项列出并阻断「macOS 专项通过」；`TB-MENU-008`、`TB-MENU-003-GLOBAL-SEARCH` 与构建溯源均已客观达成 `PASS`，不再作为遗留项。Windows 平台执行属独立 Windows 专项（见本计划 §1 与专项报告平台说明），不计入本 macOS 专项判定，其未执行不压低本 macOS 结论，仅作为跨平台发布提示。
+3. 结论口径以最新权威批次为准：专项整体 `条件通过`、P `PASS`、F `PASS`、`provenance=PASS`、`specialityPass=false`；不宣称专项通过、完整通过或跨平台发布通过。
 4. 发布说明须同时列明客观遗留项与总计划 §8.3 全表。
 
 标题栏专项通过不会自动代表 `D-NAV`、`D-CHAT`、`D-EDITOR` 通过；反之，导航或模型域失败也不应掩盖已独立确认的菜单结构结果。
@@ -136,5 +136,5 @@ webview/                 # 同批次 Playwright companion 结果（如执行）
 本专项不另建延期清单，统一引用 [总验收计划 §8](../UI_ACCEPTANCE_PLAN.md) 的唯一权威登记表。
 
 - 与本专项直接相关：`DEFER-UI-001`（弹窗视觉质量/交互完成度）、`DEFER-UI-005`（发布前目视手续）、`DEFER-UI-010`（中文文案语义与减法价值判断）、`DEFER-UI-011`（跨文档 `CF-023` 口径复核）、`DEFER-UI-012`（M6 中针对主观项的签字）。其余各项按总计划 §8.3 全局生效。
-- 本专项**不划出**：13 个 `TB-MENU-*` 用例 ID、`P` / `F` 子门槛分离规则、全部机器断言与哈希清单、`TB-MENU-008` 的客观窗口行为、`TB-MENU-011` 英文残留审计、`TB-MENU-006` 主题像素比对、Windows 平台执行、`CF-023` 实现偏差记录。
-- 本次只改计划：`scripts/title-bar/` 的判定逻辑、`artifacts/title-bar-acceptance/` 与 `artifacts/title-bar-fixture-acceptance/` 既有批次的 `result.json` 结论**不追溯改写**；[专项报告](./UI_ACCEPTANCE_MACOS_TITLE_BAR.md) 中把视觉质量列为条件通过原因的表述已于 2026-11-10 按总计划 §8 同步为 `DEFER-UI-001`（见 §6 条件通过规则与专项报告 §4.1/§5.2/§6/§8/§9）。
+- 本专项**不划出**：13 个 `TB-MENU-*` 用例 ID、`P` / `F` 子门槛分离规则、全部机器断言与哈希清单、`TB-MENU-008` 的客观窗口行为、`TB-MENU-011` 英文残留审计、`TB-MENU-006` 主题像素比对、Windows 平台执行、`CF-023` 全局搜索客观断言。
+- 计划层边界：`scripts/title-bar/` 的判定逻辑、`artifacts/title-bar-acceptance/` 与 `artifacts/title-bar-fixture-acceptance/` 各批次的 `result.json` 结论**不追溯改写**；[专项报告](./UI_ACCEPTANCE_MACOS_TITLE_BAR.md) 中帮助/诊断弹窗的视觉质量与交互完成度按总计划 §8 登记为 `DEFER-UI-001`，其客观断言仍留在 Alpha（见 §6 条件通过规则与专项报告 §4.1/§5.2/§6/§8/§9）。

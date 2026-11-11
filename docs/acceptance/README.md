@@ -49,7 +49,7 @@
 | [长任务/日志中心专项验收（Windows）](ui/windows/UI_ACCEPTANCE_WINDOWS_TASK_PROCESS.md) | 日志/长任务真实端到端验收报告模板（Windows） |
 | [长任务过程原生复验清单](ui/TASK_PROCESS_NATIVE_ACCEPTANCE.md) | Windows/macOS 桌面通用的原生复验清单 |
 
-> 标题栏与功能菜单专项的 Windows 报告尚未建立，M5 未执行（`NOT_EXECUTED`），当前仅有 [Windows 版计划](ui/windows/UI_ACCEPTANCE_WINDOWS_TITLE_BAR_PLAN.md)。macOS 报告结论仍为「条件通过」：`W0-SHELL-MENU-F` 已由独立脚本解锁为 PASS，但 `TB-MENU-008` 仍 BLOCKED、全局搜索用例仍 NOT_APPLICABLE（`CF-023` 未完成）、人工目视复核与 Windows M5 未完成，**不得**据此宣称专项通过、完整通过或跨平台发布通过；审核结论以专项报告及两套最新批次 `result.json` 为准。
+> 标题栏与功能菜单专项的 Windows 报告尚未建立，M5 未执行（`NOT_EXECUTED`），当前仅有 [Windows 版计划](ui/windows/UI_ACCEPTANCE_WINDOWS_TITLE_BAR_PLAN.md)。macOS 报告结论为「条件通过」：`W0-SHELL-MENU-P=PASS`、`W0-SHELL-MENU-F=PASS`（独立脚本 `UI-ACC-TITLE-BAR-FIXTURE-001`）、`TB-MENU-003-GLOBAL-SEARCH=PASS`、`TB-MENU-008=PASS`、构建溯源 `provenance=PASS`；客观遗留为 `W0-EDITOR-F` 目标平台 WebView/人工材料未回传、帮助弹窗低保真（`DEFER-UI-001`）与目录取消保态 `not-observed`，Windows 独立专项未执行不计入本 macOS 结论，**不得**据此宣称专项通过、完整通过或跨平台发布通过；审核结论以专项报告及两套最新批次 `result.json` 为准。
 
 ## IntentRouter 验收
 

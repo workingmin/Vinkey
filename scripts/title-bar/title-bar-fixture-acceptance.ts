@@ -300,7 +300,7 @@ function buildCases(
       actual: (() => {
         const c = companionCases.find((item) => item.caseId === 'TB-MENU-003-GLOBAL-SEARCH')
         if (c && (c.status === 'PASS' || c.status === 'BLOCKED')) {
-          return `CF-023 已实现（待验收）。M3 companion 验证：${c.detail ?? '(无明细)'}；结论=${c.status}。`
+          return `CF-023 统一搜索面板已实现；M3 companion 验证：${c.detail ?? '(无明细)'}；结论=${c.status}。`
         }
         const panelExists = existsSync(join(root, 'src/components/UnifiedSearchPanel.tsx'))
         return panelExists
@@ -493,6 +493,15 @@ export async function runFixtureGate(input: {
         : 'PASS'
 
   const pConclusion = pBatch.conclusion ?? 'BLOCKED'
+  // 构建溯源状态读自 UI-ACC-TITLE-BAR-001 最新原生批次，不硬编码 REVIEW/PASS，
+  // 避免 P 批次已按最终 HEAD 定稿后本门槛仍声称「需复跑」的同 HEAD 矛盾。
+  const pProvenanceReady = pBatch.provenanceStatus === 'PASS' && pBatch.repositoryClean === true
+  const provenancePhrase = pProvenanceReady
+    ? '构建溯源已按最终 HEAD 定稿（P 批次 provenance=PASS、repositoryClean=true）'
+    : `构建溯源需按最终 HEAD 复跑定稿（P 批次 provenance=${pBatch.provenanceStatus ?? 'UNAVAILABLE'}、repositoryClean=${String(pBatch.repositoryClean)}）`
+  const provenanceSentence = pProvenanceReady
+    ? '构建溯源已按最终 HEAD 定稿（P 批次 provenance=PASS、repositoryClean=true）。'
+    : `${provenancePhrase}。`
   const pBlocked = cases.filter((item) => item.subset === 'P' && item.status === 'BLOCKED').length
   const naCount = cases.filter((item) => item.status === 'NOT_APPLICABLE').length
   const specialityPass = fConclusion === 'PASS'
@@ -584,9 +593,9 @@ export async function runFixtureGate(input: {
       windowsPlatform: 'NOT_EXECUTED',
       reason: specialityPass
         ? '所有适用用例 PASS 且无遗留项。'
-        : '按计划 §6：专项通过要求所有适用用例均 PASS 且 macOS 目标平台证据、构建溯源均可核验。当前 P 子集 9/9 全 PASS（TB-MENU-008 全屏/Reopen 已客观解卡）、TB-MENU-003-GLOBAL-SEARCH 与 TB-MENU-004 已由本 F 门槛在 W0-EDITOR-F / W0-NAV-F 前置依赖真实 PASS 后客观判定为 PASS；按计划 §6 次序，P 原生批次对 F 归属用例只记 NOT_APPLICABLE（批次归属不适用）与原生过程证据、不重复判定，并以 authoritativeGate 指向本门槛。但构建溯源需按最终 HEAD 复跑定稿（provenance=REVIEW）、W0-EDITOR-F 目标平台 WebView / 人工材料仍待回传、帮助/诊断弹窗为低保真实现（DEFER-UI-001）、Windows 独立专项未执行。F 门槛通过不自动升级专项，也不得宣称跨平台发布通过。',
+        : `按计划 §6：专项通过要求所有适用用例均 PASS 且 macOS 目标平台证据、构建溯源均可核验。当前 P 子集 9/9 全 PASS（TB-MENU-008 全屏/Reopen 已客观解卡）、TB-MENU-003-GLOBAL-SEARCH 与 TB-MENU-004 已由本 F 门槛在 W0-EDITOR-F / W0-NAV-F 前置依赖真实 PASS 后客观判定为 PASS；按计划 §6 次序，P 原生批次对 F 归属用例只记 NOT_APPLICABLE（批次归属不适用）与原生过程证据、不重复判定，并以 authoritativeGate 指向本门槛。${provenanceSentence}但 W0-EDITOR-F 目标平台 WebView / 人工材料仍待回传、帮助/诊断弹窗为低保真实现（DEFER-UI-001）、Windows 独立专项未执行。F 门槛通过不自动升级专项，也不得宣称跨平台发布通过。`,
       remainingItems: [
-        '按最终 HEAD 复跑原生 P 批次以定稿构建溯源（当前 provenance=REVIEW）',
+        ...(pProvenanceReady ? [] : [`按最终 HEAD 复跑原生 P 批次以定稿构建溯源（当前 provenance=${pBatch.provenanceStatus ?? 'UNAVAILABLE'}）`]),
         'W0-EDITOR-F 目标平台 WebView / 人工观察材料回传：fixture 合同已 PASS，该材料属后续版本验收登记项，不改变 TB-MENU-004 的 F 门槛判定',
         '帮助/诊断弹窗低保真实现升级与视觉质量复核（DEFER-UI-001）',
         'Windows M5 独立专项执行（不计入本 macOS 专项判定）',

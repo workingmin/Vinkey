@@ -413,7 +413,7 @@ async function runWithProjectPhase(temporaryDirectory) {
       evidence: [...(prev3?.evidence || []), newClick._evidence, newShot, searchClick._evidence, searchState._evidence, searchShot, searchClose._evidence, textsAfterClose._evidence].filter(Boolean),
       exitCode: 0,
     })
-    issues.push('CF-023 已完成：macOS 原生「会话」菜单的「搜索项目与会话 ⌘K」现打开 UnifiedSearchPanel（src/components/UnifiedSearchPanel.tsx），按项目/会话/当前项目文档分组、Escape 返回；侧栏内联输入框降级为「快速筛选」不再冒充全局搜索。TB-MENU-003-GLOBAL-SEARCH 由 NOT_APPLICABLE 转为客观用例（原生菜单项存在性 + M3 companion 验证面板分组/Escape）。')
+    issues.push('CF-023 已实现：macOS 原生「会话」菜单的「搜索项目与会话 ⌘K」打开 UnifiedSearchPanel（src/components/UnifiedSearchPanel.tsx），按项目/会话/当前项目文档分组、Escape 返回；侧栏内联输入框为「快速筛选」，不冒充全局搜索。TB-MENU-003-GLOBAL-SEARCH 为客观用例（原生菜单项存在性 + M3 companion 验证面板分组/Escape）。')
     const searchMenuPresent = (() => {
       try {
         const tree = JSON.parse(readFileSync(join(stateDir, 'menu-tree.json'), 'utf8'))
@@ -428,7 +428,7 @@ async function runWithProjectPhase(temporaryDirectory) {
     setCase('TB-MENU-003-GLOBAL-SEARCH', {
       status: searchMenuPresent && searchPanelClosed ? 'PASS' : 'FAIL',
       action: '核对 macOS 原生「会话」菜单包含「搜索项目与会话 ⌘K」，并验证 Escape 返回原页面；面板 DOM 分组/跳转由 M3 companion（run-title-bar-companion.mjs）按 TB-GAP-006 验证',
-      actual: `CF-023 = 已实现（待验收）。原生菜单项存在=${searchMenuPresent}；⌘K 与菜单项均调用 store.setUnifiedSearchOpen(true) 打开 UnifiedSearchPanel（不再聚焦侧栏搜索框）；原生层按 Escape 后面板已关闭=${searchPanelClosed}（读回 WebView AX 文本确认）。分组/跳转由 M3 companion TB-MENU-003-GLOBAL-SEARCH 客观验证，见 companion result.json。`,
+      actual: `CF-023 = 已实现（macOS 专项客观 PASS；Windows 独立专项未执行）。原生菜单项存在=${searchMenuPresent}；⌘K 与菜单项均调用 store.setUnifiedSearchOpen(true) 打开 UnifiedSearchPanel（不再聚焦侧栏搜索框）；原生层按 Escape 后面板已关闭=${searchPanelClosed}（读回 WebView AX 文本确认）。分组/跳转由 M3 companion TB-MENU-003-GLOBAL-SEARCH 客观验证，见 companion result.json。`,
       evidence: [searchClick._evidence, searchShot, searchClose._evidence, textsAfterClose._evidence, 'menu-tree.json'].filter(Boolean),
       exitCode: 0,
     })
@@ -903,18 +903,18 @@ async function main() {
       rule: '计划 §6 判定规则',
       conclusion,
       reasons: [
-        'CF-023 已完成：TB-MENU-003-GLOBAL-SEARCH 由 NOT_APPLICABLE 转为客观用例（原生菜单项存在性 + M3 companion 验证面板分组/Escape/跳转），不再作为专项通过的阻断项',
+        'CF-023 已实现：TB-MENU-003-GLOBAL-SEARCH 为客观用例（原生菜单项存在性 + M3 companion 验证面板分组/Escape/跳转），判为 PASS，不作为专项通过的阻断项',
         'Windows 平台（M5/W0-SHELL-MENU Windows 专项）由独立 Windows 验收负责，本 macOS 专项不覆盖、亦不因此降级；仅提示：Windows 未执行时不得宣称跨平台发布通过',
-        `W0-SHELL-MENU-F 归独立脚本 ${fGateSuite} 单独判定（本批次 ${fSubsetConclusion}＝批次归属不适用，不是用例不适用；TB-MENU-004 只留原生过程证据，以 authoritativeGate 登记权威门槛，权威结论见 ${fGateArtifactRoot}最新批次 result.json；cases[].status 只用四态，不新增状态值）；按计划 §6 次序 W0-NAV-F / W0-EDITOR-F 为前置依赖，其 PASS 后 F 才判定，不由 P 结果或 companion 升级。本 macOS 专项结论仍受 macOS 范围内遗留项约束（TB-MENU-008 ${tbMenu008?.status ?? 'BLOCKED'}、构建溯源按最终 HEAD 复跑定稿），Windows 平台验收属独立专项，不计入本 macOS 专项判定。`,
+        `W0-SHELL-MENU-F 归独立脚本 ${fGateSuite} 单独判定（本批次 ${fSubsetConclusion}＝批次归属不适用，不是用例不适用；TB-MENU-004 只留原生过程证据，以 authoritativeGate 登记权威门槛，权威结论见 ${fGateArtifactRoot}最新批次 result.json；cases[].status 只用四态，不新增状态值）；按计划 §6 次序 W0-NAV-F / W0-EDITOR-F 为前置依赖，其 PASS 后 F 才判定，不由 P 结果或 companion 升级。${provenanceStatus === 'PASS' ? '构建溯源 provenance=PASS 已按最终 HEAD 定稿；' : '构建溯源需按最终 HEAD 复跑定稿；'}本 macOS 专项结论仍受 macOS 范围内遗留项（W0-EDITOR-F 目标平台 WebView/人工材料未回传、帮助/诊断弹窗低保真、目录取消保态 not-observed）约束；TB-MENU-008=${tbMenu008?.status ?? 'BLOCKED'}，Windows 平台验收属独立专项，不计入本 macOS 专项判定。`,
         '帮助/诊断弹窗为低保真实现，按 §6 计入条件通过遗留项',
-        `TB-MENU-008=${tbMenu008?.status}：全屏已改为多信号交叉判定（AXFullScreen + AX 尺寸 + CG 窗口边界），Reopen 恢复经 LaunchServices 触发 Dock Reopen 事件自动验证；若某客观信号未达成仍保留 BLOCKED，不宣称窗口动作全部通过；DEFER-UI-005 仅覆盖目视复核，不阻断上述客观项。`,
+        `TB-MENU-008=${tbMenu008?.status}：全屏采用多信号交叉判定（AXFullScreen + AX 尺寸 + CG 窗口边界），Reopen 恢复由 LaunchServices 触发 Dock Reopen 事件自动验证；若某客观信号未达成仍保留 BLOCKED，不宣称窗口动作全部通过；DEFER-UI-005 仅覆盖目视复核，不阻断上述客观项。`,
         'macOS 关闭窗口后的 Dock/系统 Reopen 恢复：本批次已通过 LaunchServices（open -a）投递 Dock Reopen 事件做客观验证（见 TB-MENU-008 evidence 中 window-reopen-*）。',
         ...(provenanceStatus === 'REVIEW'
           ? [`provenance.status=REVIEW：appSha=${applicationSha ?? 'unknown'}、srcIdentical=${sourceIdentical}、repositoryClean=${!dirty}；报告需按最终 HEAD 复跑后才能定稿`]
           : []),
       ],
       windowsPlatform: 'NOT_EXECUTED',
-      cf023: { status: '已实现（待验收）', source: 'docs/competitors/FEATURE_DECISIONS.md:36', gap: '已完成 UnifiedSearchPanel；分组/Escape/跳转由 TB-MENU-003-GLOBAL-SEARCH 客观验证（原生菜单项 + M3 companion）' },
+      cf023: { status: '已实现（macOS 专项客观 PASS；Windows 独立专项未执行）', source: 'docs/competitors/FEATURE_DECISIONS.md:36', gap: '已完成 UnifiedSearchPanel；分组/Escape/跳转由 TB-MENU-003-GLOBAL-SEARCH 客观验证（原生菜单项 + M3 companion）' },
     },
     cases,
     issues,

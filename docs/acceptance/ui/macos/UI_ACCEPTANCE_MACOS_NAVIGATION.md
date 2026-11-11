@@ -33,7 +33,7 @@
 | 首次输入标题 | `src/App.tsx`、`src/lib/conversationTitle.ts` | 合并空白并截取 28 字符；W2 已验证临时/语义/手动标题生命周期 |
 | 当前侧栏搜索 | `ProjectSessionSidebar.tsx` → `src/lib/desktop.ts` → `src-tauri/src/search.rs` | 已实现；正文只限当前工作区，最多 100 条 |
 | 语义标题/手动重命名 | `src/lib/conversationTitle.ts`、`src/store.ts`、`ProjectSessionSidebar.tsx` | 已实现；`CF-022` 已参考，W2 真实模型端到端证据已补 |
-| 全局搜索入口/结果面板 | `src/App.tsx`、`src/lib/titleBarMenu.ts`、`ProjectSessionSidebar.tsx` | 已实现；`CF-023` 已参考，分组/跳转/Escape 截图已补 |
+| 全局搜索入口/结果面板 | `src/App.tsx`、`src/lib/titleBarMenu.ts`、`ProjectSessionSidebar.tsx` | `CF-023` 统一搜索面板已实现；标题栏专项 `TB-MENU-003-GLOBAL-SEARCH` 为客观 `PASS`，分组/跳转/Escape 截图已补 |
 | 未保存草稿、运行任务与过期响应守卫 | `src/App.tsx:1430/1535/1710/1726`、W0 `applyIfMatchesActive` | 已实现；W4 五类交叉状态断言已覆盖 |
 
 源码存在不等于目标平台通过。新报告建立后，旧壳层报告中的项目、会话和搜索结论只作为历史代码证据，不再作为导航域最终判定。
@@ -72,7 +72,7 @@
 
 > 机器证据：`npm run test:navigation-e2e-acceptance:sh`（`UI-ACC-NAV-E2E-001`），`NAV-E-001`~`NAV-E-006` 6/6 PASS、退出码 0；真实模型固定参数 `temperature=0 / num_predict=64 / think=false`，结果中记录 `selectedModel`、`inferenceParams` 与 `sessionManifest`。
 > UI 材料：`11`~`18` 号截图（侧栏展开/折叠入口、标题栏菜单、⌘K 键盘入口、结果分组与文档跳转、Escape 返回、重命名、刷新持久化）。
-> 平台说明：macOS 使用系统原生菜单栏（`TitleBar` 在 `isMac` 时返回 `null`），浏览器演示层不渲染自绘标题栏；标题栏菜单截图为 Windows 自绘标题栏的跨平台 UI 对照。macOS 系统原生菜单项动作属于独立 `W0-SHELL-MENU-P/F` 专项范围；该专项现已在 macOS 执行，结论为 `W0-SHELL-MENU-P` **条件通过（含待人工复核项）**、`W0-SHELL-MENU-F` **PASS**（由独立脚本 `UI-ACC-TITLE-BAR-FIXTURE-001` 解锁；见 [标题栏与功能菜单专项验收报告](./UI_ACCEPTANCE_MACOS_TITLE_BAR.md) 与脚本计划矩阵），但专项整体**仍为「条件通过」、不是「已通过」**；**本报告不以其作为证据来源，也不把它计入 `D-NAV` 结论**。本专项覆盖的全局搜索入口为侧栏入口与 ⌘K 键盘入口；键盘入口已由 `ui-run-*` 批次断言聚焦生效，侧栏/折叠入口与结果分组、跳转、Escape 返回均有截图。
+> 平台说明：macOS 使用系统原生菜单栏（`TitleBar` 在 `isMac` 时返回 `null`），浏览器演示层不渲染自绘标题栏；标题栏菜单截图为 Windows 自绘标题栏的跨平台 UI 对照。macOS 系统原生菜单项动作属于独立 `W0-SHELL-MENU-P/F` 专项范围；该专项现已在 macOS 执行，结论为 `W0-SHELL-MENU-P` **PASS**、`W0-SHELL-MENU-F` **PASS**（由独立脚本 `UI-ACC-TITLE-BAR-FIXTURE-001` 解锁；见 [标题栏与功能菜单专项验收报告](./UI_ACCEPTANCE_MACOS_TITLE_BAR.md) 与脚本计划矩阵），但专项整体**仍为「条件通过」、不是「已通过」**；**本报告不以其作为证据来源，也不把它计入 `D-NAV` 结论**。本专项覆盖的全局搜索入口为侧栏入口与 ⌘K 键盘入口；键盘入口已由 `ui-run-*` 批次断言聚焦生效，侧栏/折叠入口与结果分组、跳转、Escape 返回均有截图。
 
 ## 5. `W4-NAV-R` 验收矩阵
 
@@ -147,17 +147,10 @@
 1. **机器断言**：来自隔离 fixture/SQLite 与本机真实 Ollama 的 `result.json`，是三档门槛结论的主要依据。
 2. **交互 UI 截图**：`UI-ACC-NAV-UI-001` 产出的是 **Playwright 浏览器演示层页面级截图**（21 张），证明交互链路、分组与视觉状态，**不是** Tauri 原生窗口证据。
 3. **原生窗口截图**：`UI-ACC-NAV-NATIVE-001` 是真实启动已安装 Tauri 应用后，由 `ui-shell-native-macos` 的 CoreGraphics helper 按窗口 ID 捕获的原生窗口（4 张），证明真实应用能正确渲染导航状态。两层截图互补，任何一层都不得冒充另一层。
-4. **不覆盖范围**：macOS 系统原生菜单栏的菜单项动作属于独立 `W0-SHELL-MENU-P/F` 专项。该专项已在 macOS 执行一次，脚本计划与 [专项报告](./UI_ACCEPTANCE_MACOS_TITLE_BAR.md) 记录为 `P` 条件通过（含待人工复核项）、`F` BLOCKED、Windows 未执行，**不得当作已通过证据**。本报告不把它计入 `D-NAV` 结论；本专项验证的全局搜索入口为侧栏/折叠入口与 ⌘K 键盘入口。
+4. **不覆盖范围**：macOS 系统原生菜单栏的菜单项动作属于独立 `W0-SHELL-MENU-P/F` 专项。该专项已在 macOS 执行，[专项报告](./UI_ACCEPTANCE_MACOS_TITLE_BAR.md) 记录为 `P=PASS`、`F=PASS`、`provenance=PASS`、专项整体**条件通过**、Windows 独立专项未执行，**不得当作专项已通过证据**。本报告不把它计入 `D-NAV` 结论；本专项验证的全局搜索入口为侧栏/折叠入口与 ⌘K 键盘入口。
 5. **人工目视复核**：截图与 `ui-observations.md` 已随批次归档，测试人员发布前目视确认作为最后一道手续，不阻断本批次自动化结论。
 6. **provenance**：以最新批次 `result.json.provenance` 为准；若工作树存在未提交改动，该字段为 `REVIEW`/`BLOCKED`，需提交后按最终 HEAD 复跑。
-7. **`CF-023` 口径边界**：本报告 §2 与 `NAV-E-005` 的 PASS 指当前工作区「项目/会话/文档」三类分组搜索、中文查询、工作区边界、100 条上限与跳转（见 `navigation-e2e-acceptance.ts` 的 `grouped` 断言），**不**证明 `CF-023` 统一全局搜索面板完成。`FEATURE_DECISIONS.md` 中 `CF-023` 为「已参考」（不表示功能完备），`TITLE_BAR_DESIGN.md` 的 `TB-GAP-006` 仍为独立阻断；菜单专项已把原生「会话 > 搜索项目与会话」提前挂载且只聚焦侧栏搜索记录为实现偏差。跨文档描述一致性需产品/设计复核，本报告不借此扩大 `D-NAV` 结论。
-
-### 本版修正记录
-
-- 上一版曾以「沿用已完整通过的 `W0-SHELL-P` / `W0-SHELL-MENU-P`」填补本专项的原生窗口与菜单证据缺口，属**无效引用**：壳层报告第 97 行明确声明「`D-NAV` 业务链路不在本报告结论内」，其 6 张原生截图只覆盖窗口尺寸/交通灯/Reopen；`W0-SHELL-MENU-P/F` 则在当时的脚本计划中标注为「待验收、不得假定通过」。两处引用已删除。
-- 本版补做 `UI-ACC-NAV-NATIVE-001`，用本专项自己的真实应用运行批次提供原生窗口证据；修正前「本沙箱无法运行完整 Tauri GUI」的判断不成立——同一台机器当天已由 `W0-SHELL-P` 真实启动应用并通过 24/24 用例。
-- 壳层验收本身也采用分层证据：12 个原生 AX 窗口用例 + 6 张 CoreGraphics 原生窗口截图，另有 9 个 WebView companion 用例 + 14 张 Vite/Playwright 浏览器截图。本专项的两层截图结构与之一致。
-- **后续补记**：菜单专项此后已在 macOS 真实执行（`UI-ACC-TITLE-BAR-001` 原生 P 批次 + `UI-ACC-TITLE-BAR-FIXTURE-001` 独立 F 批次），两套批次均 13/13 计划用例覆盖，结论为 `W0-SHELL-MENU-P` 条件通过（含待人工复核项）、`W0-SHELL-MENU-F` PASS、Windows 未执行，专项整体仍为**条件通过**，见 [标题栏与功能菜单专项验收报告](./UI_ACCEPTANCE_MACOS_TITLE_BAR.md)。该专项仍不是「已通过」，因此本节的无效引用删除、`D-NAV` 结论与「不把菜单专项计入 `D-NAV`」的边界**继续有效**，无需改写。
+7. **`CF-023` 口径边界**：本报告 §2 与 `NAV-E-005` 的 PASS 只指当前工作区「项目/会话/文档」三类分组搜索、中文查询、工作区边界、100 条上限与跳转（见 `navigation-e2e-acceptance.ts` 的 `grouped` 断言），**不**代替 `CF-023` 统一全局搜索面板的专项判定；该面板由标题栏专项的 `TB-MENU-003-GLOBAL-SEARCH` 独立判为客观 `PASS`。跨文档描述一致性由 `DEFER-UI-011` 登记产品/设计复核，本报告不借此扩大 `D-NAV` 结论。
 
 ## 9. 测试人员回填区
 
