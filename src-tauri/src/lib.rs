@@ -1452,8 +1452,11 @@ pub fn run() {
 }
 
 #[cfg(any(target_os = "macos", test))]
-fn should_restore_main_window(has_visible_windows: bool) -> bool {
-    !has_visible_windows
+fn should_restore_main_window(has_visible_windows: bool, main_window_visible: bool) -> bool {
+    // RunEvent::Reopen 的 has_visible_windows 由 tao 报告；window_controls 用
+    // CloseRequested -> hide() 隐藏主窗口，两者状态可能不同步。任一信号表明
+    // 没有可见窗口时都必须恢复，避免 tao 误报 true 把 Dock 点击恢复拦掉。
+    !has_visible_windows || !main_window_visible
 }
 
 fn focus_main_window(app: &AppHandle) {
@@ -1472,7 +1475,12 @@ fn focus_main_window(app: &AppHandle) {
 
 #[cfg(target_os = "macos")]
 fn restore_main_window(app: &AppHandle, has_visible_windows: bool) {
-    if !should_restore_main_window(has_visible_windows) {
+    let main_window = app.get_webview_window("main");
+    let main_window_visible = main_window
+        .as_ref()
+        .and_then(|window| window.is_visible().ok())
+        .unwrap_or(false);
+    if !should_restore_main_window(has_visible_windows, main_window_visible) {
         return;
     }
     focus_main_window(app);
@@ -1508,7 +1516,10 @@ mod tests {
 
     #[test]
     fn restores_main_window_only_when_macos_has_no_visible_windows() {
-        assert!(should_restore_main_window(false));
-        assert!(!should_restore_main_window(true));
+        assert!(should_restore_main_window(false, false));
+        assert!(should_restore_main_window(false, true));
+        // tao 误报「有可见窗口」但主窗口实际已隐藏时仍须恢复
+        assert!(should_restore_main_window(true, false));
+        assert!(!should_restore_main_window(true, true));
     }
 }

@@ -50,13 +50,30 @@ function syntheticRoot(editorConclusion = 'PASS'): string {
   writeResult(pBatch, {
     conclusion: '条件通过',
     subsets: { 'W0-SHELL-MENU-P': { conclusion: 'PASS' } },
-    cases: PLANNED_CASE_IDS.map((id) => ({ caseId: id, subset: 'P', status: 'PASS', actual: 'synthetic P batch' })),
+    // 新口径：P 原生批次对 F 归属的 TB-MENU-004 记 NOT_APPLICABLE（批次归属不适用），
+    // 用 authoritativeGate 指向独立门槛；cases[].status 只用四态，不新增 DEFERRED/DELEGATED。
+    cases: PLANNED_CASE_IDS.map((id) => id === 'TB-MENU-004'
+      ? {
+        caseId: id, subset: 'F', status: 'NOT_APPLICABLE',
+        actual: '合成 P 批次：F 归属，批次归属不适用，仅保留原生过程证据',
+        authoritativeGate: { suite: 'UI-ACC-TITLE-BAR-FIXTURE-001' },
+      }
+      : { caseId: id, subset: 'P', status: 'PASS', actual: 'synthetic P batch' }),
     summary: { caseCount: 13, passed: 12, failed: 0, blocked: 0, notApplicable: 1 },
     repository,
     provenance,
   })
+  // CF-023 完成后 F 门槛从 companion 的 cases 读取 TB-MENU-003-GLOBAL-SEARCH 结论；
+  // 合成证据必须同构（含该用例 PASS），否则会被正确地回退为 BLOCKED 并连带 F=BLOCKED。
   writeResult(join(pBatch, 'webview'), {
-    conclusion: 'PASS', summary: { caseCount: 4, passed: 4, failed: 0, blocked: 0 },
+    conclusion: 'PASS', summary: { caseCount: 5, passed: 5, failed: 0, blocked: 0 },
+    cases: [
+      { caseId: 'TB-MENU-003-GLOBAL-SEARCH', status: 'PASS', detail: '合成 companion：项目/会话/当前项目文档三组、过滤与 Escape 均通过', evidence: ['screenshots/m3-global-search-open.png'] },
+      { caseId: 'TB-MENU-004', status: 'PASS', detail: '合成 companion：搜索输入框 selection 断言' },
+      { caseId: 'TB-MENU-005', status: 'PASS', detail: '合成 companion：查看页面结构证据' },
+      { caseId: 'TB-MENU-010', status: 'PASS', detail: '合成 companion：菜单关闭与焦点结构证据' },
+      { caseId: 'TB-MENU-012', status: 'PASS', detail: '合成 companion：首版减法结构证据' },
+    ],
   })
   return root
 }
@@ -147,8 +164,18 @@ describe('UI-ACC-TITLE-BAR-FIXTURE-001 independent F gate', () => {
     expect(result.decision.specialityPass).toBe(false)
     expect(result.decision.overallConclusion).toBe('条件通过')
     expect(result.decision.windowsPlatform).toBe('NOT_EXECUTED')
-    expect(result.summary.notApplicable).toBe(1)
+    // CF-023 已实现后该用例由 NOT_APPLICABLE 转为客观 PASS，13 项不再有 N/A。
+    expect(result.summary.notApplicable).toBe(0)
+    expect(result.summary.passed).toBe(13)
     expect(result.summary.failed).toBe(0)
+    // 脚本计划 §8「不新增状态值」：F 门槛输出四态；P 批次的批次归属 N/A 不改变
+    // TB-MENU-004 的权威 PASS，也不会把 F 结论降级。
+    const gateCases = (output.result.cases ?? []) as Array<{ caseId: string; status: string }>
+    expect(gateCases).toHaveLength(13)
+    expect(gateCases.every((item) => ['PASS', 'FAIL', 'BLOCKED', 'NOT_APPLICABLE'].includes(item.status))).toBe(true)
+    expect(gateCases.find((item) => item.caseId === 'TB-MENU-004')!.status).toBe('PASS')
+    expect(JSON.stringify(gateCases)).not.toMatch(/DEFERRED|DELEGATED|deferredTo/)
+    expect(result.summary).not.toHaveProperty('delegated')
     expect(JSON.parse(readFileSync(output.resultFile, 'utf8')).schemaVersion).toBe(1)
     verifySha256Sums(outputDir)
   })

@@ -230,7 +230,7 @@ mod tests {
         assert_eq!(shortest_path("a", "d", 2, edges.clone()), None);
         assert_eq!(
             shortest_path("a", "d", 3, edges),
-            Some(vec!["a", "b", "c", "d"])
+            Some(vec!["a".to_string(), "b".to_string(), "c".to_string(), "d".to_string()])
         );
     }
 

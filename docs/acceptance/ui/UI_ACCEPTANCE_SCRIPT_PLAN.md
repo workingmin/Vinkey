@@ -98,14 +98,14 @@ macOS 原生入口：`scripts/title-bar/run-title-bar-native-macos.sh`（配套 
 
 ### 5.3 `UI-ACC-TITLE-BAR-001` macOS 原生批次执行结果
 
-入口：`scripts/title-bar/run-title-bar-native-acceptance.mjs` + `.sh`，`npm run test:title-bar-native-acceptance`；原生自动化器 `scripts/title-bar/menu-ax-helper.swift`（ApplicationServices AX C API），M3 companion 为 `scripts/title-bar/run-title-bar-companion.mjs`。该 runner 只判定 P 子门槛，F 记为 `DEFERRED` 并指向 §5.4 的独立脚本。计划与判定规则见 [macOS 标题栏菜单专项计划](./macos/UI_ACCEPTANCE_MACOS_TITLE_BAR_PLAN.md) 与 [专项报告](./macos/UI_ACCEPTANCE_MACOS_TITLE_BAR.md)。
+入口：`scripts/title-bar/run-title-bar-native-acceptance.mjs` + `.sh`，`npm run test:title-bar-native-acceptance`；原生自动化器 `scripts/title-bar/menu-ax-helper.swift`（ApplicationServices AX C API），M3 companion 为 `scripts/title-bar/run-title-bar-companion.mjs`。该 runner 只判定 P 子门槛；F 归属用例的权威结论归 §5.4 的独立脚本，本批次对 `TB-MENU-004` 记 `NOT_APPLICABLE`（批次归属不适用）并用 `authoritativeGate` 引用该门槛，不新增状态值。计划与判定规则见 [macOS 标题栏菜单专项计划](./macos/UI_ACCEPTANCE_MACOS_TITLE_BAR_PLAN.md) 与 [专项报告](./macos/UI_ACCEPTANCE_MACOS_TITLE_BAR.md)。
 
 - **覆盖率基线**：`result.json.coverage.plannedCaseIds` 与 `executedCaseIds` 完全一致，共 13 项（`TB-MENU-001`~`TB-MENU-012` + `TB-MENU-003-GLOBAL-SEARCH` 遗留项），未删减、未合并、未改名。`P`/`F` 归属按计划 §3「关联缺口」列，两个子门槛分别给结论。
 - **原生证据**：真实启动 `/Applications/Vinkey.app`，注入隔离 `VINKEY_ACCEPTANCE_DATA_DIR`，按「无项目 / 已打开项目」两阶段执行；`CGWindowListCreateImage` 捕获 20 张窗口截图，菜单展开用 `screencapture -R0,0,760,190` 只截系统菜单栏与下拉菜单区域。应用版本、构建号与嵌入 Git SHA 取自 `Info.plist` 与隔离 Profile 的 `app.start.fields.commitSha`，`provenance.status` 记录仓库/源码一致性（计划 §2）。
-- **M3 companion**：计划要求的 Playwright/WebView 结构证据，4/4 PASS、9 张截图；只在 Win32 上下文渲染自绘标题栏，**不能**证明 macOS 原生菜单、交通灯或物理 DPI，也**不能**升级 `BLOCKED` 用例或 `F` 子门槛。
-- **忠实判定**：`conclusion=条件通过`、`exitCode=0`、`13/13` 覆盖；`W0-SHELL-MENU-P=条件通过（含待人工复核项）`（`TB-MENU-008` 全屏/Reopen 待人工复核），`W0-SHELL-MENU-F=DEFERRED`（不在此判定，权威结论见 §5.4 的独立 F 批次 `F=PASS`）；`TB-MENU-003-GLOBAL-SEARCH=NOT_APPLICABLE`（`CF-023` 未完成，保留遗留项）；`windowsPlatform=NOT_EXECUTED`。结果与 [macOS 专项报告](./macos/UI_ACCEPTANCE_MACOS_TITLE_BAR.md) 逐条对照计划判定规则。
-- **实现偏差**：`CF-023` 状态为「已参考」（不表示功能完备）、`TB-GAP-006` 未实现，但 macOS 原生「会话」菜单已挂载「搜索项目与会话 ⌘K」，动作只聚焦侧栏搜索框。批次在 `issues` 中如实记录，未删除用例、未改写计划、未写 PASS。
-- **自动化稳定性**：首次按最终 HEAD 复跑曾因应用未前台激活、低保真诊断弹窗残留导致 AX 焦点读回为空，`TB-MENU-010` 出现一次 `FAIL`，`TB-MENU-008` 的 `AXFullScreen` 跨批次不稳定。已在 helper 增加 `activate` / `dismiss`、在 runner 增加 `establishFocus()`（激活 → 点击 → 读回验证焦点，最多 4 次），并把 `TB-MENU-008` 固定为 `BLOCKED`（Reopen 恢复未自动验证）。**判定规则与用例清单未放宽**；原始 FAIL 批次保留归档，修正记录见专项报告 §10。
+- **M3 companion**：计划要求的 Playwright/WebView 结构证据，逐批次用例结论与截图数量见 `webview/result.json`；**不能**证明 macOS 原生菜单、交通灯或物理 DPI，也**不能**升级 `BLOCKED` 用例或 `F` 子门槛。
+- **忠实判定**：以 `artifacts/title-bar-acceptance/title-bar-w0-p-*/result.json` 最新批次为准，不硬编码批次号与 Git SHA。`13/13` 覆盖不变；`cases[].status` 只用 `PASS` / `FAIL` / `BLOCKED` / `NOT_APPLICABLE` 四态。`W0-SHELL-MENU-F` 不由本批次判定，权威结论见 §5.4 的独立 F 批次（`F=PASS`）；`TB-MENU-004` 在本批次记 `NOT_APPLICABLE`（批次归属不适用，非用例不适用），并用 `authoritativeGate` 引用独立门槛。`CF-023` 已完成后 `TB-MENU-003-GLOBAL-SEARCH` 为客观 `PASS`；`TB-MENU-008` 全屏/Reopen 已由多信号判据与 LaunchServices Reopen 事件自动验证；但 2026-11-11 两次复跑全屏 `score=0`（`/Applications/Vinkey.app` 为 11-04 旧构建、`provenance.srcIdentical=false`），该用例当前记 `BLOCKED`，须按最终 HEAD 重建 app 后复跑定稿。`windowsPlatform=NOT_EXECUTED` 属独立 Windows 专项，不计入 macOS 专项判定。结果与 [macOS 专项报告](./macos/UI_ACCEPTANCE_MACOS_TITLE_BAR.md) 逐条对照计划判定规则。
+- **实现偏差与修复**：`CF-023` 已落地为 `UnifiedSearchPanel`（按项目/会话/当前项目文档分组、Escape 返回），侧栏内联输入框降级为「快速筛选」，不再冒充全局搜索。未删除用例、未改写计划、未写 PASS。
+- **自动化稳定性**：helper 提供 `activate` / `dismiss`，runner 通过 `establishFocus()`（激活 → 点击 → 读回验证焦点，最多 4 次）建立可判定前置状态；全屏采用多信号交叉判据（`AXFullScreen` + AX 几何 + CG 窗口边界），Reopen 由 LaunchServices 触发 Dock/系统 Reopen 事件自动验证，**不放宽任何断言**。
 
 ### 5.4 `UI-ACC-TITLE-BAR-FIXTURE-001` 独立 F 门槛（计划 §7 第 114 行「单独归档」）
 
@@ -115,7 +115,7 @@ macOS 原生入口：`scripts/title-bar/run-title-bar-native-macos.sh`（配套 
 - **范围不缩水**：`PLANNED_CASE_IDS` 与计划 §3 完全一致，共 13 项（`TB-MENU-001`~`012` + `TB-MENU-003-GLOBAL-SEARCH`）；`coverage.idsMatch=true`。F 归属 4 项由本脚本判定，P 归属 9 项引用 `UI-ACC-TITLE-BAR-001` 最新原生批次并标注来源，不重复判定、不混入 F 证据。
 - **分层不冒充**：本脚本是机器 fixture / 组件合同层，内部调用 `npm run test:title-bar-acceptance` 产出 `machine/result.json`；引用 P 批次 `webview/result.json` 作为 M3 结构证据快照；**不产出**原生窗口截图，也不证明 macOS 原生菜单、交通灯或系统窗口动作。
 - **忠实判定**：`W0-SHELL-MENU-F=PASS`；`decision.specialityPass=false`、`overallConclusion=条件通过`、`windowsPlatform=NOT_EXECUTED`。F 通过不会自动升级专项；`SHA256SUMS` 在 `result.json` 定稿后计算且不自引用。
-- **与 P runner 的分工**：`run-title-bar-native-acceptance.mjs` 已移除写死的 `F=BLOCKED（W0-EDITOR-F 待编写）`，改记 `DEFERRED` + `deferredTo`（独立脚本 ID / 命令 / 归档目录），只把 F 归属菜单动作作为原生过程证据，避免同一 HEAD 下两套 runner 结论矛盾。
+- **与 P runner 的分工**：`run-title-bar-native-acceptance.mjs` 已移除写死的 `F=BLOCKED（W0-EDITOR-F 待编写）`。F 归属用例的判定权归本独立门槛，P runner 只把 F 归属菜单动作作为原生过程证据；`TB-MENU-004` 在 P 批次记四态内的 `NOT_APPLICABLE`（批次归属不适用），并以 `authoritativeGate` 登记本门槛的脚本 ID / 复跑命令 / 归档目录，**不新增状态值**（见 §8）。同一 HEAD 下只有一个 F 权威结论，两套 runner 不再互相矛盾。
 
 ## 6. 编辑器脚本专项
 

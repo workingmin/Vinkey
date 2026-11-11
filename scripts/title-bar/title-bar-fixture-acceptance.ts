@@ -52,7 +52,7 @@ export const F_GATE_CASE_IDS = [
   'TB-MENU-003-GLOBAL-SEARCH',
 ] as const
 
-export type CaseStatus = 'PASS' | 'FAIL' | 'BLOCKED' | 'NOT_APPLICABLE' | 'DELEGATED'
+export type CaseStatus = 'PASS' | 'FAIL' | 'BLOCKED' | 'NOT_APPLICABLE'
 
 export interface GateCase {
   caseId: string
@@ -65,7 +65,7 @@ export interface GateCase {
   status: CaseStatus
   actual: string
   evidence: string[]
-  delegatedTo?: string
+  sourceBatch?: string
   exitCode: number
 }
 
@@ -261,7 +261,7 @@ function buildCases(
       action: '由 UI-ACC-TITLE-BAR-001 原生 AX/CoreGraphics 批次执行，本脚本不重复判定',
       expected, status,
       actual: `${source?.actual ?? '引用 P 批次用例状态'}；本批次仅引用，不作为 F 门槛证据（计划 §1 第 19 行、§7 第 114 行不得混报）。`,
-      evidence: [pNote], delegatedTo: 'UI-ACC-TITLE-BAR-001', exitCode: 0,
+      evidence: [pNote], sourceBatch: 'UI-ACC-TITLE-BAR-001', exitCode: 0,
     }
   }
 
@@ -508,7 +508,6 @@ export async function runFixtureGate(input: {
     failed: cases.filter((item) => item.status === 'FAIL').length,
     blocked: cases.filter((item) => item.status === 'BLOCKED').length,
     notApplicable: naCount,
-    delegated: cases.filter((item) => item.status === 'DELEGATED').length,
   }
   const exitCode = fConclusion === 'FAIL' ? 2 : 0
 
@@ -542,7 +541,7 @@ export async function runFixtureGate(input: {
       executedCount: executed.length,
       idsMatch,
       fGateCaseIds: fCases.map((item) => item.caseId),
-      delegatedTo: 'UI-ACC-TITLE-BAR-001',
+      sourceBatch: 'UI-ACC-TITLE-BAR-001',
       note: 'P 归属用例引用 UI-ACC-TITLE-BAR-001 最新批次结论并逐项留痕，不重复判定、不缩减、不合并、不改名。',
     },
     dependencies: Object.fromEntries(dependencies.map((item) => [item.id, item])),
@@ -585,13 +584,13 @@ export async function runFixtureGate(input: {
       windowsPlatform: 'NOT_EXECUTED',
       reason: specialityPass
         ? '所有适用用例 PASS 且无遗留项。'
-        : '按计划 §6：专项通过要求所有适用用例均 PASS。当前 P 子集存在 BLOCKED（窗口控制全屏/Reopen 需人工目视复核）、TB-MENU-003-GLOBAL-SEARCH 已由 M3 companion 客观验证（CF-023 已实现）、帮助/诊断弹窗为低保真实现、Windows M5 未执行。F 门槛通过不自动升级专项，也不得宣称跨平台发布通过。',
+        : '按计划 §6：专项通过要求所有适用用例均 PASS 且 macOS 目标平台证据、构建溯源均可核验。当前 P 子集 9/9 全 PASS（TB-MENU-008 全屏/Reopen 已客观解卡）、TB-MENU-003-GLOBAL-SEARCH 与 TB-MENU-004 已由本 F 门槛在 W0-EDITOR-F / W0-NAV-F 前置依赖真实 PASS 后客观判定为 PASS；按计划 §6 次序，P 原生批次对 F 归属用例只记 NOT_APPLICABLE（批次归属不适用）与原生过程证据、不重复判定，并以 authoritativeGate 指向本门槛。但构建溯源需按最终 HEAD 复跑定稿（provenance=REVIEW）、W0-EDITOR-F 目标平台 WebView / 人工材料仍待回传、帮助/诊断弹窗为低保真实现（DEFER-UI-001）、Windows 独立专项未执行。F 门槛通过不自动升级专项，也不得宣称跨平台发布通过。',
       remainingItems: [
-        'TB-MENU-008 全屏状态目视复核与关闭窗口后 Dock/系统 Reopen 恢复（人工观察）',
-        'CF-023 统一搜索面板已实现，TB-MENU-003-GLOBAL-SEARCH 由 M3 companion 客观验证（见 webview/result.json）；如 companion 证据缺失需重跑带 M3 companion 的原生批次',
-        '帮助/诊断弹窗低保真实现升级与视觉质量复核',
-        'Windows M5 目标桌面执行',
-        '目录选择取消/失败后原状态保留（人工观察）',
+        '按最终 HEAD 复跑原生 P 批次以定稿构建溯源（当前 provenance=REVIEW）',
+        'W0-EDITOR-F 目标平台 WebView / 人工观察材料回传：fixture 合同已 PASS，该材料属后续版本验收登记项，不改变 TB-MENU-004 的 F 门槛判定',
+        '帮助/诊断弹窗低保真实现升级与视觉质量复核（DEFER-UI-001）',
+        'Windows M5 独立专项执行（不计入本 macOS 专项判定）',
+        '目录选择取消/失败后原状态保留（人工观察，本批次 not-observed）',
       ],
     },
     issues,

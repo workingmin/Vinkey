@@ -43,7 +43,9 @@ Ollama、模型 profile 和真实会话不是本专项前置条件。测试人�
 
 ## 3. 用例清单
 
-状态值使用 `PASS`、`FAIL`、`BLOCKED`、`NOT_APPLICABLE`。每个用例必须记录平台、前置状态、动作、预期、实际结果、证据文件和退出码。
+状态值使用 `PASS`、`FAIL`、`BLOCKED`、`NOT_APPLICABLE` 四态，**不新增状态值**（[脚本计划 §8](../UI_ACCEPTANCE_SCRIPT_PLAN.md)：`result.json` 的 `cases[].status` 只用这四种取值）。每个用例必须记录平台、前置状态、动作、预期、实际结果、证据文件和退出码。
+
+> `NOT_APPLICABLE` 有两种互不混用的语义：① **用例本身不适用**（如 `CF-023` 未实现时的 `TB-MENU-003-GLOBAL-SEARCH`），仍按 §6 计入专项阻断；② **批次归属不适用**——F 归属用例在 `W0-SHELL-MENU-P` 原生批次中记 `NOT_APPLICABLE`，表示该批次不判定该用例，权威结论由 `W0-SHELL-MENU-F` 独立门槛给出。② 不改变用例适用性、不作为专项阻断项，必须在 `actual` 与引用字段中写明权威批次。两种语义不得互相替代或用来凑 PASS。
 
 | 用例 ID | 场景 | macOS | 核心断言 | 关联缺口 |
 | --- | --- | --- | --- | --- |
@@ -126,6 +128,8 @@ webview/                 # 同批次 Playwright companion 结果（如执行）
 | M7 | 后续版本主观验收（**非 Alpha**） | 按 [总验收计划 §8.3](../UI_ACCEPTANCE_PLAN.md) 完成 `DEFER-UI-*` 的视觉评审、专家判断、用户调研与签字；未完成项继续延期 | 产品/设计/用户研究/测试 |
 
 执行顺序建议为 `M1 → M2 → M3 → W0-SHELL-MENU-P → W0-NAV-F/W0-EDITOR-F → W0-SHELL-MENU-F → M4 → M6`（macOS 版；Windows 执行见 M5 对应计划）。`W0-SHELL-MENU-P` 可以先于业务 fixture 执行；`W0-SHELL-MENU-F` 必须等待 `W0-NAV-F`、`W0-EDITOR-F` 的必要用例通过。`W0-SHELL-MENU-F` 的机器 fixture 证据由 `npm run test:title-bar-acceptance` 单独归档，不得与 P 子集或导航脚本混报；目标平台原生菜单仍需 M4 桌面执行。**M7 不计入 Alpha 执行顺序，不构成 Alpha 发布前置。**
+
+**`TB-MENU-004` 与 `W0-EDITOR-F` 的判定权/次序（本计划 §1 第 19 行、§7 第 114 行的具体化）**：该用例为 F 归属且依赖 `W0-EDITOR-F`（三类输入中「可编辑文档」的 `EDIT-F-001`~`006` 合同），**权威判定归属 `W0-SHELL-MENU-F` 独立门槛**，不留在 P 原生批次。`W0-SHELL-MENU-P` 原生 runner 先于业务 fixture 执行，只能记录 macOS AX 焦点与六项编辑命令的**过程证据**；该用例在本批次记 `NOT_APPLICABLE`（§3 的「批次归属不适用」，非用例不适用），并用 `authoritativeGate` 登记权威判定所在的脚本 ID、复跑命令与归档目录，**不得**自行写 `PASS`、`FAIL` 或 `BLOCKED`。`cases[].status` 一律只用四态，不引入 `DEFERRED` 等第五态（[脚本计划 §8](../UI_ACCEPTANCE_SCRIPT_PLAN.md)）；`DEFERRED_AFTER_ALPHA` 只是计划层排期状态，不进入 JSON schema。权威结论在 `W0-NAV-F` / `W0-EDITOR-F` 真实 PASS **之后**由 `W0-SHELL-MENU-F` 独立门槛读取其真实 `result.json` 给出，缺任一依赖时由该门槛按 §1 第 19 行单独记 `BLOCKED`。13 项用例 ID 不删减、覆盖计数可核对；专项结论不因该项在 P 批次的状态变化而自动升级。`W0-EDITOR-F` 的目标平台 WebView/人工材料回传属后续版本验收登记项，与本用例的 F 门槛判定分开记录，不得混为 `BLOCKED` 依据。
 
 ## 8. Alpha 延期边界（引用）
 

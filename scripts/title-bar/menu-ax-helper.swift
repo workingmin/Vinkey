@@ -407,8 +407,25 @@ func fullscreenState(_ app: AXUIElement) -> [String: Any] {
         "width": Double(disp.width), "height": Double(disp.height),
     ]
     let tol: Double = 4
-    let axSizeMatches = abs(s.width - mainDisplay["width"]!) <= tol && abs(s.height - mainDisplay["height"]!) <= tol
-    let cgBoundsMatches = cgBounds.map { abs($0["width"]! - mainDisplay["width"]!) <= tol && abs($0["height"]! - mainDisplay["height"]!) <= tol } ?? false
+    // macOS 原生全屏（AXFullScreen=true）时窗口 frame 以菜单栏下沿为原点
+    // （本机实测 y=34、高度=显示器高-34），不再与 CGDisplayBounds 完全重合。
+    // 只比对宽高会把「真全屏」误判为不匹配，反把「zoom 铺满但非全屏」判为匹配。
+    // 几何信号因此改为「覆盖显示器可见工作区」：左右边界 + 底边三处对齐。
+    // axFullScreen 仍是 evaluateFullscreen 的必要主条件，4px 容差不变；
+    // 普通窗口（如 1440x900 @ (135,52)）因边界不对齐仍被排除。
+    let axLeft = abs(Double(p.x) - mainDisplay["x"]!) <= tol
+    let axRight = abs((Double(p.x) + s.width) - (mainDisplay["x"]! + mainDisplay["width"]!)) <= tol
+    let axBottom = abs((Double(p.y) + s.height) - (mainDisplay["y"]! + mainDisplay["height"]!)) <= tol
+    let axSizeMatches = axLeft && axRight && axBottom
+    let cgBoundsMatches = cgBounds.map { b in
+        let x = b["x"] ?? 0
+        let y = b["y"] ?? 0
+        let w = b["width"] ?? 0
+        let h = b["height"] ?? 0
+        return abs(x - mainDisplay["x"]!) <= tol
+            && abs((x + w) - (mainDisplay["x"]! + mainDisplay["width"]!)) <= tol
+            && abs((y + h) - (mainDisplay["y"]! + mainDisplay["height"]!)) <= tol
+    } ?? false
     let score = [axFullScreen, axSizeMatches, cgBoundsMatches].filter { $0 }.count
     let fullscreen = axFullScreen && (axSizeMatches || cgBoundsMatches)
     return [
@@ -582,9 +599,31 @@ case "focus":
 case "fullscreen-state":
     payload["fullscreen"] = fullscreenState(app)
 case "openapp":
+    // 真实 Dock Reopen：通过 LaunchServices 请求打开应用。
+    // activateApp() 使用 .activateAllWindows，对「已激活但无可见窗口」的应用
+    // 是 no-op，不会触发 applicationShouldHandleReopen / RunEvent::Reopen，
+    // 会把「窗口未恢复」误记为产品缺陷。open -a 复用运行中的实例并投递 Reopen。
     let activated = activateApp(found.pid)
+    let appURL = NSRunningApplication(processIdentifier: found.pid)?.bundleURL
+        ?? NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier)
+    var reopenDispatched = false
+    let task = Process()
+    task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+    if let url = appURL {
+        task.arguments = ["-a", url.path]
+    } else {
+        task.arguments = ["-b", bundleIdentifier]
+    }
+    do {
+        try task.run()
+        reopenDispatched = true
+    } catch {
+        reopenDispatched = false
+    }
     usleep(700_000)
     payload["activated"] = activated
+    payload["reopenDispatched"] = reopenDispatched
+    payload["reopenMethod"] = reopenDispatched ? "launch-services-open" : "unavailable"
     payload["stateAfter"] = readState(app)
 case "cancel-panel":
     let r = cancelPanel(app)

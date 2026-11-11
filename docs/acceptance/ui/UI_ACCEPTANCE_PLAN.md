@@ -119,13 +119,13 @@
 | 壳层结构 | 已有实现和历史单元测试；目标平台截图、直接渲染覆盖仍待补 |
 | 导航 fixture | `W0-NAV-F` 脚本已就绪（`UI-ACC-NAV-FIXTURE-001`）；目标平台执行与人工材料待回传 |
 | 编辑器 fixture | `W0-EDITOR-F`（`UI-ACC-EDITOR-001`）本机已执行：CLI 6/6 + 合同测试 10/10；目标平台 WebView/人工材料仍待回传 |
-| 标题栏菜单 fixture | `W0-SHELL-MENU-F` 独立门槛脚本 `UI-ACC-TITLE-BAR-FIXTURE-001` 已建立并执行，`F=PASS`；`W0-SHELL-MENU-P` macOS 原生批次已执行，P 结论为条件通过（含待人工复核项）。专项整体仍为**条件通过**：`TB-MENU-008` BLOCKED、全局搜索用例 NOT_APPLICABLE、Windows M5 未执行 |
+| 标题栏菜单 fixture | `W0-SHELL-MENU-F` 独立门槛 `UI-ACC-TITLE-BAR-FIXTURE-001` 已执行，`F=PASS`（`TB-MENU-004=PASS`、13/13 覆盖）；`W0-SHELL-MENU-P` macOS 原生批次已执行，13/13 覆盖，`TB-MENU-003-GLOBAL-SEARCH=PASS`。专项整体仍为**条件通过**：最新两次 P 复跑 `TB-MENU-008=BLOCKED`（全屏 `score=0`，根因 `/Applications/Vinkey.app` 为 11-04 旧构建、`provenance.srcIdentical=false`），另有 `W0-EDITOR-F` 目标平台 WebView/人工材料未回传、`DEFER-UI-001`、目录取消保态 `not-observed`，以及 Windows 独立专项未执行；须按最终 HEAD 重建 app 后复跑定稿，不得宣称专项通过、完整通过或跨平台发布通过 |
 | 会话语义标题 | 临时标题/语义升级/手动重命名已实现（`conversationTitle.ts`、侧栏入口）；`CF-022` 已参考，`W2-NAV-E` 真实模型端到端用例阻断 |
-| 全局搜索面板 | 标题栏菜单与 `⌘/Ctrl+K` 入口已实现并按项目/会话/文档分组；`CF-023` 已参考，目标面板跳转用例阻断 |
+| 全局搜索面板 | `CF-023` 统一搜索面板已落地：原生「会话 > 搜索项目与会话」、`⌘/Ctrl+K`、Windows 自绘菜单三入口，按项目/会话/当前项目文档分组并可跳转；`TB-MENU-003-GLOBAL-SEARCH` 为客观 `PASS`。目标平台人工材料仍待回传 |
 | 真实模型链路 | 依赖测试人员在 macOS 15+/Windows + Ollama/profile 环境回传 |
 | 主观类验收项 | 按 §8 全部登记为 `DEFERRED_AFTER_ALPHA`（共 12 项），Alpha 内不作结论前置、不计入本表阻断口径；必须在发布说明中单独列出，不得写成通过或删除 |
 
-> 本表是计划基线时的阻断摘要，各专项最新状态以专项报告和 [脚本编写计划](./UI_ACCEPTANCE_SCRIPT_PLAN.md) 矩阵为准。其中「全局搜索面板」一行描述的是当前工作区「项目/会话/文档」分组搜索；`CF-023` 统一面板仍未完成（`FEATURE_DECISIONS.md` 状态为「已参考」，不表示功能完备），macOS 原生菜单项提前挂载的实现偏差见 [标题栏与功能菜单专项验收报告（macOS）](./macos/UI_ACCEPTANCE_MACOS_TITLE_BAR.md) §6。本计划的功能域与用例范围不因执行结果调整。
+> 本表是计划基线时的阻断摘要，各专项最新状态以专项报告和 [脚本编写计划](./UI_ACCEPTANCE_SCRIPT_PLAN.md) 矩阵为准。`CF-023` 统一面板已完成后，「全局搜索面板」一行改述为已落地的按项目/会话/当前项目文档分组的统一搜索面板，侧栏内联输入框降级为「快速筛选」不再冒充全局搜索，`TB-MENU-003-GLOBAL-SEARCH` 已由 `NOT_APPLICABLE` 转为客观 `PASS`；历史实现偏差见 [标题栏与功能菜单专项验收报告（macOS）](./macos/UI_ACCEPTANCE_MACOS_TITLE_BAR.md) §6。本计划的功能域与用例范围不因执行结果调整。
 
 ## 8. Alpha 阶段边界与主观类验收项延期
 
@@ -183,7 +183,7 @@
 
 本次只修改 4 份验收计划：本文件、[脚本计划](./UI_ACCEPTANCE_SCRIPT_PLAN.md)、[macOS 标题栏计划](./macos/UI_ACCEPTANCE_MACOS_TITLE_BAR_PLAN.md)、[Windows 标题栏计划](./windows/UI_ACCEPTANCE_WINDOWS_TITLE_BAR_PLAN.md)。§8.3 的同步进度如下（2026-11-10）：
 
-- 专项报告：`UI_ACCEPTANCE_MACOS_TITLE_BAR.md` **已同步**——把诊断弹窗视觉质量/交互完成度从「条件通过原因」改为 `DEFER-UI-001`，并同步 §3/§4.1/§5.2/§6/§8/§9/§10 的相关表述；经核查 `UI_ACCEPTANCE_MACOS_NAVIGATION.md`、`UI_ACCEPTANCE_MACOS_SHELL.md` 中无「视觉质量列为条件通过原因」的表述，无需改动。
+- 专项报告：`UI_ACCEPTANCE_MACOS_TITLE_BAR.md` **已同步**——把诊断弹窗视觉质量/交互完成度从「条件通过原因」改为 `DEFER-UI-001`，并同步 §3/§4.1/§5.2/§6/§8/§9 的相关表述；经核查 `UI_ACCEPTANCE_MACOS_NAVIGATION.md`、`UI_ACCEPTANCE_MACOS_SHELL.md` 中无「视觉质量列为条件通过原因」的表述，无需改动。
 - 规范与模板：[UI_ACCEPTANCE_SCRIPT_SPEC.md](./UI_ACCEPTANCE_SCRIPT_SPEC.md) §1/§9.1 **已加** `DEFER-UI-*` 注记，明确主观观感类不计入 Alpha 条件通过原因；8 份 `*_RUN_TEMPLATE.md` 经核查无具体主观行，原则由本规范承载，模板文本无需改动。
 - 审核索引：[验收索引](../README.md) 标题栏条目**已补** `DEFER-UI-001` 注记。
 - 脚本与 `result.json`：不新增状态值、不改判定规则、不改批次结论，无需改动。

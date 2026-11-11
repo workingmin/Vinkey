@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * UI-ACC-TITLE-BAR-001 — W0-SHELL-MENU-P（macOS 原生判定）
- * F 子门槛由独立脚本 UI-ACC-TITLE-BAR-FIXTURE-001 单独归档，本 runner 只记为 DEFERRED。
+ * F 子门槛由独立脚本 UI-ACC-TITLE-BAR-FIXTURE-001 单独归档；本 runner 不判定 F，
+ * TB-MENU-004 记 NOT_APPLICABLE（批次归属不适用）并用 authoritativeGate 引用该门槛。
  *
  * 严格按 docs/acceptance/ui/macos/UI_ACCEPTANCE_MACOS_TITLE_BAR_PLAN.md：
  *   - §3 用例清单 TB-MENU-001 ~ TB-MENU-012 + TB-MENU-003-GLOBAL-SEARCH 遗留项
@@ -71,7 +72,7 @@ const CASE_DEFS = [
   { id: 'TB-MENU-001', subset: 'P', scene: '一级菜单树', expected: '原生菜单显示 Vinkey/项目/会话/编辑/查看/窗口/帮助，语义同设计；不存在「文件」' },
   { id: 'TB-MENU-002', subset: 'F', scene: '项目菜单', expected: '添加本地项目、刷新当前项目；选择失败保留原状态；刷新不清除会话和草稿' },
   { id: 'TB-MENU-003', subset: 'F', scene: '会话菜单', expected: '新建会话进入对话页；不把侧栏搜索冒充全局搜索' },
-  { id: 'TB-MENU-003-GLOBAL-SEARCH', subset: 'F', scene: '全局搜索（CF-023 后续入口）', expected: 'CF-023 完成后新增独立用例；完成前 NOT_APPLICABLE 并保留遗留项' },
+  { id: 'TB-MENU-003-GLOBAL-SEARCH', subset: 'F', scene: '全局搜索（CF-023 统一搜索面板）', expected: '原生「会话」菜单含「搜索项目与会话」且 Escape 返回原页面；面板项目/会话/当前项目文档分组由 M3 companion 验证' },
   { id: 'TB-MENU-004', subset: 'F', scene: '编辑焦点分派', expected: '撤销/重做/剪切/复制/粘贴/全选作用于 WebView 当前焦点；无有效目标时禁用；不切页、不丢选区' },
   { id: 'TB-MENU-005', subset: 'P', scene: '查看页面切换', expected: '对话工作台、项目文件、任务与日志一次切换一个内容页；基础容器状态不被清除' },
   { id: 'TB-MENU-006', subset: 'P', scene: '主题菜单', expected: '切换浅色/深色后菜单、侧栏和窗口主题同步；业务选择保持' },
@@ -82,6 +83,18 @@ const CASE_DEFS = [
   { id: 'TB-MENU-011', subset: 'P', scene: '中文菜单审计', expected: '自有菜单和快捷键说明无 File/View/Settings 等英文残留；系统注入服务项单独标记' },
   { id: 'TB-MENU-012', subset: 'P', scene: '首版菜单减法审计', expected: '不出现全局停止生成、侧栏折叠、文档保存/关闭；降级入口仍可从对话/侧栏/文件页到达' },
 ]
+
+// 计划 §1 第 19 行 / §7 第 114 行：F 必须由独立脚本单独归档，不得与 P 子集混报。
+// UI-ACC-TITLE-BAR-FIXTURE-001 已建立后，本 runner 只做 macOS 原生 AX / CoreGraphics
+// 的 P 子集判定；F 归属用例在本批次的观察仅作过程证据，不重新判定、不写死结论，
+// 避免同一 HEAD 下两个 runner 给出互相矛盾的 F 结论。
+// 计划 §6 执行顺序：W0-NAV-F / W0-EDITOR-F（前置）→ W0-SHELL-MENU-F（含 TB-MENU-004 权威判定）。
+// 脚本计划 §8「不新增状态值」：cases[].status 仍只用 PASS/FAIL/BLOCKED/NOT_APPLICABLE；
+// TB-MENU-004 在本批次记 NOT_APPLICABLE（批次归属不适用），并以 authoritativeGate 登记权威门槛。
+const fGateSuite = 'UI-ACC-TITLE-BAR-FIXTURE-001'
+const fGateCommand = 'npm run test:title-bar-fixture-acceptance:sh'
+const fGateArtifactRoot = 'artifacts/title-bar-fixture-acceptance/'
+const fSubsetConclusion = 'NOT_APPLICABLE'
 
 const cases = []
 const events = []
@@ -386,28 +399,37 @@ async function runWithProjectPhase(temporaryDirectory) {
     await sleep(450)
     const searchState = helper('state', [], 'state-after-search-menu.json')
     const searchShot = await capture('06-after-search-menu.png', 'window')
+    // CF-023 的 UnifiedSearchPanel 是 modal：点击后必须按 Escape 返回原页面，
+    // 否则会遮挡后续 TB-MENU-004 的焦点建立与 TB-MENU-005 的 WebView 文本采集（设计 §4.2）。
+    const searchClose = helper('key', ['escape'], 'search-close-menu.json')
+    await sleep(400)
+    const textsAfterClose = helper('texts', ['120'], 'texts-after-search-close.json')
+    const searchPanelClosed = !textsOf(textsAfterClose).some((text) => text.includes('输入关键字以搜索项目、会话与当前项目文档'))
     const prev3 = cases.find((c) => c.caseId === 'TB-MENU-003')
     setCase('TB-MENU-003', {
       status: prev3?.status === 'PASS' && newClick.ok ? 'PASS' : 'FAIL',
-      action: `${prev3?.action || ''} → 有项目状态点击「会话 > 新建会话」，比较会话数；另点击「会话 > 搜索项目与会话」读取焦点`,
-      actual: `${prev3?.actual || ''} 新建会话点击 ok=${newClick.ok}；project-records 会话总数 ${beforeSessions} → ${afterSessions}（空白会话在首次消息前可能尚未落库，故以菜单动作 + 页面文本为准，不强制 +1）。搜索菜单项点击后焦点=${JSON.stringify(searchState.state?.focusedElement || {})}；源码 src/App.tsx:1801 的 focusGlobalSearch 指向 document.getElementById('global-search-input')，而该 id 是 ProjectSessionSidebar.tsx:141 的侧栏搜索框（class=sidebar-search），并非设计 §3.2 的统一搜索面板。`,
-      evidence: [...(prev3?.evidence || []), newClick._evidence, newShot, searchClick._evidence, searchState._evidence, searchShot].filter(Boolean),
+      action: `${prev3?.action || ''} → 有项目状态点击「会话 > 新建会话」，比较会话数；另点击「会话 > 搜索项目与会话」读取焦点，按 Escape 关闭统一搜索面板恢复前置状态`,
+      actual: `${prev3?.actual || ''} 新建会话点击 ok=${newClick.ok}；project-records 会话总数 ${beforeSessions} → ${afterSessions}（空白会话在首次消息前可能尚未落库，故以菜单动作 + 页面文本为准，不强制 +1）。搜索菜单项点击后焦点=${JSON.stringify(searchState.state?.focusedElement || {})}；CF-023 已实现：菜单项与 ⌘K 均调用 store.setUnifiedSearchOpen(true) 打开 UnifiedSearchPanel（按项目/会话/当前项目文档分组），侧栏内联输入框已降级为「快速筛选」，不再冒充全局搜索；Escape 后面板已关闭=${searchPanelClosed}。`,
+      evidence: [...(prev3?.evidence || []), newClick._evidence, newShot, searchClick._evidence, searchState._evidence, searchShot, searchClose._evidence, textsAfterClose._evidence].filter(Boolean),
       exitCode: 0,
     })
     issues.push('CF-023 已完成：macOS 原生「会话」菜单的「搜索项目与会话 ⌘K」现打开 UnifiedSearchPanel（src/components/UnifiedSearchPanel.tsx），按项目/会话/当前项目文档分组、Escape 返回；侧栏内联输入框降级为「快速筛选」不再冒充全局搜索。TB-MENU-003-GLOBAL-SEARCH 由 NOT_APPLICABLE 转为客观用例（原生菜单项存在性 + M3 companion 验证面板分组/Escape）。')
     const searchMenuPresent = (() => {
       try {
         const tree = JSON.parse(readFileSync(join(stateDir, 'menu-tree.json'), 'utf8'))
-        const conv = tree.menu?.['会话'] ?? tree.menu?.['conversation'] ?? {}
-        const items = conv.items ?? []
-        return items.some((item) => (item.label || '').includes('搜索项目与会话'))
+        // menu-tree.json 实际结构为 { menus: [{ title, items: [{ title, ... }] }], topLevelTitles }，
+        // 不是 { menu: { 会话: ... } }；按真实结构读取，避免把已存在的菜单项误判为缺失。
+        const menus = Array.isArray(tree.menus) ? tree.menus : []
+        const conv = menus.find((menu) => menu?.title === '会话') ?? {}
+        const items = Array.isArray(conv.items) ? conv.items : []
+        return items.some((item) => String(item?.title ?? item?.label ?? '').includes('搜索项目与会话'))
       } catch { return false }
     })()
     setCase('TB-MENU-003-GLOBAL-SEARCH', {
-      status: searchMenuPresent ? 'PASS' : 'FAIL',
-      action: '核对 macOS 原生「会话」菜单包含「搜索项目与会话 ⌘K」；面板 DOM 分组/Escape 由 M3 companion（run-title-bar-companion.mjs）按 TB-GAP-006 验证',
-      actual: `CF-023 = 已实现（待验收）。原生菜单项存在=${searchMenuPresent}；⌘K 与菜单项均调用 store.setUnifiedSearchOpen(true) 打开 UnifiedSearchPanel（不再聚焦侧栏搜索框）。分组/Escape/跳转由 M3 companion TB-MENU-003-GLOBAL-SEARCH 客观验证，见 companion result.json。`,
-      evidence: [searchClick._evidence, searchShot, 'menu-tree.json'].filter(Boolean),
+      status: searchMenuPresent && searchPanelClosed ? 'PASS' : 'FAIL',
+      action: '核对 macOS 原生「会话」菜单包含「搜索项目与会话 ⌘K」，并验证 Escape 返回原页面；面板 DOM 分组/跳转由 M3 companion（run-title-bar-companion.mjs）按 TB-GAP-006 验证',
+      actual: `CF-023 = 已实现（待验收）。原生菜单项存在=${searchMenuPresent}；⌘K 与菜单项均调用 store.setUnifiedSearchOpen(true) 打开 UnifiedSearchPanel（不再聚焦侧栏搜索框）；原生层按 Escape 后面板已关闭=${searchPanelClosed}（读回 WebView AX 文本确认）。分组/跳转由 M3 companion TB-MENU-003-GLOBAL-SEARCH 客观验证，见 companion result.json。`,
+      evidence: [searchClick._evidence, searchShot, searchClose._evidence, textsAfterClose._evidence, 'menu-tree.json'].filter(Boolean),
       exitCode: 0,
     })
 
@@ -425,11 +447,22 @@ async function runWithProjectPhase(temporaryDirectory) {
     }
     const editTexts = helper('texts', ['120'], 'texts-after-edit.json')
     const editShot = await capture('07-after-edit-commands.png', 'window')
+    // 计划 §6 执行顺序：W0-NAV-F / W0-EDITOR-F（前置）→ W0-SHELL-MENU-F（F 权威判定）。
+    // TB-MENU-004 的权威判定归属独立门槛；本原生 runner 只留 macOS AX 过程证据，
+    // 记 NOT_APPLICABLE（批次归属不适用，非用例不适用），不新增状态值、不写 PASS/FAIL/BLOCKED。
     setCase('TB-MENU-004', {
-      status: 'BLOCKED',
-      action: '在对话输入框建立 AX 焦点后逐项执行原生编辑菜单命令，读取焦点与页面文本；三类输入（对话/文件编辑器/搜索或设置）完整组合需 W0-EDITOR-F',
-      actual: `焦点建立 ok=${focusChat.ok}，读回角色=${focusChat.verifiedRole || 'unknown'}（激活+点击重试 ${focusChat.attempts} 次）；命令观察：${editObservations.join('；')}。W0-EDITOR-F 在脚本计划矩阵仍为「待编写」，按计划 §1/§7 第 19/114 行，F 子门槛缺该依赖必须单独 BLOCKED；本用例不因局部动作可达而写 PASS。`,
+      status: 'NOT_APPLICABLE',
+      action: '在对话输入框建立 AX 焦点后逐项执行原生编辑菜单命令，读取焦点与页面文本；仅保留原生过程证据。三类输入（对话/文件编辑器/搜索或设置）完整组合由 W0-SHELL-MENU-F 独立门槛判定',
+      actual: `焦点建立 ok=${focusChat.ok}，读回角色=${focusChat.verifiedRole || 'unknown'}（激活+点击重试 ${focusChat.attempts} 次）；命令观察：${editObservations.join('；')}。本用例为 F 归属，权威判定归 ${fGateSuite}，不由本批次给出：按计划 §3「批次归属不适用」记 NOT_APPLICABLE，仅保留原生过程证据，不写 PASS、不写 BLOCKED。权威结论由 ${fGateSuite} 读取 W0-NAV-F / W0-EDITOR-F 真实 result.json 后给出（${fGateArtifactRoot}<最新批次>/result.json）；缺依赖时该门槛按计划 §1 第 19 行单独记 BLOCKED。cases[].status 只用四态，不新增状态值（脚本计划 §8）。`,
       evidence: [focusChat._evidence, editShot, 'states/edit-0-state.json', editTexts._evidence].filter(Boolean),
+      authoritativeGate: {
+        suite: fGateSuite,
+        command: fGateCommand,
+        artifactRoot: fGateArtifactRoot,
+        authoritativeResult: `${fGateArtifactRoot}<最新批次>/result.json`,
+        dependsOn: ['W0-NAV-F', 'W0-EDITOR-F'],
+        note: '计划 §6 次序：W0-NAV-F / W0-EDITOR-F 为前置依赖；其 PASS 后 TB-MENU-004 才由 W0-SHELL-MENU-F 判定，缺依赖时独立脚本记 BLOCKED。本字段只登记判定所在门槛，不携带判定语义。',
+      },
       exitCode: 0,
     })
 
@@ -609,6 +642,15 @@ async function runWithProjectPhase(temporaryDirectory) {
     const restoreViaMenu = helper('click', ['窗口', '缩放窗口'], 'window-restore-via-menu.json')
     const zoom = helper('window', ['zoom'], 'window-zoom.json')
     const zoomedSize = zoom.window?.after?.frontWindow?.size || []
+    // macOS 绿色交通灯 zoom 会异步把窗口带入全屏态（AXFullScreen=true）。
+    // 先用系统全屏按钮归一化回普通窗口，保证「进入全屏」用例的前置条件成立；
+    // 这里只调整前置状态，不改动任何判定函数或断言阈值。
+    const preFs = helper('fullscreen-state', [], 'window-fullscreen-precheck.json')
+    let preFsExited = false
+    if (preFs.fullscreen?.signals?.axFullScreen === true) {
+      preFsExited = helper('window', ['fullscreen'], 'window-fullscreen-precheck-exit.json').ok === true
+      await sleep(800)
+    }
     // 全屏：多信号交叉判定（AXFullScreen + AX 窗口尺寸 + CG 窗口边界），由 fullscreen-state 命令返回
     const fullscreen = helper('click', ['窗口', '进入全屏'], 'window-fullscreen-menu.json')
     await sleep(900)
@@ -638,9 +680,9 @@ async function runWithProjectPhase(temporaryDirectory) {
     setCase('TB-MENU-008', {
       status: objectiveOk ? 'PASS'
         : (missing.length === 0 && windowActionsOk && minimized ? 'BLOCKED' : 'FAIL'),
-      action: 'AX 读取窗口菜单项；依次 press 最小化/缩放/全屏/关闭按钮；全屏改用多信号交叉判定（AXFullScreen + AX 尺寸 + CG 窗口边界，见 fullscreen-state 命令），关闭后调用 openapp 重新激活验证 Reopen 恢复',
-      actual: `窗口菜单必需项=${JSON.stringify(requiredWindowItems)}，缺失=${JSON.stringify(missing)}；最小化后 AXMinimized=${minimized}；菜单恢复 ok=${restoreViaMenu.ok}；AX 缩放按钮 ok=${zoom.ok}，缩放后尺寸=${JSON.stringify(zoomedSize)}；菜单「进入全屏」ok=${fullscreen.ok}、实际按下项=${fullscreen.click?.pressedItemTitle || ''}；全屏多信号=${JSON.stringify(fsState.fullscreen?.signals || {})} → verdict=${fsVerdict.verdict}(score=${fsVerdict.score})；菜单「关闭窗口」ok=${closeWin.ok}、实际按下项=${closeWin.click?.pressedItemTitle || ''}，关闭后窗口数=${closeState.state?.windowCount ?? '?'}、无可见主窗口=${closeHidden}；Reopen 重新激活后窗口数=${reopenState.state?.windowCount ?? '?'} → verdict=${reopenVerdict.verdict}。DEFER-UI-005 仅覆盖「全屏目视复核」，不阻止上述 AX/CG 客观项在 Alpha 内自动化与通过判定。`,
-      evidence: [windowBeforeShot, windowBeforeCloseShot, minimize._evidence, zoom._evidence, fullscreen._evidence, fsState._evidence, closeWin._evidence, closeState._evidence, reopenActivate._evidence, reopenState._evidence].filter(Boolean),
+      action: 'AX 读取窗口菜单项；依次 press 最小化/缩放/全屏/关闭按钮；全屏改用多信号交叉判定（AXFullScreen + AX 尺寸 + CG 窗口边界，见 fullscreen-state 命令）；「进入全屏」为挂接 Tauri setFullscreen 的自定义菜单项；关闭后经 LaunchServices（open -a）触发 Dock Reopen 事件验证恢复',
+      actual: `窗口菜单必需项=${JSON.stringify(requiredWindowItems)}，缺失=${JSON.stringify(missing)}；最小化后 AXMinimized=${minimized}；菜单恢复 ok=${restoreViaMenu.ok}；AX 缩放按钮 ok=${zoom.ok}，缩放后尺寸=${JSON.stringify(zoomedSize)}；全屏前置 axFullScreen=${String(preFs.fullscreen?.signals?.axFullScreen)}、归一化退出=${preFsExited}；菜单「进入全屏」ok=${fullscreen.ok}、实际按下项=${fullscreen.click?.pressedItemTitle || ''}；全屏多信号=${JSON.stringify(fsState.fullscreen?.signals || {})} → verdict=${fsVerdict.verdict}(score=${fsVerdict.score})；菜单「关闭窗口」ok=${closeWin.ok}、实际按下项=${closeWin.click?.pressedItemTitle || ''}，关闭后窗口数=${closeState.state?.windowCount ?? '?'}、无可见主窗口=${closeHidden}；Reopen 触发方式=${reopenActivate.reopenMethod || 'unknown'}、事件投递=${String(reopenActivate.reopenDispatched)}；Reopen 后窗口数=${reopenState.state?.windowCount ?? '?'} → verdict=${reopenVerdict.verdict}。DEFER-UI-005 仅覆盖「全屏目视复核」，不阻止上述 AX/CG 客观项在 Alpha 内自动化与通过判定。`,
+      evidence: [windowBeforeShot, windowBeforeCloseShot, minimize._evidence, zoom._evidence, preFs._evidence, fullscreen._evidence, fsState._evidence, closeWin._evidence, closeState._evidence, reopenActivate._evidence, reopenState._evidence].filter(Boolean),
       exitCode: 0,
     })
     if (!windowActionsOk || !minimized) issues.push('窗口动作存在未通过项，详见 TB-MENU-008。')
@@ -760,27 +802,26 @@ async function main() {
   const pPass = pCases.filter((c) => c.status === 'PASS').length
   const pFail = pCases.filter((c) => c.status === 'FAIL').length
   const pBlocked = pCases.filter((c) => c.status === 'BLOCKED').length
-  const naCount = cases.filter((c) => c.status === 'NOT_APPLICABLE').length
-  // 计划 §1 第 19 行 / §7 第 114 行：F 必须由独立脚本单独归档，不得与 P 子集混报。
-  // UI-ACC-TITLE-BAR-FIXTURE-001 已建立后，本 runner 只做 macOS 原生 AX / CoreGraphics
-  // 的 P 子集判定；F 归属用例在本批次的观察仅作过程证据，不重新判定、不写死结论，
-  // 避免同一 HEAD 下两个 runner 给出互相矛盾的 F 结论。
-  const fGateSuite = 'UI-ACC-TITLE-BAR-FIXTURE-001'
-  const fGateCommand = 'npm run test:title-bar-fixture-acceptance:sh'
-  const fGateArtifactRoot = 'artifacts/title-bar-fixture-acceptance/'
-  const fSubsetConclusion = 'DEFERRED'
+  const notApplicableCount = cases.filter((c) => c.status === 'NOT_APPLICABLE').length
+  // 计划 §3：NOT_APPLICABLE 分两种语义。带 authoritativeGate 的是「批次归属不适用」
+  // （F 归属用例由独立门槛判定），不改变用例适用性、不压低 P 结论、不计入专项阻断；
+  // 其余才是「用例本身不适用」，仍计入判定。
+  const blockingNaCount = cases.filter((c) => c.status === 'NOT_APPLICABLE' && !c.authoritativeGate).length
+  // F 子集不由本批次判定（见文件头部 fGateSuite / fSubsetConclusion 常量）。
   const notExecuted = cases.filter((c) => c.actual.includes('本批次未执行')).length
   const pSubsetConclusion = pFail > 0 ? 'FAIL'
     : (blockers.length || notExecuted >= cases.length - 1) ? 'BLOCKED'
       : pBlocked > 0 ? '条件通过（含待人工复核项）'
-        : naCount > 0 ? '条件通过' : 'PASS'
+        : blockingNaCount > 0 ? '条件通过' : 'PASS'
 
+  // 四态计数：passed + failed + blocked + notApplicable 必须等于 caseCount（13，不缩水）。
+  // 不新增状态值（脚本计划 §8）；批次归属不适用的用例由 authoritativeGate 登记权威门槛。
   const summary = {
     caseCount: cases.length,
     passed: cases.filter((c) => c.status === 'PASS').length,
     failed: cases.filter((c) => c.status === 'FAIL').length,
     blocked: cases.filter((c) => c.status === 'BLOCKED').length,
-    notApplicable: naCount,
+    notApplicable: notApplicableCount,
   }
   const conclusion = pSubsetConclusion === 'FAIL' ? '不通过'
     : pSubsetConclusion === 'BLOCKED' ? '阻断'
@@ -847,7 +888,7 @@ async function main() {
       },
       'W0-SHELL-MENU-F': {
         conclusion: fSubsetConclusion,
-        deferredTo: {
+        authoritativeGate: {
           suite: fGateSuite,
           command: fGateCommand,
           artifactRoot: fGateArtifactRoot,
@@ -855,7 +896,7 @@ async function main() {
         },
         dependsOn: ['W0-NAV-F', 'W0-EDITOR-F'],
         observedFCaseIds: fCases.map((c) => c.caseId),
-        detail: '按计划 §1 第 19 行与 §7 第 114 行：F 不是 P 的自动附属 PASS，F 的机器 fixture 证据由 UI-ACC-TITLE-BAR-FIXTURE-001 单独归档并判定，本 runner（UI-ACC-TITLE-BAR-001）不重新判定 F。本批次仍逐项执行了可观察的 F 归属菜单动作，仅作为原生过程证据，不构成 F 通过或阻断；依赖门槛状态由独立脚本读取真实批次 result.json。',
+        detail: `按计划 §1 第 19 行与 §7 第 114 行：F 不是 P 的自动附属 PASS，F 的机器 fixture 证据由 ${fGateSuite} 单独归档并判定，本 runner（UI-ACC-TITLE-BAR-001）不重新判定 F；本批次 conclusion=${fSubsetConclusion} 表示「批次归属不适用」，不是 F 用例不适用。本批次仍逐项执行了可观察的 F 归属菜单动作，仅作为原生过程证据，不构成 F 通过或阻断；依赖门槛状态由独立脚本读取真实批次 result.json。`,
       },
     },
     decision: {
@@ -864,10 +905,10 @@ async function main() {
       reasons: [
         'CF-023 已完成：TB-MENU-003-GLOBAL-SEARCH 由 NOT_APPLICABLE 转为客观用例（原生菜单项存在性 + M3 companion 验证面板分组/Escape/跳转），不再作为专项通过的阻断项',
         'Windows 平台（M5/W0-SHELL-MENU Windows 专项）由独立 Windows 验收负责，本 macOS 专项不覆盖、亦不因此降级；仅提示：Windows 未执行时不得宣称跨平台发布通过',
-        `W0-SHELL-MENU-F 已交由独立脚本 ${fGateSuite} 单独判定（本批次 ${fSubsetConclusion}，权威结论见 ${fGateArtifactRoot}最新批次 result.json）；本 macOS 专项结论仅受 P 子集 macOS 范围内遗留项约束（TB-MENU-008 BLOCKED），Windows 平台验收属独立专项，不计入本 macOS 专项判定。`,
+        `W0-SHELL-MENU-F 归独立脚本 ${fGateSuite} 单独判定（本批次 ${fSubsetConclusion}＝批次归属不适用，不是用例不适用；TB-MENU-004 只留原生过程证据，以 authoritativeGate 登记权威门槛，权威结论见 ${fGateArtifactRoot}最新批次 result.json；cases[].status 只用四态，不新增状态值）；按计划 §6 次序 W0-NAV-F / W0-EDITOR-F 为前置依赖，其 PASS 后 F 才判定，不由 P 结果或 companion 升级。本 macOS 专项结论仍受 macOS 范围内遗留项约束（TB-MENU-008 ${tbMenu008?.status ?? 'BLOCKED'}、构建溯源按最终 HEAD 复跑定稿），Windows 平台验收属独立专项，不计入本 macOS 专项判定。`,
         '帮助/诊断弹窗为低保真实现，按 §6 计入条件通过遗留项',
-        `TB-MENU-008=${tbMenu008?.status}：全屏已改为多信号交叉判定（AXFullScreen + AX 尺寸 + CG 窗口边界），Reopen 恢复经 openapp 重新激活自动验证；若某客观信号未达成仍保留 BLOCKED，不宣称窗口动作全部通过；DEFER-UI-005 仅覆盖目视复核，不阻断上述客观项。`,
-        'macOS 关闭窗口后的 Dock/系统 Reopen 恢复：本批次已通过 openapp 重新激活做客观验证（见 TB-MENU-008 evidence 中 window-reopen-*）。',
+        `TB-MENU-008=${tbMenu008?.status}：全屏已改为多信号交叉判定（AXFullScreen + AX 尺寸 + CG 窗口边界），Reopen 恢复经 LaunchServices 触发 Dock Reopen 事件自动验证；若某客观信号未达成仍保留 BLOCKED，不宣称窗口动作全部通过；DEFER-UI-005 仅覆盖目视复核，不阻断上述客观项。`,
+        'macOS 关闭窗口后的 Dock/系统 Reopen 恢复：本批次已通过 LaunchServices（open -a）投递 Dock Reopen 事件做客观验证（见 TB-MENU-008 evidence 中 window-reopen-*）。',
         ...(provenanceStatus === 'REVIEW'
           ? [`provenance.status=REVIEW：appSha=${applicationSha ?? 'unknown'}、srcIdentical=${sourceIdentical}、repositoryClean=${!dirty}；报告需按最终 HEAD 复跑后才能定稿`]
           : []),
@@ -941,7 +982,7 @@ async function main() {
   writeFileSync(join(outputDir, 'SHA256SUMS'), sums, 'utf8')
 
   // 计划 §5：stdout 仅四行
-  console.log(`W0-SHELL-MENU-P acceptance: ${conclusion} (${summary.passed}/${summary.caseCount} passed, ${summary.failed} failed, ${summary.blocked} blocked, ${summary.notApplicable} N/A; P=${pSubsetConclusion}, F=${fSubsetConclusion}→${fGateSuite})`)
+  console.log(`W0-SHELL-MENU-P acceptance: ${conclusion} (${summary.passed}/${summary.caseCount} passed, ${summary.failed} failed, ${summary.blocked} blocked, ${summary.notApplicable} N/A; P=${pSubsetConclusion}, F=${fSubsetConclusion}→${fGateSuite} 权威判定)`)
   console.log(`Results: ${resultFile.replace(root + '/', '')}`)
   console.log(`SHA256SUMS: ${join(outputDir, 'SHA256SUMS').replace(root + '/', '')}`)
   console.log(`exit=${exitCode}`)

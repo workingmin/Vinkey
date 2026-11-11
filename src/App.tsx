@@ -127,10 +127,25 @@ async function installMacMenu(callbacks: {
     await menuItem(TITLE_BAR_MENU_ITEM_LABELS.logs, () => callbacks.changePage('logs')),
     await menuItem(TITLE_BAR_MENU_ITEM_LABELS.toggleTheme, callbacks.toggleTheme),
   ] })
+  const appWindow = getCurrentWindow()
+  const toggleFullscreen = () => {
+    void (async () => {
+      try {
+        const next = !(await appWindow.isFullscreen())
+        await appWindow.setFullscreen(next)
+      } catch (cause) {
+        console.error('切换全屏失败：', cause)
+      }
+    })()
+  }
+  // 自定义项：不依赖 Tauri 预定义 Fullscreen 项的 toggleFullScreen: 选择器，
+  // 直接调用窗口 API，保证 AXFullScreen 与窗口几何真实变化（TB-MENU-008）。
+  // 标题固定为「进入全屏」：AX 菜单契约按标题定位，动态改标题会破坏验收与辅助功能。
+  const fullscreenMenuItem = await menuItem(TITLE_BAR_MENU_ITEM_LABELS.fullscreen, toggleFullscreen, 'CmdOrCtrl+Shift+F')
   const windowMenu = await Submenu.new({ text: TITLE_BAR_MENU_LABELS.window, items: [
     await nativeItem('Minimize', TITLE_BAR_MENU_ITEM_LABELS.minimize),
     await nativeItem('Maximize', TITLE_BAR_MENU_ITEM_LABELS.zoom),
-    await nativeItem('Fullscreen', TITLE_BAR_MENU_ITEM_LABELS.fullscreen),
+    fullscreenMenuItem,
     await nativeItem('CloseWindow', TITLE_BAR_MENU_ITEM_LABELS.closeWindow),
   ] })
   const help = await Submenu.new({ text: TITLE_BAR_MENU_LABELS.help, items: [
