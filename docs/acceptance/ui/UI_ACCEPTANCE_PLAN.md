@@ -118,8 +118,8 @@
 | --- | --- |
 | 壳层结构 | 已有实现和历史单元测试；目标平台截图、直接渲染覆盖仍待补 |
 | 导航 fixture | `W0-NAV-F` 脚本已就绪（`UI-ACC-NAV-FIXTURE-001`）；目标平台执行与人工材料待回传 |
-| 编辑器 fixture | `W0-EDITOR-F`（`UI-ACC-EDITOR-001`）本机已执行：CLI 6/6 + 合同测试 10/10；目标平台 WebView/人工材料仍待回传 |
-| 标题栏菜单 fixture | `W0-SHELL-MENU-F` 独立门槛 `UI-ACC-TITLE-BAR-FIXTURE-001` 已执行，`F=PASS`（`TB-MENU-004=PASS`、13/13 覆盖）；`W0-SHELL-MENU-P` macOS 原生批次已执行，`P=PASS`，13/13 覆盖，`TB-MENU-003-GLOBAL-SEARCH=PASS`、`TB-MENU-008=PASS`（全屏 `score=3 / verdict=fullscreen`、Reopen `0→1`）；app 按最终 HEAD 重建，两批 `provenance=PASS`。专项整体仍为**条件通过**：`W0-EDITOR-F` 目标平台 WebView/人工材料未回传、`DEFER-UI-001`、目录取消保态 `not-observed`，以及 Windows 独立专项未执行；不得宣称专项通过、完整通过或跨平台发布通过 |
+| 编辑器 fixture | `W0-EDITOR-F`（`UI-ACC-EDITOR-001`）本机已执行：CLI 6/6 + 合同测试 10/10；目标平台 WebView 客观证据由 `UI-ACC-EDITOR-WEBVIEW-001` 采集（6/6），人工 UI 观察仍待测试人员回传 |
+| 标题栏菜单 fixture | `W0-SHELL-MENU-F` 独立门槛 `UI-ACC-TITLE-BAR-FIXTURE-001` 已执行，`F=PASS`（`TB-MENU-004=PASS`、13/13 覆盖）；`W0-SHELL-MENU-P` macOS 原生批次已执行，`P=PASS`，13/13 覆盖，`TB-MENU-003-GLOBAL-SEARCH=PASS`、`TB-MENU-008=PASS`（全屏 `score=3 / verdict=fullscreen`、Reopen `0→1`）；app 按最终 HEAD 重建，两批 `provenance=PASS`。专项整体仍为**条件通过**：`W0-EDITOR-F` 人工 UI 观察待回传、`DEFER-UI-001`，以及 Windows 独立专项未执行；`W0-EDITOR-F` 目标平台 WebView 客观证据已采集、目录取消保态已按 AX/CG 双信号判为 `preserved`，二者不再是遗留项；不得宣称专项通过、完整通过或跨平台发布通过 |
 | 会话语义标题 | 临时标题/语义升级/手动重命名已实现（`conversationTitle.ts`、侧栏入口）；`CF-022` 已参考，`W2-NAV-E` 真实模型端到端用例阻断 |
 | 全局搜索面板 | `CF-023` 统一搜索面板已落地：原生「会话 > 搜索项目与会话」、`⌘/Ctrl+K`、Windows 自绘菜单三入口，按项目/会话/当前项目文档分组并可跳转；`TB-MENU-003-GLOBAL-SEARCH` 为客观 `PASS`。目标平台人工材料仍待回传 |
 | 真实模型链路 | 依赖测试人员在 macOS 15+/Windows + Ollama/profile 环境回传 |
@@ -150,7 +150,7 @@
 - 全部机器断言、合同测试、隔离 fixture、SQLite/文件桥接、真实模型链路、退出码、`SHA256SUMS`、`provenance`、构建溯源与脱敏；
 - 客观可自动化的窗口与焦点行为：`TB-MENU-008` 的全屏状态、Reopen 恢复、关闭后窗口隐藏、目录选择取消保态、`AXTextArea` 焦点读回，以及 `TB-MENU-011` 的英文残留字符串审计、`TB-MENU-006` 的主题切换像素比对；
 - 所有 `D-*` / `Q-*` 功能域、13 个 `TB-MENU-*` 用例 ID、`W0`~`W4` 门槛、`P/F/E/R` 判定规则——**一个都不删、不合并、不改名、不放宽断言**；
-- 功能未实现 / 目标平台未执行 / 依赖缺失 / 真实链路未回传类遗留项：Windows 平台执行、Ollama 真实链路回传、`W0-EDITOR-F` 目标平台 WebView 材料。这些不是主观判断，仍按原门槛逐项列出，不因本节而消失。
+- 功能未实现 / 目标平台未执行 / 依赖缺失 / 真实链路未回传类遗留项：Windows 平台执行、Ollama 真实链路回传、`W0-EDITOR-F` 人工 UI 观察材料。这些不是主观判断，仍按原门槛逐项列出，不因本节而消失；`W0-EDITOR-F` 目标平台 WebView 结构/内容/保存状态栏客观证据与目录选择取消保态已由机器判据完成，不再列为未完成客观项。
 
 上述两类边界的拆分原则：**同一个物理动作，客观读回留在 Alpha，人眼观感划到后续版本**。例如「全屏是否进入原生 Space」由 AX/CG 判据验证，「全屏看起来对不对」才属延期项。
 
@@ -175,7 +175,7 @@
 
 1. **延期 ≠ 通过**：任何 `DEFER-UI-*` 不得写成 `PASS`，不得从用例清单或报告中删除，不得计入通过数，不得用于消除 `BLOCKED` / `NOT_APPLICABLE`。
 2. **不追溯改写**：`artifacts/**/result.json` 与已发布专项报告仍是各自批次的权威结论。本次只调整计划层排期与前置条件；脚本不新增状态值、不改判定规则、不改批次结论。
-3. **Alpha 结论仍按 §5 与各专项 §6 判定**。当前标题栏与功能菜单专项（macOS）仍为**条件通过**：`P=PASS`、`F=PASS`、`TB-MENU-008=PASS`、全局搜索客观 `PASS`、构建溯源 `provenance=PASS` 均已达成；客观遗留项（`W0-EDITOR-F` 目标平台 WebView/人工材料未回传、目录取消保态 `not-observed`）与本节主观遗留项分别列出，Windows 独立专项未执行不计入本 macOS 专项判定，都不因本节升级为「专项通过」「完整通过」或「跨平台发布通过」。
+3. **Alpha 结论仍按 §5 与各专项 §6 判定**。当前标题栏与功能菜单专项（macOS）仍为**条件通过**：`P=PASS`、`F=PASS`、`TB-MENU-008=PASS`、全局搜索客观 `PASS`、构建溯源 `provenance=PASS` 均已达成；遗留项（`W0-EDITOR-F` 人工 UI 观察待回传）与本节主观遗留项分别列出；`W0-EDITOR-F` 目标平台 WebView 客观证据已采集、目录取消保态已客观判定为 `preserved`，不再计入遗留项。Windows 独立专项未执行不计入本 macOS 专项判定，都不因本节升级为「专项通过」「完整通过」或「跨平台发布通过」。
 4. **发布说明必须同时列出**：客观遗留项 + §8.3 全表 + 现有 `条件通过` 结论；不得声称功能完备、视觉/体验已验收或跨平台发布通过。
 5. **后续版本启动时**，§8.3 全表自动转入该版本验收范围；仍未完成的项继续标 `DEFERRED_AFTER_ALPHA`，不得静默丢弃。
 

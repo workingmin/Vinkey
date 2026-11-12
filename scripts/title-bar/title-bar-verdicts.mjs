@@ -61,22 +61,53 @@ export function evaluateReopen(info) {
 
 /**
  * Directory (open/save panel) cancel preservation verdict.
- * @param {object} info - { panelOpened:boolean, canceled:boolean, projectCountBefore:number, projectCountAfter:number, windowCountAfter:number, errorDialogPresent:boolean }
- * @returns {{verdict:'preserved'|'not-preserved'|'not-observed', panelOpened:boolean, canceled:boolean, preserved:boolean, reason:string}}
+ *
+ * 判据（TB-MENU-002，收紧而非放宽）：面板必须由 AXSheet + CG 面板窗口双信号证实打开；
+ * 由 AX 按下 Cancel 按钮取消（Escape 仅为后备），取消后两个信号须同时消失；
+ * 菜单树/窗口数状态读回须无变化；无错误弹窗。
+ * 计数只有在两侧都提供实数时才比较，缺失时不冒充 0=0。
+ * @param {object} info - { panelOpened, canceled, panelClosed, cgPanelDisappeared,
+ *   axSheetDismissed, stateUnchanged, projectCountBefore?, projectCountAfter?,
+ *   windowCountAfter, errorDialogPresent }
+ * @returns {{verdict:'preserved'|'not-preserved'|'not-observed', panelOpened:boolean,
+ *   canceled:boolean, panelClosed:boolean, stateUnchanged:boolean, preserved:boolean, reason:string}}
  */
 export function evaluateDirectoryCancel(info) {
   const opened = info?.panelOpened === true
   const canceledOk = info?.canceled === true
-  const preserved = canceledOk
-    && (info?.projectCountBefore ?? -1) === (info?.projectCountAfter ?? -2)
-    && (info?.windowCountAfter ?? 0) >= 1
-    && info?.errorDialogPresent !== true
+  const closed = info?.panelClosed === true
+  const cgGone = info?.cgPanelDisappeared === true
+  const sheetGone = info?.axSheetDismissed === true
+  const stateUnchanged = info?.stateUnchanged === true
+  const windowOk = (info?.windowCountAfter ?? 0) >= 1
+  const noError = info?.errorDialogPresent !== true
+  const before = info?.projectCountBefore
+  const after = info?.projectCountAfter
+  const countsProvided = typeof before === 'number' && typeof after === 'number'
+  const countsMatch = countsProvided ? before === after : null
+  const stateOk = stateUnchanged && windowOk && noError && countsMatch !== false
+  const preserved = opened && canceledOk && closed && cgGone && sheetGone && stateOk
   const verdict = !opened ? 'not-observed'
-    : opened && !preserved ? 'not-preserved'
-      : 'preserved'
+    : preserved ? 'preserved'
+      : 'not-preserved'
   const reason = !opened ? 'panel-not-opened'
     : !canceledOk ? 'cancel-failed'
-      : !preserved ? 'state-not-preserved'
-        : 'ok'
-  return { verdict, panelOpened: opened, canceled: canceledOk, preserved, reason }
+      : !closed ? 'panel-not-closed'
+        : !cgGone ? 'cg-panel-window-remains'
+          : !sheetGone ? 'ax-sheet-remains'
+            : !stateOk ? 'state-not-preserved'
+              : 'ok'
+  return {
+    verdict,
+    panelOpened: opened,
+    canceled: canceledOk,
+    panelClosed: closed,
+    cgPanelDisappeared: cgGone,
+    axSheetDismissed: sheetGone,
+    stateUnchanged,
+    countsMatch,
+    preserved,
+    reason,
+  }
 }
+

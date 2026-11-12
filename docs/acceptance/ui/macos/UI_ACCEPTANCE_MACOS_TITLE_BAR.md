@@ -14,10 +14,11 @@
   - P 原生批次 `UI-ACC-TITLE-BAR-001`：`npm run test:title-bar-native-acceptance`（`scripts/title-bar/run-title-bar-native-acceptance.mjs`）
   - **F 独立门槛 `UI-ACC-TITLE-BAR-FIXTURE-001`**：`npm run test:title-bar-fixture-acceptance:sh`（`scripts/title-bar/title-bar-fixture-acceptance.ts`）
   - F 机器合同层：`npm run test:title-bar-acceptance:sh`（`scripts/title-bar/title-bar-acceptance.ts`，由独立门槛脚本内部调用）
-- 报告状态：**条件通过**——**不是「专项通过」，也不是「完整通过」**；本 macOS 专项仅按 macOS 范围判定。`W0-SHELL-MENU-P` 已解锁为 **PASS**（P 子集 9/9 全 PASS，`TB-MENU-008` 全屏/Reopen 客观判据达成）；`W0-SHELL-MENU-F` 独立门槛 **PASS**（`TB-MENU-004=PASS`、`13/13` 覆盖）。`CF-023` 统一搜索面板已实现，`TB-MENU-003-GLOBAL-SEARCH` 为客观 PASS（原生菜单项存在性 + Escape 返回 + M3 companion 面板分组）。`TB-MENU-004` 的判定归入 `W0-SHELL-MENU-F` 独立门槛：P 原生批次记 `NOT_APPLICABLE`（批次归属不适用）+ `authoritativeGate` 引用（只留 AX 过程证据），`cases[].status` 只用 `PASS/FAIL/BLOCKED/NOT_APPLICABLE` 四态。构建溯源已按最终 HEAD 定稿：app 按最终 HEAD 重建，内嵌 SHA = HEAD、`sourceIdenticalToHead=true`、`repositoryClean=true`、`provenance.status=PASS`。最新 P 原生批次为 `条件通过 (12/13 passed, 0 failed, 0 blocked, 1 N/A; P=PASS, exitCode=0)`；独立 F 门槛为 `条件通过 (13/13 passed, 0 failed, 0 blocked; F=PASS)`。专项仍为条件通过，客观遗留为 `W0-EDITOR-F` 目标平台 WebView/人工材料未回传、帮助弹窗低保真（`DEFER-UI-001`）、目录取消保态 `not-observed` 与 Windows 独立专项未执行。Windows 平台验收属独立 Windows 专项，不计入本 macOS 专项结论。
-- 更新日期：`2026-11-11`
+  - `W0-EDITOR-F` 目标平台 WebView 客观证据 `UI-ACC-EDITOR-WEBVIEW-001`：`npm run test:editor-webview-native-mac`（`scripts/editor/run-editor-webview-native-macos.mjs`）
+- 报告状态：**条件通过**——**不是「专项通过」，也不是「完整通过」**；本 macOS 专项仅按 macOS 范围判定。`W0-SHELL-MENU-P` 已解锁为 **PASS**（P 子集 9/9 全 PASS，`TB-MENU-008` 全屏/Reopen 客观判据达成）；`W0-SHELL-MENU-F` 独立门槛 **PASS**（`TB-MENU-004=PASS`、`13/13` 覆盖）。`CF-023` 统一搜索面板已实现，`TB-MENU-003-GLOBAL-SEARCH` 为客观 PASS（原生菜单项存在性 + Escape 返回 + M3 companion 面板分组）。`TB-MENU-004` 的判定归入 `W0-SHELL-MENU-F` 独立门槛：P 原生批次记 `NOT_APPLICABLE`（批次归属不适用）+ `authoritativeGate` 引用（只留 AX 过程证据），`cases[].status` 只用 `PASS/FAIL/BLOCKED/NOT_APPLICABLE` 四态。构建溯源已按最终 HEAD 定稿：app 按最终 HEAD 重建，内嵌 SHA = HEAD、`sourceIdenticalToHead=true`、`repositoryClean=true`、`provenance.status=PASS`。最新 P 原生批次为 `条件通过 (12/13 passed, 0 failed, 0 blocked, 1 N/A; P=PASS, exitCode=0)`；独立 F 门槛为 `条件通过 (13/13 passed, 0 failed, 0 blocked; F=PASS)`。专项仍为条件通过，遗留为 `W0-EDITOR-F` 人工 UI 观察仍待测试人员回传、帮助弹窗低保真（`DEFER-UI-001`）与 Windows 独立专项未执行。`W0-EDITOR-F` 目标平台 WebView 结构/内容/保存状态栏客观证据已由 `UI-ACC-EDITOR-WEBVIEW-001` 采集，目录取消保态已由 AXSheet + CG 面板窗口双信号客观判定为 `preserved`，二者不再作为遗留项。Windows 平台验收属独立 Windows 专项，不计入本 macOS 专项结论。
+- 更新日期：`2026-11-12`
 
-> **证据定位约定**：本报告不硬编码批次号与 Git SHA。`artifacts/title-bar-acceptance/` 下最新的 `title-bar-w0-p-*` 批次是 P 子门槛与 macOS 原生证据的唯一权威机器记录；`artifacts/title-bar-fixture-acceptance/` 下最新的 `title-bar-w0-f-*` 批次是 `W0-SHELL-MENU-F` 的唯一权威机器记录。环境、应用构建溯源、`provenance`、逐用例全字段、SHA-256 清单均以各自 `result.json` 为准。报告提交会改变 HEAD，故每次提交后须按最终 HEAD 复跑一次以保持 `provenance.status=PASS`；复跑不改变用例清单与判定规则。
+> **证据定位约定**：本报告不硬编码批次号与 Git SHA。`artifacts/title-bar-acceptance/` 下最新的 `title-bar-w0-p-*` 批次是 P 子门槛与 macOS 原生证据的唯一权威机器记录；`artifacts/title-bar-fixture-acceptance/` 下最新的 `title-bar-w0-f-*` 批次是 `W0-SHELL-MENU-F` 的唯一权威机器记录。`W0-EDITOR-F` 目标平台 WebView 客观证据另以 `artifacts/editor-webview-native-macos/` 下最新 `editor-wv-*` 批次为准。环境、应用构建溯源、`provenance`、逐用例全字段、SHA-256 清单均以各自 `result.json` 为准。报告提交会改变 HEAD，故每次提交后须按最终 HEAD 复跑一次以保持 `provenance.status=PASS`；复跑不改变用例清单与判定规则。
 
 ## 1. 验收范围与忠实性声明
 
@@ -71,7 +72,7 @@
 
 计数（与最新 P 原生批次 `result.json.summary` 一致）：`caseCount=13`、`passed=12`、`failed=0`、`blocked=0`、`notApplicable=1`（F 归属的 `TB-MENU-004`，批次归属不适用）；四项之和 `12+0+0+1=13`，覆盖不缩水；`cases[].status` 只用四态，无第五态；`result.json.exitCode=0`，进程退出码与之一致。最新 P 原生批次为 `条件通过 (12/13 passed, 0 failed, 0 blocked, 1 N/A; P=PASS, F=NOT_APPLICABLE→UI-ACC-TITLE-BAR-FIXTURE-001 权威判定)`：`TB-MENU-004` 记 N/A 并以 `authoritativeGate` 引用独立门槛、`TB-MENU-003-GLOBAL-SEARCH` 客观 PASS、`TB-MENU-008` 全屏/Reopen 判据达成 PASS；M3 companion `5/5 PASS`。独立 F 门槛为 `条件通过 (13/13 passed, 0 failed, 0 blocked; F=PASS)`，其中 `TB-MENU-004=PASS`、`TB-MENU-008=PASS`；`coverage.idsMatch=true`、13/13 覆盖。两批 `provenance.status=PASS`、`repositoryClean=true`；SHA-256 清单 P 123 文件、F 16 文件全部校验通过。
 
-> **关于「F 门槛 PASS 不等于专项 PASS」**：`W0-SHELL-MENU-F` 由计划 §1 第 19 行与 §7 第 114 行独立判定，只有 `W0-NAV-F`、`W0-EDITOR-F` 均真实 PASS 且 F 归属适用用例无 FAIL/BLOCKED 时才解锁；它不是由 P 结果或 M3 companion 升级而来。按计划 §6 次序，`TB-MENU-004` 的权威判定发生在这两个前置依赖 PASS **之后**，P 原生批次只记 `NOT_APPLICABLE`（批次归属不适用）与 `authoritativeGate` 引用。反过来，P 与 F 双双 PASS 也**不得**自动升级专项：构建溯源虽已定稿为 `provenance=PASS`，但 `W0-EDITOR-F` 目标平台 WebView/人工材料未回传、帮助/诊断弹窗为低保真实现（`DEFER-UI-001`）、目录取消保态 `not-observed`，专项整体依然只能是「条件通过」。Windows 平台验收属独立 Windows 专项，不计入本 macOS 专项判定。帮助弹窗的视觉质量/交互完成度已按总计划 §8 登记为 `DEFER-UI-001`（后续版本验收），不再作为 Alpha 的条件通过原因。
+> **关于「F 门槛 PASS 不等于专项 PASS」**：`W0-SHELL-MENU-F` 由计划 §1 第 19 行与 §7 第 114 行独立判定，只有 `W0-NAV-F`、`W0-EDITOR-F` 均真实 PASS 且 F 归属适用用例无 FAIL/BLOCKED 时才解锁；它不是由 P 结果或 M3 companion 升级而来。按计划 §6 次序，`TB-MENU-004` 的权威判定发生在这两个前置依赖 PASS **之后**，P 原生批次只记 `NOT_APPLICABLE`（批次归属不适用）与 `authoritativeGate` 引用。反过来，P 与 F 双双 PASS 也**不得**自动升级专项：构建溯源虽已定稿为 `provenance=PASS`，`W0-EDITOR-F` 目标平台 WebView 客观证据已采集、目录取消保态已客观判定为 `preserved`，但 `W0-EDITOR-F` 人工 UI 观察仍待测试人员回传、帮助/诊断弹窗为低保真实现（`DEFER-UI-001`），专项整体依然只能是「条件通过」。Windows 平台验收属独立 Windows 专项，不计入本 macOS 专项判定。帮助弹窗的视觉质量/交互完成度已按总计划 §8 登记为 `DEFER-UI-001`（后续版本验收），不再作为 Alpha 的条件通过原因。
 
 ## 4. 子门槛判定
 
@@ -81,7 +82,7 @@ P 子集 9 个用例（13 项扣除 4 个 F 归属用例）：`9 PASS / 0 FAIL /
 
 - 不因 `F` 阻断而降格，也**不吸收** `F` 结果；P 只证明壳层与平台承载能力。
 - 不反向把 P 结论写入 `W0-SHELL-P` 或 `D-NAV`；壳层报告 §1 与导航报告 §8 的边界继续有效。
-- 按计划 §6，专项通过还要求「目标平台证据与构建溯源均可核验」；本批次构建溯源已定稿，但 `W0-EDITOR-F` 目标平台 WebView / 人工材料仍未回传，且 `DEFER-UI-001`、目录取消保态 `not-observed` 未清，故专项仍不能记为 PASS。
+- 按计划 §6，专项通过还要求「目标平台证据与构建溯源均可核验」；本批次构建溯源已定稿，`W0-EDITOR-F` 目标平台 WebView 客观证据已由 `UI-ACC-EDITOR-WEBVIEW-001` 采集、目录取消保态已按 AX/CG 双信号客观判定为 `preserved`，但 `W0-EDITOR-F` 人工 UI 观察仍待测试人员回传、`DEFER-UI-001` 仍按总计划 §8 保留登记，故专项仍不能记为 PASS。
 
 ### 4.2 `W0-SHELL-MENU-F` — PASS（独立门槛已解锁）
 
@@ -89,12 +90,12 @@ P 子集 9 个用例（13 项扣除 4 个 F 归属用例）：`9 PASS / 0 FAIL /
 | --- | --- | --- |
 | `W0-SHELL-MENU-P` | PASS | 最新 `UI-ACC-TITLE-BAR-001` 原生批次 `subsets['W0-SHELL-MENU-P'].conclusion` |
 | `W0-NAV-F` | PASS | `artifacts/navigation-acceptance/run-*/result.json` 6/6，见导航报告 §8 |
-| `W0-EDITOR-F` | **PASS（本机已执行）** | `artifacts/editor-acceptance/run-*/result.json` CLI 6/6、`tests/editor/editor-acceptance-cli.test.ts` 10/10；修好了 macOS `/var/folders` → `/private/var/folders` 符号链接导致的路径守卫误判，越界保护断言未放宽 |
+| `W0-EDITOR-F` | **PASS（本机已执行）** | `artifacts/editor-acceptance/run-*/result.json` CLI 6/6、`tests/editor/editor-acceptance-cli.test.ts` 10/10；路径守卫用 `safeRealpath` 归一 macOS `/var/folders` → `/private/var/folders` 符号链接，越界保护断言未放宽 |
 
 - **独立脚本已建立**：`scripts/title-bar/title-bar-fixture-acceptance.ts` + `run-title-bar-fixture-acceptance.mjs` / `.sh` / `.ps1`，npm 入口 `test:title-bar-fixture-acceptance`（含 `:sh` / `:win`）；批次目录独立为 `artifacts/title-bar-fixture-acceptance/title-bar-w0-f-*`。合同测试 `tests/title-bar/title-bar-fixture-acceptance-cli.test.ts` 6/6 PASS，机器验证「13 项覆盖不缩水、依赖结论读真实批次、F 通过不自动升级专项」。
 - **判定来源**：F 结论由 `title-bar-w0-f-*/result.json` 的 `subsets['W0-SHELL-MENU-F'].conclusion` 给出；`dependencies` 逐项记录三个依赖批次的路径、`conclusion`、`gitSha`、`provenanceStatus`、`repositoryClean`，不硬编码。
 - **职责分离**：`UI-ACC-TITLE-BAR-001` 原生 runner 不判定 F；F 归属用例在本批次记 `NOT_APPLICABLE`（批次归属不适用），并以 `authoritativeGate` 登记独立门槛的脚本 ID / 命令 / 归档目录，只把 F 归属菜单动作作为原生过程证据。`cases[].status` 只用四态，两个 runner 不再对同一件事给出互相矛盾的结论。
-- **仍未越过专项门槛（macOS 范围）**：`TB-MENU-003-GLOBAL-SEARCH`（`CF-023`）客观 PASS；F 归属的 `TB-MENU-004` 已按计划 §6 次序由独立 F 门槛（在 `W0-NAV-F`/`W0-EDITOR-F` 前置 PASS **之后**）判为 PASS，P 原生批次只记 `NOT_APPLICABLE`（批次归属不适用）与原生过程证据。`TB-MENU-008` 全屏/Reopen 已客观解卡为 PASS，构建溯源 `provenance=PASS` 已按最终 HEAD 定稿，二者不再是专项阻断项。剩余客观遗留为 `W0-EDITOR-F` 目标平台 WebView/人工材料未回传、帮助弹窗低保真（`DEFER-UI-001`）与目录取消保态 `not-observed`；Windows 平台验收属独立 Windows 专项，故专项整体仍只能是「条件通过」。`F=PASS` 只表示 F 子门槛解锁，**不是**专项通过、也不是完整通过。
+- **仍未越过专项门槛（macOS 范围）**：`TB-MENU-003-GLOBAL-SEARCH`（`CF-023`）客观 PASS；F 归属的 `TB-MENU-004` 已按计划 §6 次序由独立 F 门槛（在 `W0-NAV-F`/`W0-EDITOR-F` 前置 PASS **之后**）判为 PASS，P 原生批次只记 `NOT_APPLICABLE`（批次归属不适用）与原生过程证据。`TB-MENU-008` 全屏/Reopen 已客观解卡为 PASS，构建溯源 `provenance=PASS` 已按最终 HEAD 定稿，二者不再是专项阻断项。剩余遗留为 `W0-EDITOR-F` 人工 UI 观察仍待测试人员回传、帮助弹窗低保真（`DEFER-UI-001`）；`W0-EDITOR-F` 目标平台 WebView 客观证据已采集、目录取消保态已客观判定为 `preserved`，不再计入遗留项。Windows 平台验收属独立 Windows 专项，故专项整体仍只能是「条件通过」。`F=PASS` 只表示 F 子门槛解锁，**不是**专项通过、也不是完整通过。
 
 ## 5. 证据材料与证据层级
 
@@ -117,7 +118,7 @@ P 子集 9 个用例（13 项扣除 4 个 F 归属用例）：`9 PASS / 0 FAIL /
 
 1. **原生证据**：真实启动 `/Applications/Vinkey.app`，AX C API 直接读取/点击 `AXMenuBar` / `AXMenuItem`，`CGWindowListCreateImage` 按窗口 ID 捕获 20 张原生截图。这是本专项结论的主要依据。
 2. **M3 WebView companion**：Playwright 在 Win32 上下文渲染自绘标题栏（`macOS` 下 `TitleBar` 返回 `null`），为 `TB-MENU-004`、`TB-MENU-005`、`TB-MENU-010`、`TB-MENU-012`、`TB-MENU-003-GLOBAL-SEARCH` 提供结构证据，5/5 PASS、12 张截图。它**不能**证明 macOS 原生菜单、交通灯、系统窗口按钮或物理 DPI，也**不能**升级任何 `BLOCKED` 用例或 `F` 子门槛。
-3. **人工观察**：目录选择取消/失败保留原状态、全屏状态目视复核、关闭窗口后 Dock/系统 Reopen 恢复、诊断弹窗的**焦点返回**（客观，已由 `TB-MENU-010` 读回验证）均保留为人工观察或条件通过遗留项，未被写成 PASS。诊断弹窗的**视觉质量/交互完成度**按总计划 §8 登记为 `DEFER-UI-001`，属后续版本验收，不再作为 Alpha 的条件通过原因。
+3. **人工观察**：`W0-EDITOR-F` 的人工 UI 观察（视觉质量、交互手感、无障碍观感）与诊断弹窗的**视觉质量/交互完成度**（`DEFER-UI-001`）仍待测试人员回传，未被写成 PASS，也不由机器证据冒充。目录选择取消/失败保留原状态已由 `TB-MENU-002` 的 AXSheet + CG 面板窗口双信号判据客观判定为 `preserved`；全屏状态、关闭窗口后 Dock/系统 Reopen 恢复与诊断弹窗**焦点返回**均已由 `TB-MENU-008` / `TB-MENU-010` 客观读回，不再是遗留项。
 
 ### 5.3 `provenance`
 
@@ -138,15 +139,30 @@ P 子集 9 个用例（13 项扣除 4 个 F 归属用例）：`9 PASS / 0 FAIL /
 
 该批次**不含**原生窗口截图，也**不声称**证明 macOS 原生菜单、交通灯或系统窗口动作；这些仍只由 `UI-ACC-TITLE-BAR-001` 批次承担。
 
+### 5.5 `W0-EDITOR-F` 目标平台 WebView 客观证据批次
+
+`UI-ACC-EDITOR-WEBVIEW-001` 在 `artifacts/editor-webview-native-macos/editor-wv-*/` 独立归档，不与 `artifacts/editor-acceptance/run-*`（fixture / 文件桥接合同层）或标题栏批次混目录。证据取自真实 `/Applications/Vinkey.app` 窗口：ApplicationServices AX 树与文本快照、原生菜单 `查看 > 项目文件` 点击、`AXPress` 打开 `README.md`、CoreGraphics 窗口截图、隔离 Profile 的 `app.start` 构建溯源日志。
+
+| 用例 | 客观判据 | 结论 |
+| --- | --- | --- |
+| `EDIT-WV-001` | 真实窗口 `AXWebArea` + 原生菜单切换 + `AXPress` 打开文档 | PASS |
+| `EDIT-WV-002` | `AXLandmarkRegion`「文件列表」子树含 `README.md` 按钮 | PASS |
+| `EDIT-WV-003` | `AXTextArea` 的 AXValue 与 fixture 文档内容逐字一致 | PASS |
+| `EDIT-WV-004` | 状态栏按「语言/markdown、行/行数、字符数/字符、词数/词、UTF-8、LF、已保存」连续读回 | PASS |
+| `EDIT-WV-005` | 「文档视图」分组子树含「编辑 / 分栏 / 预览」三个按钮 | PASS |
+| `EDIT-WV-006` | `app.start.commitSha` = HEAD、构建时与当前工作树均干净，文件页/编辑器页原生截图齐备 | PASS |
+
+该批次 `platformPass=false`、`humanUIObservation.returned=false`、`DEFER-UI-001` 只登记不判定：人工 UI 观察仍待测试人员回传，客观证据不冒充人工观察，也不代表 `W0-EDITOR-F` 平台层综合通过。`cases[].status` 只用四态；`result.json` 与 `SHA256SUMS` 由批次自行定稿，原始 `app-runtime.jsonl`、`states/`、`screenshots/` 同批归档。
+
 ## 6. 遗留项与实现偏差（不得据此宣称通过）
 
 1. **`CF-023` / `TB-GAP-006`（已实现）**：设计 §3.2 要求「打开统一搜索面板，按项目、会话、当前项目文档分组；`Escape` 返回原页面」。`CF-023` 已实现：`src/components/UnifiedSearchPanel.tsx` 按三组分组、`Escape` 返回；⌘/Ctrl+K 与「会话 > 搜索项目与会话」菜单项均调用 `store.setUnifiedSearchOpen(true)`；侧栏内联输入框降级为「快速筛选」不再冒充全局搜索。`TB-MENU-003-GLOBAL-SEARCH` 经原生菜单项存在性 + M3 companion 面板分组/Escape 验证为 **PASS**（见 `webview/result.json` 与 F 批次 `result.json`），判定阈值未降低。
 2. **跨文档口径需产品/设计复核**：`UI_ACCEPTANCE_PLAN.md` §7 与导航报告 §2 把「全局搜索入口/结果面板」描述为已实现；导航报告 `NAV-E-005` 的 PASS 实际证明的是当前工作区「项目/会话/文档」三类分组搜索与跳转（`scripts/navigation/navigation-e2e-acceptance.ts` 的 `grouped` 断言），**不构成** `CF-023` 统一面板的验收证据（`CF-023` 由本专项 `TB-MENU-003-GLOBAL-SEARCH` 独立验证）。本专项不改变 `D-NAV` 结论，也不借用其 PASS 为 `CF-023` 背书；两处描述的一致性需另行复核，不在本专项里修改测试范围。
 3. **诊断弹窗（客观部分）**：快捷键/窗口诊断/应用诊断日志由 `window.alert` 或简易弹窗承载，`TB-MENU-009` 仅按客观断言计「动作可触发 / 可关闭 / 焦点返回 / 脱敏 / 构建溯源」，这些仍计入条件通过的依据。**其视觉质量/交互完成度按总计划 §8 登记为 `DEFER-UI-001`，属后续版本验收，不再作为 Alpha 的条件通过原因或专项通过的阻断项**（与客观行为分开：不删除、不改写为 PASS）。
-4. **F 门槛已解锁，但 macOS 专项遗留项未清**：`W0-EDITOR-F` 本机已执行并 PASS（CLI 6/6 + 合同测试 10/10），独立 `UI-ACC-TITLE-BAR-FIXTURE-001` 已建立且 `F=PASS`。按计划 §6 次序，`TB-MENU-004` 的权威判定在 `W0-NAV-F`/`W0-EDITOR-F` PASS **之后**由该门槛读取真实 `result.json` 给出（PASS），P 原生批次只记 `NOT_APPLICABLE`（批次归属不适用）+ `authoritativeGate` 引用。`TB-MENU-008`（全屏/Reopen）客观 PASS、构建溯源 `provenance=PASS` 已定稿，均不再是专项阻断项。这**不解除**下列 macOS 范围内**客观**遗留项：`W0-EDITOR-F` 目标平台 WebView/人工材料未回传（后续版本验收登记项）、帮助弹窗低保真（`DEFER-UI-001`）、目录取消保态 `not-observed`。Windows 平台验收属独立 Windows 专项，不计入本 macOS 专项判定。`specialityPass` 仍为 `false`。
+4. **F 门槛已解锁，但 macOS 专项遗留项未清**：`W0-EDITOR-F` 本机已执行并 PASS（CLI 6/6 + 合同测试 10/10），独立 `UI-ACC-TITLE-BAR-FIXTURE-001` 已建立且 `F=PASS`。按计划 §6 次序，`TB-MENU-004` 的权威判定在 `W0-NAV-F`/`W0-EDITOR-F` PASS **之后**由该门槛读取真实 `result.json` 给出（PASS），P 原生批次只记 `NOT_APPLICABLE`（批次归属不适用）+ `authoritativeGate` 引用。`TB-MENU-008`（全屏/Reopen）客观 PASS、构建溯源 `provenance=PASS` 已定稿，均不再是专项阻断项。这**不解除**下列 macOS 范围内遗留项：`W0-EDITOR-F` 人工 UI 观察仍待测试人员回传、帮助弹窗低保真（`DEFER-UI-001`）。`W0-EDITOR-F` 目标平台 WebView 客观证据已由 `UI-ACC-EDITOR-WEBVIEW-001` 采集，目录取消保态已按 AX/CG 双信号客观判定为 `preserved`，二者不再是遗留项。Windows 平台验收属独立 Windows 专项，不计入本 macOS 专项判定。`specialityPass` 仍为 `false`。
 5. **Windows 平台验收（独立专项，后置，不计入本 macOS 结论）**：`decision.windowsPlatform=NOT_EXECUTED` 仅记录 Windows 平台未在本批次执行这一事实；Windows 自绘菜单、窗口控制、DPI 与截图由独立 Windows 专项（`UI_ACCEPTANCE_WINDOWS_TITLE_BAR_PLAN.md`）负责，本 macOS 专项不覆盖、亦不因此降级。仅提示：在 Windows 专项执行前，不得宣称跨平台发布通过。
 6. **平台自动化偏差**：`System Events` 权限违例、`AXExpanded` 缺失、菜单展开区域截图收窄、helper 由 AppleScript 改为 Swift AX C API，均已在 `result.json.environment` / `privacy` 与本报告 §2 如实记录。
-7. **`W0-EDITOR-F` 的目标平台边界仍在**：其 PASS 只覆盖隔离 fixture / 文件桥接合同与合同测试，目标平台 WebView 的文件树、编辑器、保存状态栏与预览截图/人工观察仍未回传；该边界见 [基础编辑器专项验收报告](../UI_ACCEPTANCE_EDITOR.md)，本专项不代为判定。
+7. **`W0-EDITOR-F` 的边界**：fixture / 文件桥接合同层由 `UI-ACC-EDITOR-001` 判为 PASS；目标平台 WebView 的文件树、编辑器、保存状态栏与文档视图已由 `UI-ACC-EDITOR-WEBVIEW-001` 取得客观证据。人工 UI 观察仍待测试人员回传，故 `W0-EDITOR-F` 平台层综合结论保持未判定；该边界见 [基础编辑器专项验收报告](../UI_ACCEPTANCE_EDITOR.md)，本专项不代为判定。
 
 ## 7. 与其他专项的边界
 
@@ -155,14 +171,14 @@ P 子集 9 个用例（13 项扣除 4 个 F 归属用例）：`9 PASS / 0 FAIL /
 | `W0-SHELL-P` | 壳层报告 §1/§4 明确不判定菜单树与菜单命令；本报告不把 P 结果反向写入 `W0-SHELL-P`，也不改写其 24/24 结论 |
 | `D-NAV` | 导航报告「完整通过」只针对 `D-NAV`；其 §8 不把菜单专项当证据。本专项复用 `W0-NAV-F` 的 fixture 生成器只是为了构造「已打开项目」前置状态，**不重复判定导航业务链路** |
 | `W1-MODEL-E` | `TB-MENU-007` 只验收「进入/返回设置」与壳层恢复；模型保存、连接和凭据由 `W1-MODEL-E` 负责 |
-| 脚本计划状态 | `W0-SHELL-MENU-P/F` 由「待验收、不得假定通过」更新为「已执行：P PASS / F PASS（独立脚本）」，**专项整体仍不是「已通过」**；`W0-EDITOR-F` 由「待编写 / 待本地执行」更新为「本机已执行：CLI 6/6 + 合同测试 10/10，目标平台证据仍待回传」 |
+| 脚本计划状态 | `W0-SHELL-MENU-P/F` 已执行：P PASS / F PASS（独立脚本），**专项整体仍不是「已通过」**；`W0-EDITOR-F` 为 fixture 合同层 CLI 6/6 + 合同测试 10/10、目标平台 WebView 客观证据 6/6（独立脚本），人工 UI 观察仍待测试人员回传 |
 
 ## 8. 结论（逐条对照计划 §6）
 
 | §6 判定 | 是否满足 | 依据 |
 | --- | --- | --- |
-| **专项通过** | **否** | 要求所有适用用例均 PASS 且目标平台证据、构建溯源均可核验（macOS 范围）。本 macOS 专项内 P 子集 `9/9 PASS`、F 归属适用用例全 PASS、`13/13` 覆盖、`failed=0`；构建溯源已定稿为 `provenance=PASS`。但 `W0-EDITOR-F` 目标平台 WebView / 人工材料未回传、目录取消保态 `not-observed`、帮助/诊断弹窗低保真（`DEFER-UI-001`）等客观遗留项未清，且 Windows 独立专项未执行，故不能宣称专项通过或跨平台发布通过。诊断弹窗视觉质量已按总计划 §8 登记为 `DEFER-UI-001`，属后续版本验收，不计入本 Alpha 的条件通过原因。`decision.specialityPass=false` |
-| **条件通过** | **是（本次结论）** | 菜单结构与核心动作通过、macOS 目标平台证据已采集、F 门槛独立解锁为 PASS、`exitCode=0`、两套批次哈希清单均可核验；按 §6 必须列出遗留项且**不能宣称跨平台发布通过** |
+| **专项通过** | **否** | 要求所有适用用例均 PASS 且目标平台证据、构建溯源均可核验（macOS 范围）。本 macOS 专项内 P 子集 `9/9 PASS`、F 归属适用用例全 PASS、`13/13` 覆盖、`failed=0`；构建溯源已定稿为 `provenance=PASS`。但 `W0-EDITOR-F` 人工 UI 观察仍待测试人员回传、帮助/诊断弹窗低保真（`DEFER-UI-001`）等遗留项未清，且 Windows 独立专项未执行，故不能宣称专项通过或跨平台发布通过。`W0-EDITOR-F` 目标平台 WebView 客观证据与目录取消保态 `preserved` 已补齐，不再计入遗留项。诊断弹窗视觉质量已按总计划 §8 登记为 `DEFER-UI-001`，属后续版本验收，不计入本 Alpha 的条件通过原因。`decision.specialityPass=false` |
+| **条件通过** | **是（本次结论）** | 菜单结构与核心动作通过、macOS 目标平台证据与 `W0-EDITOR-F` 目标平台 WebView 客观证据已采集、目录取消保态客观达成、F 门槛独立解锁为 PASS、`exitCode=0`、各批次哈希清单均可核验；按 §6 必须列出遗留项且**不能宣称跨平台发布通过** |
 | **不通过** | 否 | `failed=0`；无旧「文件」一级菜单、设置不在「查看」、编辑命令未作用于错误焦点、菜单关闭断言与截图一致、最小化/缩放/关闭窗口动作成功 |
 | **阻断** | 否 | 应用包可启动、平台权限具备、结果文件完整且可证明来自目标包；`W0-EDITOR-F` 已本机执行并 PASS，F 子门槛不再 `BLOCKED`。 |
 
@@ -173,7 +189,7 @@ P 子集 9 个用例（13 项扣除 4 个 F 归属用例）：`9 PASS / 0 FAIL /
 - `W0-SHELL-MENU-P`：`PASS`；最新批次为 `12/13 passed, 0 failed, 0 blocked, 1 N/A`（`TB-MENU-008=PASS`、`TB-MENU-004=N/A〔批次归属不适用〕`），证据见 `artifacts/title-bar-acceptance/` 最新 `title-bar-w0-p-*` 批次的 `result.json` + `SHA256SUMS` + `screenshots/`（20 张原生截图）+ `states/` + `menu-tree.json`。
 - `W0-SHELL-MENU-F`：`PASS`；权威记录为 `artifacts/title-bar-fixture-acceptance/` 最新 `title-bar-w0-f-*` 批次的 `result.json` + `SHA256SUMS` + `dependencies/` + `machine/`；依赖状态见 `result.json.dependencies` 与 `subsets['W0-SHELL-MENU-F'].dependency`（`W0-NAV-F=PASS`、`W0-EDITOR-F=PASS`、`W0-SHELL-MENU-P=PASS`）。
 - M3 companion：`5/5 PASS`；证据见 P 批次 `webview/result.json` + `webview/SHA256SUMS` + 12 张截图；**仅为 WebView 结构证据**。
-- 人工复核清单：`<① 全屏：fullscreen-state 为 score=3 / verdict=fullscreen（AXFullScreen=true、原生 frame (0,34,1710,1073)），客观判据已达成，TB-MENU-008 记 PASS；Reopen 由 LaunchServices Dock Reopen 事件客观确认（窗口数 0→1 / verdict=reopened）；构建溯源 provenance=PASS（app 按最终 HEAD 重建、内嵌 SHA = HEAD、repositoryClean=true），无需人工目视复核；② 关闭窗口后主窗口隐藏状态已客观确认（窗口数归 0）；③ 目录选择取消/失败后原状态保留（cancel-panel 已接线，该菜单未弹出可识别原生面板，记 not-observed）；④ 诊断弹窗焦点返回（客观，TB-MENU-010 已 PASS）；其视觉质量/交互完成度属 DEFER-UI-001（后续版本）；⑤ Windows 平台验收由独立 Windows 专项负责（后置，不计入本 macOS 结论）；⑥ W0-EDITOR-F 目标平台 WebView/人工材料回传（后续版本验收登记项，与 TB-MENU-004 的 F 门槛 PASS 判定分开记录）>`
+- 人工复核清单：`<① 全屏：fullscreen-state 为 score=3 / verdict=fullscreen（AXFullScreen=true、原生 frame (0,34,1710,1073)），客观判据已达成，TB-MENU-008 记 PASS；Reopen 由 LaunchServices Dock Reopen 事件客观确认（窗口数 0→1 / verdict=reopened）；构建溯源 provenance=PASS（app 按最终 HEAD 重建、内嵌 SHA = HEAD、repositoryClean=true），无需人工目视复核；② 关闭窗口后主窗口隐藏状态已客观确认（窗口数归 0）；③ 目录选择取消/失败后原状态保留已由 AXSheet + CG 面板窗口双信号客观判定为 preserved（`AXPress Cancel` 后两信号同时消失、菜单树/窗口数状态读回不变）；④ 诊断弹窗焦点返回（客观，TB-MENU-010 已 PASS）；其视觉质量/交互完成度属 DEFER-UI-001（后续版本）；⑤ Windows 平台验收由独立 Windows 专项负责（后置，不计入本 macOS 结论）；⑥ W0-EDITOR-F 目标平台 WebView 客观证据已由 UI-ACC-EDITOR-WEBVIEW-001 采集（6/6 PASS），人工 UI 观察仍待测试人员回传（后续版本验收登记项，与 TB-MENU-004 的 F 门槛 PASS 判定分开记录）>`
 - 问题列表：`<① CF-023/TB-GAP-006 已实现并客观 PASS：原生「会话 > 搜索项目与会话 ⌘K」与 ⌘/Ctrl+K 打开 UnifiedSearchPanel（按项目/会话/当前项目文档分组、Escape 返回），侧栏内联输入框降级为「快速筛选」不再冒充全局搜索；② TB-MENU-008 为 PASS：全屏 score=3 / verdict=fullscreen、Reopen 0→1 / verdict=reopened，判定阈值未降低；③ TB-MENU-004 判定归独立门槛：P 原生批次记 `NOT_APPLICABLE`（批次归属不适用）+ `authoritativeGate` 引用（仅 AX 过程证据），`W0-EDITOR-F` 前置 PASS 后由 `UI-ACC-TITLE-BAR-FIXTURE-001` 判 PASS，`cases[].status` 只用四态；④ 构建溯源 provenance=PASS（app 按最终 HEAD 重建、srcIdentical=true、repositoryClean=true）；⑤ 诊断弹窗视觉质量/交互完成度属 DEFER-UI-001（客观触发/关闭/焦点返回仍验，不阻断 Alpha）；⑥ Windows 平台验收属独立专项（后置，不计入本 macOS 结论），跨平台发布通过提示待其执行>`
-- 综合结论：`<条件通过 — P 子集 9/9 PASS、F 门槛 PASS（13/13）且专项未通过；13/13 用例覆盖（P 批次 12 PASS + 1 N/A〔批次归属不适用〕、F 批次 13 PASS）；TB-MENU-008=PASS、TB-MENU-004=PASS、TB-MENU-003-GLOBAL-SEARCH=PASS；构建溯源 provenance=PASS（app 按最终 HEAD 重建、内嵌 SHA = HEAD）；剩余客观遗留为 W0-EDITOR-F 目标平台材料未回传、DEFER-UI-001、目录取消保态 not-observed 与 Windows 独立专项未执行；不得宣称专项通过、完整通过或跨平台发布通过>`
-- 下一次复审版本/日期：`<W0-EDITOR-F 目标平台 WebView/人工材料回传、Windows 专项执行（独立平台）、Vinkey 版本发布，或菜单树/设计合同变更时>`
+- 综合结论：`<条件通过 — P 子集 9/9 PASS、F 门槛 PASS（13/13）且专项未通过；13/13 用例覆盖（P 批次 12 PASS + 1 N/A〔批次归属不适用〕、F 批次 13 PASS）；TB-MENU-008=PASS、TB-MENU-004=PASS、TB-MENU-003-GLOBAL-SEARCH=PASS；构建溯源 provenance=PASS（app 按最终 HEAD 重建、内嵌 SHA = HEAD）；剩余遗留为 W0-EDITOR-F 人工 UI 观察待测试人员回传、DEFER-UI-001 与 Windows 独立专项未执行；W0-EDITOR-F 目标平台 WebView 客观证据已采集、目录取消保态 preserved；不得宣称专项通过、完整通过或跨平台发布通过>`
+- 下一次复审版本/日期：`<W0-EDITOR-F 人工 UI 观察材料回传、Windows 专项执行（独立平台）、Vinkey 版本发布，或菜单树/设计合同变更时>`

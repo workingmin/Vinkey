@@ -7,14 +7,18 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   ACCEPTANCE_ID,
   DOMAIN_ID,
+  EDITOR_WEBVIEW_SUITE_ID,
   F_GATE_CASE_IDS,
   GATE,
   PLANNED_CASE_IDS,
   SUITE_ID,
+  editorEvidenceBoundaryPhrase,
   gateUsage,
   parseGateArguments,
   readAllDependencies,
+  readEditorWebViewEvidence,
   runFixtureGate,
+  titleBarRemainingItems,
 } from '../../scripts/title-bar/title-bar-fixture-acceptance'
 
 const repositoryRoot = resolve(import.meta.dirname, '../..')
@@ -76,6 +80,21 @@ function syntheticRoot(editorConclusion = 'PASS'): string {
     ],
   })
   return root
+}
+
+function writeWebViewBatch(root: string, overrides: Record<string, unknown> = {}): string {
+  const directory = join(root, 'artifacts/editor-webview-native-macos/editor-wv-20260101T000003Z-macos')
+  writeResult(directory, {
+    suite: { id: EDITOR_WEBVIEW_SUITE_ID },
+    objectiveConclusion: 'PASS',
+    summary: { caseCount: 6, passed: 6, failed: 0, blocked: 0, notApplicable: 0 },
+    provenance: { status: 'PASS' },
+    humanUIObservation: { required: true, returned: false },
+    platformPass: false,
+    exitCode: 0,
+    ...overrides,
+  })
+  return directory
 }
 
 function verifySha256Sums(batchDir: string): void {
@@ -190,5 +209,81 @@ describe('UI-ACC-TITLE-BAR-FIXTURE-001 independent F gate', () => {
     expect(cases.find((item) => item.caseId === 'TB-MENU-004')!.status).toBe('BLOCKED')
     expect(cases).toHaveLength(13)
     verifySha256Sums(outputDir)
+  })
+
+  describe('遗留项口径（客观项完成 / 主观项保留）', () => {
+    const base = {
+      pProvenanceReady: true,
+      pProvenanceStatus: 'PASS',
+      editorWebViewObjectivePass: true,
+      editorHumanObservationReturned: false,
+      dirCancelPreserved: true,
+    }
+
+    it('目录取消保态 preserved 后不再登记为遗留项', () => {
+      const items = titleBarRemainingItems(base)
+      expect(items.some((item) => item.includes('目录选择取消'))).toBe(false)
+      expect(titleBarRemainingItems({ ...base, dirCancelPreserved: false })
+        .some((item) => item.includes('目录选择取消'))).toBe(true)
+    })
+
+    it('构建溯源定稿后不再登记「需复跑」遗留项', () => {
+      expect(titleBarRemainingItems(base).some((item) => item.includes('复跑'))).toBe(false)
+      expect(titleBarRemainingItems({ ...base, pProvenanceReady: false, pProvenanceStatus: 'REVIEW' })
+        .some((item) => item.includes('REVIEW'))).toBe(true)
+    })
+
+    it('W0-EDITOR-F 客观证据已采集与人工 UI 观察待回传必须分开表述', () => {
+      const items = titleBarRemainingItems(base)
+      expect(items.some((item) => item.includes('UI-ACC-EDITOR-WEBVIEW-001') && item.includes('人工 UI 观察仍待测试人员回传'))).toBe(true)
+      expect(editorEvidenceBoundaryPhrase(true)).toContain('客观证据已由 UI-ACC-EDITOR-WEBVIEW-001 采集')
+      expect(editorEvidenceBoundaryPhrase(true)).toContain('人工 UI 观察仍待测试人员回传')
+      expect(editorEvidenceBoundaryPhrase(false)).toContain('目标平台 WebView 客观证据与人工 UI 观察材料仍待回传')
+    })
+
+    it('DEFER-UI-001 与 Windows 独立专项恒保留登记，不得删除或写成 PASS', () => {
+      const items = titleBarRemainingItems(base)
+      expect(items.some((item) => item.includes('DEFER-UI-001'))).toBe(true)
+      expect(items.some((item) => item.includes('Windows M5 独立专项'))).toBe(true)
+      expect(items.every((item) => !item.includes('PASS'))).toBe(true)
+      const allResolved = titleBarRemainingItems({ ...base, editorHumanObservationReturned: true })
+      expect(allResolved.some((item) => item.includes('DEFER-UI-001'))).toBe(true)
+      expect(allResolved.some((item) => item.includes('Windows M5 独立专项'))).toBe(true)
+    })
+
+    it('readEditorWebViewEvidence 读取真实批次，缺失或不合格时不冒充客观通过', () => {
+      const empty = track(mkdtempSync(join(tmpdir(), 'vinkey-title-bar-wv-empty-')))
+      expect(readEditorWebViewEvidence(empty).objectivePass).toBe(false)
+      expect(readEditorWebViewEvidence(empty).available).toBe(false)
+
+      const root = track(mkdtempSync(join(tmpdir(), 'vinkey-title-bar-wv-')))
+      writeWebViewBatch(root)
+      const good = readEditorWebViewEvidence(root)
+      expect(good.available).toBe(true)
+      expect(good.objectivePass).toBe(true)
+      expect(good.humanUIObservationReturned).toBe(false)
+      expect(good.platformPass).toBe(false)
+      expect(good.resultFile).toContain('artifacts/editor-webview-native-macos')
+
+      const badRoot = track(mkdtempSync(join(tmpdir(), 'vinkey-title-bar-wv-bad-')))
+      writeWebViewBatch(badRoot, { objectiveConclusion: 'FAIL', exitCode: 1 })
+      expect(readEditorWebViewEvidence(badRoot).objectivePass).toBe(false)
+    })
+
+    it('F 门槛 result.json 登记 WebView 证据引用与剩余项，专项仍条件通过', { timeout: 90_000 }, async () => {
+      const root = syntheticRoot()
+      writeWebViewBatch(root)
+      const outputDir = track(mkdtempSync(join(tmpdir(), 'vinkey-title-bar-gate-wv-out-')))
+      const output = await runFixtureGate({ root, options: parseGateArguments(['--output', outputDir]) })
+      const decision = (output.result as { decision: Record<string, unknown> }).decision
+      expect((decision.editorWebViewEvidence as { objectivePass: boolean }).objectivePass).toBe(true)
+      expect((decision.editorWebViewEvidence as { humanUIObservationReturned: boolean }).humanUIObservationReturned).toBe(false)
+      expect(decision.specialityPass).toBe(false)
+      expect(decision.overallConclusion).toBe('条件通过')
+      const items = decision.remainingItems as string[]
+      expect(items.some((item: string) => item.includes('DEFER-UI-001'))).toBe(true)
+      expect(items.some((item: string) => item.includes('人工 UI 观察仍待测试人员回传'))).toBe(true)
+      verifySha256Sums(outputDir)
+    })
   })
 })

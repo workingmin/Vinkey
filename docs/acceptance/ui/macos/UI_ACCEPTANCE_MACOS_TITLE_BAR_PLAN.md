@@ -102,14 +102,14 @@ webview/                 # 同批次 Playwright companion 结果（如执行）
 ## 6. 判定规则
 
 - **专项通过**：`TB-MENU-001` 至 `TB-MENU-012` 中所有适用用例均 `PASS`；全局搜索 `TB-MENU-003-GLOBAL-SEARCH` 在 `CF-023` 完成后已转为客观 `PASS`（由原生菜单项存在性 + M3 companion 面板分组/Escape 验证），不再标记 `NOT_APPLICABLE`；macOS 至少一次目标平台证据；`result.json.exitCode=0` 且哈希清单可核验。
-- **条件通过**：菜单结构和核心动作通过，且 macOS 目标平台证据已采集（本批次已实机执行）；但存在其它**客观**遗留项（如 `W0-EDITOR-F` 目标平台 WebView/人工材料未回传、目录取消保态 `not-observed`）时，仍只能条件通过；必须列出遗留项，不能宣称跨平台发布通过。Windows 平台执行属独立 Windows 专项，不计入本 macOS 专项判定。帮助弹窗的低保真实现只按 `TB-MENU-009` 的客观断言（触发、关闭、焦点返回、脱敏、构建溯源）判定，其**视觉质量与交互完成度**属 `DEFER-UI-001`，不计入 Alpha 的条件通过原因。
+- **条件通过**：菜单结构和核心动作通过，且 macOS 目标平台证据已采集（本批次已实机执行）；但存在其它遗留项（如 `W0-EDITOR-F` 人工 UI 观察仍待测试人员回传、`DEFER-UI-001` 保留登记）时，仍只能条件通过；`W0-EDITOR-F` 目标平台 WebView 客观证据已采集、目录取消保态已客观判定为 `preserved`，不再计入遗留项；必须列出遗留项，不能宣称跨平台发布通过。Windows 平台执行属独立 Windows 专项，不计入本 macOS 专项判定。帮助弹窗的低保真实现只按 `TB-MENU-009` 的客观断言（触发、关闭、焦点返回、脱敏、构建溯源）判定，其**视觉质量与交互完成度**属 `DEFER-UI-001`，不计入 Alpha 的条件通过原因。
 - **不通过**：仍出现旧“文件”一级菜单、设置仍在“查看”、编辑命令作用于错误焦点、菜单关闭断言与截图冲突，或窗口动作失败。
 - **阻断**：应用包无法启动、平台权限缺失、结果文件不完整或无法证明结果来自目标包。
 
 **Alpha 判定补充**（仅调整前置条件，不修改上述四条判定规则的通过条件）：
 
 1. 按 [总验收计划 §8](../UI_ACCEPTANCE_PLAN.md) 登记的 `DEFER-UI-001`、`DEFER-UI-005`、`DEFER-UI-010`、`DEFER-UI-011`、`DEFER-UI-012` 等主观项，在 Alpha 内**不作为结论前置条件**；它们不参与「所有适用用例均 PASS」的计数，也不得写成 `PASS` 或从报告删除。
-2. 客观遗留项不因本节消失：`W0-EDITOR-F` 目标平台 WebView/人工材料未回传、目录取消保态 `not-observed` 仍按原规则逐项列出并阻断「macOS 专项通过」；`TB-MENU-008`、`TB-MENU-003-GLOBAL-SEARCH` 与构建溯源均已客观达成 `PASS`，不再作为遗留项。Windows 平台执行属独立 Windows 专项（见本计划 §1 与专项报告平台说明），不计入本 macOS 专项判定，其未执行不压低本 macOS 结论，仅作为跨平台发布提示。
+2. 遗留项不因本节消失：`W0-EDITOR-F` 人工 UI 观察仍待测试人员回传、`DEFER-UI-001` 保留登记，仍按原规则逐项列出并阻断「macOS 专项通过」；`TB-MENU-008`、`TB-MENU-003-GLOBAL-SEARCH`、构建溯源、`W0-EDITOR-F` 目标平台 WebView 客观证据与目录取消保态 `preserved` 均已客观达成，不再作为遗留项。Windows 平台执行属独立 Windows 专项（见本计划 §1 与专项报告平台说明），不计入本 macOS 专项判定，其未执行不压低本 macOS 结论，仅作为跨平台发布提示。
 3. 结论口径以最新权威批次为准：专项整体 `条件通过`、P `PASS`、F `PASS`、`provenance=PASS`、`specialityPass=false`；不宣称专项通过、完整通过或跨平台发布通过。
 4. 发布说明须同时列明客观遗留项与总计划 §8.3 全表。
 
@@ -121,7 +121,7 @@ webview/                 # 同批次 Playwright companion 结果（如执行）
 | --- | --- | --- | --- |
 | M1 | 设计和源码审计 | `TITLE_BAR_DESIGN.md` 审计表、缺口清单 | 产品/设计/开发 |
 | M2 | 菜单迁移和焦点桥接 | 项目/会话菜单、设置归属、编辑命令实现 | 开发；已完成，待验收 |
-| M3 | Playwright/WebView companion 与 fixture 脚本 | `TB-MENU-004`、`TB-MENU-005`、`TB-MENU-010` 结构证据；`scripts/title-bar/` 生成 `W0-SHELL-MENU-F` 与 `W0-SHELL-MENU-P` 机器证据 | 开发/测试；脚本已实现，待本地执行 |
+| M3 | Playwright/WebView companion 与 fixture 脚本 | `TB-MENU-004`、`TB-MENU-005`、`TB-MENU-010` 结构证据；`scripts/title-bar/` 生成 `W0-SHELL-MENU-F` 与 `W0-SHELL-MENU-P` 机器证据 | 开发/测试；脚本已实现并执行 |
 | M4 | macOS 原生执行 | Accessibility 菜单、交通灯、窗口动作、哈希归档；入口 `npm run test:title-bar-native-mac` | 测试人员 |
 | M5 | Windows 桌面执行 | 自绘菜单、窗口控制、DPI 和截图；见 [Windows 版计划](../windows/UI_ACCEPTANCE_WINDOWS_TITLE_BAR_PLAN.md) | 测试人员 |
 | M6 | 报告复审（Alpha） | 逐项结果、客观遗留项与延期登记完整性；**不含**对主观项的专家签字 | 测试/产品 |
@@ -129,7 +129,7 @@ webview/                 # 同批次 Playwright companion 结果（如执行）
 
 执行顺序建议为 `M1 → M2 → M3 → W0-SHELL-MENU-P → W0-NAV-F/W0-EDITOR-F → W0-SHELL-MENU-F → M4 → M6`（macOS 版；Windows 执行见 M5 对应计划）。`W0-SHELL-MENU-P` 可以先于业务 fixture 执行；`W0-SHELL-MENU-F` 必须等待 `W0-NAV-F`、`W0-EDITOR-F` 的必要用例通过。`W0-SHELL-MENU-F` 的机器 fixture 证据由 `npm run test:title-bar-acceptance` 单独归档，不得与 P 子集或导航脚本混报；目标平台原生菜单仍需 M4 桌面执行。**M7 不计入 Alpha 执行顺序，不构成 Alpha 发布前置。**
 
-**`TB-MENU-004` 与 `W0-EDITOR-F` 的判定权/次序（本计划 §1 第 19 行、§7 第 114 行的具体化）**：该用例为 F 归属且依赖 `W0-EDITOR-F`（三类输入中「可编辑文档」的 `EDIT-F-001`~`006` 合同），**权威判定归属 `W0-SHELL-MENU-F` 独立门槛**，不留在 P 原生批次。`W0-SHELL-MENU-P` 原生 runner 先于业务 fixture 执行，只能记录 macOS AX 焦点与六项编辑命令的**过程证据**；该用例在本批次记 `NOT_APPLICABLE`（§3 的「批次归属不适用」，非用例不适用），并用 `authoritativeGate` 登记权威判定所在的脚本 ID、复跑命令与归档目录，**不得**自行写 `PASS`、`FAIL` 或 `BLOCKED`。`cases[].status` 一律只用四态，不引入 `DEFERRED` 等第五态（[脚本计划 §8](../UI_ACCEPTANCE_SCRIPT_PLAN.md)）；`DEFERRED_AFTER_ALPHA` 只是计划层排期状态，不进入 JSON schema。权威结论在 `W0-NAV-F` / `W0-EDITOR-F` 真实 PASS **之后**由 `W0-SHELL-MENU-F` 独立门槛读取其真实 `result.json` 给出，缺任一依赖时由该门槛按 §1 第 19 行单独记 `BLOCKED`。13 项用例 ID 不删减、覆盖计数可核对；专项结论不因该项在 P 批次的状态变化而自动升级。`W0-EDITOR-F` 的目标平台 WebView/人工材料回传属后续版本验收登记项，与本用例的 F 门槛判定分开记录，不得混为 `BLOCKED` 依据。
+**`TB-MENU-004` 与 `W0-EDITOR-F` 的判定权/次序（本计划 §1 第 19 行、§7 第 114 行的具体化）**：该用例为 F 归属且依赖 `W0-EDITOR-F`（三类输入中「可编辑文档」的 `EDIT-F-001`~`006` 合同），**权威判定归属 `W0-SHELL-MENU-F` 独立门槛**，不留在 P 原生批次。`W0-SHELL-MENU-P` 原生 runner 先于业务 fixture 执行，只能记录 macOS AX 焦点与六项编辑命令的**过程证据**；该用例在本批次记 `NOT_APPLICABLE`（§3 的「批次归属不适用」，非用例不适用），并用 `authoritativeGate` 登记权威判定所在的脚本 ID、复跑命令与归档目录，**不得**自行写 `PASS`、`FAIL` 或 `BLOCKED`。`cases[].status` 一律只用四态，不引入 `DEFERRED` 等第五态（[脚本计划 §8](../UI_ACCEPTANCE_SCRIPT_PLAN.md)）；`DEFERRED_AFTER_ALPHA` 只是计划层排期状态，不进入 JSON schema。权威结论在 `W0-NAV-F` / `W0-EDITOR-F` 真实 PASS **之后**由 `W0-SHELL-MENU-F` 独立门槛读取其真实 `result.json` 给出，缺任一依赖时由该门槛按 §1 第 19 行单独记 `BLOCKED`。13 项用例 ID 不删减、覆盖计数可核对；专项结论不因该项在 P 批次的状态变化而自动升级。`W0-EDITOR-F` 的目标平台 WebView 客观证据已由 `UI-ACC-EDITOR-WEBVIEW-001` 采集；其人工 UI 观察回传属后续版本验收登记项，与本用例的 F 门槛判定分开记录，不得混为 `BLOCKED` 依据。
 
 ## 8. Alpha 延期边界（引用）
 

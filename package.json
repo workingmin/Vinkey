@@ -45,6 +45,7 @@
     "test:editor-acceptance": "node scripts/editor/run-editor-acceptance.mjs",
     "test:editor-acceptance:win": "powershell -ExecutionPolicy Bypass -File scripts/editor/run-editor-acceptance.ps1",
     "test:editor-acceptance:sh": "bash scripts/editor/run-editor-acceptance.sh",
+    "test:editor-webview-native-mac": "bash scripts/editor/run-editor-webview-native-macos.sh",
     "test:model-acceptance": "node scripts/model/run-model-acceptance.mjs",
     "test:model-acceptance:win": "powershell -ExecutionPolicy Bypass -File scripts/model/run-model-acceptance.ps1",
     "test:model-acceptance:sh": "bash scripts/model/run-model-acceptance.sh",

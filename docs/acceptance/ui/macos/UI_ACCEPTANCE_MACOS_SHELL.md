@@ -125,7 +125,7 @@ Playwright 自动化入口支持按平台运行，并在状态变化后等待双
 - **不通过**：窗口控制、内容容器、焦点、错误恢复或平台语义不满足设计断言。
 - **阻断**：桌面运行环境或构建依赖使结论不可得；记录复现信息。
 
-标题栏菜单不是本报告的通过条件；若菜单设计或菜单实现存在缺口，应在 [标题栏与功能菜单专项验收报告](./UI_ACCEPTANCE_MACOS_TITLE_BAR.md) 中记录（该报告的 `P=PASS`、`F=PASS`、`TB-MENU-003-GLOBAL-SEARCH=PASS`、`TB-MENU-008=PASS`、`provenance=PASS`，客观遗留为 `W0-EDITOR-F` 目标平台 WebView/人工材料未回传、帮助弹窗低保真 `DEFER-UI-001`、目录取消保态 `not-observed` 与 Windows 独立专项未执行；专项整体仍为条件通过），不得反向改写 `W0-SHELL-P` 的窗口/容器结论。
+标题栏菜单不是本报告的通过条件；若菜单设计或菜单实现存在缺口，应在 [标题栏与功能菜单专项验收报告](./UI_ACCEPTANCE_MACOS_TITLE_BAR.md) 中记录（该报告的 `P=PASS`、`F=PASS`、`TB-MENU-003-GLOBAL-SEARCH=PASS`、`TB-MENU-008=PASS`、`provenance=PASS`，`W0-EDITOR-F` 目标平台 WebView 客观证据已采集、目录取消保态已客观判定为 `preserved`；遗留为 `W0-EDITOR-F` 人工 UI 观察待回传、帮助弹窗低保真 `DEFER-UI-001` 与 Windows 独立专项未执行；专项整体仍为条件通过），不得反向改写 `W0-SHELL-P` 的窗口/容器结论。
 
 当前综合结论：**macOS 完整通过**（`W0-SHELL-P` 子门槛）。本版本唯一有效证据批次在最终构建 HEAD 下重跑，机器层 24/24 PASS、0 失败、0 阻断、`exitCode=0`；原生窗口控制、WebView companion、构建溯源、隔离 Profile、显示探针（物理 DPI `133`）与隐私扫描全部通过，6 张 CoreGraphics 窗口截图有效，两级哈希清单与归档脱敏通过，应用与仓库 Git SHA 一致且工作树 clean。Windows 平台验收见 [UI_ACCEPTANCE_WINDOWS_SHELL.md](../windows/UI_ACCEPTANCE_WINDOWS_SHELL.md)；本报告不覆盖 `D-NAV` 真实业务链路或标题栏菜单专项。
 

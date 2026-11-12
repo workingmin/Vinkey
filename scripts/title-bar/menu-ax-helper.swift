@@ -12,6 +12,8 @@
 //   menu-ax-helper state <out.json>
 //   menu-ax-helper click <out.json> <一级菜单标题> <菜单项标题>
 //   menu-ax-helper key   <out.json> <escape|cmd-k|cmd-comma|cmd-o|cmd-n|cmd-w|cmd-r>
+//   menu-ax-helper press-ax <out.json> <role|*> <exact-title>
+//   menu-ax-helper ax-tree  <out.json>   # 扁平导出窗口 AX 树（WebArea 结构证据）
 //   menu-ax-helper window <out.json> <minimize|zoom|fullscreen|close>
 import AppKit
 import ApplicationServices
@@ -447,35 +449,140 @@ func fullscreenState(_ app: AXUIElement) -> [String: Any] {
 
 // MARK: - 目录选择对话框取消（TB-MENU-002 客观自动化）
 
-/// 检测并取消一个打开的面板/表单（NSOpenPanel / NSAlert sheet），优先 Escape。
-func cancelPanel(_ app: AXUIElement) -> [String: Any] {
-    func hasCancel(_ el: AXUIElement) -> Bool {
-        if role(of: el) == "AXButton" {
-            let txt = "\(title(of: el) ?? "") \(description(of: el) ?? "")"
-            return txt.contains("取消")
-        }
-        return children(of: el).contains { hasCancel($0) }
+/// 面板检测（AX + CoreGraphics 两个独立层交叉，不放宽断言）。
+/// 本机实测：macOS NSOpenPanel 以 `AXSheet` 挂在主窗口，取消按钮标题为英文 `Cancel`
+/// （旧实现只匹配中文「取消」导致 no-cancel-panel-found）；同时 CGWindowList 会出现
+/// 同 PID、layer 0、名为 `Open` 的第二个窗口。Escape 后两者须同时消失。
+func panelSignals(_ app: AXUIElement) -> [String: Any] {
+    func isCancelTitle(_ text: String) -> Bool {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return t == "cancel" || t == "取消" || t.contains("cancel") || t.contains("取消")
     }
+    var sheetFound = false
+    var cancelFound = false
     func walk(_ el: AXUIElement, _ depth: Int) {
-        guard foundPanel == nil, depth <= 16 else { return }
+        guard depth <= 14 else { return }
         let r = role(of: el) ?? ""
-        if (r == "AXWindow" || r == "AXPanel" || r == "AXSheet") && hasCancel(el) {
-            foundPanel = el
-            return
+        if r == "AXSheet" || r == "AXPanel" || r == "AXDialog" { sheetFound = true }
+        if r == "AXButton" && isCancelTitle("\(title(of: el) ?? "") \(description(of: el) ?? "")") {
+            cancelFound = true
         }
         for child in children(of: el) { walk(child, depth + 1) }
     }
-    var foundPanel: AXUIElement?
-    if let win = frontWindow(app) { walk(win, 0) }
-    for w in windows(of: app) where foundPanel == nil { walk(w, 0) }
-    let before = windows(of: app).count
-    guard foundPanel != nil else {
-        return ["ok": false, "reason": "no-cancel-panel-found", "windowCountBefore": before]
+    let wins = windows(of: app)
+    for w in wins { walk(w, 0) }
+
+    var cgWindowCountForApp = 0
+    var cgPanelNameMatched = false
+    var cgPanelNames: [String] = []
+    let opts = CGWindowListOption(arrayLiteral: .optionOnScreenOnly, .excludeDesktopElements)
+    if let pid = pidOf(app), let infoList = CGWindowListCopyWindowInfo(opts, kCGNullWindowID) as? [[String: Any]] {
+        for info in infoList {
+            guard let ownerPid = info[kCGWindowOwnerPID as String] as? Int32, ownerPid == pid,
+                  let layer = info[kCGWindowLayer as String] as? Int, layer == 0,
+                  let bounds = info[kCGWindowBounds as String] as? [String: Double],
+                  let w = bounds["Width"], let h = bounds["Height"], w > 1, h > 1
+            else { continue }
+            cgWindowCountForApp += 1
+            let name = info[kCGWindowName as String] as? String ?? ""
+            cgPanelNames.append(name)
+            let n = name.lowercased()
+            if n == "open" || n == "打开" || n.contains("open") || n.contains("打开") {
+                cgPanelNameMatched = true
+            }
+        }
     }
-    postKey(53, [])
-    usleep(450_000)
-    let after = windows(of: app).count
-    return ["ok": true, "canceled": true, "method": "escape", "windowCountBefore": before, "windowCountAfter": after]
+    // 面板服务进程只作辅助记录：实测 Escape 后进程不即时退出，不用于「已关闭」判定。
+    var panelServicePresent = false
+    for p in NSWorkspace.shared.runningApplications {
+        if let b = p.bundleIdentifier, b == "com.apple.appkit.xpc.openAndSavePanelService",
+           let n = p.localizedName, n.contains(processName) {
+            panelServicePresent = true
+        }
+    }
+    let axSheetPresent = sheetFound && cancelFound
+    let panelOpened = axSheetPresent && cgPanelNameMatched
+    return [
+        "axSheetFound": sheetFound,
+        "axCancelButtonPresent": cancelFound,
+        "axSheetPresent": axSheetPresent,
+        "cgPanelNameMatched": cgPanelNameMatched,
+        "cgWindowCountForApp": cgWindowCountForApp,
+        "cgPanelNames": cgPanelNames,
+        "axWindowCount": wins.count,
+        "panelServicePresent": panelServicePresent,
+        "panelOpened": panelOpened,
+    ]
+}
+
+/// 定位面板的取消按钮（AX 直接 press，不依赖键盘焦点时序）。
+func findCancelButton(_ app: AXUIElement) -> AXUIElement? {
+    var target: AXUIElement?
+    func walk(_ el: AXUIElement, _ depth: Int) {
+        guard target == nil, depth <= 14 else { return }
+        if role(of: el) == "AXButton" {
+            let t = "\(title(of: el) ?? "") \(description(of: el) ?? "")"
+                .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if t == "cancel" || t == "取消" || t.contains("cancel") || t.contains("取消") {
+                target = el
+                return
+            }
+        }
+        for child in children(of: el) { walk(child, depth + 1) }
+    }
+    for w in windows(of: app) { walk(w, 0) }
+    return target
+}
+
+/// 取消一个已打开的目录选择面板；只有「打开」与「关闭」都被双层信号证实才算成功。
+/// 优先 AX 按下 Cancel 按钮；未关闭时激活应用并用 Escape 重试，全过程如实记录。
+func cancelPanel(_ app: AXUIElement) -> [String: Any] {
+    let before = panelSignals(app)
+    guard before["panelOpened"] as? Bool == true else {
+        return [
+            "ok": false,
+            "reason": "panel-not-detected",
+            "signalsBefore": before,
+            "windowCountBefore": before["axWindowCount"] as? Int ?? 0,
+        ]
+    }
+    var method = "none"
+    var pressedCancel = false
+    if let button = findCancelButton(app), performPress(button) {
+        pressedCancel = true
+        method = "ax-press-cancel"
+    }
+    usleep(400_000)
+    var after = panelSignals(app)
+    if (after["panelOpened"] as? Bool) == true {
+        if let pid = pidOf(app) { _ = activateApp(pid) }
+        usleep(200_000)
+        postKey(53, [])
+        usleep(500_000)
+        after = panelSignals(app)
+        method = pressedCancel ? "ax-press-cancel+escape" : "escape"
+    }
+    if (after["panelOpened"] as? Bool) == true {
+        postKey(53, [])
+        usleep(600_000)
+        after = panelSignals(app)
+        method += "+escape-retry"
+    }
+    let closed = (after["panelOpened"] as? Bool) != true
+    return [
+        "ok": closed,
+        "canceled": closed,
+        "closed": closed,
+        "panelClosed": closed,
+        "method": method,
+        "pressedCancelButton": pressedCancel,
+        "signalsBefore": before,
+        "signalsAfter": after,
+        "windowCountBefore": before["axWindowCount"] as? Int ?? 0,
+        "windowCountAfter": after["axWindowCount"] as? Int ?? 0,
+        "cgPanelDisappeared": (after["cgPanelNameMatched"] as? Bool) != true,
+        "axSheetDismissed": (after["axSheetPresent"] as? Bool) != true,
+    ]
 }
 
 // MARK: - 输出
@@ -529,6 +636,60 @@ case "key":
     } else {
         payload = ["ok": false, "error": "unknown-key", "key": args[3]]
     }
+case "press-ax":
+    // 按 role + 精确标题在 WebView/AX 树中定位并按下控件（不依赖屏幕坐标）。
+    // 用于 W0-EDITOR-F 目标平台 WebView 证据：真实 Tauri app 中打开文档进入编辑器。
+    if args.count < 5 {
+        payload = ["ok": false, "error": "usage: press-ax <out> <role|*> <exact-title>"]
+    } else {
+        let wantedRole = args[3]
+        let wantedTitle = args[4]
+        var target: AXUIElement?
+        var matched: [String: Any] = [:]
+        func walk(_ el: AXUIElement, _ depth: Int) {
+            guard target == nil, depth <= 16 else { return }
+            let r = role(of: el) ?? ""
+            let t = "\(title(of: el) ?? "")".trimmingCharacters(in: .whitespacesAndNewlines)
+            let d = "\(description(of: el) ?? "")".trimmingCharacters(in: .whitespacesAndNewlines)
+            let roleOk = wantedRole == "*" || r == wantedRole
+            if roleOk && (t == wantedTitle || d == wantedTitle) {
+                target = el
+                matched = ["role": r, "title": t, "description": d,
+                           "enabled": boolAttr(el, kAXEnabledAttribute) ?? true]
+                return
+            }
+            for c in children(of: el) { walk(c, depth + 1) }
+        }
+        for w in windows(of: app) { walk(w, 0) }
+        if let el = target {
+            let ok = performPress(el)
+            usleep(500_000)
+            payload["pressAx"] = ["ok": ok, "matched": matched, "role": wantedRole, "title": wantedTitle]
+            payload["ok"] = ok
+            payload["stateAfter"] = readState(app)
+        } else {
+            payload = ["ok": false, "error": "no-ax-match", "role": wantedRole, "title": wantedTitle]
+        }
+    }
+case "ax-tree":
+    // 扁平导出目标应用窗口的 AX 树，供目标平台 WebView 结构证据归档。
+    var nodes: [[String: Any]] = []
+    func walk(_ el: AXUIElement, _ depth: Int) {
+        guard depth <= 16, nodes.count < 1400 else { return }
+        nodes.append([
+            "depth": depth,
+            "role": role(of: el) ?? "",
+            "subrole": subrole(of: el) ?? "",
+            "title": title(of: el) ?? "",
+            "description": description(of: el) ?? "",
+            "value": valueAttr(el, kAXValueAttribute) ?? "",
+        ])
+        for c in children(of: el) { walk(c, depth + 1) }
+    }
+    for w in windows(of: app) { walk(w, 0) }
+    payload["axTree"] = nodes
+    payload["nodeCount"] = nodes.count
+    payload["truncated"] = nodes.count >= 1400
 case "window":
     if args.count < 4 {
         payload = ["ok": false, "error": "usage: window <out> <action>"]

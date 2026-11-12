@@ -1,7 +1,7 @@
 # UI 测试验收脚本编写工作计划
 
 - 计划基线：当前版本 `0.1.0`（Alpha）
-- 更新日期：`2026-11-10`
+- 更新日期：`2026-11-12`
 - 脚本规范：[UI_ACCEPTANCE_SCRIPT_SPEC.md](./UI_ACCEPTANCE_SCRIPT_SPEC.md)
 - 总验收计划：[UI_ACCEPTANCE_PLAN.md](./UI_ACCEPTANCE_PLAN.md)（主观类验收项延期登记表的唯一权威是该文件 §8，本文件只引用、不另建清单）
 
@@ -42,8 +42,8 @@
 | `W0-SHELL-MENU-P` | `D-SHELL` 标题栏与功能菜单 | `W0-SHELL-P` 的桌面启动和平台权限 | `UI-ACC-TITLE-BAR-001` | `scripts/title-bar/` 机器层菜单树/查看/主题/设置/帮助/关闭焦点/中文与减法审计已有；macOS 原生 AX 菜单入口已有 | `npm run test:title-bar-p-acceptance -- --json`；macOS 原生入口 `npm run test:title-bar-native-mac` | 一级菜单树、平台窗口动作、主题、中文审计、菜单关闭 | **已执行（macOS）**：`UI-ACC-TITLE-BAR-001` 原生批次，P 子集 9 项 `9 PASS / 0 FAIL / 0 BLOCKED`（`TB-MENU-008` 全屏 `score=3 / verdict=fullscreen`、Reopen `0→1 / verdict=reopened`），结论 **P=PASS**；`13/13` 覆盖（`TB-MENU-004` 记 `NOT_APPLICABLE`〔批次归属不适用〕+ `authoritativeGate`），`provenance=PASS`；Windows 独立专项未执行，不计入本 macOS 专项结论；详见 [macOS 专项报告](./macos/UI_ACCEPTANCE_MACOS_TITLE_BAR.md)。**不得记为专项通过或完整通过** |
 | `W0-RESP-P` | `Q-RESP` 响应式/主题 | 壳层 Token | `UI-ACC-RESPONSIVE-001` | 与壳层共用 Playwright 三种视口/主题/焦点场景 | 当前由 `test:ui-shell-acceptance` 提供结构截图；窄窗口专项仍待扩展 | 三种目标尺寸、主题、焦点、无横向溢出（机器可判）；视觉观感/对比度按总计划 §8 延期 | 部分自动化可执行，目标桌面 DPI 待回填；`Q-RESP` 范围不缩减 |
 | `W0-NAV-F` | `D-NAV` 项目/会话导航 | 桌面桥接、SQLite、隔离 fixture | `UI-ACC-NAV-FIXTURE-001` | store、删除对话框和搜索单元证据；`scripts/navigation/` 与 `navigation-acceptance-cli.test.ts` 合同测试已有；组件直测仍需补 | `npm run test:navigation-acceptance:sh`；脚本自建隔离临时目录、双项目、双会话、中英文文档、删除边界和当前搜索；不调用 Ollama | 切换、恢复、确认、错误重试、结果范围 | 已执行：`NAV-F-001`~`006` 6/6 PASS；截图材料由 `UI-ACC-NAV-UI-001` 补齐 |
-| `W0-EDITOR-F` | `D-EDITOR` 基础编辑器 | 工作区/文件桥接 | `UI-ACC-EDITOR-001` | `scripts/editor/` 复刻文档分类、读取、保存、冲突与越界保护合同；不覆盖用户文件 | `npm run test:editor-acceptance -- --json`；临时工作区含 Unicode/BOM/CRLF/二进制 fixture | 文件树、打开、编辑、保存、预览 | **本机已执行**：CLI `EDIT-F-001`~`006` 6/6 PASS、合同测试 10/10 PASS；修复 macOS `/var/folders` 符号链接导致的路径守卫误判与 `result.json` 自引用 hash。目标平台 WebView/人工材料仍待回传，见 [基础编辑器报告](./UI_ACCEPTANCE_EDITOR.md) |
-| `W0-SHELL-MENU-F` | `D-SHELL` + 入口 fixture | `W0-SHELL-MENU-P`、`W0-NAV-F`、`W0-EDITOR-F`；设置使用可控 UI fixture | `UI-ACC-TITLE-BAR-FIXTURE-001` | **独立门槛脚本已建立**：`scripts/title-bar/title-bar-fixture-acceptance.ts` + runner/`.sh`/`.ps1`，独立批次 `artifacts/title-bar-fixture-acceptance/title-bar-w0-f-*`；内部调用 `title-bar-acceptance.ts` 产出 `machine/`，读取三个依赖批次的真实 `result.json`；不调用 Ollama | `npm run test:title-bar-fixture-acceptance:sh`（Windows 用 `:win`）；合同测试 `tests/title-bar/title-bar-fixture-acceptance-cli.test.ts` 6/6 | 添加/刷新项目、新建会话、页面状态、编辑焦点、设置打开/返回 | **已独立执行：`F=PASS`**。`W0-NAV-F` PASS、`W0-EDITOR-F` 本机 PASS；13/13 用例覆盖、`TB-MENU-004=PASS`、依赖不硬编码、`SHA256SUMS` 全 OK、`provenance=PASS`。**F 通过不等于专项通过**：`W0-EDITOR-F` 目标平台 WebView/人工材料未回传、目录取消保态 `not-observed`、Windows 独立专项未执行，`specialityPass=false` / `overallConclusion=条件通过`。不得与 P 子集混报 |
+| `W0-EDITOR-F` | `D-EDITOR` 基础编辑器 | 工作区/文件桥接 | `UI-ACC-EDITOR-001` + `UI-ACC-EDITOR-WEBVIEW-001` | `scripts/editor/` 复刻文档分类、读取、保存、冲突与越界保护合同；目标平台 WebView 由 AX 树/文本快照/原生截图/构建溯源构成六项客观判据 | `npm run test:editor-acceptance -- --json`；`npm run test:editor-webview-native-mac`（真实 Tauri app、隔离 Profile、`realpath` 归一） | 文件树、打开、编辑、保存、预览；人工 UI 观察 | **已执行**：fixture 合同层 CLI 6/6 + 合同测试 10/10；目标平台 WebView 客观证据 6/6（独立批次 `artifacts/editor-webview-native-macos/`）；人工 UI 观察仍待测试人员回传，见 [基础编辑器报告](./UI_ACCEPTANCE_EDITOR.md) |
+| `W0-SHELL-MENU-F` | `D-SHELL` + 入口 fixture | `W0-SHELL-MENU-P`、`W0-NAV-F`、`W0-EDITOR-F`；设置使用可控 UI fixture | `UI-ACC-TITLE-BAR-FIXTURE-001` | **独立门槛脚本已建立**：`scripts/title-bar/title-bar-fixture-acceptance.ts` + runner/`.sh`/`.ps1`，独立批次 `artifacts/title-bar-fixture-acceptance/title-bar-w0-f-*`；内部调用 `title-bar-acceptance.ts` 产出 `machine/`，读取三个依赖批次的真实 `result.json`；不调用 Ollama | `npm run test:title-bar-fixture-acceptance:sh`（Windows 用 `:win`）；合同测试 `tests/title-bar/title-bar-fixture-acceptance-cli.test.ts` 6/6 | 添加/刷新项目、新建会话、页面状态、编辑焦点、设置打开/返回 | **已独立执行：`F=PASS`**。`W0-NAV-F` PASS、`W0-EDITOR-F` 本机 PASS；13/13 用例覆盖、`TB-MENU-004=PASS`、依赖不硬编码、`SHA256SUMS` 全 OK、`provenance=PASS`。**F 通过不等于专项通过**：`W0-EDITOR-F` 人工 UI 观察待回传、`DEFER-UI-001` 保留登记、Windows 独立专项未执行，`specialityPass=false` / `overallConclusion=条件通过`；目标平台 WebView 客观证据与目录取消保态 `preserved` 已补齐。不得与 P 子集混报 |
 | `W1-MODEL-E` | `D-MODEL` 模型设置 | 桌面桥接、SQLite、系统凭据库 | `UI-ACC-SETTINGS-001` | `SettingsPage.test.tsx`、硬件和隐私测试 | 设置连接/凭据冒烟脚本；确认 profile 后再执行真实模型 | 设置入口、保存、切换、删除、键盘导航 | 已执行：2026-11-04 本机 macOS + Ollama（qwen3:8b），`MODEL-E-001`~`MODEL-E-005` 5/5 PASS；归档 `artifacts/model-acceptance/run-2026-11-04T11-26-30-345Z/` |
 | `W1-INTENT-E` | `D-INTENT` IntentRouter | 模型 profile 和真实模型 | `AGENT-ACC-INTENT-001` | `intent-router-acceptance-cli.test.ts` | `npm run test:intent-router-acceptance -- --profile-id <id> --json`；统一 JSON 外层字段待核对 | profile、日志、失败恢复 | 脚本已有；真实 Ollama 待执行 |
 | `W2-CHAT-E` | `D-CHAT` 对话 | W0 壳层、W1 模型/IntentRouter | `UI-ACC-CHAT-001` | 消息、流式、停止和运行锁定测试 | 真实短对话、停止、超时和错误恢复脚本 | 发送/停止、流式完成、模型状态、失败重试 | 已执行：2026-11-04 本机 macOS + Ollama（qwen3:8b），`CHAT-E-001`~`CHAT-E-004` 4/4 PASS（单轮/多轮上下文/流式中断/失败处理）；归档 `artifacts/chat-acceptance/run-2026-11-04T11-28-38-617Z/` |
@@ -125,7 +125,13 @@ macOS 原生入口：`scripts/title-bar/run-title-bar-native-macos.sh`（配套 
 
 脚本自建并清理隔离临时工作区，包含 Markdown/代码/文本/环境文件/二进制文档 fixture；机器用例 `EDIT-F-001`～`EDIT-F-006` 复刻 `src-tauri/src/lib.rs` 的文档分类、打开与读取、保存与行尾/BOM 保真、修改时间冲突拒绝、新建与路径越界保护和边界隔离合同。报告入口：`docs/acceptance/ui/UI_ACCEPTANCE_EDITOR.md`。
 
-本机执行状态（2026-11-10）：CLI 6/6 PASS、合同测试 10/10 PASS，批次归档在 `artifacts/editor-acceptance/run-*`。修复了两处真实缺陷：`resolveExisting()` / `resolveForCreate()` 的 `resolvedRoot` 未做 `realpath` 归一，导致 macOS `/var/folders` → `/private/var/folders` 符号链接下的合法 fixture 被误判「路径超出已授权工作区」（越界保护断言未放宽）；以及 `result.json` 自引用 hash 循环导致 `shasum -c` 报 `result.json: FAILED`。该 PASS 只覆盖 fixture / 文件桥接合同，目标平台 WebView 与人工材料仍待回传。
+当前执行状态：CLI 6/6 PASS、合同测试 10/10 PASS，批次归档在 `artifacts/editor-acceptance/run-*`。路径守卫用 `safeRealpath(resolve(workspaceRoot))` 让目标与根使用同一归一基准，避免 macOS `/var/folders` → `/private/var/folders` 符号链接下的合法 fixture 被误判「路径超出已授权工作区」（越界保护断言未放宽）；`result.json` 定稿后不再改写、哈希清单在定稿文件上计算且不自引用。该 PASS 只覆盖 fixture / 文件桥接合同；目标平台 WebView 客观证据见 §6.2，人工 UI 观察仍待测试人员回传。
+
+### 6.2 `W0-EDITOR-F` 目标平台 WebView 客观证据
+
+实现入口：`scripts/editor/run-editor-webview-native-macos.mjs`（npm `test:editor-webview-native-mac`、`.sh` 包装）、纯判据 `scripts/editor/editor-webview-verdicts.mjs`、合同测试 `tests/editor/editor-webview-verdicts.test.mjs`。批次独立归档在 `artifacts/editor-webview-native-macos/editor-wv-*`，不与 `artifacts/editor-acceptance/run-*` 混目录，避免干扰 `UI-ACC-TITLE-BAR-FIXTURE-001` 对 `W0-EDITOR-F` 合同批次的最新批次解析。
+
+证据全部取自真实目标应用窗口：隔离 Profile 注入 fixture、原生「查看 > 项目文件」切换、`AXPress` 打开 `README.md`、ApplicationServices AX 树与文本快照、CoreGraphics 窗口截图、`app.start` 构建溯源日志。六项客观用例 `EDIT-WV-001`~`006` 覆盖真实 `AXWebArea`、文件列表、`AXTextArea` 内容与 fixture 文档逐字一致、保存状态栏连续读回、「编辑 / 分栏 / 预览」文档视图、构建溯源与原生截图。`cases[].status` 只用四态；`platformPass=false`、`humanUIObservation.returned=false`、`DEFER-UI-001` 只登记不判定——人工 UI 观察仍待测试人员回传，机器证据不冒充人工观察。
 
 ## 7. 模型设置与真实模型执行顺序
 
@@ -167,5 +173,5 @@ macOS 原生入口：`scripts/title-bar/run-title-bar-native-macos.sh`（配套 
 - **脚本矩阵不缩减**：§3 的所有验收标识、脚本 ID、功能域与 `W0`~`W4` 门槛保持原样；`W0-RESP-P`、`W4-RESP-R` 等含视觉字样的行只把「人眼观感」部分标为延期，尺寸、状态保持、无横向溢出、机器探针等客观断言仍由脚本覆盖，脚本仍须编写与执行。
 - **不新增状态值**：`result.json` 的 `cases[].status` 仍只用 `PASS` / `FAIL` / `BLOCKED` / `NOT_APPLICABLE`；`DEFERRED_AFTER_ALPHA` 只出现在计划与报告的排期字段，不进入 JSON schema，不参与覆盖率或计数。
 - **不因延期改判定规则**：各专项 §6 的「条件通过 / 专项通过 / 完整通过」判定仍以机器结果与客观遗留项为准；主观项从 Alpha 的**前置条件**中移出，不等于把结论升级为通过。
-- **仍需建设的客观脚本**：`TB-MENU-008` 的全屏多信号判据、Reopen 事件恢复、关闭后窗口隐藏稳定态、目录选择取消保态、弹窗焦点读回，属总计划 §8.2「不划出」范围，仍按现有脚本计划推进；不得借延期跳过。
-- **待同步（下一阶段）**：[脚本规范](./UI_ACCEPTANCE_SCRIPT_SPEC.md) §1/§9.1 的人工观察表述与 8 份 `*_RUN_TEMPLATE.md` 的主观字段；在此之前以总计划 §8 为准。
+- **客观脚本均已落地**：`TB-MENU-008` 的全屏多信号判据、Reopen 事件恢复、关闭后窗口隐藏稳定态、弹窗焦点读回，以及 `TB-MENU-002` 目录选择取消保态（AXSheet + CG 面板窗口双信号 + `AXPress Cancel` + 菜单树/窗口数状态读回）均已在 `scripts/title-bar/` 实作并有合同测试；目标平台 WebView 六项客观判据见 §6.2。属总计划 §8.2「不划出」范围的客观项不得以延期为由跳过或删除。
+- **人工观察表述边界**：[脚本规范](./UI_ACCEPTANCE_SCRIPT_SPEC.md) §1/§9.1 与 8 份 `*_RUN_TEMPLATE.md` 的主观字段以 [总计划 §8](./UI_ACCEPTANCE_PLAN.md) 为准；主观项不进入 `cases[].status`、不计入通过数。

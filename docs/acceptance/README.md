@@ -39,7 +39,7 @@
 | 文档 | 用途 |
 | --- | --- |
 | [应用壳层与入口专项验收（macOS）](ui/macos/UI_ACCEPTANCE_MACOS_SHELL.md) | 壳层平台与结构验收报告（macOS，完整通过） |
-| [标题栏与功能菜单专项验收（macOS）](ui/macos/UI_ACCEPTANCE_MACOS_TITLE_BAR.md) | 标题栏/原生菜单与窗口命令验收报告（macOS，**条件通过**；`W0-SHELL-MENU-P` 含待客观人工复核项 `TB-MENU-008` 全屏/Reopen、`W0-SHELL-MENU-F` 由独立脚本 `UI-ACC-TITLE-BAR-FIXTURE-001` 解锁为 PASS，但专项未通过；诊断弹窗视觉质量已登记 `DEFER-UI-001` 延后至后续版本；13/13 计划用例覆盖） |
+| [标题栏与功能菜单专项验收（macOS）](ui/macos/UI_ACCEPTANCE_MACOS_TITLE_BAR.md) | 标题栏/原生菜单与窗口命令验收报告（macOS，**条件通过**；`W0-SHELL-MENU-P=PASS`（`TB-MENU-008` 全屏/Reopen 已客观 PASS）、`W0-SHELL-MENU-F=PASS`（独立脚本 `UI-ACC-TITLE-BAR-FIXTURE-001`）、`provenance=PASS`，13/13 计划用例覆盖；遗留为 `W0-EDITOR-F` 人工 UI 观察待回传、`DEFER-UI-001` 与 Windows 独立专项未执行，专项未通过） |
 | [应用壳层与入口专项验收（Windows）](ui/windows/UI_ACCEPTANCE_WINDOWS_SHELL.md) | 壳层平台与结构验收报告（Windows，待执行） |
 | [项目与会话导航专项验收（macOS）](ui/macos/UI_ACCEPTANCE_MACOS_NAVIGATION.md) | 导航合同、端到端和回归验收报告（macOS，完整通过；含真实应用原生窗口证据） |
 | [项目与会话导航专项验收（Windows）](ui/windows/UI_ACCEPTANCE_WINDOWS_NAVIGATION.md) | 导航合同、端到端和回归验收（Windows） |
@@ -49,7 +49,7 @@
 | [长任务/日志中心专项验收（Windows）](ui/windows/UI_ACCEPTANCE_WINDOWS_TASK_PROCESS.md) | 日志/长任务真实端到端验收报告模板（Windows） |
 | [长任务过程原生复验清单](ui/TASK_PROCESS_NATIVE_ACCEPTANCE.md) | Windows/macOS 桌面通用的原生复验清单 |
 
-> 标题栏与功能菜单专项的 Windows 报告尚未建立，M5 未执行（`NOT_EXECUTED`），当前仅有 [Windows 版计划](ui/windows/UI_ACCEPTANCE_WINDOWS_TITLE_BAR_PLAN.md)。macOS 报告结论为「条件通过」：`W0-SHELL-MENU-P=PASS`、`W0-SHELL-MENU-F=PASS`（独立脚本 `UI-ACC-TITLE-BAR-FIXTURE-001`）、`TB-MENU-003-GLOBAL-SEARCH=PASS`、`TB-MENU-008=PASS`、构建溯源 `provenance=PASS`；客观遗留为 `W0-EDITOR-F` 目标平台 WebView/人工材料未回传、帮助弹窗低保真（`DEFER-UI-001`）与目录取消保态 `not-observed`，Windows 独立专项未执行不计入本 macOS 结论，**不得**据此宣称专项通过、完整通过或跨平台发布通过；审核结论以专项报告及两套最新批次 `result.json` 为准。
+> 标题栏与功能菜单专项的 Windows 报告尚未建立，M5 未执行（`NOT_EXECUTED`），当前仅有 [Windows 版计划](ui/windows/UI_ACCEPTANCE_WINDOWS_TITLE_BAR_PLAN.md)。macOS 报告结论为「条件通过」：`W0-SHELL-MENU-P=PASS`、`W0-SHELL-MENU-F=PASS`（独立脚本 `UI-ACC-TITLE-BAR-FIXTURE-001`）、`TB-MENU-003-GLOBAL-SEARCH=PASS`、`TB-MENU-008=PASS`、构建溯源 `provenance=PASS`；`W0-EDITOR-F` 目标平台 WebView 客观证据已由 `UI-ACC-EDITOR-WEBVIEW-001` 采集、目录取消保态已由 AX/CG 双信号客观判定为 `preserved`；遗留为 `W0-EDITOR-F` 人工 UI 观察待回传、帮助弹窗低保真（`DEFER-UI-001`），Windows 独立专项未执行不计入本 macOS 结论，**不得**据此宣称专项通过、完整通过或跨平台发布通过；审核结论以专项报告及两套最新批次 `result.json` 为准。
 
 ## IntentRouter 验收
 

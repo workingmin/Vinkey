@@ -67,6 +67,28 @@ function readRuntimeStart(profile) {
   return null
 }
 
+/** 只引用 W0-EDITOR-F 目标平台 WebView 客观证据批次；人工 UI 观察不由机器代为判定。 */
+function readEditorWebViewObjective(rootDir) {
+  const dir = join(rootDir, 'artifacts/editor-webview-native-macos')
+  if (!existsSync(dir)) return null
+  const names = readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && /^editor-wv-/u.test(entry.name))
+    .map((entry) => entry.name)
+    .sort()
+  const latest = names.at(-1)
+  if (!latest) return null
+  const file = join(dir, latest, 'result.json')
+  if (!existsSync(file)) return null
+  try {
+    const payload = JSON.parse(readFileSync(file, 'utf8'))
+    const s = payload.summary || {}
+    const ok = payload.objectiveConclusion === 'PASS' && payload.exitCode === 0
+      && s.caseCount > 0 && s.passed === s.caseCount && s.failed === 0 && s.blocked === 0
+      && payload.provenance?.status === 'PASS'
+    return { ok, resultFile: `${dir.replace(root + '/', '')}/${latest}/result.json` }
+  } catch { return null }
+}
+
 // 计划 §3：逐用例必须记录平台、前置状态、动作、预期、实际、证据文件、退出码
 const CASE_DEFS = [
   { id: 'TB-MENU-001', subset: 'P', scene: '一级菜单树', expected: '原生菜单显示 Vinkey/项目/会话/编辑/查看/窗口/帮助，语义同设计；不存在「文件」' },
@@ -111,6 +133,11 @@ let fixtureLibrary = null
 let fixtureManifest = null
 let treeData = null
 let appRuntimeStart = null
+let directoryCancelVerdict = null
+const editorWebViewObjective = readEditorWebViewObjective(root)
+const editorBoundaryPhrase = editorWebViewObjective?.ok
+  ? 'W0-EDITOR-F 目标平台 WebView 客观证据已由 UI-ACC-EDITOR-WEBVIEW-001 采集，人工 UI 观察仍待测试人员回传'
+  : 'W0-EDITOR-F 目标平台 WebView 客观证据与人工 UI 观察材料仍待回传'
 const issues = []
 
 function logEvent(text) {
@@ -287,36 +314,52 @@ async function runNoProjectPhase(temporaryDirectory) {
       status: refresh && refresh.enabled === false ? 'PASS' : 'FAIL',
       action: 'AX 读取「项目」菜单；无项目前置下核对「刷新当前项目」禁用态；项目数保持不变',
       actual: refresh
-        ? `无项目时「刷新当前项目」enabled=${refresh.enabled}（应为 false）；「添加本地项目…」enabled=${projectItems.find((i) => i.title === '添加本地项目…')?.enabled}。目录选择对话框的取消/失败保留原状态记为人工观察（计划 §4.1 步骤 5）。`
+        ? `无项目时「刷新当前项目」enabled=${refresh.enabled}（应为 false）；「添加本地项目…」enabled=${projectItems.find((i) => i.title === '添加本地项目…')?.enabled}。目录选择对话框的取消/失败保留原状态另由本用例 directoryCancel 字段按客观判据给出。`
         : '未读到「刷新当前项目」菜单项',
       evidence: ['menu-tree.json', shot, tree._evidence].filter(Boolean),
       exitCode: 0,
     })
 
     // 目录选择对话框取消/失败保留原状态 —— TB-MENU-002 客观自动化（计划 §3 关联缺口）
+    // 判据：AXSheet（含 Cancel/取消 按钮）+ CG 面板窗口双信号证实「打开」；优先 AXPress Cancel，
+    // Escape 仅作后备；取消后两个信号须同时消失，菜单树与窗口数状态读回须无变化。
+    // 本机实测 NSOpenPanel 以 AXSheet 挂在主窗口、按钮标题为英文 Cancel。
     const dirConvBefore = totalConversations()
+    const treeBeforeCancel = helper('tree', [], 'tree-before-cancel.json', 30000)
     const addLocal = helper('click', ['项目', '添加本地项目…'], 'click-add-local-project.json')
     await sleep(700)
     const cancelPanel = helper('cancel-panel', [], 'cancel-add-local-panel.json')
     await sleep(500)
     const afterCancelState = helper('state', [], 'state-after-cancel-add-local.json')
+    const treeAfterCancel = helper('tree', [], 'tree-after-cancel.json', 30000)
     const dirConvAfter = totalConversations()
+    const cp = cancelPanel.cancelPanel || {}
+    const normalizeTree = (d) => JSON.stringify((d?.menus || []).map((m) => [m.title, (m.items || []).map((i) => [i.title, i.enabled])]))
+    const stateUnchanged = normalizeTree(treeBeforeCancel) === normalizeTree(treeAfterCancel)
+      && (afterCancelState.state?.windowCount ?? 0) === 1
     const dirVerdict = evaluateDirectoryCancel({
-      panelOpened: addLocal.ok && cancelPanel.ok === true,
-      canceled: cancelPanel.ok === true,
-      projectCountBefore: dirConvBefore ?? 0,
-      projectCountAfter: dirConvAfter ?? 0,
+      panelOpened: addLocal.ok === true && cp.signalsBefore?.panelOpened === true,
+      canceled: cp.canceled === true,
+      panelClosed: cp.panelClosed === true,
+      cgPanelDisappeared: cp.cgPanelDisappeared === true,
+      axSheetDismissed: cp.axSheetDismissed === true,
+      stateUnchanged,
+      projectCountBefore: dirConvBefore,
+      projectCountAfter: dirConvAfter,
       windowCountAfter: afterCancelState.state?.windowCount ?? 0,
-      errorDialogPresent: false,
+      errorDialogPresent: cp.signalsAfter?.axSheetFound === true,
     })
+    directoryCancelVerdict = dirVerdict.verdict
     const tb2prev = cases.find((c) => c.caseId === 'TB-MENU-002')
-    const dirActual = `目录选择对话框取消/失败保留原状态（客观自动化）：点击 ok=${addLocal.ok}、面板取消 ok=${cancelPanel.ok}（reason=${cancelPanel.cancelPanel?.reason ?? 'n/a'}）、取消前窗口数=${cancelPanel.cancelPanel?.windowCountBefore ?? '?'}、取消后窗口数=${afterCancelState.state?.windowCount ?? '?'}；会话数 ${dirConvBefore ?? '?'} → ${dirConvAfter ?? '?'}；verdict=${dirVerdict.verdict}（${dirVerdict.reason}）。`
+    const dirActual = `目录选择对话框取消/失败保留原状态（客观自动化）：点击 ok=${addLocal.ok}；面板打开双信号 AXSheet=${cp.signalsBefore?.axSheetPresent ?? false} + CG 面板窗口=${cp.signalsBefore?.cgPanelNameMatched ?? false}（CG 窗口名=${JSON.stringify(cp.signalsBefore?.cgPanelNames ?? [])}）；取消方式=${cp.method ?? 'unknown'}（AX 取消按钮按下=${cp.pressedCancelButton ?? false}）；取消后 AXSheet 消失=${cp.axSheetDismissed ?? false}、CG 面板窗口消失=${cp.cgPanelDisappeared ?? false}、AX 窗口数 ${cp.windowCountBefore ?? '?'} → ${cp.windowCountAfter ?? '?'}；菜单树/窗口数状态读回不变=${stateUnchanged}；会话数 ${dirConvBefore ?? '不适用'} → ${dirConvAfter ?? '不适用'}；verdict=${dirVerdict.verdict}（${dirVerdict.reason}）。`
     setCase('TB-MENU-002', {
-      action: `${tb2prev?.action || ''}；触发「项目 > 添加本地项目…」打开目录对话框，按 Escape 取消，核对原状态保持`,
+      action: `${tb2prev?.action || ''}；触发「项目 > 添加本地项目…」打开目录对话框，由 AX 按下 Cancel 按钮取消（Escape 为后备），核对原状态保持`,
       actual: `${tb2prev?.actual || ''} ${dirActual}`,
-      evidence: [addLocal._evidence, cancelPanel._evidence, afterCancelState._evidence].filter(Boolean),
+      evidence: [addLocal._evidence, cancelPanel._evidence, afterCancelState._evidence, treeBeforeCancel._evidence, treeAfterCancel._evidence].filter(Boolean),
+      directoryCancel: dirVerdict,
     })
     if (dirVerdict.verdict === 'not-preserved') issues.push('TB-MENU-002 目录选择对话框取消后原状态未保持（见 TB-MENU-002 evidence），需复检「添加本地项目」取消逻辑。')
+    if (dirVerdict.verdict === 'not-observed') issues.push('TB-MENU-002 目录选择对话框未被 AX/CG 双信号观察到（见 cancel-add-local-panel.json），客观判据未达成，保持如实记录。')
 
     const clickNew = helper('click', ['会话', '新建会话'], 'click-new-conversation-no-project.json')
     await sleep(400)
@@ -905,7 +948,7 @@ async function main() {
       reasons: [
         'CF-023 已实现：TB-MENU-003-GLOBAL-SEARCH 为客观用例（原生菜单项存在性 + M3 companion 验证面板分组/Escape/跳转），判为 PASS，不作为专项通过的阻断项',
         'Windows 平台（M5/W0-SHELL-MENU Windows 专项）由独立 Windows 验收负责，本 macOS 专项不覆盖、亦不因此降级；仅提示：Windows 未执行时不得宣称跨平台发布通过',
-        `W0-SHELL-MENU-F 归独立脚本 ${fGateSuite} 单独判定（本批次 ${fSubsetConclusion}＝批次归属不适用，不是用例不适用；TB-MENU-004 只留原生过程证据，以 authoritativeGate 登记权威门槛，权威结论见 ${fGateArtifactRoot}最新批次 result.json；cases[].status 只用四态，不新增状态值）；按计划 §6 次序 W0-NAV-F / W0-EDITOR-F 为前置依赖，其 PASS 后 F 才判定，不由 P 结果或 companion 升级。${provenanceStatus === 'PASS' ? '构建溯源 provenance=PASS 已按最终 HEAD 定稿；' : '构建溯源需按最终 HEAD 复跑定稿；'}本 macOS 专项结论仍受 macOS 范围内遗留项（W0-EDITOR-F 目标平台 WebView/人工材料未回传、帮助/诊断弹窗低保真、目录取消保态 not-observed）约束；TB-MENU-008=${tbMenu008?.status ?? 'BLOCKED'}，Windows 平台验收属独立专项，不计入本 macOS 专项判定。`,
+        `W0-SHELL-MENU-F 归独立脚本 ${fGateSuite} 单独判定（本批次 ${fSubsetConclusion}＝批次归属不适用，不是用例不适用；TB-MENU-004 只留原生过程证据，以 authoritativeGate 登记权威门槛，权威结论见 ${fGateArtifactRoot}最新批次 result.json；cases[].status 只用四态，不新增状态值）；按计划 §6 次序 W0-NAV-F / W0-EDITOR-F 为前置依赖，其 PASS 后 F 才判定，不由 P 结果或 companion 升级。${provenanceStatus === 'PASS' ? '构建溯源 provenance=PASS 已按最终 HEAD 定稿；' : '构建溯源需按最终 HEAD 复跑定稿；'}本 macOS 专项结论仍受 macOS 范围内遗留项（${editorBoundaryPhrase}、帮助/诊断弹窗低保真${directoryCancelVerdict === 'preserved' ? '；目录取消保态已按 AX/CG 双信号客观判定为 preserved，不再作为遗留项' : `、目录取消保态 ${directoryCancelVerdict ?? 'not-observed'}`}）约束；TB-MENU-008=${tbMenu008?.status ?? 'BLOCKED'}，Windows 平台验收属独立专项，不计入本 macOS 专项判定。`,
         '帮助/诊断弹窗为低保真实现，按 §6 计入条件通过遗留项',
         `TB-MENU-008=${tbMenu008?.status}：全屏采用多信号交叉判定（AXFullScreen + AX 尺寸 + CG 窗口边界），Reopen 恢复由 LaunchServices 触发 Dock Reopen 事件自动验证；若某客观信号未达成仍保留 BLOCKED，不宣称窗口动作全部通过；DEFER-UI-005 仅覆盖目视复核，不阻断上述客观项。`,
         'macOS 关闭窗口后的 Dock/系统 Reopen 恢复：本批次已通过 LaunchServices（open -a）投递 Dock Reopen 事件做客观验证（见 TB-MENU-008 evidence 中 window-reopen-*）。',

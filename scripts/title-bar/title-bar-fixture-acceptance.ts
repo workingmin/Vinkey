@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join, relative, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import {
   collectEnvironment,
@@ -118,6 +118,92 @@ function readJson(file: string): Record<string, unknown> | null {
     return JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>
   } catch {
     return null
+  }
+}
+
+export const EDITOR_WEBVIEW_SUITE_ID = 'UI-ACC-EDITOR-WEBVIEW-001'
+
+/**
+ * W0-EDITOR-F 边界口径：目标平台 WebView 客观证据与人工 UI 观察必须分开表述。
+ * 客观证据已采集不等于人工观察已回传，也不等于 W0-EDITOR-F 平台层综合通过。
+ */
+export function editorEvidenceBoundaryPhrase(objectivePass: boolean): string {
+  return objectivePass
+    ? 'W0-EDITOR-F 目标平台 WebView 结构/内容/保存状态栏客观证据已由 UI-ACC-EDITOR-WEBVIEW-001 采集，人工 UI 观察仍待测试人员回传'
+    : 'W0-EDITOR-F 目标平台 WebView 客观证据与人工 UI 观察材料仍待回传'
+}
+
+export interface RemainingItemsSignals {
+  pProvenanceReady: boolean
+  pProvenanceStatus?: string | null
+  editorWebViewObjectivePass: boolean
+  editorHumanObservationReturned: boolean
+  dirCancelPreserved: boolean
+}
+
+/**
+ * F 门槛「条件通过」遗留项清单。全部来自真实批次信号，不硬编码结论：
+ *   - pProvenanceReady / pProvenanceStatus 来自 P 原生批次；
+ *   - editorWebViewObjectivePass 来自 UI-ACC-EDITOR-WEBVIEW-001 最新批次；
+ *   - dirCancelPreserved 来自 P 原生批次 TB-MENU-002.directoryCancel.verdict；
+ *   - DEFER-UI-001 与 Windows 独立专项恒保留登记，不得静默丢弃、不得写成 PASS。
+ */
+export function titleBarRemainingItems(signals: RemainingItemsSignals): string[] {
+  const items: string[] = []
+  if (!signals.pProvenanceReady) {
+    items.push(`按最终 HEAD 复跑原生 P 批次以定稿构建溯源（当前 provenance=${signals.pProvenanceStatus ?? 'UNAVAILABLE'}）`)
+  }
+  if (!signals.editorHumanObservationReturned) {
+    items.push(`${editorEvidenceBoundaryPhrase(signals.editorWebViewObjectivePass)}；机器证据不冒充人工观察，不改变 TB-MENU-004 的 F 门槛判定`)
+  }
+  items.push('帮助/诊断弹窗低保真实现升级与视觉质量复核（DEFER-UI-001）')
+  items.push('Windows M5 独立专项执行（不计入本 macOS 专项判定）')
+  if (!signals.dirCancelPreserved) {
+    items.push('目录选择取消/失败后原状态保留（P 批次 AX/CG 双信号客观判据未达成）')
+  }
+  return items
+}
+
+export interface EditorWebViewEvidenceSnapshot {
+  available: boolean
+  resultFile: string | null
+  objectiveConclusion: string | null
+  objectivePass: boolean
+  humanUIObservationReturned: boolean
+  platformPass: boolean | null
+}
+
+/** 读取 W0-EDITOR-F 目标平台 WebView 最新客观证据批次；只引用，不代为判定人工 UI 观察。 */
+export function readEditorWebViewEvidence(root: string): EditorWebViewEvidenceSnapshot {
+  const base: EditorWebViewEvidenceSnapshot = {
+    available: false, resultFile: null, objectiveConclusion: null,
+    objectivePass: false, humanUIObservationReturned: false, platformPass: null,
+  }
+  const dir = join(root, 'artifacts/editor-webview-native-macos')
+  if (!existsSync(dir)) return base
+  const names = readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && /^editor-wv-/u.test(entry.name))
+    .map((entry) => entry.name)
+    .sort()
+  const latest = names.at(-1)
+  if (!latest) return base
+  const resultFile = join(dir, latest, 'result.json')
+  const payload = readJson(resultFile)
+  if (!payload) return { ...base, resultFile: relative(root, resultFile) }
+  const summary = payload.summary as { caseCount?: number; passed?: number; failed?: number; blocked?: number } | undefined
+  const provenance = payload.provenance as { status?: string } | undefined
+  const human = payload.humanUIObservation as { returned?: boolean } | undefined
+  const allCasesPass = Boolean(summary) && summary!.caseCount! > 0
+    && summary!.passed === summary!.caseCount && summary!.failed === 0 && summary!.blocked === 0
+  const objectiveConclusion = typeof payload.objectiveConclusion === 'string' ? payload.objectiveConclusion : null
+  return {
+    available: true,
+    resultFile: relative(root, resultFile),
+    objectiveConclusion,
+    objectivePass: objectiveConclusion === 'PASS' && payload.exitCode === 0
+      && allCasesPass && provenance?.status === 'PASS',
+    humanUIObservationReturned: human?.returned === true,
+    platformPass: typeof payload.platformPass === 'boolean' ? payload.platformPass : null,
   }
 }
 
@@ -493,6 +579,14 @@ export async function runFixtureGate(input: {
         : 'PASS'
 
   const pConclusion = pBatch.conclusion ?? 'BLOCKED'
+  // 目录取消保态的客观判据由 P 原生批次给出；F 门槛只读引用，不重复判定、不冒充。
+  const pPayload = pBatch.resultFile ? readJson(pBatch.resultFile) : null
+  const pRawCases = (Array.isArray(pPayload?.cases) ? pPayload!.cases : []) as Array<Record<string, unknown>>
+  const dirCancel = pRawCases.find((item) => item.caseId === 'TB-MENU-002')?.directoryCancel as Record<string, unknown> | undefined
+  const dirCancelPreserved = dirCancel?.verdict === 'preserved'
+  // W0-EDITOR-F 目标平台 WebView 客观证据由独立批次提供；人工 UI 观察只登记、不由脚本判定。
+  const editorWebView = readEditorWebViewEvidence(root)
+  const editorBoundaryPhrase = editorEvidenceBoundaryPhrase(editorWebView.objectivePass)
   // 构建溯源状态读自 UI-ACC-TITLE-BAR-001 最新原生批次，不硬编码 REVIEW/PASS，
   // 避免 P 批次已按最终 HEAD 定稿后本门槛仍声称「需复跑」的同 HEAD 矛盾。
   const pProvenanceReady = pBatch.provenanceStatus === 'PASS' && pBatch.repositoryClean === true
@@ -593,14 +687,24 @@ export async function runFixtureGate(input: {
       windowsPlatform: 'NOT_EXECUTED',
       reason: specialityPass
         ? '所有适用用例 PASS 且无遗留项。'
-        : `按计划 §6：专项通过要求所有适用用例均 PASS 且 macOS 目标平台证据、构建溯源均可核验。当前 P 子集 9/9 全 PASS（TB-MENU-008 全屏/Reopen 已客观解卡）、TB-MENU-003-GLOBAL-SEARCH 与 TB-MENU-004 已由本 F 门槛在 W0-EDITOR-F / W0-NAV-F 前置依赖真实 PASS 后客观判定为 PASS；按计划 §6 次序，P 原生批次对 F 归属用例只记 NOT_APPLICABLE（批次归属不适用）与原生过程证据、不重复判定，并以 authoritativeGate 指向本门槛。${provenanceSentence}但 W0-EDITOR-F 目标平台 WebView / 人工材料仍待回传、帮助/诊断弹窗为低保真实现（DEFER-UI-001）、Windows 独立专项未执行。F 门槛通过不自动升级专项，也不得宣称跨平台发布通过。`,
-      remainingItems: [
-        ...(pProvenanceReady ? [] : [`按最终 HEAD 复跑原生 P 批次以定稿构建溯源（当前 provenance=${pBatch.provenanceStatus ?? 'UNAVAILABLE'}）`]),
-        'W0-EDITOR-F 目标平台 WebView / 人工观察材料回传：fixture 合同已 PASS，该材料属后续版本验收登记项，不改变 TB-MENU-004 的 F 门槛判定',
-        '帮助/诊断弹窗低保真实现升级与视觉质量复核（DEFER-UI-001）',
-        'Windows M5 独立专项执行（不计入本 macOS 专项判定）',
-        '目录选择取消/失败后原状态保留（人工观察，本批次 not-observed）',
-      ],
+        : `按计划 §6：专项通过要求所有适用用例均 PASS 且 macOS 目标平台证据、构建溯源均可核验。当前 P 子集 9/9 全 PASS（TB-MENU-008 全屏/Reopen 已客观解卡）、TB-MENU-003-GLOBAL-SEARCH 与 TB-MENU-004 已由本 F 门槛在 W0-EDITOR-F / W0-NAV-F 前置依赖真实 PASS 后客观判定为 PASS；按计划 §6 次序，P 原生批次对 F 归属用例只记 NOT_APPLICABLE（批次归属不适用）与原生过程证据、不重复判定，并以 authoritativeGate 指向本门槛。${provenanceSentence}但 ${editorBoundaryPhrase}、帮助/诊断弹窗为低保真实现（DEFER-UI-001）、Windows 独立专项未执行${dirCancelPreserved ? '；目录选择取消保态已由 P 批次 AX/CG 双信号客观判定为 preserved，不再作为遗留项' : '；目录选择取消保态的 AX/CG 双信号客观判据未达成'}。F 门槛通过不自动升级专项，也不得宣称跨平台发布通过。`,
+      editorWebViewEvidence: {
+        suite: EDITOR_WEBVIEW_SUITE_ID,
+        source: editorWebView.resultFile,
+        available: editorWebView.available,
+        objectiveConclusion: editorWebView.objectiveConclusion,
+        objectivePass: editorWebView.objectivePass,
+        humanUIObservationReturned: editorWebView.humanUIObservationReturned,
+        platformPass: editorWebView.platformPass,
+        note: '只引用目标平台 WebView 客观证据批次；人工 UI 观察仍待测试人员回传，不由机器代为判定。',
+      },
+      remainingItems: titleBarRemainingItems({
+        pProvenanceReady,
+        pProvenanceStatus: pBatch.provenanceStatus,
+        editorWebViewObjectivePass: editorWebView.objectivePass,
+        editorHumanObservationReturned: editorWebView.humanUIObservationReturned,
+        dirCancelPreserved,
+      }),
     },
     issues,
     exitCode,

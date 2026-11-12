@@ -69,25 +69,64 @@ describe('evaluateReopen (TB-MENU-008 关闭后 Reopen 恢复)', () => {
 })
 
 describe('evaluateDirectoryCancel (TB-MENU-002 目录选择对话框取消保态)', () => {
-  it('preserved when panel opened, canceled and state unchanged', () => {
-    const v = evaluateDirectoryCancel({ panelOpened: true, canceled: true, projectCountBefore: 2, projectCountAfter: 2, windowCountAfter: 1, errorDialogPresent: false })
+  const ok = {
+    panelOpened: true, canceled: true, panelClosed: true,
+    cgPanelDisappeared: true, axSheetDismissed: true, stateUnchanged: true,
+    projectCountBefore: 2, projectCountAfter: 2, windowCountAfter: 1, errorDialogPresent: false,
+  }
+
+  it('preserved only when AXSheet + CG panel closed and state read-back is unchanged', () => {
+    const v = evaluateDirectoryCancel(ok)
     expect(v.verdict).toBe('preserved')
+    expect(v.reason).toBe('ok')
+    expect(v.preserved).toBe(true)
   })
 
   it('not-preserved when the underlying state changed', () => {
-    const v = evaluateDirectoryCancel({ panelOpened: true, canceled: true, projectCountBefore: 2, projectCountAfter: 3, windowCountAfter: 1, errorDialogPresent: false })
+    const v = evaluateDirectoryCancel({ ...ok, projectCountAfter: 3 })
+    expect(v.verdict).toBe('not-preserved')
+    expect(v.reason).toBe('state-not-preserved')
+    expect(v.countsMatch).toBe(false)
+  })
+
+  it('not-preserved when the menu-tree/window state read-back changed', () => {
+    const v = evaluateDirectoryCancel({ ...ok, stateUnchanged: false })
     expect(v.verdict).toBe('not-preserved')
     expect(v.reason).toBe('state-not-preserved')
   })
 
   it('not-preserved when the cancel did not succeed', () => {
-    const v = evaluateDirectoryCancel({ panelOpened: true, canceled: false, projectCountBefore: 2, projectCountAfter: 2, windowCountAfter: 2, errorDialogPresent: false })
+    const v = evaluateDirectoryCancel({ ...ok, canceled: false, panelClosed: false, windowCountAfter: 2 })
     expect(v.verdict).toBe('not-preserved')
     expect(v.reason).toBe('cancel-failed')
   })
 
+  it('not-preserved when Escape did not close the panel', () => {
+    const v = evaluateDirectoryCancel({ ...ok, panelClosed: false })
+    expect(v.verdict).toBe('not-preserved')
+    expect(v.reason).toBe('panel-not-closed')
+  })
+
+  it('not-preserved when the CG panel window remains', () => {
+    const v = evaluateDirectoryCancel({ ...ok, cgPanelDisappeared: false })
+    expect(v.verdict).toBe('not-preserved')
+    expect(v.reason).toBe('cg-panel-window-remains')
+  })
+
+  it('not-preserved when the AX sheet remains', () => {
+    const v = evaluateDirectoryCancel({ ...ok, axSheetDismissed: false })
+    expect(v.verdict).toBe('not-preserved')
+    expect(v.reason).toBe('ax-sheet-remains')
+  })
+
+  it('does not fake 0=0 when counts are unavailable', () => {
+    const v = evaluateDirectoryCancel({ ...ok, projectCountBefore: undefined, projectCountAfter: undefined })
+    expect(v.countsMatch).toBe(null)
+    expect(v.verdict).toBe('preserved')
+  })
+
   it('not-observed when the panel never opened', () => {
-    const v = evaluateDirectoryCancel({ panelOpened: false, canceled: false, projectCountBefore: 2, projectCountAfter: 2, windowCountAfter: 1, errorDialogPresent: false })
+    const v = evaluateDirectoryCancel({ ...ok, panelOpened: false })
     expect(v.verdict).toBe('not-observed')
     expect(v.reason).toBe('panel-not-opened')
   })
