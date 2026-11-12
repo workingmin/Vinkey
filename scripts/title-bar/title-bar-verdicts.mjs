@@ -9,6 +9,7 @@
 //   - evaluateFullscreen  -> TB-MENU-008 多信号全屏交叉判定
 //   - evaluateReopen      -> TB-MENU-008 关闭后 Reopen 恢复
 //   - evaluateDirectoryCancel -> TB-MENU-002 目录选择对话框取消/失败保留原状态
+//   - evaluateSearchPanelEscape -> TB-MENU-003-GLOBAL-SEARCH 面板打开/关闭双向读回
 
 export const FULLSCREEN_TOLERANCE_PX = 4
 
@@ -109,5 +110,24 @@ export function evaluateDirectoryCancel(info) {
     preserved,
     reason,
   }
+}
+
+/**
+ * CF-023 统一搜索面板 Escape 返回判据（TB-MENU-003-GLOBAL-SEARCH）。
+ *
+ * 收紧而非放宽：原生菜单项存在、面板被观察到打开、Escape 后面板被观察到关闭，
+ * 三个独立信号必须同时成立。只检查「关闭」会把「面板根本没打开」误记为成功。
+ * @param {{menuPresent?:boolean, panelOpened?:boolean, panelClosed?:boolean}} info
+ */
+export function evaluateSearchPanelEscape(info = {}) {
+  const menuPresent = info.menuPresent === true
+  const panelOpened = info.panelOpened === true
+  const panelClosed = info.panelClosed === true
+  const passed = menuPresent && panelOpened && panelClosed
+  const reason = !menuPresent ? 'menu-item-missing'
+    : !panelOpened ? 'panel-not-observed-open'
+      : !panelClosed ? 'panel-not-closed'
+        : 'ok'
+  return { passed, menuPresent, panelOpened, panelClosed, reason }
 }
 

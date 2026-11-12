@@ -22,7 +22,7 @@ import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { build } from 'esbuild'
-import { evaluateFullscreen, evaluateReopen, evaluateDirectoryCancel } from './title-bar-verdicts.mjs'
+import { evaluateFullscreen, evaluateReopen, evaluateDirectoryCancel, evaluateSearchPanelEscape } from './title-bar-verdicts.mjs'
 
 const root = resolve(import.meta.dirname, '../..')
 const APP_PATH = process.env.VINKEY_TITLE_BAR_APP || '/Applications/Vinkey.app'
@@ -444,15 +444,31 @@ async function runWithProjectPhase(temporaryDirectory) {
     const searchShot = await capture('06-after-search-menu.png', 'window')
     // CF-023 的 UnifiedSearchPanel 是 modal：点击后必须按 Escape 返回原页面，
     // 否则会遮挡后续 TB-MENU-004 的焦点建立与 TB-MENU-005 的 WebView 文本采集（设计 §4.2）。
-    const searchClose = helper('key', ['escape'], 'search-close-menu.json')
-    await sleep(400)
-    const textsAfterClose = helper('texts', ['120'], 'texts-after-search-close.json')
-    const searchPanelClosed = !textsOf(textsAfterClose).some((text) => text.includes('输入关键字以搜索项目、会话与当前项目文档'))
+    // Escape 由输入框的 React onKeyDown 处理；原生菜单项 AXPress 之后 WebView 焦点不一定
+    // 已落到该输入框（读回 kAXFocusedUIElementAttribute 可能为空），此时 CGEvent 的 Escape
+    // 不会进入 WebView。故先「激活 + 点击输入框 + 焦点读回」建立真实前置条件，再投递 Escape；
+    // 同时先读回面板已打开，避免「面板根本没打开」被误记为 Escape 成功。最多重试 3 次，
+    // 断言不降低：面板必须被观察到打开，且 Escape 后必须被观察到关闭。
+    const textsBeforeClose = helper('texts', ['120'], 'texts-before-search-close.json')
+    const searchPanelOpened = textsOf(textsBeforeClose).some((text) => text.includes('输入关键字以搜索项目、会话与当前项目文档'))
+    let searchClose = null
+    let textsAfterClose = null
+    let searchPanelClosed = false
+    const searchFocusRoles = []
+    for (let attempt = 1; attempt <= 3 && !searchPanelClosed; attempt += 1) {
+      helper('activate', [], `activate-search-${attempt}.json`)
+      const focus = helper('focus', ['AXTextField', '0'], `focus-search-input-${attempt}.json`)
+      searchFocusRoles.push(focus.focus?.stateAfter?.focusedElement?.role || 'unknown')
+      searchClose = helper('key', ['escape'], `search-close-menu-${attempt}.json`)
+      await sleep(450)
+      textsAfterClose = helper('texts', ['120'], `texts-after-search-close-${attempt}.json`)
+      searchPanelClosed = !textsOf(textsAfterClose).some((text) => text.includes('输入关键字以搜索项目、会话与当前项目文档'))
+    }
     const prev3 = cases.find((c) => c.caseId === 'TB-MENU-003')
     setCase('TB-MENU-003', {
       status: prev3?.status === 'PASS' && newClick.ok ? 'PASS' : 'FAIL',
       action: `${prev3?.action || ''} → 有项目状态点击「会话 > 新建会话」，比较会话数；另点击「会话 > 搜索项目与会话」读取焦点，按 Escape 关闭统一搜索面板恢复前置状态`,
-      actual: `${prev3?.actual || ''} 新建会话点击 ok=${newClick.ok}；project-records 会话总数 ${beforeSessions} → ${afterSessions}（空白会话在首次消息前可能尚未落库，故以菜单动作 + 页面文本为准，不强制 +1）。搜索菜单项点击后焦点=${JSON.stringify(searchState.state?.focusedElement || {})}；CF-023 已实现：菜单项与 ⌘K 均调用 store.setUnifiedSearchOpen(true) 打开 UnifiedSearchPanel（按项目/会话/当前项目文档分组），侧栏内联输入框已降级为「快速筛选」，不再冒充全局搜索；Escape 后面板已关闭=${searchPanelClosed}。`,
+      actual: `${prev3?.actual || ''} 新建会话点击 ok=${newClick.ok}；project-records 会话总数 ${beforeSessions} → ${afterSessions}（空白会话在首次消息前可能尚未落库，故以菜单动作 + 页面文本为准，不强制 +1）。搜索菜单项点击后焦点=${JSON.stringify(searchState.state?.focusedElement || {})}；CF-023 已实现：菜单项与 ⌘K 均调用 store.setUnifiedSearchOpen(true) 打开 UnifiedSearchPanel（按项目/会话/当前项目文档分组），侧栏内联输入框已降级为「快速筛选」，不再冒充全局搜索；面板已观察到打开=${searchPanelOpened}、建立输入框焦点读回=${JSON.stringify(searchFocusRoles)}、Escape 后面板已关闭=${searchPanelClosed}。`,
       evidence: [...(prev3?.evidence || []), newClick._evidence, newShot, searchClick._evidence, searchState._evidence, searchShot, searchClose._evidence, textsAfterClose._evidence].filter(Boolean),
       exitCode: 0,
     })
@@ -468,11 +484,16 @@ async function runWithProjectPhase(temporaryDirectory) {
         return items.some((item) => String(item?.title ?? item?.label ?? '').includes('搜索项目与会话'))
       } catch { return false }
     })()
+    const searchVerdict = evaluateSearchPanelEscape({
+      menuPresent: searchMenuPresent,
+      panelOpened: searchPanelOpened,
+      panelClosed: searchPanelClosed,
+    })
     setCase('TB-MENU-003-GLOBAL-SEARCH', {
-      status: searchMenuPresent && searchPanelClosed ? 'PASS' : 'FAIL',
-      action: '核对 macOS 原生「会话」菜单包含「搜索项目与会话 ⌘K」，并验证 Escape 返回原页面；面板 DOM 分组/跳转由 M3 companion（run-title-bar-companion.mjs）按 TB-GAP-006 验证',
-      actual: `CF-023 = 已实现（macOS 专项客观 PASS；Windows 独立专项未执行）。原生菜单项存在=${searchMenuPresent}；⌘K 与菜单项均调用 store.setUnifiedSearchOpen(true) 打开 UnifiedSearchPanel（不再聚焦侧栏搜索框）；原生层按 Escape 后面板已关闭=${searchPanelClosed}（读回 WebView AX 文本确认）。分组/跳转由 M3 companion TB-MENU-003-GLOBAL-SEARCH 客观验证，见 companion result.json。`,
-      evidence: [searchClick._evidence, searchShot, searchClose._evidence, textsAfterClose._evidence, 'menu-tree.json'].filter(Boolean),
+      status: searchVerdict.passed ? 'PASS' : 'FAIL',
+      action: '核对 macOS 原生「会话」菜单包含「搜索项目与会话 ⌘K」，读回确认面板已打开，建立输入框真实焦点后按 Escape 并读回确认面板已关闭；面板 DOM 分组/跳转由 M3 companion（run-title-bar-companion.mjs）按 TB-GAP-006 验证',
+      actual: `CF-023 = 已实现（macOS 专项客观 PASS；Windows 独立专项未执行）。原生菜单项存在=${searchMenuPresent}；⌘K 与菜单项均调用 store.setUnifiedSearchOpen(true) 打开 UnifiedSearchPanel（不再聚焦侧栏搜索框）；面板打开读回=${searchPanelOpened}；输入框焦点读回=${JSON.stringify(searchFocusRoles)}；Escape 后面板关闭读回=${searchPanelClosed}（读回 WebView AX 文本确认，断言要求打开与关闭两侧都成立）；判据 verdict=${searchVerdict.reason}。分组/跳转由 M3 companion TB-MENU-003-GLOBAL-SEARCH 客观验证，见 companion result.json。`,
+      evidence: [searchClick._evidence, searchShot, textsBeforeClose._evidence, searchClose?._evidence, textsAfterClose?._evidence, 'menu-tree.json'].filter(Boolean),
       exitCode: 0,
     })
 

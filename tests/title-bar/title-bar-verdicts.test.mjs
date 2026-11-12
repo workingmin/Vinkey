@@ -3,10 +3,11 @@ import {
   evaluateFullscreen,
   evaluateReopen,
   evaluateDirectoryCancel,
+  evaluateSearchPanelEscape,
   FULLSCREEN_TOLERANCE_PX,
 } from '../../scripts/title-bar/title-bar-verdicts.mjs'
 
-// Contract tests for the TB-MENU-008 / TB-MENU-002 objective verdict logic.
+// Contract tests for the TB-MENU-008 / TB-MENU-002 / TB-MENU-003-GLOBAL-SEARCH objective verdict logic.
 // These are pure functions: no macOS/AX/CoreGraphics nor a running app required,
 // so they pin the agreement between menu-ax-helper.swift output and the native runner.
 
@@ -129,6 +130,39 @@ describe('evaluateDirectoryCancel (TB-MENU-002 目录选择对话框取消保态
     const v = evaluateDirectoryCancel({ ...ok, panelOpened: false })
     expect(v.verdict).toBe('not-observed')
     expect(v.reason).toBe('panel-not-opened')
+  })
+})
+
+describe('evaluateSearchPanelEscape (TB-MENU-003-GLOBAL-SEARCH 打开/关闭双向读回)', () => {
+  const ok = { menuPresent: true, panelOpened: true, panelClosed: true }
+
+  it('passes only when menu item, observed-open and observed-close all agree', () => {
+    const v = evaluateSearchPanelEscape(ok)
+    expect(v.passed).toBe(true)
+    expect(v.reason).toBe('ok')
+  })
+
+  it('fails when the panel was never observed open, preventing a false PASS', () => {
+    const v = evaluateSearchPanelEscape({ ...ok, panelOpened: false })
+    expect(v.passed).toBe(false)
+    expect(v.reason).toBe('panel-not-observed-open')
+  })
+
+  it('fails when the panel remains open after Escape', () => {
+    const v = evaluateSearchPanelEscape({ ...ok, panelClosed: false })
+    expect(v.passed).toBe(false)
+    expect(v.reason).toBe('panel-not-closed')
+  })
+
+  it('fails when the native menu item is missing', () => {
+    const v = evaluateSearchPanelEscape({ ...ok, menuPresent: false })
+    expect(v.passed).toBe(false)
+    expect(v.reason).toBe('menu-item-missing')
+  })
+
+  it('does not treat missing/undefined signals as success', () => {
+    expect(evaluateSearchPanelEscape().passed).toBe(false)
+    expect(evaluateSearchPanelEscape({ menuPresent: true, panelClosed: true }).passed).toBe(false)
   })
 })
 
