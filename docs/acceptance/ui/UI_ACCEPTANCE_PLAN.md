@@ -119,7 +119,7 @@
 | 壳层结构 | 已有实现和历史单元测试；目标平台截图、直接渲染覆盖仍待补 |
 | 导航 fixture | `W0-NAV-F` 脚本已就绪（`UI-ACC-NAV-FIXTURE-001`）；目标平台执行与人工材料待回传 |
 | 编辑器 fixture | `W0-EDITOR-F`（`UI-ACC-EDITOR-001`）本机已执行：CLI 6/6 + 合同测试 10/10；目标平台 WebView 客观证据由 `UI-ACC-EDITOR-WEBVIEW-001` 采集（6/6），人工 UI 观察仍待测试人员回传 |
-| 标题栏菜单 fixture | `W0-SHELL-MENU-F` 独立门槛 `UI-ACC-TITLE-BAR-FIXTURE-001` 已执行，`F=PASS`（`TB-MENU-004=PASS`、13/13 覆盖）；`W0-SHELL-MENU-P` macOS 原生批次已执行，`P=PASS`，13/13 覆盖，`TB-MENU-003-GLOBAL-SEARCH=PASS`、`TB-MENU-008=PASS`（全屏 `score=3 / verdict=fullscreen`、Reopen `0→1`）；app 按最终 HEAD 重建，两批 `provenance=PASS`。专项整体仍为**条件通过**：`W0-EDITOR-F` 人工 UI 观察待回传、`DEFER-UI-001`，以及 Windows 独立专项未执行；`W0-EDITOR-F` 目标平台 WebView 客观证据已采集、目录取消保态已按 AX/CG 双信号判为 `preserved`，二者不再是遗留项；不得宣称专项通过、完整通过或跨平台发布通过 |
+| 标题栏菜单 fixture | `W0-SHELL-MENU-F` 独立门槛 `UI-ACC-TITLE-BAR-FIXTURE-001` 已执行，`F=PASS`（`TB-MENU-004=PASS`、13/13 覆盖）；`W0-SHELL-MENU-P` macOS 原生批次已执行，`P=PASS`，13/13 覆盖，`TB-MENU-003-GLOBAL-SEARCH=PASS`、`TB-MENU-008=PASS`（全屏 `score=3 / verdict=fullscreen`、Reopen `0→1`）；app 按最终 HEAD 重建，WebView / P / F 三批 `provenance=PASS`。专项整体仍为**条件通过**：`W0-EDITOR-F` 人工 UI 观察待回传、`DEFER-UI-001`，以及 Windows 独立专项未执行；`W0-EDITOR-F` 目标平台 WebView 客观证据已采集、目录取消保态已按 AX/CG 双信号判为 `preserved`，二者不再是遗留项；不得宣称专项通过、完整通过或跨平台发布通过 |
 | 会话语义标题 | 临时标题/语义升级/手动重命名已实现（`conversationTitle.ts`、侧栏入口）；`CF-022` 已参考，`W2-NAV-E` 真实模型端到端用例阻断 |
 | 全局搜索面板 | `CF-023` 统一搜索面板已落地：原生「会话 > 搜索项目与会话」、`⌘/Ctrl+K`、Windows 自绘菜单三入口，按项目/会话/当前项目文档分组并可跳转；`TB-MENU-003-GLOBAL-SEARCH` 为客观 `PASS`。目标平台人工材料仍待回传 |
 | 真实模型链路 | 依赖测试人员在 macOS 15+/Windows + Ollama/profile 环境回传 |

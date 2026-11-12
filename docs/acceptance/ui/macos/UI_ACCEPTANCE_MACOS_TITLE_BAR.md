@@ -70,7 +70,7 @@
 | `TB-MENU-011` | 中文菜单审计 | P | 已打开项目 | 自有菜单项英文残留 `[]`；系统注入服务项单独标记 13 条（`Quit and Keep Windows`、`AutoFill`、`Start Dictation…`、`Minimize All` 等），品牌/格式/协议字段按计划允许保留 | PASS | `menu-tree.json` |
 | `TB-MENU-012` | 首版菜单减法审计 | P | 已打开项目 | 菜单中禁止项 `[]`（无全局停止生成、侧栏折叠、文档保存/关闭）；降级入口由 M3 companion 复核存在 | PASS | `webview/result.json`、`menu-tree.json` |
 
-计数（与最新 P 原生批次 `result.json.summary` 一致）：`caseCount=13`、`passed=12`、`failed=0`、`blocked=0`、`notApplicable=1`（F 归属的 `TB-MENU-004`，批次归属不适用）；四项之和 `12+0+0+1=13`，覆盖不缩水；`cases[].status` 只用四态，无第五态；`result.json.exitCode=0`，进程退出码与之一致。最新 P 原生批次为 `条件通过 (12/13 passed, 0 failed, 0 blocked, 1 N/A; P=PASS, F=NOT_APPLICABLE→UI-ACC-TITLE-BAR-FIXTURE-001 权威判定)`：`TB-MENU-004` 记 N/A 并以 `authoritativeGate` 引用独立门槛、`TB-MENU-003-GLOBAL-SEARCH` 客观 PASS、`TB-MENU-008` 全屏/Reopen 判据达成 PASS；M3 companion `5/5 PASS`。独立 F 门槛为 `条件通过 (13/13 passed, 0 failed, 0 blocked; F=PASS)`，其中 `TB-MENU-004=PASS`、`TB-MENU-008=PASS`；`coverage.idsMatch=true`、13/13 覆盖。两批 `provenance.status=PASS`、`repositoryClean=true`；SHA-256 清单 P 123 文件、F 16 文件全部校验通过。
+计数（与最新 P 原生批次 `result.json.summary` 一致）：`caseCount=13`、`passed=12`、`failed=0`、`blocked=0`、`notApplicable=1`（F 归属的 `TB-MENU-004`，批次归属不适用）；四项之和 `12+0+0+1=13`，覆盖不缩水；`cases[].status` 只用四态，无第五态；`result.json.exitCode=0`，进程退出码与之一致。最新 P 原生批次为 `条件通过 (12/13 passed, 0 failed, 0 blocked, 1 N/A; P=PASS, F=NOT_APPLICABLE→UI-ACC-TITLE-BAR-FIXTURE-001 权威判定)`：`TB-MENU-004` 记 N/A 并以 `authoritativeGate` 引用独立门槛、`TB-MENU-003-GLOBAL-SEARCH` 客观 PASS、`TB-MENU-008` 全屏/Reopen 判据达成 PASS；M3 companion `5/5 PASS`。独立 F 门槛为 `条件通过 (13/13 passed, 0 failed, 0 blocked; F=PASS)`，其中 `TB-MENU-004=PASS`、`TB-MENU-008=PASS`；`coverage.idsMatch=true`、13/13 覆盖。WebView / P / F 三批 `provenance.status=PASS`、`repositoryClean=true`；三批 `SHA256SUMS` 均已逐文件重算并全部校验通过（清单条数以各批次文件为准，不在报告内固化计数）。
 
 > **关于「F 门槛 PASS 不等于专项 PASS」**：`W0-SHELL-MENU-F` 由计划 §1 第 19 行与 §7 第 114 行独立判定，只有 `W0-NAV-F`、`W0-EDITOR-F` 均真实 PASS 且 F 归属适用用例无 FAIL/BLOCKED 时才解锁；它不是由 P 结果或 M3 companion 升级而来。按计划 §6 次序，`TB-MENU-004` 的权威判定发生在这两个前置依赖 PASS **之后**，P 原生批次只记 `NOT_APPLICABLE`（批次归属不适用）与 `authoritativeGate` 引用。反过来，P 与 F 双双 PASS 也**不得**自动升级专项：构建溯源虽已定稿为 `provenance=PASS`，`W0-EDITOR-F` 目标平台 WebView 客观证据已采集、目录取消保态已客观判定为 `preserved`，但 `W0-EDITOR-F` 人工 UI 观察仍待测试人员回传、帮助/诊断弹窗为低保真实现（`DEFER-UI-001`），专项整体依然只能是「条件通过」。Windows 平台验收属独立 Windows 专项，不计入本 macOS 专项判定。帮助弹窗的视觉质量/交互完成度已按总计划 §8 登记为 `DEFER-UI-001`（后续版本验收），不再作为 Alpha 的条件通过原因。
 
@@ -122,7 +122,7 @@ P 子集 9 个用例（13 项扣除 4 个 F 归属用例）：`9 PASS / 0 FAIL /
 
 ### 5.3 `provenance`
 
-以最新批次 `result.json.provenance.status` 为准（P 原生批次与 F 独立批次分别核对）。工作树存在未提交改动时为 `REVIEW`，应用构建 SHA 缺失或源码一致性不成立时按计划 §2/§6 阻断。本版已按最终 HEAD 重建 `/Applications/Vinkey.app` 并复跑两套批次：app 内嵌 SHA = HEAD、`sourceIdenticalToHead=true`、`repositoryClean=true`、`workingTreeDirtyAtBuild=false`，两批 `provenance.status=PASS`，各自 `SHA256SUMS` 重新校验通过。报告本身不硬编码批次号与 SHA，避免自引用失配。
+以最新批次 `result.json.provenance.status` 为准（WebView / P / F 三批分别核对）。工作树存在未提交改动时为 `REVIEW`，应用构建 SHA 缺失或源码一致性不成立时按计划 §2/§6 阻断。本版已按最终 HEAD 重建 `/Applications/Vinkey.app` 并复跑 WebView / P / F 三套批次：app 内嵌 SHA = HEAD、`sourceIdenticalToHead=true`、`repositoryClean=true`、`workingTreeDirtyAtBuild=false`，三批 `provenance.status=PASS`，各自 `SHA256SUMS` 逐文件重算校验通过。报告本身不硬编码批次号、SHA 与证据清单条数，避免自引用失配。
 
 ### 5.4 独立 F 门槛批次输出集
 
