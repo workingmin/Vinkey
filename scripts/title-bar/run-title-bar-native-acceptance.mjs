@@ -136,8 +136,8 @@ let appRuntimeStart = null
 let directoryCancelVerdict = null
 const editorWebViewObjective = readEditorWebViewObjective(root)
 const editorBoundaryPhrase = editorWebViewObjective?.ok
-  ? 'W0-EDITOR-F 目标平台 WebView 客观证据已由 UI-ACC-EDITOR-WEBVIEW-001 采集，人工 UI 观察仍待测试人员回传'
-  : 'W0-EDITOR-F 目标平台 WebView 客观证据与人工 UI 观察材料仍待回传'
+  ? 'W0-EDITOR-F 目标平台 WebView 客观证据已由 UI-ACC-EDITOR-WEBVIEW-001 采集（客观项，留 Alpha），人工 UI 观察已集中至总计划 §8.5 人工复核事项（待自动化全部完成后统一处理）'
+  : 'W0-EDITOR-F 目标平台 WebView 客观证据仍按 Alpha 客观门槛采集，人工 UI 观察已集中至总计划 §8.5 人工复核事项（待自动化全部完成后统一处理）'
 const issues = []
 
 function logEvent(text) {
@@ -621,11 +621,11 @@ async function runWithProjectPhase(temporaryDirectory) {
     setCase('TB-MENU-009', {
       status: helpItems.length === 3 && aboutInApp ? 'PASS' : 'FAIL',
       action: '依次点击帮助三项，采集窗口状态与截图并 Escape 关闭；核对「关于 Vinkey」位于 Vinkey 应用菜单',
-      actual: `${helpObservations.join('；')}；关于在 Vinkey 应用菜单=${aboutInApp}。按计划 §3 与 TITLE_BAR_DESIGN.md §7，window.alert 仅计「动作可触发」，诊断弹窗仍属低保真实现，列入条件通过遗留项。`,
+      actual: `${helpObservations.join('；')}；关于在 Vinkey 应用菜单=${aboutInApp}。按计划 §3 与 TITLE_BAR_DESIGN.md §7，window.alert 仅计「动作可触发」；诊断弹窗的视觉质量/交互完成度属 DEFER-UI-001，已集中至总计划 §8.5 人工复核事项，不作为本 macOS 专项遗留项或条件通过原因。`,
       evidence: [...helpEvidence, 'menu-tree.json'],
       exitCode: 0,
     })
-    issues.push('帮助与诊断入口由 window.alert / 简易弹窗承载，按计划 §6 属低保真实现，只证明动作可触发，计入条件通过遗留项。')
+    issues.push('帮助与诊断入口由 window.alert / 简易弹窗承载，按计划 §6 属低保真实现，只证明动作可触发；其视觉质量/交互完成度属 DEFER-UI-001，已集中至总计划 §8.5 人工复核事项，不作为本 macOS 专项遗留项或条件通过原因。')
 
     // ---- TB-MENU-010 ----
     // 先切回对话页并显式建立 WebView 输入焦点，才能验证「菜单关闭后焦点恢复」
@@ -969,8 +969,8 @@ async function main() {
       reasons: [
         'CF-023 已实现：TB-MENU-003-GLOBAL-SEARCH 为客观用例（原生菜单项存在性 + M3 companion 验证面板分组/Escape/跳转），判为 PASS，不作为专项通过的阻断项',
         'Windows 平台（M5/W0-SHELL-MENU Windows 专项）由独立 Windows 验收负责，本 macOS 专项不覆盖、亦不因此降级；仅提示：Windows 未执行时不得宣称跨平台发布通过',
-        `W0-SHELL-MENU-F 归独立脚本 ${fGateSuite} 单独判定（本批次 ${fSubsetConclusion}＝批次归属不适用，不是用例不适用；TB-MENU-004 只留原生过程证据，以 authoritativeGate 登记权威门槛，权威结论见 ${fGateArtifactRoot}最新批次 result.json；cases[].status 只用四态，不新增状态值）；按计划 §6 次序 W0-NAV-F / W0-EDITOR-F 为前置依赖，其 PASS 后 F 才判定，不由 P 结果或 companion 升级。${provenanceStatus === 'PASS' ? '构建溯源 provenance=PASS 已按最终 HEAD 定稿；' : '构建溯源需按最终 HEAD 复跑定稿；'}本 macOS 专项结论仍受 macOS 范围内遗留项（${editorBoundaryPhrase}、帮助/诊断弹窗低保真${directoryCancelVerdict === 'preserved' ? '；目录取消保态已按 AX/CG 双信号客观判定为 preserved，不再作为遗留项' : `、目录取消保态 ${directoryCancelVerdict ?? 'not-observed'}`}）约束；TB-MENU-008=${tbMenu008?.status ?? 'BLOCKED'}，Windows 平台验收属独立专项，不计入本 macOS 专项判定。`,
-        '帮助/诊断弹窗为低保真实现，按 §6 计入条件通过遗留项',
+        `W0-SHELL-MENU-F 归独立脚本 ${fGateSuite} 单独判定（本批次 ${fSubsetConclusion}＝批次归属不适用，不是用例不适用；TB-MENU-004 只留原生过程证据，以 authoritativeGate 登记权威门槛，权威结论见 ${fGateArtifactRoot}最新批次 result.json；cases[].status 只用四态，不新增状态值）；按计划 §6 次序 W0-NAV-F / W0-EDITOR-F 为前置依赖，其 PASS 后 F 才判定，不由 P 结果或 companion 升级。${provenanceStatus === 'PASS' ? '构建溯源 provenance=PASS 已按最终 HEAD 定稿；' : '构建溯源需按最终 HEAD 复跑定稿；'}${editorBoundaryPhrase}，帮助/诊断弹窗视觉质量/交互完成度（DEFER-UI-001）已集中至总计划 §8.5 人工复核事项，均不作为本 macOS 专项遗留项或专项通过的阻断项；专项整体结论由独立 F 门槛 decision.specialityPass 单独判定，本批次不代为判定${directoryCancelVerdict === 'preserved' ? '；目录取消保态已按 AX/CG 双信号客观判定为 preserved，为客观已达成项' : `；目录取消保态 ${directoryCancelVerdict ?? 'not-observed'}`}；TB-MENU-008=${tbMenu008?.status ?? 'BLOCKED'}，Windows 平台验收属独立专项，不计入本 macOS 专项判定，整体仍不宣称跨平台发布通过 / 完整发布通过。`,
+        '帮助/诊断弹窗的视觉质量/交互完成度属 DEFER-UI-001，已集中至总计划 §8.5 人工复核事项，不作为本专项遗留项或条件通过原因',
         `TB-MENU-008=${tbMenu008?.status}：全屏采用多信号交叉判定（AXFullScreen + AX 尺寸 + CG 窗口边界），Reopen 恢复由 LaunchServices 触发 Dock Reopen 事件自动验证；若某客观信号未达成仍保留 BLOCKED，不宣称窗口动作全部通过；DEFER-UI-005 仅覆盖目视复核，不阻断上述客观项。`,
         'macOS 关闭窗口后的 Dock/系统 Reopen 恢复：本批次已通过 LaunchServices（open -a）投递 Dock Reopen 事件做客观验证（见 TB-MENU-008 evidence 中 window-reopen-*）。',
         ...(provenanceStatus === 'REVIEW'
