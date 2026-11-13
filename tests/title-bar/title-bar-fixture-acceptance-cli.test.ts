@@ -159,7 +159,7 @@ describe('UI-ACC-TITLE-BAR-FIXTURE-001 independent F gate', () => {
     expect(readAllDependencies(track(mkdtempSync(join(tmpdir(), 'vinkey-title-bar-empty-')))).every((item) => !item.available)).toBe(true)
   })
 
-  it('derives F=PASS from machine cases and dependencies but keeps the specialty conditional', { timeout: 90_000 }, async () => {
+  it('derives F=PASS from machine cases and dependencies and reaches Alpha-objective specialty pass after removing human items', { timeout: 90_000 }, async () => {
     const root = syntheticRoot()
     const outputDir = track(mkdtempSync(join(tmpdir(), 'vinkey-title-bar-gate-out-')))
     const output = await runFixtureGate({ root, options: parseGateArguments(['--output', outputDir, '--tester-id', 'gate-test']) })
@@ -179,9 +179,9 @@ describe('UI-ACC-TITLE-BAR-FIXTURE-001 independent F gate', () => {
     expect(result.coverage.idsMatch).toBe(true)
     expect(result.machineContract.conclusion).toBe('PASS')
     expect(result.subsets['W0-SHELL-MENU-F']!.conclusion).toBe('PASS')
-    // 忠实于计划 §6：F 门槛通过不自动升级专项；NOT_APPLICABLE / 人工遗留项 / Windows 未执行仍在。
-    expect(result.decision.specialityPass).toBe(false)
-    expect(result.decision.overallConclusion).toBe('条件通过')
+    // 新口径：剥离人工/跨平台项后，客观项全 PASS → Alpha 客观范围专项通过（specialityPass=true）。
+    expect(result.decision.specialityPass).toBe(true)
+    expect(result.decision.overallConclusion).toBe('专项通过')
     expect(result.decision.windowsPlatform).toBe('NOT_EXECUTED')
     // CF-023 已实现后该用例由 NOT_APPLICABLE 转为客观 PASS，13 项不再有 N/A。
     expect(result.summary.notApplicable).toBe(0)
@@ -211,7 +211,7 @@ describe('UI-ACC-TITLE-BAR-FIXTURE-001 independent F gate', () => {
     verifySha256Sums(outputDir)
   })
 
-  describe('遗留项口径（客观项完成 / 主观项保留）', () => {
+  describe('遗留项口径（客观残留项 / 主观项摘除至 §8.5）', () => {
     const base = {
       pProvenanceReady: true,
       pProvenanceStatus: 'PASS',
@@ -233,22 +233,25 @@ describe('UI-ACC-TITLE-BAR-FIXTURE-001 independent F gate', () => {
         .some((item) => item.includes('REVIEW'))).toBe(true)
     })
 
-    it('W0-EDITOR-F 客观证据已采集与人工 UI 观察待回传必须分开表述', () => {
+    it('W0-EDITOR-F 人工 UI 观察等主观项已从 remainingItems 摘除至 §8.5 人工复核', () => {
       const items = titleBarRemainingItems(base)
-      expect(items.some((item) => item.includes('UI-ACC-EDITOR-WEBVIEW-001') && item.includes('人工 UI 观察仍待测试人员回传'))).toBe(true)
+      expect(items.some((item) => item.includes('UI-ACC-EDITOR-WEBVIEW-001') && item.includes('人工 UI 观察仍待测试人员回传'))).toBe(false)
+      // editorEvidenceBoundaryPhrase 仍导出供 §8.5 人工复核事项引用：客观证据与人工观察分开表述。
       expect(editorEvidenceBoundaryPhrase(true)).toContain('客观证据已由 UI-ACC-EDITOR-WEBVIEW-001 采集')
       expect(editorEvidenceBoundaryPhrase(true)).toContain('人工 UI 观察仍待测试人员回传')
       expect(editorEvidenceBoundaryPhrase(false)).toContain('目标平台 WebView 客观证据与人工 UI 观察材料仍待回传')
     })
 
-    it('DEFER-UI-001 与 Windows 独立专项恒保留登记，不得删除或写成 PASS', () => {
+    it('DEFER-UI-001 与 Windows 独立专项已从 remainingItems 摘除、集中至 §8.5 人工复核（不阻断专项通过）', () => {
       const items = titleBarRemainingItems(base)
-      expect(items.some((item) => item.includes('DEFER-UI-001'))).toBe(true)
-      expect(items.some((item) => item.includes('Windows M5 独立专项'))).toBe(true)
-      expect(items.every((item) => !item.includes('PASS'))).toBe(true)
+      // 这些主观/跨平台项不得出现在阻断专项通过的客观残留项中；仍须保留登记（不得删除、不得写成 PASS），
+      // 由 decision.humanReview 承载（在 runFixtureGate 集成测试中校验）。
+      expect(items.some((item) => item.includes('DEFER-UI-001'))).toBe(false)
+      expect(items.some((item) => item.includes('Windows M5 独立专项'))).toBe(false)
+      expect(items.some((item) => item.includes('人工 UI 观察仍待测试人员回传'))).toBe(false)
       const allResolved = titleBarRemainingItems({ ...base, editorHumanObservationReturned: true })
-      expect(allResolved.some((item) => item.includes('DEFER-UI-001'))).toBe(true)
-      expect(allResolved.some((item) => item.includes('Windows M5 独立专项'))).toBe(true)
+      expect(allResolved.some((item) => item.includes('DEFER-UI-001'))).toBe(false)
+      expect(allResolved.some((item) => item.includes('Windows M5 独立专项'))).toBe(false)
     })
 
     it('readEditorWebViewEvidence 读取真实批次，缺失或不合格时不冒充客观通过', () => {
@@ -270,7 +273,7 @@ describe('UI-ACC-TITLE-BAR-FIXTURE-001 independent F gate', () => {
       expect(readEditorWebViewEvidence(badRoot).objectivePass).toBe(false)
     })
 
-    it('F 门槛 result.json 登记 WebView 证据引用与剩余项，专项仍条件通过', { timeout: 90_000 }, async () => {
+    it('F 门槛 result.json 登记 WebView 证据与 §8.5 人工复核事项，Alpha 客观范围专项通过', { timeout: 90_000 }, async () => {
       const root = syntheticRoot()
       writeWebViewBatch(root)
       const outputDir = track(mkdtempSync(join(tmpdir(), 'vinkey-title-bar-gate-wv-out-')))
@@ -278,11 +281,18 @@ describe('UI-ACC-TITLE-BAR-FIXTURE-001 independent F gate', () => {
       const decision = (output.result as { decision: Record<string, unknown> }).decision
       expect((decision.editorWebViewEvidence as { objectivePass: boolean }).objectivePass).toBe(true)
       expect((decision.editorWebViewEvidence as { humanUIObservationReturned: boolean }).humanUIObservationReturned).toBe(false)
-      expect(decision.specialityPass).toBe(false)
-      expect(decision.overallConclusion).toBe('条件通过')
+      // 剥离人工/跨平台项后，客观项全 PASS → 专项通过（Alpha 客观范围）。
+      expect(decision.specialityPass).toBe(true)
+      expect(decision.overallConclusion).toBe('专项通过')
       const items = decision.remainingItems as string[]
-      expect(items.some((item: string) => item.includes('DEFER-UI-001'))).toBe(true)
-      expect(items.some((item: string) => item.includes('人工 UI 观察仍待测试人员回传'))).toBe(true)
+      // 客观残留项为空（构建溯源定稿、目录取消保态 preserved）；人工/跨平台项登记在 humanReview。
+      expect(items.some((item: string) => item.includes('DEFER-UI-001'))).toBe(false)
+      expect(items.some((item: string) => item.includes('人工 UI 观察仍待测试人员回传'))).toBe(false)
+      const humanReview = decision.humanReview as { reference: string; items: string[] }
+      expect(humanReview.reference).toContain('§8.5')
+      expect(humanReview.items.some((item: string) => item.includes('DEFER-UI-001'))).toBe(true)
+      expect(humanReview.items.some((item: string) => item.includes('Windows M5 独立专项'))).toBe(true)
+      expect(humanReview.items.some((item: string) => item.includes('人工 UI 观察'))).toBe(true)
       verifySha256Sums(outputDir)
     })
   })

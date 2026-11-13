@@ -142,22 +142,17 @@ export interface RemainingItemsSignals {
 }
 
 /**
- * F 门槛「条件通过」遗留项清单。全部来自真实批次信号，不硬编码结论：
+ * F 门槛「客观遗留项」清单。全部来自真实批次信号，不含主观/跨平台项，不硬编码结论：
  *   - pProvenanceReady / pProvenanceStatus 来自 P 原生批次；
- *   - editorWebViewObjectivePass 来自 UI-ACC-EDITOR-WEBVIEW-001 最新批次；
  *   - dirCancelPreserved 来自 P 原生批次 TB-MENU-002.directoryCancel.verdict；
- *   - DEFER-UI-001 与 Windows 独立专项恒保留登记，不得静默丢弃、不得写成 PASS。
+ * 人工 UI 观察、DEFER-UI-001、Windows 独立专项等主观/跨平台项已集中至总计划 §8.5 人工复核事项，
+ * 不在此列为阻断专项通过的残留项（见 decision.humanReview）。
  */
 export function titleBarRemainingItems(signals: RemainingItemsSignals): string[] {
   const items: string[] = []
   if (!signals.pProvenanceReady) {
     items.push(`按最终 HEAD 复跑原生 P 批次以定稿构建溯源（当前 provenance=${signals.pProvenanceStatus ?? 'UNAVAILABLE'}）`)
   }
-  if (!signals.editorHumanObservationReturned) {
-    items.push(`${editorEvidenceBoundaryPhrase(signals.editorWebViewObjectivePass)}；机器证据不冒充人工观察，不改变 TB-MENU-004 的 F 门槛判定`)
-  }
-  items.push('帮助/诊断弹窗低保真实现升级与视觉质量复核（DEFER-UI-001）')
-  items.push('Windows M5 独立专项执行（不计入本 macOS 专项判定）')
   if (!signals.dirCancelPreserved) {
     items.push('目录选择取消/失败后原状态保留（P 批次 AX/CG 双信号客观判据未达成）')
   }
@@ -441,9 +436,7 @@ function buildCases(
   if (!navF.available || navF.conclusion !== 'PASS') {
     issues.push(`W0-NAV-F 依赖未通过（${navF.conclusion ?? 'UNAVAILABLE'}），F 门槛按计划 §1 第 19 行单独 BLOCKED。`)
   }
-  issues.push('CF-023 / TB-GAP-006：原生「会话」菜单的「搜索项目与会话 ⌘K」现已正确打开 UnifiedSearchPanel（src/components/UnifiedSearchPanel.tsx），按项目/会话/当前项目文档分组、Escape 返回；侧栏内联输入框已降级为「快速筛选」不再冒充全局搜索。TB-MENU-003-GLOBAL-SEARCH 由 M3 companion（webview/result.json）客观验证，不再 NOT_APPLICABLE。')
-  issues.push('帮助/诊断弹窗为低保真 window.alert 实现，只证明动作可触发，按计划 §6 计入条件通过遗留项。')
-  issues.push('Windows M5 未执行（NOT_EXECUTED），不得宣称跨平台发布通过。')
+  // 下列信息性说明不再进入阻断专项通过的 issues，改由 decision.info / decision.humanReview 承载（见 runFixtureGate 内 decision 构造）。
   return cases
 }
 
@@ -586,7 +579,7 @@ export async function runFixtureGate(input: {
   const dirCancelPreserved = dirCancel?.verdict === 'preserved'
   // W0-EDITOR-F 目标平台 WebView 客观证据由独立批次提供；人工 UI 观察只登记、不由脚本判定。
   const editorWebView = readEditorWebViewEvidence(root)
-  const editorBoundaryPhrase = editorEvidenceBoundaryPhrase(editorWebView.objectivePass)
+  // editorBoundaryPhrase 不再用于阻断专项通过；人工 UI 观察与 DEFER-UI-001 已集中至总计划 §8.5 人工复核事项。editorEvidenceBoundaryPhrase 仍导出供人工复核事项引用。
   // 构建溯源状态读自 UI-ACC-TITLE-BAR-001 最新原生批次，不硬编码 REVIEW/PASS，
   // 避免 P 批次已按最终 HEAD 定稿后本门槛仍声称「需复跑」的同 HEAD 矛盾。
   const pProvenanceReady = pBatch.provenanceStatus === 'PASS' && pBatch.repositoryClean === true
@@ -686,8 +679,9 @@ export async function runFixtureGate(input: {
       overallConclusion,
       windowsPlatform: 'NOT_EXECUTED',
       reason: specialityPass
-        ? '所有适用用例 PASS 且无遗留项。'
-        : `按计划 §6：专项通过要求所有适用用例均 PASS 且 macOS 目标平台证据、构建溯源均可核验。当前 P 子集 9/9 全 PASS（TB-MENU-008 全屏/Reopen 已客观解卡）、TB-MENU-003-GLOBAL-SEARCH 与 TB-MENU-004 已由本 F 门槛在 W0-EDITOR-F / W0-NAV-F 前置依赖真实 PASS 后客观判定为 PASS；按计划 §6 次序，P 原生批次对 F 归属用例只记 NOT_APPLICABLE（批次归属不适用）与原生过程证据、不重复判定，并以 authoritativeGate 指向本门槛。${provenanceSentence}但 ${editorBoundaryPhrase}、帮助/诊断弹窗为低保真实现（DEFER-UI-001）、Windows 独立专项未执行${dirCancelPreserved ? '；目录选择取消保态已由 P 批次 AX/CG 双信号客观判定为 preserved，不再作为遗留项' : '；目录选择取消保态的 AX/CG 双信号客观判据未达成'}。F 门槛通过不自动升级专项，也不得宣称跨平台发布通过。`,
+        ? 'Alpha 客观范围内所有适用用例 PASS、构建溯源已定稿、无客观遗留项；人工 UI 观察、帮助/诊断弹窗低保真实现（DEFER-UI-001）与 Windows 独立专项等主观/跨平台项已摘除至总计划 §8.5 人工复核事项统一后置，不阻断本 macOS 专项，专项在 Alpha 客观范围达成专项通过。'
+        : `按计划 §6：P 原生批次 9/9 全 PASS、F 归属 4 用例均 PASS（TB-MENU-003-GLOBAL-SEARCH 与 TB-MENU-004 已在 W0-NAV-F / W0-EDITOR-F 前置依赖真实 PASS 后客观判定为 PASS）；${provenanceSentence}但人工 UI 观察、帮助/诊断弹窗低保真实现（DEFER-UI-001）与 Windows 独立专项等主观/跨平台项已从本 macOS 专项验收范围摘除，集中至总计划 §8.5 人工复核事项统一后置处理，不作为本专项的遗留项或阻断项${dirCancelPreserved ? '；目录选择取消保态已由 P 批次 AX/CG 双信号客观判定为 preserved，不再作为遗留项' : '；目录选择取消保态的 AX/CG 双信号客观判据未达成'}。F 门槛通过不自动升级专项，也不得宣称跨平台发布通过 / 完整发布通过。`,
+      info: '人工 UI 观察、DEFER-UI-001 与 Windows 独立专项等主观/跨平台验收项已集中至总计划 §8.5 人工复核统一批次，在所有自动化验收脚本跑完后再统一处理，不计入本 macOS 专项判定或专项通过的阻断项。',
       editorWebViewEvidence: {
         suite: EDITOR_WEBVIEW_SUITE_ID,
         source: editorWebView.resultFile,
@@ -696,7 +690,19 @@ export async function runFixtureGate(input: {
         objectivePass: editorWebView.objectivePass,
         humanUIObservationReturned: editorWebView.humanUIObservationReturned,
         platformPass: editorWebView.platformPass,
-        note: '只引用目标平台 WebView 客观证据批次；人工 UI 观察仍待测试人员回传，不由机器代为判定。',
+        note: '只引用目标平台 WebView 客观证据批次；人工 UI 观察已登记于 decision.humanReview，不由机器代为判定，不计入本 macOS 专项判定。',
+      },
+      humanReview: {
+        reference: 'docs/acceptance/ui/UI_ACCEPTANCE_PLAN.md §8.5 人工复核统一批次',
+        note: '下列主观/专家/用户判断项已从各功能域与本 macOS 专项验收范围摘除，集中至总计划 §8.5 人工复核事项，在所有自动化验收脚本跑完后再统一处理；不计入本 macOS 专项判定或专项通过的阻断项，也不得写成 PASS。',
+        items: [
+          'W0-EDITOR-F 目标平台 WebView 人工 UI 观察（客观证据已由 UI-ACC-EDITOR-WEBVIEW-001 采集，人工观察仍待测试人员回传）',
+          '标题栏与功能菜单诊断/帮助弹窗低保真实现升级与视觉质量复核（DEFER-UI-001）',
+          'Windows M5 独立专项执行（跨平台，不计入本 macOS 专项判定）',
+          '各功能域其它自动化脚本不能完成、需人工/专家/用户判断的 UI 交互验证项（见总计划 §8.5 清单）',
+        ],
+        editorWebViewObjectivePass: editorWebView.objectivePass,
+        editorHumanObservationReturned: editorWebView.humanUIObservationReturned,
       },
       remainingItems: titleBarRemainingItems({
         pProvenanceReady,

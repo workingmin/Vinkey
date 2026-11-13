@@ -147,7 +147,7 @@
 1. **机器断言**：来自隔离 fixture/SQLite 与本机真实 Ollama 的 `result.json`，是三档门槛结论的主要依据。
 2. **交互 UI 截图**：`UI-ACC-NAV-UI-001` 产出的是 **Playwright 浏览器演示层页面级截图**（21 张），证明交互链路、分组与视觉状态，**不是** Tauri 原生窗口证据。
 3. **原生窗口截图**：`UI-ACC-NAV-NATIVE-001` 是真实启动已安装 Tauri 应用后，由 `ui-shell-native-macos` 的 CoreGraphics helper 按窗口 ID 捕获的原生窗口（4 张），证明真实应用能正确渲染导航状态。两层截图互补，任何一层都不得冒充另一层。
-4. **不覆盖范围**：macOS 系统原生菜单栏的菜单项动作属于独立 `W0-SHELL-MENU-P/F` 专项。该专项已在 macOS 执行，[专项报告](./UI_ACCEPTANCE_MACOS_TITLE_BAR.md) 记录为 `P=PASS`、`F=PASS`、`provenance=PASS`、专项整体**条件通过**、Windows 独立专项未执行，**不得当作专项已通过证据**。本报告不把它计入 `D-NAV` 结论；本专项验证的全局搜索入口为侧栏/折叠入口与 ⌘K 键盘入口。
+4. **不覆盖范围**：macOS 系统原生菜单栏的菜单项动作属于独立 `W0-SHELL-MENU-P/F` 专项。该专项已在 macOS 执行，[专项报告](./UI_ACCEPTANCE_MACOS_TITLE_BAR.md) 记录为 `P=PASS`、`F=PASS`、`provenance=PASS`、专项整体**专项通过（Alpha 客观范围）**、Windows 独立专项未执行，**不得当作跨平台发布通过证据，也不计入 `D-NAV` 结论**。本报告不把它计入 `D-NAV` 结论；本专项验证的全局搜索入口为侧栏/折叠入口与 ⌘K 键盘入口。
 5. **人工目视复核**：截图与 `ui-observations.md` 已随批次归档，测试人员发布前目视确认作为最后一道手续，不阻断本批次自动化结论。
 6. **provenance**：以最新批次 `result.json.provenance` 为准；若工作树存在未提交改动，该字段为 `REVIEW`/`BLOCKED`，需提交后按最终 HEAD 复跑。
 7. **`CF-023` 口径边界**：本报告 §2 与 `NAV-E-005` 的 PASS 只指当前工作区「项目/会话/文档」三类分组搜索、中文查询、工作区边界、100 条上限与跳转（见 `navigation-e2e-acceptance.ts` 的 `grouped` 断言），**不**代替 `CF-023` 统一全局搜索面板的专项判定；该面板由标题栏专项的 `TB-MENU-003-GLOBAL-SEARCH` 独立判为客观 `PASS`。跨文档描述一致性由 `DEFER-UI-011` 登记产品/设计复核，本报告不借此扩大 `D-NAV` 结论。

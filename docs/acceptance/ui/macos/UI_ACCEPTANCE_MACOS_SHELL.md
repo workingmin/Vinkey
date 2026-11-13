@@ -8,7 +8,7 @@
 - 验收标识：`W0-SHELL-P`
 - 关联设计：[UI_DESIGN_SHELL.md](../../../design/ui/UI_DESIGN_SHELL.md)、[TITLE_BAR_DESIGN.md](../../../design/ui/TITLE_BAR_DESIGN.md)
 - 标题栏菜单专项计划：[UI_ACCEPTANCE_MACOS_TITLE_BAR_PLAN.md](./UI_ACCEPTANCE_MACOS_TITLE_BAR_PLAN.md)，拆分为 `W0-SHELL-MENU-P`（平台/结构）与 `W0-SHELL-MENU-F`（fixture 业务入口链路）
-- 标题栏菜单专项报告：[UI_ACCEPTANCE_MACOS_TITLE_BAR.md](./UI_ACCEPTANCE_MACOS_TITLE_BAR.md)；macOS 已执行，结论为 `P` PASS、`F` PASS（独立脚本 `UI-ACC-TITLE-BAR-FIXTURE-001`）、`provenance=PASS`、专项整体条件通过、Windows 独立专项未执行，均不计入 `W0-SHELL-P`
+- 标题栏菜单专项报告：[UI_ACCEPTANCE_MACOS_TITLE_BAR.md](./UI_ACCEPTANCE_MACOS_TITLE_BAR.md)；macOS 已执行，结论为 `P` PASS、`F` PASS（独立脚本 `UI-ACC-TITLE-BAR-FIXTURE-001`）、`provenance=PASS`、专项整体**专项通过（Alpha 客观范围）**、Windows 独立专项未执行，均不计入 `W0-SHELL-P`
 - 导航业务报告：[UI_ACCEPTANCE_MACOS_NAVIGATION.md](./UI_ACCEPTANCE_MACOS_NAVIGATION.md)
 - 回填模板：[UI_ACCEPTANCE_MACOS_SHELL_RUN_TEMPLATE.md](./UI_ACCEPTANCE_MACOS_SHELL_RUN_TEMPLATE.md)
 - 自动化入口：[Playwright 脚本](../../../../scripts/ui-shell/run-ui-shell-acceptance.mjs)，命令为 `npm run test:ui-shell-acceptance`
@@ -125,7 +125,7 @@ Playwright 自动化入口支持按平台运行，并在状态变化后等待双
 - **不通过**：窗口控制、内容容器、焦点、错误恢复或平台语义不满足设计断言。
 - **阻断**：桌面运行环境或构建依赖使结论不可得；记录复现信息。
 
-标题栏菜单不是本报告的通过条件；若菜单设计或菜单实现存在缺口，应在 [标题栏与功能菜单专项验收报告](./UI_ACCEPTANCE_MACOS_TITLE_BAR.md) 中记录（该报告的 `P=PASS`、`F=PASS`、`TB-MENU-003-GLOBAL-SEARCH=PASS`、`TB-MENU-008=PASS`、`provenance=PASS`，`W0-EDITOR-F` 目标平台 WebView 客观证据已采集、目录取消保态已客观判定为 `preserved`；遗留为 `W0-EDITOR-F` 人工 UI 观察待回传、帮助弹窗低保真 `DEFER-UI-001` 与 Windows 独立专项未执行；专项整体仍为条件通过），不得反向改写 `W0-SHELL-P` 的窗口/容器结论。
+标题栏菜单不是本报告的通过条件；若菜单设计或菜单实现存在缺口，应在 [标题栏与功能菜单专项验收报告](./UI_ACCEPTANCE_MACOS_TITLE_BAR.md) 中记录（该报告的 `P=PASS`、`F=PASS`、`TB-MENU-003-GLOBAL-SEARCH=PASS`、`TB-MENU-008=PASS`、`provenance=PASS`，`W0-EDITOR-F` 目标平台 WebView 客观证据已采集、目录取消保态已客观判定为 `preserved`；`W0-EDITOR-F` 人工 UI 观察与帮助弹窗低保真 `DEFER-UI-001` 等主观项已集中至总计划 §8.5 人工复核事项、Windows 独立专项未执行不计入本 macOS 结论，专项整体在 Alpha 客观范围达成**专项通过**），不得反向改写 `W0-SHELL-P` 的窗口/容器结论。
 
 当前综合结论：**macOS 完整通过**（`W0-SHELL-P` 子门槛）。本版本唯一有效证据批次在最终构建 HEAD 下重跑，机器层 24/24 PASS、0 失败、0 阻断、`exitCode=0`；原生窗口控制、WebView companion、构建溯源、隔离 Profile、显示探针（物理 DPI `133`）与隐私扫描全部通过，6 张 CoreGraphics 窗口截图有效，两级哈希清单与归档脱敏通过，应用与仓库 Git SHA 一致且工作树 clean。Windows 平台验收见 [UI_ACCEPTANCE_WINDOWS_SHELL.md](../windows/UI_ACCEPTANCE_WINDOWS_SHELL.md)；本报告不覆盖 `D-NAV` 真实业务链路或标题栏菜单专项。
 

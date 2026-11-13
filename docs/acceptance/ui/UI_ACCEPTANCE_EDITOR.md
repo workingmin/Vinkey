@@ -5,12 +5,12 @@
 - 验收对象：[UI_DESIGN_EDITOR.md](../../design/ui/UI_DESIGN_EDITOR.md)
 - 脚本入口：`UI-ACC-EDITOR-001`，命令 `npm run test:editor-acceptance`（macOS/Linux 加 `:sh`、Windows 加 `:win`）
 - 目标平台 WebView 客观证据入口：`UI-ACC-EDITOR-WEBVIEW-001`，命令 `npm run test:editor-webview-native-mac`（`scripts/editor/run-editor-webview-native-macos.mjs`）
-- 报告状态：**fixture / 文件桥接合同层本机已通过；目标平台 WebView 客观证据已采集**（CLI `EDIT-F-001`~`006` 6/6、合同测试 10/10；`EDIT-WV-001`~`006` 6/6）；人工 UI 观察仍待测试人员回传，**机器通过不等于人工观察或平台层综合通过**
+- 报告状态：**fixture / 文件桥接合同层本机已通过；目标平台 WebView 客观证据已采集**（CLI `EDIT-F-001`~`006` 6/6、合同测试 10/10；`EDIT-WV-001`~`006` 6/6）；人工 UI 观察已集中至 [总计划 §8.5](./UI_ACCEPTANCE_PLAN.md) 人工复核事项（待所有自动化验收脚本跑完后统一处理），**机器通过不等于人工观察或平台层综合通过**
 - 更新日期：`2026-11-12`
 
 ## 1. 验收边界
 
-`W0-EDITOR-F` 验收隔离工作区 fixture 下的基础文件与编辑器合同（文件分类、打开/读取、编辑保存、修改时间冲突、新建文档与路径越界保护），以及真实目标平台 WebView 中文件树、编辑器、保存状态栏与文档视图的客观结构证据。人工 UI 观察（视觉质量、交互手感、无障碍观感）仍待测试人员回传，不由机器判定。真实 AI 改稿、DiffProposal 与跨域文档冲突归 `W3-REVISION-E`；对话页与编辑器间的交叉状态归 `W4-NAV-R`。
+`W0-EDITOR-F` 验收隔离工作区 fixture 下的基础文件与编辑器合同（文件分类、打开/读取、编辑保存、修改时间冲突、新建文档与路径越界保护），以及真实目标平台 WebView 中文件树、编辑器、保存状态栏与文档视图的客观结构证据。人工 UI 观察（视觉质量、交互手感、无障碍观感）已集中至 [总计划 §8.5](./UI_ACCEPTANCE_PLAN.md) 人工复核事项，待所有自动化验收脚本跑完后再由测试人员统一处理；不由机器判定。真实 AI 改稿、DiffProposal 与跨域文档冲突归 `W3-REVISION-E`；对话页与编辑器间的交叉状态归 `W4-NAV-R`。
 
 ## 2. 机器用例
 
@@ -45,14 +45,14 @@
 
 - `W0-EDITOR-F` 机器层：**PASS（fixture / 文件桥接合同）**。该结论已作为 `W0-SHELL-MENU-F` 的硬依赖，被 `UI-ACC-TITLE-BAR-FIXTURE-001` 从最新 `result.json` 真实读取，用于解锁 F 子门槛。
 - `W0-EDITOR-F` 目标平台 WebView 客观证据：**PASS（`UI-ACC-EDITOR-WEBVIEW-001` 6/6）**，见 §3.1；文件树、`AXTextArea` 编辑器、保存状态栏、文档视图与原生截图均由真实目标应用窗口读回。
-- **人工 UI 观察仍待测试人员回传**：视觉质量、交互手感、无障碍观感不由机器判定；`platformPass=false`，`W0-EDITOR-F` 平台层综合结论保持未判定。机器通过不等于人工观察或目标平台综合通过，也不代表 `W3-REVISION-E` / `W3-CONTEXT-E` 通过。
-- `DEFER-UI-001` 按总计划 §8.3 保留登记，Alpha 内不判定、不写成 PASS、不删除。
+- **人工 UI 观察已集中至 [总计划 §8.5](./UI_ACCEPTANCE_PLAN.md) 人工复核事项**：视觉质量、交互手感、无障碍观感不由机器判定，待自动化全部完成后统一处理；`W0-EDITOR-F` 平台层综合结论（含 `platformPass`）在人工复核事项回填前保持未判定。机器通过不等于人工观察或目标平台综合通过，也不代表 `W3-REVISION-E` / `W3-CONTEXT-E` 通过。
+- `DEFER-UI-001` 按总计划 §8.3 登记并集中至 [总计划 §8.5](./UI_ACCEPTANCE_PLAN.md) 人工复核事项，Alpha 内不判定、不写成 PASS、不删除。
 
 ## 5. 测试人员回填区
 
 - 机器证据：`<UI-ACC-EDITOR-001 acceptance: PASS (6/6)；artifacts/editor-acceptance/ 最新批次 result.json + SHA256SUMS>`
 - 目标平台 WebView 客观证据：`<UI-ACC-EDITOR-WEBVIEW-001 objectiveConclusion=PASS (6/6)；artifacts/editor-webview-native-macos/ 最新批次 result.json + SHA256SUMS + states/ + screenshots/>`
-- 人工 UI 层：`<TBD（视觉质量 / 交互手感 / 无障碍观感，待测试人员回传）>`
+- 人工 UI 层：`<已集中至总计划 §8.5 人工复核事项（待自动化全部完成后统一处理）>`
 - 问题列表：`<人工 UI 观察材料待回传；DEFER-UI-001 按总计划 §8.3 保留登记>`
-- 综合结论：`<fixture/合同层 PASS；目标平台 WebView 客观证据 PASS；人工 UI 观察未回传，W0-EDITOR-F 平台层综合结论未判定>`
+- 综合结论：`<fixture/合同层 PASS；目标平台 WebView 客观证据 PASS；人工 UI 观察已集中至总计划 §8.5 人工复核事项（待自动化全部完成后统一处理），W0-EDITOR-F 平台层综合结论在人工复核回填前未判定>`
 - 下一次复审：`<人工 UI 观察材料回传、Vinkey 版本发布，或文件桥接合同变更时>`
