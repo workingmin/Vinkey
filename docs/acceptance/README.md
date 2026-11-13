@@ -36,10 +36,16 @@
 
 ### 专项验收
 
+> **本表通用口径**（适用于下列所有「专项验收（macOS）」栏，统一在此说明，不在各栏重复）：
+> - **结论范围**：各栏结论均为**对应平台的单平台结论**；凡标注「专项通过」者，均指 **Alpha 客观自动化范围**内的专项通过——客观用例全部 PASS 且机器证据链（`result.json`、`SHA256SUMS`、`provenance`、退出码）可核验，不代表视觉/体验已验收、功能完备或完整发布通过。其他栏的「完整通过」等字样亦限于对应功能域的单平台范围，不等同于完整发布通过。
+> - **人工复核统一后置**：需人工观察、专家判断或用户意见才能判定的 UI 交互与主观验收项，按 [总计划 §8.3](ui/UI_ACCEPTANCE_PLAN.md) 登记为 `DEFERRED_AFTER_ALPHA`（共 12 项），已从各功能域验收范围摘除并集中至 [§8.5 人工复核统一批次](ui/UI_ACCEPTANCE_PLAN.md#85-人工复核统一批次自动化验收完成后统一处理)，待**所有自动化验收脚本跑完后**统一处理；不计入各专项结论、不作为阻断项，不得写成 `PASS` 或删除，结论单独记录且不回溯改写功能域 `result.json`。
+> - **平台边界**：Windows 平台执行属独立 Windows 专项；macOS 专项不执行 Windows 独立专项，其 `NOT_EXECUTED` 不计入 macOS 结论，反之亦然。因此任何单平台专项通过**均不宣称跨平台发布通过 / 完整发布通过**。
+> - 各栏只写该专项自身结论与证据；审核结论以专项报告及最新批次 `result.json` 为准。
+
 | 文档 | 用途 |
 | --- | --- |
 | [应用壳层与入口专项验收（macOS）](ui/macos/UI_ACCEPTANCE_MACOS_SHELL.md) | 壳层平台与结构验收报告（macOS，完整通过） |
-| [标题栏与功能菜单专项验收（macOS）](ui/macos/UI_ACCEPTANCE_MACOS_TITLE_BAR.md) | 标题栏/原生菜单与窗口命令验收报告（macOS，**专项通过（Alpha 客观范围）**；`W0-SHELL-MENU-P=PASS`（`TB-MENU-008` 全屏/Reopen 已客观 PASS）、`W0-SHELL-MENU-F=PASS`（独立脚本 `UI-ACC-TITLE-BAR-FIXTURE-001`）、`provenance=PASS`，13/13 计划用例覆盖；人工项已摘除至 [§8.5 人工复核事项](ui/UI_ACCEPTANCE_PLAN.md)，Windows 独立专项未执行不计入本 macOS 结论，专项在 Alpha 客观范围通过、整体不宣称跨平台发布通过） |
+| [标题栏与功能菜单专项验收（macOS）](ui/macos/UI_ACCEPTANCE_MACOS_TITLE_BAR.md) | 标题栏/原生菜单与窗口命令验收报告（macOS，**专项通过**；`W0-SHELL-MENU-P=PASS`（`TB-MENU-008` 全屏/Reopen 已客观 PASS）、`W0-SHELL-MENU-F=PASS`（独立脚本 `UI-ACC-TITLE-BAR-FIXTURE-001`）、`provenance=PASS`，13/13 计划用例覆盖） |
 | [应用壳层与入口专项验收（Windows）](ui/windows/UI_ACCEPTANCE_WINDOWS_SHELL.md) | 壳层平台与结构验收报告（Windows，待执行） |
 | [项目与会话导航专项验收（macOS）](ui/macos/UI_ACCEPTANCE_MACOS_NAVIGATION.md) | 导航合同、端到端和回归验收报告（macOS，完整通过；含真实应用原生窗口证据） |
 | [项目与会话导航专项验收（Windows）](ui/windows/UI_ACCEPTANCE_WINDOWS_NAVIGATION.md) | 导航合同、端到端和回归验收（Windows） |
@@ -49,7 +55,7 @@
 | [长任务/日志中心专项验收（Windows）](ui/windows/UI_ACCEPTANCE_WINDOWS_TASK_PROCESS.md) | 日志/长任务真实端到端验收报告模板（Windows） |
 | [长任务过程原生复验清单](ui/TASK_PROCESS_NATIVE_ACCEPTANCE.md) | Windows/macOS 桌面通用的原生复验清单 |
 
-> 标题栏与功能菜单专项的 Windows 报告尚未建立，M5 未执行（`NOT_EXECUTED`），当前仅有 [Windows 版计划](ui/windows/UI_ACCEPTANCE_WINDOWS_TITLE_BAR_PLAN.md)。macOS 报告在 Alpha 客观范围达成**专项通过**：`W0-SHELL-MENU-P=PASS`、`W0-SHELL-MENU-F=PASS`（独立脚本 `UI-ACC-TITLE-BAR-FIXTURE-001`）、`TB-MENU-003-GLOBAL-SEARCH=PASS`、`TB-MENU-008=PASS`、构建溯源 `provenance=PASS`、13/13 覆盖；`W0-EDITOR-F` 目标平台 WebView 客观证据已由 `UI-ACC-EDITOR-WEBVIEW-001` 采集、目录取消保态已由 AX/CG 双信号客观判定为 `preserved`；`W0-EDITOR-F` 人工 UI 观察与帮助弹窗低保真（`DEFER-UI-001`）等主观项已集中至 [§8.5 人工复核事项](ui/UI_ACCEPTANCE_PLAN.md)（待所有自动化验收脚本跑完后统一处理），Windows 独立专项未执行不计入本 macOS 结论；整体仍**不宣称跨平台发布通过 / 完整发布通过**；审核结论以专项报告及两套最新批次 `result.json` 为准。
+> 标题栏与功能菜单专项的 Windows 报告尚未建立，当前仅有 [Windows 版计划](ui/windows/UI_ACCEPTANCE_WINDOWS_TITLE_BAR_PLAN.md)（M5 待执行）。该专项 macOS 侧的补充证据：`TB-MENU-003-GLOBAL-SEARCH=PASS`、`TB-MENU-008=PASS`、13/13 覆盖、构建溯源 `provenance=PASS`；`W0-EDITOR-F` 目标平台 WebView 客观证据已由 `UI-ACC-EDITOR-WEBVIEW-001` 采集，目录取消保态已由 AX/CG 双信号客观判定为 `preserved`。
 
 ## IntentRouter 验收
 
