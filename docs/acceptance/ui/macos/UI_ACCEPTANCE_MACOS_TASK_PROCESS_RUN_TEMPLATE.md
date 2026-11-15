@@ -1,6 +1,6 @@
 # 长任务/日志中心本地验收回填模板（macOS）
 
-本模板供测试人员在 macOS 桌面环境执行 `W4-TASK-E` / `UI-ACC-LOGS-001`。所有 `<...>` 均为待填占位符；未执行或缺少必要证据时不得填写 `PASS`。Windows 平台请使用 [UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_RUN_TEMPLATE.md](../windows/UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_RUN_TEMPLATE.md)。
+本模板供测试人员在 macOS 桌面环境执行 `W4-TASK-E` / `UI-ACC-LOGS-001`。所有 `<...>` 均为待填占位符；未执行或缺少必要证据时不得填写 `PASS`。原生复验任务按 [长任务过程原生复验清单（macOS）](./UI_ACCEPTANCE_MACOS_TASK_PROCESS_NATIVE.md)（`NT-MAC-001`~`005`）分派，共享合同见 [TASK_PROCESS_NATIVE_ACCEPTANCE.md](../TASK_PROCESS_NATIVE_ACCEPTANCE.md)。Windows 平台请使用 [UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_RUN_TEMPLATE.md](../windows/UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_RUN_TEMPLATE.md)。
 
 ## 1. 执行元数据
 

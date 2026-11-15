@@ -7,9 +7,9 @@
 - 验收对象：[TASK_PROCESS_COPY_DESIGN.md](../../../design/ui/TASK_PROCESS_COPY_DESIGN.md)（§4 任务过程拆解、§5 文案目录、§7 状态依据、§8 评审示例、§9.2 UX 验收清单）
 - 验收脚本：`UI-ACC-LOGS-001`（`scripts/task-process/`，入口 `npm run test:task-process-acceptance`）
 - 回填模板：[UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_RUN_TEMPLATE.md](./UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_RUN_TEMPLATE.md)
-- 关联原生复验：[TASK_PROCESS_NATIVE_ACCEPTANCE.md](../TASK_PROCESS_NATIVE_ACCEPTANCE.md)（`NT-001..NT-005`）
-- 报告状态：设计结论与实现基线已定稿，脚本与回填模板已就绪；真实桌面执行与人工观察材料待回填
-- 更新日期：`2026-11-02`
+- 关联原生复验：[长任务过程原生复验清单（Windows）](./UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_NATIVE.md)（`NT-WIN-001..NT-WIN-005`）；共享合同与平台任务分派索引见 [TASK_PROCESS_NATIVE_ACCEPTANCE.md](../TASK_PROCESS_NATIVE_ACCEPTANCE.md)（`NT-001..NT-005`）
+- 报告状态：设计结论与实现基线已定稿，脚本与回填模板已就绪；独立 Windows 专项 `NOT_EXECUTED`（客观后置），真实桌面执行与人工观察材料待回填
+- 更新日期：`2026-11-15`
 
 ## 1. 验收边界
 

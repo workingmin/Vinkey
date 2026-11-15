@@ -1,7 +1,7 @@
 # UI 测试验收脚本编写工作计划
 
 - 计划基线：当前版本 `0.1.0`（Alpha）
-- 更新日期：`2026-11-13`
+- 更新日期：`2026-11-15`
 - 脚本规范：[UI_ACCEPTANCE_SCRIPT_SPEC.md](./UI_ACCEPTANCE_SCRIPT_SPEC.md)
 - 总验收计划：[UI_ACCEPTANCE_PLAN.md](./UI_ACCEPTANCE_PLAN.md)（主观类验收项延期登记表的唯一权威是该文件 §8，本文件只引用、不另建清单）
 
@@ -50,7 +50,7 @@
 | `W2-NAV-E` | `D-NAV` 真实导航 | `W0-NAV-F`、`W1-MODEL-E`、`W2-CHAT-E` | `UI-ACC-NAV-E2E-001` | 会话状态和持久化测试已由脚本覆盖 | `npm run test:navigation-e2e-acceptance:sh`；隔离 fixture + 本机真实 Ollama，2 项目 × 3 会话 × 2 轮、标题生命周期、刷新持久化、搜索分组跳转 | 标题前后、刷新、搜索分组和 Escape 返回 | 已编写并执行：`NAV-E-001`~`006` 6/6 PASS、退出码 0；截图由 `UI-ACC-NAV-UI-001` 补齐 |
 | `W3-CONTEXT-E` | `D-CONTEXT` 上下文分析 | W0 编辑器、W1 模型、W2 对话 | `UI-ACC-CONTEXT-001` | 召回、权限、预算和来源收据测试 | 固定 fixture + 真实模型调用 | 选择文件、权限、来源和超限 | 待编写，依赖 W1/W2 |
 | `W3-REVISION-E` | `D-REVISION` AI 改稿 | W0 编辑器、W2 对话 | `UI-ACC-EDITOR-002` | 提案解析、接受/拒绝和保存测试 | 真实模型改稿、冲突和提案完整性 | DiffProposal、接受/拒绝、保存 | 待编写，不与基础编辑器混写 |
-| `W4-TASK-E` | `D-TASK-LOG` 长任务/日志 | W2 对话；分析还需 W3 上下文 | `UI-ACC-LOGS-001` | Worker/TaskJob、事件/段标签/终态/产物核查（`TASK-CHK-*`）与 `task-process-acceptance-cli.test.ts` 合同测试 | `scripts/task-process/`：只读核查 `.vinkey/analysis/jobs/<jobId>/` 产物与 SQLite，`--dump-manual` 生成人工回填模板 | 暂停/恢复、停止确认、折叠/自动跟随、产物预览、重启恢复、源变化拒绝、失败重试、窄栏/键盘（`TASK-UI-*`） | 已有（待本地执行） |
+| `W4-TASK-E` | `D-TASK-LOG` 长任务/日志 | W2 对话；分析还需 W3 上下文 | `UI-ACC-LOGS-001` | Worker/TaskJob、事件/段标签/终态/产物核查（`TASK-CHK-*`）与 `task-process-acceptance-cli.test.ts` 合同测试 | `scripts/task-process/`：只读核查 `.vinkey/analysis/jobs/<jobId>/` 产物与 SQLite，`--dump-manual` 生成人工回填模板；macOS 用 `:sh`、Windows 用 `:win` | 暂停/恢复、停止确认、折叠/自动跟随、产物预览、重启恢复、源变化拒绝、失败重试、窄栏/键盘（`TASK-UI-*`）；主观观感按 `DEFER-UI-006` 集中至 [总计划 §8.5](./UI_ACCEPTANCE_PLAN.md#85-人工复核统一批次自动化验收完成后统一处理) | 已有（待本地执行）；`NT-001..NT-005` 按平台拆分：macOS `NT-MAC-001`~`005` 待执行、Windows `NT-WIN-001`~`005` 独立专项客观后置，客观流程断言留 Alpha；共享合同与分派索引见 [TASK_PROCESS_NATIVE_ACCEPTANCE.md](./TASK_PROCESS_NATIVE_ACCEPTANCE.md) |
 | `W4-NAV-R` | `D-NAV` 跨域回归 | W2 导航、W3 改稿、W4 任务 | `UI-ACC-NAV-REGRESSION-001` | 过期响应、运行锁定和草稿保护断言已由脚本覆盖 | `npm run test:navigation-regression-acceptance:sh`；隔离 fixture 建模生成中会话、运行任务、未保存草稿与延迟搜索响应 | 阻断、确认、取消、保存和恢复 | 已编写并执行：`NAV-R-001`~`005` 5/5 PASS、退出码 0；前置态由 `preconditionStates` 记录 |
 | `UI-ACC-NAV-UI-001` | `D-NAV` UI 材料（三档） | W0/W2/W4 机器批次 | `UI-ACC-NAV-UI-001` | Playwright 逐场景断言 | `npm run test:navigation-ui-acceptance:sh`；启动 Vite 演示层、注入隔离 localStorage fixture、真实点击导航 UI | 21 张页面级截图 + UI 观察表 + `SHA256SUMS` | 已编写并执行：19/19 PASS；**浏览器演示层页面级证据，非原生窗口证据** |
 | `UI-ACC-NAV-NATIVE-001` | `D-NAV` 原生窗口（macOS） | 已安装 `/Applications/Vinkey.app`、`ui-shell-native-macos` 已编译 CoreGraphics helper、`W0-NAV-F` fixture | `UI-ACC-NAV-NATIVE-001` | 四场景原生窗口断言 + 构建溯源 | `npm run test:navigation-native-mac:sh`；真实启动应用、隔离 `VINKEY_ACCEPTANCE_DATA_DIR`、按窗口 ID 捕获 | 4 张 CoreGraphics 原生窗口截图 + 原生观察表 + `SHA256SUMS` | 已编写并执行：4/4 PASS；与浏览器 companion 分层，互不冒充 |

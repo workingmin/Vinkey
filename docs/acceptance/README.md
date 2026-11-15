@@ -4,7 +4,7 @@
 
 ## UI 验收
 
-先查阅[UI 验收工作计划](ui/UI_ACCEPTANCE_PLAN.md)，确认功能域、验收门槛和前置依赖，再审核对应专项报告及执行证据。平台执行类文档按 macOS / Windows 分版维护于 `ui/macos/` 与 `ui/windows/`，两版共享同一验收合同与脚本规范，仅执行入口和证据按平台区分；跨平台合同类文档（计划、脚本规范、原生复验清单）继续留在 `ui/` 根目录。文档按「计划 → 回填模板 → 规范 → 专项验收」分类维护。
+先查阅[UI 验收工作计划](ui/UI_ACCEPTANCE_PLAN.md)，确认功能域、验收门槛和前置依赖，再审核对应专项报告及执行证据。平台执行类文档（含长任务过程原生复验清单的执行任务）按 macOS / Windows 分版维护于 `ui/macos/` 与 `ui/windows/`，两版共享同一验收合同与脚本规范，仅执行入口和证据按平台区分；跨平台合同类文档（计划、脚本规范）与原生复验清单的共享合同、平台任务分派索引继续留在 `ui/` 根目录。文档按「计划 → 回填模板 → 规范 → 专项验收」分类维护。
 
 ### 计划
 
@@ -53,7 +53,9 @@
 | [模型设置专项验收（Windows）](ui/windows/UI_ACCEPTANCE_WINDOWS_SETTINGS.md) | 设置与真实模型服务验收报告（Windows） |
 | [长任务/日志中心专项验收（macOS）](ui/macos/UI_ACCEPTANCE_MACOS_TASK_PROCESS.md) | 日志/长任务真实端到端验收报告模板（macOS） |
 | [长任务/日志中心专项验收（Windows）](ui/windows/UI_ACCEPTANCE_WINDOWS_TASK_PROCESS.md) | 日志/长任务真实端到端验收报告模板（Windows） |
-| [长任务过程原生复验清单](ui/TASK_PROCESS_NATIVE_ACCEPTANCE.md) | Windows/macOS 桌面通用的原生复验清单 |
+| [长任务过程原生复验清单（macOS）](ui/macos/UI_ACCEPTANCE_MACOS_TASK_PROCESS_NATIVE.md) | `NT-001..NT-005` 的 macOS 平台执行任务（`NT-MAC-001`~`005`，待执行）与证据入口 |
+| [长任务过程原生复验清单（Windows）](ui/windows/UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_NATIVE.md) | `NT-001..NT-005` 的 Windows 平台执行任务（`NT-WIN-001`~`005`，独立专项客观后置）与证据入口 |
+| [长任务过程原生复验清单（共享合同与平台任务分派索引）](ui/TASK_PROCESS_NATIVE_ACCEPTANCE.md) | 5 个原用例编号与通过标准、平台任务分派索引及共性口径 |
 
 > 标题栏与功能菜单专项的 Windows 报告尚未建立，当前仅有 [Windows 版计划](ui/windows/UI_ACCEPTANCE_WINDOWS_TITLE_BAR_PLAN.md)（M5 待执行）。该专项 macOS 侧的补充证据：`TB-MENU-003-GLOBAL-SEARCH=PASS`、`TB-MENU-008=PASS`、13/13 覆盖、构建溯源 `provenance=PASS`；`W0-EDITOR-F` 目标平台 WebView 客观证据已由 `UI-ACC-EDITOR-WEBVIEW-001` 采集，目录取消保态已由 AX/CG 双信号客观判定为 `preserved`。
 
@@ -64,7 +66,7 @@
 
 ## 维护约定
 
-- 新增验收文档统一放入本目录，按功能领域分类并更新本索引；UI 验收使用 `ui/`（平台执行文档按 macOS/Windows 放入 `ui/macos/`、`ui/windows/`），并归入「计划 / 回填模板 / 规范 / 专项验收」对应小节；IntentRouter 验收使用 `intent-router/`。
+- 新增验收文档统一放入本目录，按功能领域分类并更新本索引；UI 验收使用 `ui/`（平台执行文档按 macOS/Windows 放入 `ui/macos/`、`ui/windows/`；长任务过程原生复验清单的执行任务同样按平台分版，`ui/` 根目录只保留其共享合同与分派索引），并归入「计划 / 回填模板 / 规范 / 专项验收」对应小节；IntentRouter 验收使用 `intent-router/`。
 - 设计文档继续由 [`design/`](../design/) 维护，验收文档通过相对链接关联设计依据、实现和测试入口。
 - 报告与回填模板分开维护；审核结论以报告及实际执行证据为准，计划、模板和占位内容不代表验收通过。
 - 可执行脚本保存在 [`scripts/`](../../scripts/README.md)，自动化测试保存在 [`tests/`](../../tests/README.md)。

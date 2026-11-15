@@ -1,7 +1,7 @@
 # Vinkey 当前版本 UI 功能域验收工作计划
 
 - 版本：`0.1.0`（Alpha）
-- 更新日期：`2026-11-13`
+- 更新日期：`2026-11-15`
 - 适用阶段：Alpha；主观类验收项的后续版本边界见本文件 §8
 - 适用环境：Windows/macOS 15+ 桌面环境；真实模型验收使用本地 Ollama 或已批准的兼容服务
 - 统一生命周期：[UI_DESIGN.md](../../design/ui/UI_DESIGN.md) 的“统一验收生命周期”
@@ -56,7 +56,7 @@
 | `W2-NAV-E` | `D-NAV` | 真实端到端 | `W0-NAV-F`、`W2-CHAT-E` | 多项目多会话、标题生命周期、刷新持久化、目标全局搜索和跳转 | `macos/UI_ACCEPTANCE_MACOS_NAVIGATION.md` / `windows/UI_ACCEPTANCE_WINDOWS_NAVIGATION.md` |
 | `W3-CONTEXT-E` | `D-CONTEXT` | 真实端到端 | `W0-EDITOR-F`、`W1-MODEL-E`、`W2-CHAT-E` | 上下文范围、召回、预算、来源收据、权限和分析结果 | 上下文专项报告（待建立） |
 | `W3-REVISION-E` | `D-REVISION` | 真实端到端 | `W0-EDITOR-F`、`W2-CHAT-E` | 真实模型改稿、DiffProposal、接受/拒绝、冲突和保存 | `UI_ACCEPTANCE_EDITOR.md` |
-| `W4-TASK-E` | `D-TASK-LOG` | 真实端到端 | `W2-CHAT-E`；分析任务还需 `W3-CONTEXT-E` | 长任务进度、暂停/失败/恢复、步骤重试、产物和执行快照 | [长任务/日志中心专项验收（macOS）](./macos/UI_ACCEPTANCE_MACOS_TASK_PROCESS.md) / [Windows](./windows/UI_ACCEPTANCE_WINDOWS_TASK_PROCESS.md) |
+| `W4-TASK-E` | `D-TASK-LOG` | 真实端到端 | `W2-CHAT-E`；分析任务还需 `W3-CONTEXT-E` | 长任务进度、暂停/失败/恢复、步骤重试、产物和执行快照 | [长任务/日志中心专项验收（macOS）](./macos/UI_ACCEPTANCE_MACOS_TASK_PROCESS.md) / [Windows](./windows/UI_ACCEPTANCE_WINDOWS_TASK_PROCESS.md)；原生复验清单按平台拆分：[macOS](./macos/UI_ACCEPTANCE_MACOS_TASK_PROCESS_NATIVE.md) / [Windows](./windows/UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_NATIVE.md)，共享合同见 [TASK_PROCESS_NATIVE_ACCEPTANCE.md](./TASK_PROCESS_NATIVE_ACCEPTANCE.md) |
 | `W4-NAV-R` | `D-NAV` | 跨域回归 | `W2-NAV-E`、`W3-REVISION-E`、`W4-TASK-E` | 运行中任务、生成中会话、未保存文档和过期搜索响应下的切换/删除保护 | `macos/UI_ACCEPTANCE_MACOS_NAVIGATION.md` / `windows/UI_ACCEPTANCE_WINDOWS_NAVIGATION.md` |
 | `W4-RESP-R` | `Q-RESP` | 跨域回归 | 各页面已形成实现 | 全页面视觉、主题、焦点、DPI、平台菜单和状态保持回归 | 响应式/跨域回归记录 |
 
@@ -123,6 +123,7 @@
 | 会话语义标题 | 临时标题/语义升级/手动重命名已实现（`conversationTitle.ts`、侧栏入口）；`CF-022` 已参考，`W2-NAV-E` 真实模型端到端用例阻断 |
 | 全局搜索面板 | `CF-023` 统一搜索面板已落地：原生「会话 > 搜索项目与会话」、`⌘/Ctrl+K`、Windows 自绘菜单三入口，按项目/会话/当前项目文档分组并可跳转；`TB-MENU-003-GLOBAL-SEARCH` 为客观 `PASS`。目标平台人工材料（视觉/交互观感部分）已集中至 [§8.5](#85-人工复核统一批次自动化验收完成后统一处理) 人工复核事项 |
 | 真实模型链路 | `W1-MODEL-E` macOS 已按最终 HEAD 复跑：Ollama 原生 `/api/*` 与 `/v1/*` 兼容层双协议 10/10 PASS、系统凭据库 5/5 PASS、组件/合同/Rust 模型域测试全绿、`provenance=PASS`；模型设置专项在 Alpha 客观范围达成**专项通过**。外部独立 OpenAI-compatible 服务与 Windows 独立专项仍按原门槛列为客观遗留，见 [macOS 设置报告](./macos/UI_ACCEPTANCE_MACOS_SETTINGS.md) |
+| 长任务原生复验 | `NT-001..NT-005` 已按平台拆分为 macOS `NT-MAC-001`~`005`（待执行）与 Windows `NT-WIN-001`~`005`（独立专项客观后置）；`UI-ACC-LOGS-001` 脚本已有、待本地执行，`TASK-CHK-*` 机器核查与流程断言仍留 Alpha，主观/人工观察按 `DEFER-UI-006` 集中至 [§8.5](#85-人工复核统一批次自动化验收完成后统一处理)；共享合同与分派索引见 [TASK_PROCESS_NATIVE_ACCEPTANCE.md](./TASK_PROCESS_NATIVE_ACCEPTANCE.md) |
 | 主观类验收项 | 按 §8.3 登记为 `DEFERRED_AFTER_ALPHA`（共 12 项）并集中至 [§8.5](#85-人工复核统一批次自动化验收完成后统一处理) 人工复核事项，已从功能域验收范围摘除，不作为 Alpha 结论前置、不计入本表阻断口径；必须在发布说明中单独列出，不得写成通过或删除 |
 
 > 本表是当前版本的阻断摘要，各专项最新状态以专项报告和 [脚本编写计划](./UI_ACCEPTANCE_SCRIPT_PLAN.md) 矩阵为准。`CF-023` 统一面板为按项目/会话/当前项目文档分组的统一搜索面板，侧栏内联输入框为「快速筛选」，不冒充全局搜索；`TB-MENU-003-GLOBAL-SEARCH` 为客观 `PASS`。本计划的功能域与用例范围不因执行结果调整。
@@ -186,7 +187,7 @@
 **纳入范围（划出标准 §8.2 第 1–3 条）**：
 
 - 全部 12 项 `DEFER-UI-001`~`DEFER-UI-012`（视觉质量、交互完成度、无障碍观感、设计/产品评审、用户调研、竞品体验、治理签字等），原登记见 §8.3。
-- 各功能域人工 UI 观察：`W0-EDITOR-F` 人工 UI 观察（视觉质量、交互手感、无障碍观感）、`W0-NAV-F` 目标平台人工材料、`CF-023` 目标平台人工材料（视觉/交互观感部分，客观结构已由 `TB-MENU-003-GLOBAL-SEARCH` 验证）、`W2-NAV-E` 真实模型端到端人工观察（如适用）、`W1-MODEL-E` 模型设置专项人工 UI 观察（设置页观感、键盘与窗口缩放目视、真实 app 端到端删除密钥人工确认；客观部分已由组件自动化与 Keychain 批次覆盖）。
+- 各功能域人工 UI 观察：`W0-EDITOR-F` 人工 UI 观察（视觉质量、交互手感、无障碍观感）、`W0-NAV-F` 目标平台人工材料、`CF-023` 目标平台人工材料（视觉/交互观感部分，客观结构已由 `TB-MENU-003-GLOBAL-SEARCH` 验证）、`W2-NAV-E` 真实模型端到端人工观察（如适用）、`W1-MODEL-E` 模型设置专项人工 UI 观察（设置页观感、键盘与窗口缩放目视、真实 app 端到端删除密钥人工确认；客观部分已由组件自动化与 Keychain 批次覆盖）、`W4-TASK-E` 长任务原生复验人工 UI 观察（暂停/恢复、源变化拒绝、两层折叠、重启恢复等主观观感部分，按 `DEFER-UI-006` 归口；事件序列、段标签、终态与产物读回、状态映射和流程断言等客观部分仍按 [平台清单](./TASK_PROCESS_NATIVE_ACCEPTANCE.md) 留在 Alpha）。
 - 其他经 §8.2 划出的主观/专家/用户判断项。
 
 **执行顺序（修订 §6 第 7 步）**：
@@ -212,6 +213,11 @@
 - [标题栏菜单专项验收报告（macOS）](./macos/UI_ACCEPTANCE_MACOS_TITLE_BAR.md)
 - [标题栏菜单专项验收计划（Windows）](./windows/UI_ACCEPTANCE_WINDOWS_TITLE_BAR_PLAN.md)
 - [模型设置验收（macOS）](./macos/UI_ACCEPTANCE_MACOS_SETTINGS.md)
+- [长任务/日志中心专项验收（macOS）](./macos/UI_ACCEPTANCE_MACOS_TASK_PROCESS.md)
+- [长任务/日志中心专项验收（Windows）](./windows/UI_ACCEPTANCE_WINDOWS_TASK_PROCESS.md)
+- [长任务过程原生复验清单（macOS）](./macos/UI_ACCEPTANCE_MACOS_TASK_PROCESS_NATIVE.md)
+- [长任务过程原生复验清单（Windows）](./windows/UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_NATIVE.md)
+- [长任务过程原生复验清单（共享合同与平台任务分派索引）](./TASK_PROCESS_NATIVE_ACCEPTANCE.md)
 - [模型设置验收（Windows）](./windows/UI_ACCEPTANCE_WINDOWS_SETTINGS.md)
 - [长任务/日志中心验收（macOS）](./macos/UI_ACCEPTANCE_MACOS_TASK_PROCESS.md)
 - [长任务/日志中心验收（Windows）](./windows/UI_ACCEPTANCE_WINDOWS_TASK_PROCESS.md)
