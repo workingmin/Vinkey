@@ -44,6 +44,7 @@ A/B/C 三个阶段均已落地：
 - 生产 `worker_service.rs` 对每个终态事件（`completed`/`failed`/`cancelled`）闭合所属段的 `endedAt`；直接发布的 `chunking`/`evidence`/`lifecycle` 完成事件同样带段结束时间，与 CP-27/R8 及前端“已完成 · 耗时”一致。
 - `job-start.json` 一次性写死 `status: "running"`，真实终态由 `job.json`（completed）/ `job-failed.json`（failed）与 lifecycle 事件承载；验收脚本按生产格式读回终态，`TASK-CHK-006` 判定条件不放宽。
 - `UI-ACC-LOGS-001` 在 `result.json` 定稿后再计算 `SHA256SUMS`，不自引用自身哈希；`_stage-cache` 等共享缓存目录不计入任务列表。
+- 真实模型输出具不确定性：模型给出与来源行不一致的引用时，生产 pipeline 按设计拒绝并写 `failed` 终态（`job-failed.json` 与 quarantine 记录）；正式验收批次只取 `completed` 终态，执行层重跑不改写任何断言、用例 ID 或四态。
 - 暂停安全点回执：原生端当前只设置暂停标志，只验证 CP-42「已暂停后续步骤」，不得写成 CP-05「已暂停」。
 - 活动失败→任务失败映射：任务失败仅由生命周期确定（UX-10）。
 
@@ -65,7 +66,7 @@ A/B/C 三个阶段均已落地：
 | `TASK-CHK-006` 任务终态与产物快照 | completed 任务：`worker-output.json` 存在、`pipelineCompleted=true`、内容非空；非 completed 任务 BLOCKED | `PASS` |
 | `TASK-CHK-007` 结果与 SHA-256 清单写入 | `result.json` 与 `SHA256SUMS` 成功写入且逐文件重算全部校验通过 | `PASS` |
 
-机器证据概要：真实任务终态 `completed`（终态来源 `job.json`）、`pipelineCompleted=true`、产物内容非空、模型真实调用 4 次、chunk 1、汇总 1；17 个事件 sequence 连续，段标签覆盖阅读与分段 / 分析文本片段 / 汇总章节分析 / 汇总分卷分析 / 综合分析 / 核对引用 / 任务，已完成段全部带 `endedAt`；checkpoint 清单、证据结果、分段清单与分析正文齐备。
+机器证据概要：真实任务终态 `completed`（终态来源 `job.json`）、`pipelineCompleted=true`、`worker-output.json` 内容非空、真实模型调用次数大于零（逐次次数以 `driver-summary.json` / `result.json` 为准，随模型输出重试浮动）；事件 sequence 自 1 连续递增，段标签覆盖阅读与分段 / 分析文本片段 / 汇总章节分析 / 汇总分卷分析 / 综合分析 / 核对引用 / 任务（含「重新…」重试段），所有终态事件均带 `endedAt`；checkpoint 清单、证据结果、分段清单与分析正文齐备。
 
 ### 3.2 人工 UI 用例（统一归 §8.5，待测试人员回填）
 

@@ -51,7 +51,7 @@
 | [项目与会话导航专项验收（Windows）](ui/windows/UI_ACCEPTANCE_WINDOWS_NAVIGATION.md) | 导航合同、端到端和回归验收（Windows） |
 | [模型设置专项验收（macOS）](ui/macos/UI_ACCEPTANCE_MACOS_SETTINGS.md) | 设置与真实模型服务验收报告（macOS，**专项通过**；`W1-MODEL-E` 双协议 10/10 PASS、`UI-ACC-SETTINGS-KEYCHAIN-001` 5/5 PASS、组件 17/17、Rust 模型域全绿、`provenance=PASS`；外部独立 OpenAI-compatible 服务仍为客观遗留） |
 | [模型设置专项验收（Windows）](ui/windows/UI_ACCEPTANCE_WINDOWS_SETTINGS.md) | 设置与真实模型服务验收报告（Windows） |
-| [长任务/日志中心专项验收（macOS）](ui/macos/UI_ACCEPTANCE_MACOS_TASK_PROCESS.md) | 日志/长任务真实端到端验收报告（macOS，**专项通过**；`UI-ACC-LOGS-001` 7/7 机器用例 PASS、真实任务 `completed` 且 `pipelineCompleted=true`、17 事件序列连续、4 次真实 Ollama 调用、`provenance=PASS`、合同测试全绿；证据由 CLI 驱动 + 生产 pipeline + 真实 Ollama 产出，非桌面 UI 发起） |
+| [长任务/日志中心专项验收（macOS）](ui/macos/UI_ACCEPTANCE_MACOS_TASK_PROCESS.md) | 日志/长任务真实端到端验收报告（macOS，**专项通过**；`UI-ACC-LOGS-001` 7/7 机器用例 PASS、真实任务 `completed` 且 `pipelineCompleted=true`、事件 sequence 连续且终态事件均带 `endedAt`、真实 Ollama 调用次数大于零、`provenance=PASS`、合同测试全绿；证据由 CLI 驱动 + 生产 pipeline + 真实 Ollama 产出，非桌面 UI 发起） |
 | [长任务/日志中心专项验收（Windows）](ui/windows/UI_ACCEPTANCE_WINDOWS_TASK_PROCESS.md) | 日志/长任务真实端到端验收报告（Windows，`NOT_EXECUTED`） |
 | [长任务过程原生复验清单（macOS）](ui/macos/UI_ACCEPTANCE_MACOS_TASK_PROCESS_NATIVE.md) | `NT-001..NT-005` 的 macOS 平台执行任务（`NT-MAC-001`~`005`，待执行）与证据入口 |
 | [长任务过程原生复验清单（Windows）](ui/windows/UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_NATIVE.md) | `NT-001..NT-005` 的 Windows 平台执行任务（`NT-WIN-001`~`005`，独立专项客观后置）与证据入口 |
