@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SettingsPage } from './SettingsPage'
-import { useAppStore } from '../store'
+import { useAppStore, type ChatRun } from '../store'
 import * as desktop from '../lib/desktop'
 
 beforeEach(() => {
@@ -194,5 +194,67 @@ describe('model settings workflow', () => {
     await desktop.saveModelConnection({ id: 'key-b', name: '密钥 B', kind: 'ollama', baseUrl: 'http://localhost:11434', apiKey: 'secret-b' })
     await expect(desktop.saveModelConnection({ id: 'key-c', name: '密钥 A 副本', kind: 'ollama', baseUrl: 'http://localhost:11434/', apiKey: 'secret-a' })).rejects.toThrow('相同服务地址和 API 密钥的连接已存在')
     expect((await desktop.listModelConnections()).map((item) => item.id)).toEqual(expect.arrayContaining(['key-a', 'key-b']))
+  })
+
+  it('asks before discarding unsaved connection edits on Escape or return, and closes silently when clean', async () => {
+    useAppStore.setState({ settingsOpen: true })
+    render(<SettingsPage />)
+    const back = await screen.findByRole('button', { name: '返回工作区' })
+    fireEvent.change(screen.getByLabelText('名称'), { target: { value: '未保存的名称' } })
+    expect(screen.getByText('未保存')).toBeTruthy()
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(confirm).toHaveBeenCalledWith('放弃尚未保存的连接修改？')
+    expect(useAppStore.getState().settingsOpen).toBe(true)
+    fireEvent.click(back)
+    expect(useAppStore.getState().settingsOpen).toBe(true)
+    confirm.mockReturnValue(true)
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(useAppStore.getState().settingsOpen).toBe(false)
+
+    cleanup()
+    useAppStore.setState({ settingsOpen: true })
+    confirm.mockClear()
+    render(<SettingsPage />)
+    fireEvent.click(await screen.findByRole('button', { name: '返回工作区' }))
+    expect(confirm).not.toHaveBeenCalled()
+    expect(useAppStore.getState().settingsOpen).toBe(false)
+  })
+
+  it('disables the active model picker while chat or analysis runs are active', async () => {
+    useAppStore.setState({ pendingChatRequests: 0, chatRuns: {} })
+    render(<SettingsPage />)
+    const picker = await screen.findByRole('combobox', { name: '当前模型' }) as HTMLButtonElement
+    await waitFor(() => expect(picker.disabled).toBe(false))
+    useAppStore.setState({ pendingChatRequests: 1 })
+    await waitFor(() => expect(picker.disabled).toBe(true))
+    useAppStore.setState({ pendingChatRequests: 0, chatRuns: { 'analysis-1': { status: 'streaming' } as unknown as ChatRun } })
+    await waitFor(() => expect(picker.disabled).toBe(true))
+    useAppStore.setState({ chatRuns: {} })
+    await waitFor(() => expect(picker.disabled).toBe(false))
+  })
+
+  it('requires an explicit checkbox to clear a saved API key', async () => {
+    vi.spyOn(desktop, 'discoverConnectionModels').mockResolvedValue({ ok: false, models: [], message: '跳过目录发现' })
+    const [connection] = await desktop.listModelConnections()
+    await desktop.saveModelConnection({ ...connection, apiKey: 'saved-secret-value' })
+    expect((await desktop.listModelConnections())[0].hasApiKey).toBe(true)
+    render(<SettingsPage />)
+    const checkbox = await screen.findByRole('checkbox', { name: '删除已保存的密钥' }) as HTMLInputElement
+    expect(checkbox.checked).toBe(false)
+    const saveSpy = vi.spyOn(desktop, 'saveModelConnection')
+    const saveButton = await screen.findByRole('button', { name: '保存并检查模型' })
+    await waitFor(() => expect((saveButton as HTMLButtonElement).disabled).toBe(false))
+    fireEvent.click(saveButton)
+    await waitFor(() => expect(saveSpy).toHaveBeenCalled())
+    expect(saveSpy.mock.calls[0][0]).not.toMatchObject({ clearApiKey: true })
+    expect((await desktop.listModelConnections())[0].hasApiKey).toBe(true)
+
+    await waitFor(() => expect((screen.getByRole('checkbox', { name: '删除已保存的密钥' }) as HTMLInputElement).checked).toBe(false))
+    fireEvent.click(screen.getByRole('checkbox', { name: '删除已保存的密钥' }))
+    fireEvent.click(screen.getByRole('button', { name: '保存并检查模型' }))
+    await waitFor(async () => expect((await desktop.listModelConnections())[0].hasApiKey).toBe(false))
+    expect(saveSpy.mock.calls.at(-1)?.[0]).toMatchObject({ clearApiKey: true })
+    expect(JSON.stringify(localStorage)).not.toContain('saved-secret-value')
   })
 })

@@ -395,8 +395,11 @@ fn is_loopback_base(base_url: &str) -> bool {
         .ok()
         .and_then(|url| url.host_str().map(str::to_owned))
         .is_some_and(|host| {
+            // Url::host_str() 对 IPv6 字面量保留方括号（"[::1]"），直接 parse 会失败。
+            // 去掉方括号后再解析，使 IPv6 回环地址与前端 isLoopbackModelEndpoint 一致。
+            let literal = host.trim_start_matches('[').trim_end_matches(']');
             host.eq_ignore_ascii_case("localhost")
-                || host
+                || literal
                     .parse::<std::net::IpAddr>()
                     .is_ok_and(|address| address.is_loopback())
         })

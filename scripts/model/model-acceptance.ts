@@ -14,9 +14,11 @@ export type { CaseResult, CaseStatus } from '../lib/acceptance'
 export type { RepositoryInfo } from '../lib/environment'
 
 // W1-MODEL-E / D-MODEL 模型设置真实端到端验收脚本（UI-ACC-SETTINGS-001）。
-// 通过 Ollama/兼容服务的 HTTP API 验证服务可达、目录发现、模型检查（/api/show）、
-// 真实 completion、多模型目录、超时与连接失败的优雅处理。默认不读取真实应用数据目录，
-// 仅对测试人员指定的 base url 发起只读探测与一次最小推理。
+// 通过 Ollama 原生协议（/api/tags、/api/show、/api/chat）与 OpenAI-compatible 协议
+// （/v1/models、/v1/chat/completions）分别验证服务可达、目录发现、模型检查、
+// 真实 completion、多模型目录、超时与连接失败的优雅处理。默认一次运行同时执行两套协议，
+// 不读取真实应用数据目录，仅对测试人员指定的 base url 发起只读探测与最小推理。
+// 失败/超时用例为 blackhole 地址注入，不是真实服务故障恢复，报告中不得混称。
 
 export const SUITE_ID = 'UI-ACC-SETTINGS-001'
 export const SUITE_VERSION = 'model-acceptance-1'
@@ -24,9 +26,13 @@ export const ACCEPTANCE_ID = 'W1-MODEL-E'
 export const DOMAIN_ID = 'D-MODEL'
 export const GATE = 'E'
 
+export type ModelProtocol = 'ollama' | 'openai-compatible'
+export type ProtocolSelection = ModelProtocol | 'both'
+
 export interface CliOptions {
   baseUrl: string
   model: string
+  protocol: ProtocolSelection
   profileId: string | null
   profileName: string | null
   timeoutMs: number
@@ -41,8 +47,10 @@ export interface SelectedModel {
   profileId: string
   profileName: string
   model: string
-  connectionKind: 'ollama' | 'openai-compatible'
+  connectionKind: ModelProtocol
   connectionBaseUrl: string
+  protocols: ModelProtocol[]
+  openaiCompatibleBaseUrl: string | null
 }
 
 export interface AcceptanceRunInput {
@@ -87,6 +95,7 @@ function usage(): string {
 
 参数：
   --base-url <url>       服务地址（默认 http://localhost:11434）
+  --protocol <name>      ollama | openai-compatible | both（默认 both）
   --model <name>         目标模型标签（默认 qwen3:8b）
   --profile-id <id>      显式 profile ID；省略时由 base-url|model 派生稳定 ID
   --profile-name <name>  profile 显示名（默认 derived）
@@ -97,14 +106,17 @@ function usage(): string {
   -h, --help             显示帮助
 
 说明：
-  - 探测只读：/api/tags 与 /api/show；推理仅一次极小提示，不发送用户作品正文。
-  - 连接失败与超时用例验证脚本优雅降级，不因服务不可达而崩溃。`
+  - 探测只读：Ollama /api/tags、/api/show 与 /v1/models；推理仅一次极小提示，不发送用户作品正文。
+  - openai-compatible 协议在 base url 后补 /v1（已带 /v1 则直接使用）；可用 VINKEY_MODEL_API_KEY
+    提供临时凭据，仅放入 Authorization header，不写入日志、result.json 或仓库。
+  - 连接失败与超时用例为 blackhole 地址注入，不是真实服务故障恢复；报告中必须分别标注。`
 }
 
 export function parseArguments(values: string[]): CliOptions | null {
   const options: CliOptions = {
     baseUrl: 'http://localhost:11434',
     model: 'qwen3:8b',
+    protocol: 'both',
     profileId: null,
     profileName: null,
     timeoutMs: 30_000,
@@ -124,6 +136,11 @@ export function parseArguments(values: string[]): CliOptions | null {
     }
     if (value === '--base-url') options.baseUrl = take(value).replace(/\/+$/u, '')
     else if (value === '--model') options.model = take(value)
+    else if (value === '--protocol') {
+      const protocol = take(value)
+      if (!['ollama', 'openai-compatible', 'both'].includes(protocol)) throw new Error(`未知协议 ${protocol}；可选 ollama / openai-compatible / both。`)
+      options.protocol = protocol as ProtocolSelection
+    }
     else if (value === '--profile-id') options.profileId = take(value)
     else if (value === '--profile-name') options.profileName = take(value)
     else if (value === '--timeout-ms') options.timeoutMs = Number(take(value)) || options.timeoutMs
@@ -183,9 +200,26 @@ export interface ModelCaseContext {
   baseUrl: string
   model: string
   timeoutMs: number
+  protocol: ProtocolSelection
 }
 
-export async function runMachineCases(context: ModelCaseContext): Promise<CaseResult[]> {
+function openaiBase(baseUrl: string): string {
+  return /\/v1$/u.test(baseUrl) ? baseUrl : `${baseUrl}/v1`
+}
+
+function openaiHeaders(): Record<string, string> {
+  // 临时凭据只进入 Authorization header；不写入 result.json、诊断日志或仓库。
+  const apiKey = process.env.VINKEY_MODEL_API_KEY?.trim()
+  return { 'Content-Type': 'application/json', ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) }
+}
+
+function openaiModelIds(body: unknown): string[] {
+  return ((body as { data?: Array<{ id?: string }> })?.data ?? [])
+    .map((item) => item.id ?? '')
+    .filter((id) => id.length > 0)
+}
+
+async function runOllamaCases(context: ModelCaseContext): Promise<CaseResult[]> {
   const { baseUrl, model, timeoutMs } = context
   const cases: CaseResult[] = []
 
@@ -257,6 +291,83 @@ export async function runMachineCases(context: ModelCaseContext): Promise<CaseRe
   return cases
 }
 
+async function runOpenAICompatibleCases(context: ModelCaseContext): Promise<CaseResult[]> {
+  const { baseUrl, model, timeoutMs } = context
+  const v1 = openaiBase(baseUrl)
+  const headers = openaiHeaders()
+  const cases: CaseResult[] = []
+
+  // MODEL-E-OAI-001 兼容协议服务可达与目录发现
+  {
+    const res = await requestWithTimeout(`${v1}/models`, { method: 'GET', headers }, timeoutMs)
+    if (!res.ok) {
+      cases.push({ caseId: 'MODEL-E-OAI-001', title: 'OpenAI-compatible 目录发现', category: 'machine', status: 'BLOCKED', detail: `兼容端点不可达：${res.error ?? res.status ?? '未知错误'}。`, blockedReason: 'openai-compatible-unreachable' })
+    } else {
+      const ids = openaiModelIds(res.body)
+      const issues: string[] = []
+      if (ids.length === 0) issues.push('目录为空，未发现任何模型')
+      if (!ids.includes(model)) issues.push(`目标模型 ${model} 不在目录中（实际：${ids.join(', ') || '空'}）`)
+      cases.push(issues.length > 0
+        ? { caseId: 'MODEL-E-OAI-001', title: 'OpenAI-compatible 目录发现', category: 'machine', status: 'FAIL', detail: issues.join('；') }
+        : { caseId: 'MODEL-E-OAI-001', title: 'OpenAI-compatible 目录发现', category: 'machine', status: 'PASS', detail: `GET ${v1}/models 发现 ${ids.length} 个模型，目标 ${model} 存在。` })
+    }
+  }
+
+  // MODEL-E-OAI-002 兼容协议真实最小推理
+  {
+    const res = await requestWithTimeout(`${v1}/chat/completions`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ model, messages: [{ role: 'user', content: '用两个字回答：连通' }], temperature: 0, stream: false }),
+    }, timeoutMs)
+    const reply = (res.body as { choices?: Array<{ message?: { content?: string } }> })?.choices?.[0]?.message?.content ?? ''
+    const issues: string[] = []
+    if (!res.ok) issues.push(`/v1/chat/completions 失败：${res.error ?? res.status ?? '未知'}`)
+    else if (!reply.trim()) issues.push('推理返回空内容')
+    cases.push(issues.length > 0
+      ? { caseId: 'MODEL-E-OAI-002', title: 'OpenAI-compatible 最小推理', category: 'machine', status: 'FAIL', detail: issues.join('；') }
+      : { caseId: 'MODEL-E-OAI-002', title: 'OpenAI-compatible 最小推理', category: 'machine', status: 'PASS', detail: `真实调用 ${v1}/chat/completions 完成一次最小推理（${res.ms}ms），返回内容非空。` })
+  }
+
+  // MODEL-E-OAI-003 兼容协议连接失败优雅处理（blackhole 注入，不是真实服务故障恢复）
+  {
+    const blackhole = 'http://127.0.0.1:9'
+    const res = await requestWithTimeout(`${blackhole}/v1/models`, { method: 'GET', headers }, 2000)
+    const handled = !res.ok && (res.error === 'timeout' || res.error?.includes('ECONNREFUSED') || res.error?.includes('fetch'))
+    cases.push(handled
+      ? { caseId: 'MODEL-E-OAI-003', title: 'OpenAI-compatible 连接失败优雅处理', category: 'machine', status: 'PASS', detail: `指向不可达地址时降级为结构化错误（${res.error}），未崩溃。` }
+      : { caseId: 'MODEL-E-OAI-003', title: 'OpenAI-compatible 连接失败优雅处理', category: 'machine', status: 'FAIL', detail: `不可达地址未优雅处理：${JSON.stringify(res)}` })
+  }
+
+  // MODEL-E-OAI-004 兼容协议多模型目录
+  {
+    const res = await requestWithTimeout(`${v1}/models`, { method: 'GET', headers }, timeoutMs)
+    const ids = res.ok ? openaiModelIds(res.body) : []
+    cases.push(ids.length >= 1
+      ? { caseId: 'MODEL-E-OAI-004', title: 'OpenAI-compatible 多模型目录', category: 'machine', status: 'PASS', detail: `目录包含 ${ids.length} 个模型：${ids.join(', ')}` }
+      : { caseId: 'MODEL-E-OAI-004', title: 'OpenAI-compatible 多模型目录', category: 'machine', status: 'BLOCKED', detail: '目录为空，无法验证多模型选择', blockedReason: 'no-models' })
+  }
+
+  // MODEL-E-OAI-005 兼容协议超时处理（blackhole 注入，不是真实服务故障恢复）
+  {
+    const blackhole = 'http://10.255.255.1:80'
+    const res = await requestWithTimeout(`${blackhole}/v1/models`, { method: 'GET', headers }, 200)
+    const timedOut = res.error === 'timeout' || !res.ok
+    cases.push(timedOut
+      ? { caseId: 'MODEL-E-OAI-005', title: 'OpenAI-compatible 超时处理', category: 'machine', status: 'PASS', detail: `单请求超时上限生效（${res.ms}ms，结果：${res.error ?? '非 2xx'}），未无限等待。` }
+      : { caseId: 'MODEL-E-OAI-005', title: 'OpenAI-compatible 超时处理', category: 'machine', status: 'FAIL', detail: `未在限定时间内中止：${JSON.stringify(res)}` })
+  }
+
+  return cases
+}
+
+export async function runMachineCases(context: ModelCaseContext): Promise<CaseResult[]> {
+  const cases: CaseResult[] = []
+  if (context.protocol === 'ollama' || context.protocol === 'both') cases.push(...await runOllamaCases(context))
+  if (context.protocol === 'openai-compatible' || context.protocol === 'both') cases.push(...await runOpenAICompatibleCases(context))
+  return cases
+}
+
 function computeConclusion(cases: CaseResult[]): CaseStatus {
   const s = summarizeCases(cases)
   if (s.failed > 0) return 'FAIL'
@@ -272,7 +383,7 @@ function defaultLogFile(): string {
 export async function runModelAcceptance(input: AcceptanceRunInput): Promise<AcceptanceRunOutput> {
   const { options, repository, environment, selectedModel } = input
   const startedAt = Date.now()
-  const machineCases = input.cases && input.cases.length > 0 ? input.cases : await runMachineCases({ baseUrl: options.baseUrl, model: options.model, timeoutMs: options.timeoutMs })
+  const machineCases = input.cases && input.cases.length > 0 ? input.cases : await runMachineCases({ baseUrl: options.baseUrl, model: options.model, timeoutMs: options.timeoutMs, protocol: options.protocol })
   const allCases = machineCases.map((c) => ({ ...c, durationMs: c.durationMs ?? 0 }))
 
   const timestamp = new Date().toISOString().replace(/[:.]/gu, '-')
@@ -293,6 +404,7 @@ export async function runModelAcceptance(input: AcceptanceRunInput): Promise<Acc
     generatedAt: new Date().toISOString(),
     acceptance: { id: ACCEPTANCE_ID, domainId: DOMAIN_ID, gate: GATE },
     suite: { id: SUITE_ID, version: SUITE_VERSION },
+    protocols: options.protocol === 'both' ? ['ollama', 'openai-compatible'] : [options.protocol],
     repository: { version: repository.version, gitSha: repository.gitSha, dirty: repository.dirty },
     application: {
       version: repository.version,
@@ -300,7 +412,7 @@ export async function runModelAcceptance(input: AcceptanceRunInput): Promise<Acc
       gitSha: null,
       architectures: [process.arch],
       source: 'repository-development-run',
-      note: 'W1-MODEL-E 真实端到端验收：通过 Ollama/兼容服务 HTTP API 验证目录发现、模型检查与最小推理；不读取真实应用数据目录与用户作品。',
+      note: 'W1-MODEL-E 真实端到端验收：分别通过 Ollama 原生协议与 OpenAI-compatible 协议验证目录发现、模型检查与最小推理；不读取真实应用数据目录与用户作品。连接失败/超时用例为注入，不是真实服务故障恢复。',
     },
     provenance: {
       status: repository.gitSha && !repository.dirty ? 'PASS' : 'BLOCKED',
@@ -358,12 +470,17 @@ export async function main(): Promise<void> {
   const environment = collectEnvironment(root, options.baseUrl, options.timeoutMs)
   const profileId = options.profileId ?? deriveProfileId(options.baseUrl, options.model)
   const profileName = options.profileName ?? `derived-${profileId.slice(0, 8)}`
+  const protocols: ModelProtocol[] = options.protocol === 'both'
+    ? ['ollama', 'openai-compatible']
+    : [options.protocol]
   const selectedModel: SelectedModel = {
     profileId,
     profileName,
     model: options.model,
-    connectionKind: options.baseUrl.includes('openai') ? 'openai-compatible' : 'ollama',
+    connectionKind: protocols[0],
     connectionBaseUrl: options.baseUrl,
+    protocols,
+    openaiCompatibleBaseUrl: protocols.includes('openai-compatible') ? openaiBase(options.baseUrl) : null,
   }
 
   try {

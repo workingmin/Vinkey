@@ -1,7 +1,7 @@
 # UI 测试验收脚本编写工作计划
 
 - 计划基线：当前版本 `0.1.0`（Alpha）
-- 更新日期：`2026-11-12`
+- 更新日期：`2026-11-13`
 - 脚本规范：[UI_ACCEPTANCE_SCRIPT_SPEC.md](./UI_ACCEPTANCE_SCRIPT_SPEC.md)
 - 总验收计划：[UI_ACCEPTANCE_PLAN.md](./UI_ACCEPTANCE_PLAN.md)（主观类验收项延期登记表的唯一权威是该文件 §8，本文件只引用、不另建清单）
 
@@ -44,7 +44,7 @@
 | `W0-NAV-F` | `D-NAV` 项目/会话导航 | 桌面桥接、SQLite、隔离 fixture | `UI-ACC-NAV-FIXTURE-001` | store、删除对话框和搜索单元证据；`scripts/navigation/` 与 `navigation-acceptance-cli.test.ts` 合同测试已有；组件直测仍需补 | `npm run test:navigation-acceptance:sh`；脚本自建隔离临时目录、双项目、双会话、中英文文档、删除边界和当前搜索；不调用 Ollama | 切换、恢复、确认、错误重试、结果范围 | 已执行：`NAV-F-001`~`006` 6/6 PASS；截图材料由 `UI-ACC-NAV-UI-001` 补齐 |
 | `W0-EDITOR-F` | `D-EDITOR` 基础编辑器 | 工作区/文件桥接 | `UI-ACC-EDITOR-001` + `UI-ACC-EDITOR-WEBVIEW-001` | `scripts/editor/` 复刻文档分类、读取、保存、冲突与越界保护合同；目标平台 WebView 由 AX 树/文本快照/原生截图/构建溯源构成六项客观判据 | `npm run test:editor-acceptance -- --json`；`npm run test:editor-webview-native-mac`（真实 Tauri app、隔离 Profile、`realpath` 归一） | 文件树、打开、编辑、保存、预览；人工 UI 观察 | **已执行**：fixture 合同层 CLI 6/6 + 合同测试 10/10；目标平台 WebView 客观证据 6/6（独立批次 `artifacts/editor-webview-native-macos/`）；人工 UI 观察已集中至 [总计划 §8.5](./UI_ACCEPTANCE_PLAN.md) 人工复核事项（待自动化全部完成后统一处理），见 [基础编辑器报告](./UI_ACCEPTANCE_EDITOR.md) |
 | `W0-SHELL-MENU-F` | `D-SHELL` + 入口 fixture | `W0-SHELL-MENU-P`、`W0-NAV-F`、`W0-EDITOR-F`；设置使用可控 UI fixture | `UI-ACC-TITLE-BAR-FIXTURE-001` | **独立门槛脚本已建立**：`scripts/title-bar/title-bar-fixture-acceptance.ts` + runner/`.sh`/`.ps1`，独立批次 `artifacts/title-bar-fixture-acceptance/title-bar-w0-f-*`；内部调用 `title-bar-acceptance.ts` 产出 `machine/`，读取三个依赖批次的真实 `result.json`；不调用 Ollama | `npm run test:title-bar-fixture-acceptance:sh`（Windows 用 `:win`）；合同测试 `tests/title-bar/title-bar-fixture-acceptance-cli.test.ts` 6/6 | 添加/刷新项目、新建会话、页面状态、编辑焦点、设置打开/返回 | **已独立执行：`F=PASS`**。`W0-NAV-F` PASS、`W0-EDITOR-F` 本机 PASS；13/13 用例覆盖、`TB-MENU-004=PASS`、依赖不硬编码、`SHA256SUMS` 全 OK、`provenance=PASS`。**专项通过（Alpha 客观范围）**：客观项全 PASS 后 `specialityPass=true` / `overallConclusion=专项通过`；`W0-EDITOR-F` 人工 UI 观察与 `DEFER-UI-001` 等主观项已集中至 [总计划 §8.5](./UI_ACCEPTANCE_PLAN.md) 人工复核事项，Windows 独立专项未执行不计入本 macOS 结论，整体仍不宣称跨平台发布通过 / 完整发布通过；目标平台 WebView 客观证据与目录取消保态 `preserved` 已补齐。不得与 P 子集混报 |
-| `W1-MODEL-E` | `D-MODEL` 模型设置 | 桌面桥接、SQLite、系统凭据库 | `UI-ACC-SETTINGS-001` | `SettingsPage.test.tsx`、硬件和隐私测试 | 设置连接/凭据冒烟脚本；确认 profile 后再执行真实模型 | 设置入口、保存、切换、删除、键盘导航 | 已执行：2026-11-04 本机 macOS + Ollama（qwen3:8b），`MODEL-E-001`~`MODEL-E-005` 5/5 PASS；归档 `artifacts/model-acceptance/run-2026-11-04T11-26-30-345Z/` |
+| `W1-MODEL-E` | `D-MODEL` 模型设置 | 桌面桥接、SQLite、系统凭据库 | `UI-ACC-SETTINGS-001` + `UI-ACC-SETTINGS-KEYCHAIN-001` | `SettingsPage.test.tsx` 17/17、硬件/隐私测试、Rust `models::tests` 10/10 + `database::tests` 5/5、Keychain CLI 合同测试 8/8 | `npm run test:model-acceptance:sh`（默认双协议）、`npm run test:model-keychain-acceptance:sh`（macOS Keychain） | 设置入口、保存、切换、删除、密钥显式删除、运行态禁用、未保存确认、系统凭据库读写删 | **已按最终 HEAD 执行**：Ollama 原生 `/api/*` 与本机 `/v1` 兼容层 `MODEL-E-001`~`005` + `MODEL-E-OAI-001`~`005` 10/10 PASS、Keychain `MODEL-KC-001`~`005` 5/5 PASS，退出码 0、`provenance=PASS`；专项在 Alpha 客观范围达成**专项通过**（人工项已归 [总计划 §8.5](./UI_ACCEPTANCE_PLAN.md#85-人工复核统一批次自动化验收完成后统一处理)，Windows 独立专项 `NOT_EXECUTED`，整体不宣称跨平台发布通过）。归档 `artifacts/model-acceptance/run-*`、`artifacts/model-keychain-acceptance/run-*`；外部独立 OpenAI-compatible 服务仍为客观遗留，见 [macOS 设置报告](./macos/UI_ACCEPTANCE_MACOS_SETTINGS.md) |
 | `W1-INTENT-E` | `D-INTENT` IntentRouter | 模型 profile 和真实模型 | `AGENT-ACC-INTENT-001` | `intent-router-acceptance-cli.test.ts` | `npm run test:intent-router-acceptance -- --profile-id <id> --json`；统一 JSON 外层字段待核对 | profile、日志、失败恢复 | 脚本已有；真实 Ollama 待执行 |
 | `W2-CHAT-E` | `D-CHAT` 对话 | W0 壳层、W1 模型/IntentRouter | `UI-ACC-CHAT-001` | 消息、流式、停止和运行锁定测试 | 真实短对话、停止、超时和错误恢复脚本 | 发送/停止、流式完成、模型状态、失败重试 | 已执行：2026-11-04 本机 macOS + Ollama（qwen3:8b），`CHAT-E-001`~`CHAT-E-004` 4/4 PASS（单轮/多轮上下文/流式中断/失败处理）；归档 `artifacts/chat-acceptance/run-2026-11-04T11-28-38-617Z/` |
 | `W2-NAV-E` | `D-NAV` 真实导航 | `W0-NAV-F`、`W1-MODEL-E`、`W2-CHAT-E` | `UI-ACC-NAV-E2E-001` | 会话状态和持久化测试已由脚本覆盖 | `npm run test:navigation-e2e-acceptance:sh`；隔离 fixture + 本机真实 Ollama，2 项目 × 3 会话 × 2 轮、标题生命周期、刷新持久化、搜索分组跳转 | 标题前后、刷新、搜索分组和 Escape 返回 | 已编写并执行：`NAV-E-001`~`006` 6/6 PASS、退出码 0；截图由 `UI-ACC-NAV-UI-001` 补齐 |
@@ -137,9 +137,10 @@ macOS 原生入口：`scripts/title-bar/run-title-bar-native-macos.sh`（配套 
 
 1. 执行 `W0-SHELL-P`、`W0-RESP-P` 和不依赖模型的 `W0-NAV-F`/`W0-EDITOR-F`。
 2. 测试人员启动 Vinkey，在设置页确认 profile、模型、连接和系统凭据条件。
-3. 使用 `--list-profiles` 或等效入口确认 profile，再执行 `W1-MODEL-E` 和 `W1-INTENT-E`。
-4. 真实模型通过后执行 `W2-CHAT-E`，再执行 `W2-NAV-E`；不得反过来用无模型 fixture 冒充真实会话。
-5. `W3`、`W4` 按总计划依赖关系执行，并回传 `result.json`、日志、人工观察表和截图/录屏索引。
+3. 使用 `--list-profiles` 或等效入口确认 profile，执行 `W1-MODEL-E` 的**双协议真实模型批次**与 **macOS 系统凭据库批次**，再执行 `W1-INTENT-E`。双协议批次默认一次运行 Ollama 原生 `/api/*` 与本机 `/v1` 兼容层两套用例；连接失败/超时用例为注入，不是真实服务故障恢复。Keychain 批次只验证 Vinkey 凭据命名空间下的通道级写入、读回、删除与删除后不可读，不冒充 UI/Rust command 端到端。外部独立 OpenAI-compatible 服务需测试人员自备地址与临时凭据，未执行时按客观遗留如实登记，不得用本机兼容层顶替。
+4. `W1-MODEL-E` 客观范围结清条件：`UI-ACC-SETTINGS-001` 10/10 PASS、`UI-ACC-SETTINGS-KEYCHAIN-001` 5/5 PASS、组件与合同测试全绿、Rust 模型域数据层全绿、`provenance=PASS`、`SHA256SUMS` 逐文件重算通过；人工 UI 观察集中至 [总计划 §8.5](./UI_ACCEPTANCE_PLAN.md#85-人工复核统一批次自动化验收完成后统一处理)。
+5. 真实模型通过后执行 `W2-CHAT-E`，再执行 `W2-NAV-E`；不得反过来用无模型 fixture 冒充真实会话。
+6. `W3`、`W4` 按总计划依赖关系执行，并回传 `result.json`、日志、人工观察表和截图/录屏索引。
 
 ## 8. 新脚本编写任务单
 
@@ -173,5 +174,5 @@ macOS 原生入口：`scripts/title-bar/run-title-bar-native-macos.sh`（配套 
 - **脚本矩阵不缩减**：§3 的所有验收标识、脚本 ID、功能域与 `W0`~`W4` 门槛保持原样；`W0-RESP-P`、`W4-RESP-R` 等含视觉字样的行只把「人眼观感」部分标为延期，尺寸、状态保持、无横向溢出、机器探针等客观断言仍由脚本覆盖，脚本仍须编写与执行。
 - **不新增状态值**：`result.json` 的 `cases[].status` 仍只用 `PASS` / `FAIL` / `BLOCKED` / `NOT_APPLICABLE`；`DEFERRED_AFTER_ALPHA` 只出现在计划与报告的排期字段，不进入 JSON schema，不参与覆盖率或计数。
 - **不因延期改判定规则**：各专项 §6 的「条件通过 / 专项通过 / 完整通过」判定规则与断言阈值不放宽，仍以机器结果与客观遗留项为准；主观项从 Alpha 验收范围摘除、集中至 [总计划 §8.5](./UI_ACCEPTANCE_PLAN.md) 人工复核事项后，**剩余客观项全 PASS 即在 Alpha 客观范围按 §6 达成「专项通过」**（`specialityPass=true`），这是范围调整后的规则如实套用、不是放宽断言或虚标 PASS，整体仍不宣称跨平台发布通过 / 完整发布通过（Windows 独立专项 + 人工复核事项统一后置）。
-- **客观脚本均已落地**：`TB-MENU-008` 的全屏多信号判据、Reopen 事件恢复、关闭后窗口隐藏稳定态、弹窗焦点读回，以及 `TB-MENU-002` 目录选择取消保态（AXSheet + CG 面板窗口双信号 + `AXPress Cancel` + 菜单树/窗口数状态读回）均已在 `scripts/title-bar/` 实作并有合同测试；目标平台 WebView 六项客观判据见 §6.2。属总计划 §8.2「不划出」范围的客观项不得以延期为由跳过或删除。
+- **客观脚本均已落地**：`TB-MENU-008` 的全屏多信号判据、Reopen 事件恢复、关闭后窗口隐藏稳定态、弹窗焦点读回，以及 `TB-MENU-002` 目录选择取消保态（AXSheet + CG 面板窗口双信号 + `AXPress Cancel` + 菜单树/窗口数状态读回）均已在 `scripts/title-bar/` 实作并有合同测试；目标平台 WebView 六项客观判据见 §6.2；`W1-MODEL-E` 双协议真实模型批次与 macOS Keychain 通道级读写删批次见 §7，两者均有 `result.json` / `SHA256SUMS` / 合同测试。属总计划 §8.2「不划出」范围的客观项不得以延期为由跳过或删除。
 - **人工观察表述边界**：[脚本规范](./UI_ACCEPTANCE_SCRIPT_SPEC.md) §1/§9.1 与 8 份 `*_RUN_TEMPLATE.md` 的主观字段以 [总计划 §8](./UI_ACCEPTANCE_PLAN.md) 为准；主观项不进入 `cases[].status`、不计入通过数。
