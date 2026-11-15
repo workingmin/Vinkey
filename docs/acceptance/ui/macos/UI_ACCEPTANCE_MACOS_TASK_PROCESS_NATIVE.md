@@ -5,10 +5,11 @@
 - 功能域：`D-TASK-LOG` 日志中心与长任务
 - 归属门槛：`W4-TASK-E`；竞品证据 [`CF-006`](../../../competitors/FEATURE_DECISIONS.md)
 - 验收脚本：`UI-ACC-LOGS-001`（`scripts/task-process/`）
+- 前置驱动：`npm run test:task-process-ollama-driver`（真实 Ollama CLI 驱动 + 生产 pipeline，产出客观机器证据）
 - 平台专项报告：[长任务/日志中心专项验收（macOS）](./UI_ACCEPTANCE_MACOS_TASK_PROCESS.md)
 - 回填模板：[长任务/日志中心回填模板（macOS）](./UI_ACCEPTANCE_MACOS_TASK_PROCESS_RUN_TEMPLATE.md)
-- 平台状态：待执行（本机 macOS 可执行；源码存在、组件测试与浏览器证据不代替目标平台证据）
-- 更新日期：`2026-11-15`
+- 平台状态：`NT-MAC-*` 桌面 UI 执行任务待执行；`TASK-CHK-*` 客观机器证据已在 [专项报告](./UI_ACCEPTANCE_MACOS_TASK_PROCESS.md) 定稿（CLI 驱动证据边界见共享合同首部）
+- 更新日期：`2026-11-16`
 
 ## 1. 平台前置条件
 
@@ -36,13 +37,16 @@
 ## 3. 执行步骤（macOS）
 
 ```bash
+npm run test:task-process-ollama-driver -- --dry-run --db "<DB>"
+npm run test:task-process-ollama-driver -- --db "<DB>"
 npm run test:task-process-acceptance:sh -- --list-profiles --db "<DB>"
 npm run test:task-process-acceptance:sh -- --dump-manual "<man.json>"
 npm run test:task-process-acceptance:sh -- --workspace "<WS>" --db "<DB>" --tester-id "<ID>" --json
 npm run test:task-process-acceptance:sh -- --workspace "<WS>" --db "<DB>" --manual "<man.json>" --output "<OUT_DIR>" --json
 ```
 
-1. 以 `--list-profiles` 只读确认模型 profile；缺失或不可读时按前置条件记 `BLOCKED`。
+1. 以 `--list-profiles` 只读确认模型 profile；缺失或不可读时按前置条件记 `BLOCKED`。CLI 驱动只覆盖 `TASK-CHK-*` 客观机器证据。
+
 2. 以 `--dump-manual` 生成人工观察回填模板。
 3. 在 macOS 桌面端按 §2 逐项执行 `NT-MAC-*`，保存截图/录屏、状态读回与源文件指纹；未执行项写明原因。
 4. 以 `--json` 运行机器核查，核对 stdout 四行与退出码等于 `result.json.exitCode`；`TASK-CHK-*` 只读核查任务产物，不调用模型。

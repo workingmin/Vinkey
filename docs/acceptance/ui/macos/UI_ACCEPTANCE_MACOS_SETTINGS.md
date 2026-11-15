@@ -117,7 +117,7 @@
 | 项目 | 归属 | 状态 |
 | --- | --- | --- |
 | 外部独立 OpenAI-compatible 服务的目录发现、准入检查、失败恢复与超时 | `D-MODEL` 跨平台扩展 | 未执行；需测试人员提供经批准的外部服务与临时凭据，脚本不读系统凭据库 |
-| `cargo test` 全量 95 passed / 3 failed（退出码 101），失败均为 `worker_service` 测试（quote 修复、源文档变化拒绝、证据快照校验） | `W4-TASK-E` 长任务/日志中心专项 | 已如实登记，**不计入本 macOS 模型设置专项判定**；本功能域 `models::tests` 10/10 与 `database::tests` 5/5 独立全绿。旧报告记录的 GTK/GLib 宿主阻断在目标平台 macOS 上不成立 |
+| 全量 Rust 测试与 Worker 域测试 | `W4-TASK-E` 长任务/日志中心专项 | 当前全量 Rust 测试 99/99 通过、Worker harness 53/53 通过；本功能域 `models::tests` 与 `database::tests` 独立全绿。该证据归长任务专项，不计入本 macOS 模型设置专项判定 |
 | Windows 平台系统凭据库、窗口尺寸与真实服务连接 | Windows 独立专项 | `NOT_EXECUTED`，不计入本 macOS 结论 |
 | 真实 app 端到端删除连接→删除密钥、设置页键盘/窗口缩放的人工确认 | [总计划 §8.5](../UI_ACCEPTANCE_PLAN.md#85-人工复核统一批次自动化验收完成后统一处理) 人工复核统一批次 | 统一后置，不得写成 `PASS` 或删除 |
 

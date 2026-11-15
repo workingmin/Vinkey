@@ -28,9 +28,13 @@
 ### Windows PowerShell
 
 ```powershell
+npm run test:task-process-ollama-driver -- --dry-run --db "<DB>"
+npm run test:task-process-ollama-driver -- --db "<DB>"
 npm run test:task-process-acceptance:win -Db "<DB>" -Workspace "<WS>" -TesterId "<ID>" -Json
 npm run test:task-process-acceptance:win -Workspace "<WS>" -Db "<DB>" -Manual "<man.json>" -Output "<OUT_DIR>" -Json
 ```
+
+> CLI 驱动只覆盖 `TASK-CHK-*` 客观机器证据，非桌面 UI 发起；Windows 独立专项 `NOT_EXECUTED` 状态不因驱动可运行而改变，证据边界见 [共享合同](../TASK_PROCESS_NATIVE_ACCEPTANCE.md) 首部。
 
 - 退出码：`<EXIT_CODE>`（应与 `result.json.exitCode` 一致）
 - stdout 最终四行：`<CAPTURE_OR_TERMINAL_REFERENCE>`

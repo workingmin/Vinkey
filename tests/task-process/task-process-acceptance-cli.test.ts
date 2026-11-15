@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -81,6 +82,40 @@ function completedJobWorkspace(): string {
   writeFileSync(join(jobRoot, 'worker-checkpoints.json'), JSON.stringify({ schemaVersion: 'long-text-checkpoints-2', compatibilityKey: 'k', updatedAt: now, entries: [{ artifact: 'analysis.md', stage: 'synthesis', contentHash: 'h1', createdAt: now, dependencies: [] }] }))
   writeFileSync(join(jobRoot, 'worker-output.json'), JSON.stringify({ workerVersion: 'long-text-worker-6', promptVersion: 'long-text-prompts-3', outputSchemaVersion: 'long-text-output-3', compatibilityKey: 'k', pipelineCompleted: true, jobId: 'job-0001', workspaceId: 'ws-1', sourceFingerprints: {}, manifests: [], content: '分析结果正文内容。', evidence: [], chunkCount: 3, summaryCount: 1, modelInvocationCount: 4, mapCacheHits: 0, stageCacheHits: 0, jobCheckpointHits: 0, durationMs: 5000, completedAt: now + 6 }))
   writeFileSync(join(jobRoot, 'analysis.md'), '# 分析结果\n')
+  return directory
+}
+
+/**
+ * 生产真实产物格式：persist_start_manifest 把 job-start.json 一次性写死为
+ * "running"，真实终态由 job.json（completed）/ job-failed.json（failed）承载。
+ * 合同测试原先的 completedJobWorkspace 手写 job-start.json=completed，
+ * 会掩盖脚本只读 job-start.json 的判据缺陷，故单独构造本 fixture。
+ */
+function productionFormatJobWorkspace(status: 'completed' | 'failed' | 'running' = 'completed'): string {
+  const directory = track(mkdtempSync(join(tmpdir(), 'vinkey-task-process-real-job-')))
+  const jobRoot = join(directory, '.vinkey', 'analysis', 'jobs', 'job-real-0001')
+  mkdirRecursive(jobRoot)
+  const now = Date.now()
+  const segment = (id: string, label: string, startedAt: number, endedAt?: number) => ({ id, label, startedAt, endedAt })
+  const events = [
+    { sequence: 1, timestamp: now, jobId: 'job-real-0001', stage: 'chunking', status: 'running', completed: 0, total: 1, message: '正在将文本分成可分析的片段…', segment: segment('s1', '阅读与分段', now) },
+    { sequence: 2, timestamp: now + 1, jobId: 'job-real-0001', stage: 'chunking', status: 'completed', completed: 1, total: 1, message: '阅读与分段已完成', segment: segment('s1', '阅读与分段', now, now + 1) },
+    { sequence: 3, timestamp: now + 2, jobId: 'job-real-0001', stage: 'map', status: 'running', completed: 0, total: 1, message: '正在分析第 1/1 个文本片段…', segment: segment('s2', '分析文本片段', now + 2) },
+    { sequence: 4, timestamp: now + 3, jobId: 'job-real-0001', stage: 'map', status: 'completed', completed: 1, total: 1, message: '分析文本片段已完成', segment: segment('s2', '分析文本片段', now + 2, now + 3) },
+    { sequence: 5, timestamp: now + 4, jobId: 'job-real-0001', stage: 'lifecycle', status, completed: 0, total: 0, message: '任务终态', segment: null },
+  ]
+  // 与生产 persist_start_manifest 一致：固定 running，不随终态更新。
+  writeFileSync(join(jobRoot, 'job-start.json'), JSON.stringify({ jobId: 'job-real-0001', workspaceId: 'ws-real', instruction: '概括正文', status: 'running', createdAt: now, updatedAt: now, documentCount: 1, supportedDocumentCount: 1, excludedDocuments: [], sourceFingerprints: { 'a.md': 'fp' } }))
+  writeFileSync(join(jobRoot, 'worker-events.json'), JSON.stringify(events))
+  writeFileSync(join(jobRoot, 'worker-input.json'), JSON.stringify({ workerVersion: 'long-text-worker-6', promptVersion: 'long-text-prompts-3', outputSchemaVersion: 'long-text-output-3', compatibilityKey: 'k', workspaceId: 'ws-real', createdAt: now, model: { id: 'm', model: 'qwen3:8b', contextWindow: 16384 }, input: { jobId: 'job-real-0001', instruction: '概括正文', instructionHash: 'h', profileId: 'router', contextWindow: 16384, sourcePolicy: 'local-chunks', maxTokens: 8000, overlapTokens: 200, dispatch: {}, documents: [{ path: 'a.md', sourceFingerprint: 'fp' }], excludedDocuments: [] } }))
+  writeFileSync(join(jobRoot, 'worker-checkpoints.json'), JSON.stringify({ schemaVersion: 'long-text-checkpoints-2', compatibilityKey: 'k', updatedAt: now, entries: [{ artifact: 'analysis.md', stage: 'synthesis', contentHash: 'h1', createdAt: now, dependencies: [] }] }))
+  if (status === 'completed') {
+    writeFileSync(join(jobRoot, 'job.json'), JSON.stringify({ jobId: 'job-real-0001', workspaceId: 'ws-real', instruction: '概括正文', status: 'completed', createdAt: now, updatedAt: now + 4, documentCount: 1, supportedDocumentCount: 1, excludedDocuments: [], sourceFingerprints: { 'a.md': 'fp' }, chunkCount: 1, summaryCount: 1, evidenceCount: 1, modelInvocationCount: 4, mapCacheHits: 0, stageCacheHits: 0, jobCheckpointHits: 0, durationMs: 4000, error: null }))
+    writeFileSync(join(jobRoot, 'worker-output.json'), JSON.stringify({ workerVersion: 'long-text-worker-6', promptVersion: 'long-text-prompts-3', outputSchemaVersion: 'long-text-output-3', compatibilityKey: 'k', pipelineCompleted: true, jobId: 'job-real-0001', workspaceId: 'ws-real', sourceFingerprints: {}, manifests: [], content: '分析结果正文内容。', evidence: [], chunkCount: 1, summaryCount: 1, modelInvocationCount: 4, mapCacheHits: 0, stageCacheHits: 0, jobCheckpointHits: 0, durationMs: 4000, completedAt: now + 4 }))
+    writeFileSync(join(jobRoot, 'analysis.md'), '# 分析结果\n')
+  } else if (status === 'failed') {
+    writeFileSync(join(jobRoot, 'job-failed.json'), JSON.stringify({ jobId: 'job-real-0001', workspaceId: 'ws-real', instruction: '概括正文', status: 'failed', createdAt: now, updatedAt: now + 4, error: '模型输出未通过校验' }))
+  }
   return directory
 }
 
@@ -220,6 +255,57 @@ describe('task process acceptance CLI', () => {
     expect(ui001?.status).toBe('BLOCKED')
     expect(JSON.parse(readFileSync(join(output.outputDir, 'result.json'), 'utf8')).schemaVersion).toBe(1)
     expect(readFileSync(join(output.outputDir, 'SHA256SUMS'), 'utf8')).toContain('result.json')
+  })
+
+  it('does not count the production _stage-cache directory as an analysis job', () => {
+    const workspace = completedJobWorkspace()
+    mkdirRecursive(join(workspace, '.vinkey', 'analysis', 'jobs', '_stage-cache'))
+    writeFileSync(join(workspace, '.vinkey', 'analysis', 'jobs', '_stage-cache', 'entry.json'), '{}')
+    const scan = scanWorkspace(workspace, null)
+    expect(scan.jobs.map((job) => job.jobId)).toEqual(['job-0001'])
+    expect(scan.targetJob?.jobId).toBe('job-0001')
+  })
+
+  it('finalizes result.json before hashing so SHA256SUMS verifies with shasum -c', () => {
+    const { dbPath } = databaseFixture()
+    const workspace = completedJobWorkspace()
+    const output = runInternal(workspace, dbPath)
+    const resultBytes = readFileSync(join(output.outputDir, 'result.json'))
+    const actualHash = createHash('sha256').update(resultBytes).digest('hex')
+    const manifest = readFileSync(join(output.outputDir, 'SHA256SUMS'), 'utf8')
+    const resultLine = manifest.split('\n').find((line) => line.endsWith('  result.json'))
+    expect(resultLine).toBe(`${actualHash}  result.json`)
+    const onDisk = JSON.parse(resultBytes.toString('utf8')) as {
+      artifacts: { sha256: Record<string, string> }
+    }
+    // result.json 不把自身哈希写回自身，否则定稿后的改写会让清单失配。
+    expect(onDisk.artifacts.sha256['result.json']).toBeUndefined()
+  })
+
+  it('reads the terminal status from job.json for production-format artifacts', () => {
+    const { dbPath } = databaseFixture()
+    const output = runInternal(productionFormatJobWorkspace('completed'), dbPath)
+    const result = output.result as {
+      jobs: Array<{ status: string; terminalStatusSource: string }>
+      cases: Array<{ caseId: string; status: string }>
+    }
+    expect(result.jobs[0]?.status).toBe('completed')
+    expect(result.jobs[0]?.terminalStatusSource).toBe('job.json')
+    // 其余 TASK-UI-* 仍默认 BLOCKED，故整体结论保持 BLOCKED，不因终态修正而虚标通过。
+    expect(result.cases.find((item) => item.caseId === 'TASK-CHK-006')?.status).toBe('PASS')
+  })
+
+  it('does not relax TASK-CHK-006 for failed or still-running production-format jobs', () => {
+    const { dbPath } = databaseFixture()
+    for (const status of ['failed', 'running'] as const) {
+      const output = runInternal(productionFormatJobWorkspace(status), dbPath)
+      const result = output.result as {
+        jobs: Array<{ status: string; terminalStatusSource: string }>
+        cases: Array<{ caseId: string; status: string }>
+      }
+      expect(result.jobs[0]?.status).toBe(status)
+      expect(result.cases.find((item) => item.caseId === 'TASK-CHK-006')?.status).toBe('BLOCKED')
+    }
   })
 
   it('emits a single JSON document on --json and the fixed four-line summary otherwise', () => {

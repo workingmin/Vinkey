@@ -5,11 +5,12 @@
 > - **结论范围**：`W4-TASK-E` 的机器核查（`TASK-CHK-*`）、事件/段标签/终态/产物读回、状态映射与流程断言等客观项一律留在 Alpha，按目标平台执行；视觉观感、文案易理解性与 UX 可理解性（`DEFER-UI-006`）等主观/人工判断项按 [总计划 §8.2](./UI_ACCEPTANCE_PLAN.md) 集中至 [§8.5 人工复核统一批次](./UI_ACCEPTANCE_PLAN.md#85-人工复核统一批次自动化验收完成后统一处理)，待全部自动化验收脚本跑完后统一回填，不得写成 `PASS`、不得删除、不得据此放宽客观断言。
 > - **状态口径**：`result.json` 的 `cases[].status` 只用 `PASS` / `FAIL` / `BLOCKED` / `NOT_APPLICABLE`；`NOT_EXECUTED` 与 `DEFERRED_AFTER_ALPHA` 仅是计划层平台/排期状态，不进入 JSON、不参与覆盖率或计数。
 > - **证据边界**：源码存在、组件测试、Playwright/浏览器 companion 与隔离 fixture 均不代替目标平台原生证据；未执行或阻断项必须逐项说明原因。各平台清单只写该平台自身结论与证据。
+> - **CLI 驱动证据边界**：`npm run test:task-process-ollama-driver` 通过 `include!` 复用生产 `worker_service.rs` pipeline 并调用真实 Ollama，产出 `TASK-CHK-*` 客观机器证据；该证据**非桌面 UI 发起**，不代替 `NT-MAC-*` / `NT-WIN-*` 的桌面执行，也不证明暂停/停止/折叠/自动跟随/产物预览/重启恢复等交互行为；桌面 UI 发起材料统一归 [§8.5 人工复核统一批次](./UI_ACCEPTANCE_PLAN.md#85-人工复核统一批次自动化验收完成后统一处理)。
 
-- 状态：macOS 侧待执行；Windows 独立专项 `NOT_EXECUTED`
+- 状态：macOS 侧 `TASK-CHK-*` 客观机器证据已定稿，`NT-MAC-*` 桌面 UI 执行待办；Windows 独立专项 `NOT_EXECUTED`
 - 归属门槛：`W4-TASK-E` / `D-TASK-LOG`；竞品证据 [`CF-006`](../../competitors/FEATURE_DECISIONS.md)
-- 验收脚本：`UI-ACC-LOGS-001`（`scripts/task-process/`）
-- 更新日期：`2026-11-15`
+- 验收脚本：`UI-ACC-LOGS-001`（`scripts/task-process/`）；前置驱动 `npm run test:task-process-ollama-driver`
+- 更新日期：`2026-11-16`
 
 ## 1. 共享复验合同
 
@@ -27,7 +28,7 @@
 
 | 平台 | 平台任务 | 执行入口 | 证据归档 | 状态 | 平台清单 |
 | --- | --- | --- | --- | --- | --- |
-| macOS | `NT-MAC-001`~`NT-MAC-005` | `npm run test:task-process-acceptance:sh` | `task-process-<date>-macos-<profile-safe-name>/` | 待执行 | [长任务过程原生复验清单（macOS）](./macos/UI_ACCEPTANCE_MACOS_TASK_PROCESS_NATIVE.md) |
+| macOS | `NT-MAC-001`~`NT-MAC-005` | `npm run test:task-process-ollama-driver` → `npm run test:task-process-acceptance:sh` | `task-process-<date>-macos-<profile-safe-name>/` | `NT-MAC-*` 桌面 UI 执行待办；`TASK-CHK-*` 客观机器证据已定稿 | [长任务过程原生复验清单（macOS）](./macos/UI_ACCEPTANCE_MACOS_TASK_PROCESS_NATIVE.md) |
 | Windows | `NT-WIN-001`~`NT-WIN-005` | `npm run test:task-process-acceptance:win` | `task-process-<date>-windows-<profile-safe-name>/` | `NOT_EXECUTED`（独立 Windows 专项，客观后置） | [长任务过程原生复验清单（Windows）](./windows/UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_NATIVE.md) |
 
 ## 3. 前置条件与执行

@@ -89,6 +89,7 @@ export interface FixtureManifest {
 export interface JobSummary {
   jobId: string
   status: string
+  terminalStatusSource: string
   createdAt: number | null
   updatedAt: number | null
   eventCount: number
@@ -340,6 +341,11 @@ interface JobStartLoose {
   updatedAt?: number
 }
 
+interface JobTerminalLoose {
+  status?: string
+  updatedAt?: number
+}
+
 interface WorkerOutputLoose {
   pipelineCompleted?: boolean
   content?: string
@@ -354,10 +360,43 @@ interface CheckpointManifestLoose {
   entries?: Array<{ artifact?: string }> | null
 }
 
+/**
+ * 解析任务终态。生产端 `job-start.json` 在任务启动时一次性写死 `status: "running"`
+ * （见 worker_service::persist_start_manifest），此后不再更新；真实终态由
+ * `job.json`（completed）/ `job-failed.json`（failed）清单、lifecycle 事件承载。
+ * 只读 job-start.json 会把已完成任务误判为「尚未完成」，故按以下优先级读回，
+ * 并保留对早期格式 / 合同测试 fixture 的回退；判定条件本身不放宽。
+ */
+function resolveTerminalStatus(
+  jobRoot: string,
+  start: JobStartLoose | null,
+  events: AnalysisEventLoose[] | null,
+): { status: string; source: string } {
+  const completed = readJsonFile(join(jobRoot, 'job.json')) as JobTerminalLoose | null
+  if (typeof completed?.status === 'string' && completed.status.length > 0) {
+    return { status: completed.status, source: 'job.json' }
+  }
+  const failed = readJsonFile(join(jobRoot, 'job-failed.json')) as JobTerminalLoose | null
+  if (typeof failed?.status === 'string' && failed.status.length > 0) {
+    return { status: failed.status, source: 'job-failed.json' }
+  }
+  const lifecycle = [...(events ?? [])]
+    .reverse()
+    .find((event) => event.stage === 'lifecycle' && typeof event.status === 'string' && event.status.length > 0)
+  if (lifecycle?.status) {
+    return { status: lifecycle.status, source: 'worker-events.json#lifecycle' }
+  }
+  if (typeof start?.status === 'string' && start.status.length > 0) {
+    return { status: start.status, source: 'job-start.json' }
+  }
+  return { status: 'unknown', source: 'none' }
+}
+
 function summarizeJob(jobRoot: string, jobId: string): JobSummary {
   const start = readJsonFile(join(jobRoot, 'job-start.json')) as JobStartLoose | null
   const events = readJsonFile(join(jobRoot, 'worker-events.json')) as AnalysisEventLoose[] | null
   const output = readJsonFile(join(jobRoot, 'worker-output.json')) as WorkerOutputLoose | null
+  const terminal = resolveTerminalStatus(jobRoot, start, events)
   let artifactNames: string[] = []
   try {
     artifactNames = readdirSync(jobRoot).filter((name) => !name.startsWith('.'))
@@ -373,7 +412,8 @@ function summarizeJob(jobRoot: string, jobId: string): JobSummary {
     .filter((label): label is string => Boolean(label))
   return {
     jobId,
-    status: start?.status ?? 'unknown',
+    status: terminal.status,
+    terminalStatusSource: terminal.source,
     createdAt: start?.createdAt ?? null,
     updatedAt: start?.updatedAt ?? null,
     eventCount: events?.length ?? 0,
@@ -423,17 +463,25 @@ export function inspectWorkspace(root: string): FixtureManifest {
   return { workspaceRoot: root, created: false, files }
 }
 
+/**
+ * 生产 pipeline 在 jobs 根目录下写入 `_stage-cache/`（MAP_CACHE_DIR）等共享缓存目录，
+ * 它们不是任务。只把带任务清单的目录计入 jobs，避免把缓存目录误报为第 2 个任务。
+ */
+function jobDirectories(jobsRoot: string): string[] {
+  try {
+    return readdirSync(jobsRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .filter((entry) => !entry.name.startsWith('_'))
+      .map((entry) => entry.name)
+  } catch {
+    return []
+  }
+}
+
 function latestJobId(workspace: string): string | null {
   const jobsRoot = jobsRootOf(workspace)
   if (!existsSync(jobsRoot)) return null
-  let directories: string[] = []
-  try {
-    directories = readdirSync(jobsRoot, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name)
-  } catch {
-    return null
-  }
+  const directories = jobDirectories(jobsRoot)
   if (directories.length === 0) return null
   return directories
     .map((jobId) => ({ jobId, updatedAt: summarizeJob(join(jobsRoot, jobId), jobId).updatedAt ?? 0 }))
@@ -452,9 +500,8 @@ export function scanWorkspace(workspace: string, jobId: string | null): Workspac
   const jobsRoot = jobsRootOf(workspace)
   let jobs: JobSummary[] = []
   if (existsSync(jobsRoot)) {
-    jobs = readdirSync(jobsRoot, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => summarizeJob(join(jobsRoot, entry.name), entry.name))
+    jobs = jobDirectories(jobsRoot)
+      .map((jobId) => summarizeJob(join(jobsRoot, jobId), jobId))
   }
   let targetJob: JobSummary | null = null
   if (jobId) {
@@ -818,6 +865,13 @@ export function runTaskProcessAcceptance(input: {
     conclusion,
     elapsedMs: Date.now() - startedAt,
   }
+  const shaEntries: Array<{ file: string; hash: string }> = []
+  if (options.manualFile && existsSync(options.manualFile)) {
+    shaEntries.push({ file: options.manualFile.replace(/\\/gu, '/'), hash: sha256OfFile(options.manualFile) })
+  }
+  ;(result.artifacts as { sha256: Record<string, string> }).sha256 = Object.fromEntries(
+    shaEntries.map((entry) => [entry.file, entry.hash]),
+  )
   writeFileSync(logFile, JSON.stringify({
     schemaVersion: 1,
     generatedAt: result.generatedAt,
@@ -826,22 +880,15 @@ export function runTaskProcessAcceptance(input: {
       caseId: item.caseId, category: item.category, status: item.status, detail: item.detail, blockedReason: item.blockedReason,
     })),
   }, null, 2), 'utf8')
+  // result.json 定稿后不再改写：SHA256SUMS 在定稿文件上计算，避免出现「把自身哈希
+  // 写回自身」导致 shasum -c 失配。result.json 不自引用自身 hash。
   writeFileSync(resultFile, JSON.stringify(result, null, 2), 'utf8')
-
-  const shaEntries: Array<{ file: string; hash: string }> = [{ file: 'result.json', hash: sha256OfFile(resultFile) }]
-  if (options.manualFile && existsSync(options.manualFile)) {
-    shaEntries.push({ file: options.manualFile.replace(/\\/gu, '/'), hash: sha256OfFile(options.manualFile) })
-  }
-  const manifestLines = shaEntries.map((entry) => `${entry.hash}  ${entry.file}`)
+  const resultEntry = { file: 'result.json', hash: sha256OfFile(resultFile) }
+  const manifestLines = [resultEntry, ...shaEntries].map((entry) => `${entry.hash}  ${entry.file}`)
   writeFileSync(sha256File, `${manifestLines.join('\n')}\n`, 'utf8')
-  const finalResult = {
-    ...result,
-    artifacts: { ...result.artifacts, sha256: Object.fromEntries(shaEntries.map((entry) => [entry.file, entry.hash])) },
-  }
-  writeFileSync(resultFile, JSON.stringify(finalResult, null, 2), 'utf8')
 
   return {
-    result: finalResult,
+    result,
     conclusion,
     exitCode,
     outputDir,

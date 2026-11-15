@@ -1,4 +1,4 @@
-# 长任务/日志中心专项验收报告模板（Windows）
+# 长任务/日志中心专项验收报告（Windows）
 
 > **平台说明**：本文档是 Windows 平台版；macOS 平台验收见 [UI_ACCEPTANCE_MACOS_TASK_PROCESS.md](../macos/UI_ACCEPTANCE_MACOS_TASK_PROCESS.md)。验收合同、用例矩阵与设计断言跨平台一致，仅执行入口（`.sh` / PowerShell）、脚本命令和平台证据按平台分别记录。
 
@@ -8,8 +8,9 @@
 - 验收脚本：`UI-ACC-LOGS-001`（`scripts/task-process/`，入口 `npm run test:task-process-acceptance`）
 - 回填模板：[UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_RUN_TEMPLATE.md](./UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_RUN_TEMPLATE.md)
 - 关联原生复验：[长任务过程原生复验清单（Windows）](./UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_NATIVE.md)（`NT-WIN-001..NT-WIN-005`）；共享合同与平台任务分派索引见 [TASK_PROCESS_NATIVE_ACCEPTANCE.md](../TASK_PROCESS_NATIVE_ACCEPTANCE.md)（`NT-001..NT-005`）
-- 报告状态：设计结论与实现基线已定稿，脚本与回填模板已就绪；独立 Windows 专项 `NOT_EXECUTED`（客观后置），真实桌面执行与人工观察材料待回填
-- 更新日期：`2026-11-15`
+- 前置驱动：`npm run test:task-process-ollama-driver`（与 macOS 共用；Windows 独立专项仍需本机执行）
+- 报告状态：独立 Windows 专项 `NOT_EXECUTED`（客观后置）；脚本与回填模板已就绪，真实桌面执行与人工观察材料待回填
+- 更新日期：`2026-11-16`
 
 ## 1. 验收边界
 
@@ -99,8 +100,9 @@ A/B/C 三个阶段均已落地（提交 `97c4e18`、`6f6990e`、`a30c80f`）：
 
 | 脚本 ID | 门槛 | 代码位置 | 输出 | 状态 |
 | --- | --- | --- | --- | --- |
-| `UI-ACC-LOGS-001` | `W4-TASK-E` | `scripts/task-process/task-process-acceptance.ts`（TS 核心）、`run-task-process-acceptance.{mjs,sh,ps1}`（入口） | `result.json`、`SHA256SUMS`、诊断日志、人工观察模板 | 脚本已有，待本地执行 |
-| 合同测试 | `W4-TASK-E` | `tests/task-process/task-process-acceptance-cli.test.ts` | 参数/退出码/`--json` 单文档/字段稳定性 | 已有 |
+| 真实 Ollama CLI 驱动 | `W4-TASK-E` 前置 | `scripts/task-process/run-ollama-worker-cli.mjs`、`scripts/task-process/ollama-worker-cli/` | `driver-summary.json`、真实 `.vinkey/analysis/jobs/<jobId>/` 产物 | Windows 独立专项 `NOT_EXECUTED` |
+| `UI-ACC-LOGS-001` | `W4-TASK-E` | `scripts/task-process/task-process-acceptance.ts`（TS 核心）、`run-task-process-acceptance.{mjs,sh,ps1}`（入口） | `result.json`、`SHA256SUMS`、诊断日志、人工观察模板 | 脚本已有；Windows 本平台待执行 |
+| 合同测试 | `W4-TASK-E` | `tests/task-process/task-process-acceptance-cli.test.ts`、`tests/task-process/ollama-worker-cli.test.ts` | 参数/退出码/`--json` 单文档/字段稳定性、生产格式终态、清单校验、驱动证据边界 | 全绿；不替代 Windows 本平台执行 |
 
 脚本遵循 [UI_ACCEPTANCE_SCRIPT_SPEC.md](../UI_ACCEPTANCE_SCRIPT_SPEC.md)：只读 SQLite 与任务产物；`--workspace` 缺省时仅在系统临时目录生成 fixture 本地文件，不写入用户项目；stdout 固定四行，`--json` 只输出单个 JSON 文档；退出码 `0`（机器层通过/待人工）、`1`（参数或基础设施异常）、`2`（业务断言失败）。Windows 使用 `run-task-process-acceptance.ps1` 入口（`npm run test:task-process-acceptance:win`），参数名为 `-Workspace`、`-Db`、`-TesterId`、`-Manual`、`-Output`、`-ListProfiles`、`-DumpManual`、`-Json`。
 
@@ -124,8 +126,10 @@ A/B/C 三个阶段均已落地（提交 `97c4e18`、`6f6990e`、`a30c80f`）：
 
 ## 6. 当前结论
 
-- `W4-TASK-E`：设计与用例已定稿，脚本与回填模板已就绪；真实桌面执行证据与人工观察材料待回填，当前**不可判定通过**。
+- `W4-TASK-E`（Windows）：独立平台专项 `NOT_EXECUTED`。`NT-WIN-001`~`005` 与 `TASK-CHK-*`/`TASK-UI-*` 均需在本平台真实桌面环境执行，不得用 macOS 证据替代；不计入 macOS 专项结论，也不宣称跨平台发布通过。
+- macOS 专项已在 Alpha 客观范围达成专项通过，其客观证据由 CLI 驱动 + 真实 Ollama + 生产 pipeline 产出（非桌面 UI 发起）；该结论不迁移到 Windows，见 [macOS 报告](../macos/UI_ACCEPTANCE_MACOS_TASK_PROCESS.md)。
 - 暂停安全点回执未实现：只能记录 CP-42 降级结果，不得写 `CP-05`/`已暂停`。
+- 主观/人工观察项按 `DEFER-UI-006` 集中至 [总计划 §8.5](../UI_ACCEPTANCE_PLAN.md#85-人工复核统一批次自动化验收完成后统一处理)，待全部自动化验收脚本跑完后统一回填，不写成 `PASS`、不删除。
 - 源码与组件测试只作为脚本设计的实现基线，不替代平台验收。
 
 ## 7. 测试人员回填区

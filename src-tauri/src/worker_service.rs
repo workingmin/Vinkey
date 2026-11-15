@@ -601,6 +601,18 @@ fn read_events_at(jobs_root: &Path, job_id: &str) -> Result<Vec<TaskWorkerEvent>
     serde_json::from_slice(&bytes).map_err(|error| format!("Worker 事件记录损坏：{error}"))
 }
 
+/// Close the segment of a terminal event. Stages published directly
+/// (chunking / evidence / lifecycle) bypass `publish_phase_completed`, so
+/// without this their completed segment would have no `endedAt`, which
+/// contradicts CP-27/R8 and leaves the "已完成 · 耗时" fact unrecoverable.
+fn close_terminal_segment(event: &mut TaskWorkerEvent) {
+    if matches!(event.status.as_str(), "completed" | "failed" | "cancelled") {
+        if let Some(segment) = event.segment.as_mut() {
+            segment.ended_at.get_or_insert_with(now_ms);
+        }
+    }
+}
+
 fn publish(
     jobs_root: &Path,
     runtime: &WorkerRuntimeState,
@@ -621,6 +633,7 @@ fn publish(
             }
         }
     }
+    close_terminal_segment(&mut event);
     let _guard = runtime
         .event_write
         .lock()
@@ -1645,13 +1658,13 @@ fn quote_matches_line(line: &str, quote: &str) -> bool {
 }
 
 fn unique_quote_line(lines: &[&str], quote: &str) -> Option<usize> {
-    let matches = lines
+    let mut matches = lines
         .iter()
         .enumerate()
         .filter(|(_, line)| quote_matches_line(line, quote))
-        .map(|(index, _)| index + 1)
-        .collect::<Vec<_>>();
-    (matches.len() == 1).then_some(matches[0])
+        .map(|(index, _)| index + 1);
+    let first = matches.next()?;
+    matches.next().is_none().then_some(first)
 }
 
 fn deduplicate_evidence(references: Vec<EvidenceReference>) -> Vec<EvidenceReference> {
@@ -3166,6 +3179,36 @@ mod tests {
             .is_ok());
     }
 
+    #[test]
+    fn terminal_events_close_the_persisted_segment() {
+        let segment = ProcessSegment {
+            id: "segment-1".into(),
+            label: "阅读与分段".into(),
+            started_at: Some(1_000),
+            ended_at: None,
+        };
+        for status in ["completed", "failed", "cancelled"] {
+            let mut event = worker_event("job-1", "chunking", status, 1, 1, "终态");
+            event.segment = Some(segment.clone());
+            close_terminal_segment(&mut event);
+            assert!(event.segment.as_ref().unwrap().ended_at.is_some(), "{status}");
+        }
+        let mut running = worker_event("job-1", "chunking", "running", 0, 1, "进行中");
+        running.segment = Some(segment.clone());
+        close_terminal_segment(&mut running);
+        assert_eq!(running.segment.as_ref().unwrap().ended_at, None);
+        let mut already_closed = worker_event("job-1", "map", "completed", 1, 1, "已完成");
+        already_closed.segment = Some(ProcessSegment {
+            ended_at: Some(2_000),
+            ..segment.clone()
+        });
+        close_terminal_segment(&mut already_closed);
+        assert_eq!(already_closed.segment.as_ref().unwrap().ended_at, Some(2_000));
+        let mut no_segment = worker_event("job-1", "lifecycle", "completed", 1, 1, "已完成");
+        close_terminal_segment(&mut no_segment);
+        assert!(no_segment.segment.is_none());
+    }
+
     fn input() -> StartLongTextWorkerInput {
         let instruction = "分析全文".to_string();
         StartLongTextWorkerInput {
@@ -3563,10 +3606,13 @@ mod tests {
     fn rejects_a_document_changed_after_intake() {
         let directory = tempfile::tempdir().unwrap();
         fs::write(directory.path().join("chapter.md"), "已变化的正文").unwrap();
+        // macOS tempdir 位于 /var → /private/var 符号链接下；resolve_existing 会把
+        // 目标 canonicalize 后与 workspace.root 比较，故此处必须使用规范化路径，
+        // 让用例真正走到指纹校验，而不是被「路径超出已授权工作区」提前拦截。
         let workspace = Workspace {
             id: "workspace-1".into(),
             name: "Test".into(),
-            root: directory.path().to_path_buf(),
+            root: directory.path().canonicalize().unwrap(),
         };
         let source = input().documents.remove(0);
         assert!(load_and_chunk_document(&workspace, &source, 2_048, 128)
@@ -3597,8 +3643,10 @@ mod tests {
     #[test]
     fn does_not_repair_ambiguous_or_paraphrased_quotes() {
         let documents = HashMap::from([("chapter.md".into(), "重复\n重复\n结尾".into())]);
+        // 行号必须指向不含短引的行，才会进入「修复」分支；若直接命中第 1 行，
+        // 引用本身合法，验证通过是正确行为，无法检验「歧义短引不得修复」。
         let ambiguous = verify_evidence(
-            parse_evidence("[source: chapter.md lines=1-1 quote=\"重复\"]"),
+            parse_evidence("[source: chapter.md lines=3-3 quote=\"重复\"]"),
             &documents,
         );
         assert!(!ambiguous[0].verified);

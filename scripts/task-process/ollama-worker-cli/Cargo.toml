@@ -1,0 +1,19 @@
+[package]
+name = "vinkey-ollama-worker-cli"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "vinkey-ollama-worker-cli"
+path = "main.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+regex = "1"
+tempfile = "3"
+uuid = { version = "1", features = ["v4"] }
+tokio = { version = "1", features = ["macros", "time", "sync", "rt-multi-thread"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
