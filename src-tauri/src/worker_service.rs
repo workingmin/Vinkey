@@ -32,6 +32,8 @@ const MAX_MODEL_ATTEMPTS: u32 = 3;
 const MIN_CHUNK_TOKENS: usize = 128;
 const VALIDATOR_VERSION: &str = "evidence-gate-4";
 const NO_EVIDENCE: &str = "未找到与任务相关的证据。";
+/// NT-003 / CP-35：源变化后拒绝沿用旧进度与检查点的统一对外文案。
+pub const SOURCE_CHANGED_MESSAGE: &str = "原文已变化，无法沿用此前进度。请重新发起分析。";
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -779,11 +781,33 @@ fn load_and_chunk_document(
     }
     let actual_fingerprint = long_text::source_fingerprint(&document.content);
     if actual_fingerprint != source.source_fingerprint {
-        return Err(format!("源文档已变化，无法继续 Worker：{}", source.path));
+        return Err(format!(
+            "源文档已变化，无法继续 Worker（{}）：{}",
+            source.path, SOURCE_CHANGED_MESSAGE
+        ));
     }
     let manifest =
         long_text::chunk_text(document.path, &document.content, max_tokens, overlap_tokens)?;
     Ok((manifest, document.content))
+}
+
+/// 恢复前复核全部源文档指纹：差异出现时拒绝沿用旧检查点，并给出统一 CP-35 文案。
+/// 供热恢复（内存中仍有 control）与冷恢复（重启后重新 start）共用。
+fn verify_source_fingerprints(
+    workspace: &Workspace,
+    snapshot: &LongTextWorkerSnapshot,
+) -> Result<(), String> {
+    for document in &snapshot.input.documents {
+        let current = read_document_at(workspace, &document.path)?;
+        let actual = long_text::source_fingerprint(&current.content);
+        if actual != document.source_fingerprint {
+            return Err(format!(
+                "源文档已变化，无法继续 Worker（{}）：{}",
+                document.path, SOURCE_CHANGED_MESSAGE
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn read_cached_manifest(
@@ -2964,6 +2988,24 @@ pub fn resume(
         .map_err(|_| "Worker 运行状态不可用".to_string())?
         .get(job_id)
         .cloned();
+    let snapshot = read_snapshot(jobs_root, job_id)?;
+    if snapshot.workspace_id != workspace.id {
+        return Err("Worker 任务属于其他工作区".into());
+    }
+    // NT-003：无论热恢复还是冷恢复，恢复前都必须复核源指纹；变化则写入失败状态与
+    // worker.failed 事件，旧检查点不进入后续 pipeline，也不会产出新的完整结果。
+    if let Err(message) = verify_source_fingerprints(workspace, &snapshot) {
+        let idle_control = WorkerControl::default();
+        fail_worker(
+            jobs_root,
+            &snapshot,
+            &idle_control,
+            &runtime,
+            &app,
+            message.clone(),
+        );
+        return Err(message);
+    }
     if let Some(control) = control {
         control.pause.store(false, Ordering::Relaxed);
         control.continue_segment("继续");
@@ -2996,10 +3038,6 @@ pub fn resume(
             ),
         )?;
         return Ok(job);
-    }
-    let snapshot = read_snapshot(jobs_root, job_id)?;
-    if snapshot.workspace_id != workspace.id {
-        return Err("Worker 任务属于其他工作区".into());
     }
     start(jobs_root, workspace, database, snapshot.input, runtime, app)
 }
@@ -3618,6 +3656,43 @@ mod tests {
         assert!(load_and_chunk_document(&workspace, &source, 2_048, 128)
             .unwrap_err()
             .contains("源文档已变化"));
+        assert!(load_and_chunk_document(&workspace, &source, 2_048, 128)
+            .unwrap_err()
+            .contains(SOURCE_CHANGED_MESSAGE));
+    }
+
+    #[test]
+    fn rejects_resume_when_source_changed_after_pause() {
+        let directory = tempfile::tempdir().unwrap();
+        let workspace = Workspace {
+            id: "workspace-1".into(),
+            name: "Test".into(),
+            root: directory.path().canonicalize().unwrap(),
+        };
+        let snapshot = |content: &str| LongTextWorkerSnapshot {
+            worker_version: WORKER_VERSION.into(),
+            prompt_version: PROMPT_VERSION.into(),
+            output_schema_version: OUTPUT_SCHEMA_VERSION.into(),
+            compatibility_key: "test-key".into(),
+            workspace_id: workspace.id.clone(),
+            created_at: now_ms(),
+            model: model(),
+            input: StartLongTextWorkerInput {
+                documents: vec![WorkerDocumentInput {
+                    path: "chapter.md".into(),
+                    source_fingerprint: long_text::source_fingerprint(content),
+                }],
+                ..input()
+            },
+        };
+
+        fs::write(directory.path().join("chapter.md"), "正文").unwrap();
+        assert!(verify_source_fingerprints(&workspace, &snapshot("正文")).is_ok());
+
+        fs::write(directory.path().join("chapter.md"), "正文（已改动）").unwrap();
+        let error = verify_source_fingerprints(&workspace, &snapshot("正文")).unwrap_err();
+        assert!(error.contains(SOURCE_CHANGED_MESSAGE));
+        assert!(error.contains("源文档已变化"));
     }
 
     #[test]

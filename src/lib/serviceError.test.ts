@@ -14,6 +14,9 @@ describe('structured service errors', () => {
     expect(normalizeServiceError('Error: 源文档已变化，无法恢复')).toMatchObject({
       code: 'worker.compatibility_mismatch', category: 'compatibility', retryable: false,
     })
+    expect(normalizeServiceError('Error: 原文已变化，无法沿用此前进度。请重新发起分析。')).toMatchObject({
+      code: 'worker.compatibility_mismatch', category: 'compatibility', retryable: false,
+    })
   })
 
   it('does not collapse structured transport errors into object stringification', () => {

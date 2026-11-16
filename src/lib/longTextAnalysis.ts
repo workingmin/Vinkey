@@ -279,7 +279,7 @@ export async function analyzeLongText(
       const fingerprintsMatch = previousPaths.length === currentPaths.length
         && previousPaths.every((path) => sourceFingerprints[path] === previous.sourceFingerprints[path])
       if (!fingerprintsMatch) {
-        throw new Error('源文档已变化，无法安全恢复旧任务，请重新开始')
+        throw new Error('原文已变化，无法沿用此前进度。请重新发起分析。')
       }
     }
     const instructionHash = await sha256Hex(instruction)

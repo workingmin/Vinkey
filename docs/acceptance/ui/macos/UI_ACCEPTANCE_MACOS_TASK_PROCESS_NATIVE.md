@@ -9,7 +9,7 @@
 - 桌面原生 runner：`npm run test:task-process-native-mac -- --driver-workspace <WS>`（`scripts/task-process/`，真实 Tauri app + 隔离 fixture + AX 原生自动化，判定可机器判定的客观子断言；套件 `UI-ACC-TASK-NATIVE-001`）
 - 平台专项报告：[长任务/日志中心专项验收（macOS）](./UI_ACCEPTANCE_MACOS_TASK_PROCESS.md)
 - 回填模板：[长任务/日志中心回填模板（macOS）](./UI_ACCEPTANCE_MACOS_TASK_PROCESS_RUN_TEMPLATE.md)
-- 平台状态：`NT-MAC-*` 中可机器判定的客观子断言已由桌面原生 runner 采集并判定（见 `UI-ACC-TASK-NATIVE-001` 最新批次）；需真实运行中任务或人工判断的项（源变化拒绝恢复、新段推进、观感/易理解性）保留 `BLOCKED` 并归 [总计划 §8.5](../UI_ACCEPTANCE_PLAN.md#85-人工复核统一批次自动化验收完成后统一处理)；`TASK-CHK-*` 客观机器证据已在 [专项报告](./UI_ACCEPTANCE_MACOS_TASK_PROCESS.md) 定稿（证据边界见共享合同首部）
+- 平台状态：`NT-MAC-001`~`005` 的客观断言已由桌面原生 runner 采集并判定（见 `UI-ACC-TASK-NATIVE-001` 最新批次，`decision.specialityPass=true`）；源变化拒绝恢复由真实 app 恢复读回，观感/易理解性与新段推进仍归 [总计划 §8.5](../UI_ACCEPTANCE_PLAN.md#85-人工复核统一批次自动化验收完成后统一处理)；`TASK-CHK-*` 客观机器证据已在 [专项报告](./UI_ACCEPTANCE_MACOS_TASK_PROCESS.md) 定稿（证据边界见共享合同首部）
 - 更新日期：`2026-11-16`
 
 ## 1. 平台前置条件
@@ -31,7 +31,7 @@
 | --- | --- | --- | --- | --- | --- |
 | `NT-MAC-001` | `NT-001` 执行中事件记录 | 在真实长文本分析执行中观察事件顺序与任务状态栏；脚本只读核查 `.vinkey/analysis/jobs/<jobId>/` 产物 | 每个真实事件按顺序显示：sequence 从 1 连续递增、段标签与阶段映射一致、已完成段带 `endedAt`；任务状态栏常显且与 Worker 状态一致（状态读回） | `TASK-CHK-005`；`TASK-NAT-001`（状态栏/段标签读回、事件顺序与 `endedAt` 机器判定）、截图 | 客观项已自动化判定；观感归 §8.5 |
 | `NT-MAC-002` | `NT-002` 暂停/恢复快照 | 暂停后恢复，保存暂停与恢复前后截图/录屏及事件对照 | 恢复后出现新推进段、不覆盖暂停前记录；暂停文案为 CP-42「已暂停后续步骤」降级，不得写成 CP-05「已暂停」 | `TASK-NAT-002`（暂停态控件映射客观判定）；恢复后新段推进与 CP-42 易理解性归 `TASK-UI-001` §8.5 | 控件映射已自动化；新段推进归 §8.5 |
-| `NT-MAC-003` | `NT-003` 源变化拒绝恢复 | 修改源文件后恢复，记录源文件指纹、恢复提示与检查点状态 | 提示「原文已变化，无法沿用此前进度。请重新发起分析。」且不沿用旧检查点（指纹与检查点读回） | `TASK-NAT-003` 仅采集指纹/暂停态截图并保留 `BLOCKED`；恢复提示真实触发归 `TASK-UI-006` §8.5 | 需真实运行中任务，归 §8.5 |
+| `NT-MAC-003` | `NT-003` 源变化拒绝恢复 | 播种暂停态前置条件；修改真实源文件后在真实 app 中 AX 点击「继续处理」，记录指纹、恢复提示与检查点状态 | 提示「原文已变化，无法沿用此前进度。请重新发起分析。」且不沿用旧检查点（指纹变化、`failed` 终态、`worker.compatibility_mismatch`、无 `checkpoint` 复用事件、无新完整产物、AX 提示可见） | `TASK-NAT-003`（真实 app 恢复读回）+ 截图；CP-35 文案易理解性仍归 `TASK-UI-006` §8.5 | 客观项已自动化判定；易理解性归 §8.5 |
 | `NT-MAC-004` | `NT-004` 两层折叠保持 | 执行第一层批量展开/收起，检查第二层详情选择与公开响应位置 | 第一层批量操作不重置第二层详情选择；公开响应位于折叠外 | `TASK-NAT-004`（批量按钮按压回执与段展开态读回）；第二层选择/交互手感归 `TASK-UI-003` §8.5 | 客观项已自动化判定；观感归 §8.5 |
 | `NT-MAC-005` | `NT-005` 重启恢复历史 | 重启应用并重开会话，对照重启前后任务记录 | 原任务事件、产物与终态完整可见（产物清单与终态读回） | `TASK-CHK-006`；`TASK-NAT-005`（重启前后状态栏与段标签读回）、截图；目视确认归 `TASK-UI-008` §8.5 | 客观项已自动化判定；目视归 §8.5 |
 
@@ -53,7 +53,7 @@ npm run test:task-process-acceptance:sh -- --workspace "<WS>" --db "<DB>" --manu
 ```
 
 1. 以 `--list-profiles` 只读确认模型 profile；缺失或不可读时按前置条件记 `BLOCKED`。CLI 驱动只覆盖 `TASK-CHK-*` 客观机器证据。
-2. 桌面原生 runner 需先无残留 Vinkey 进程、显示器保持唤醒（`.sh` 包装已用 `caffeinate`）；它把真实作业事件播种进隔离 fixture，在真实 Tauri app 中打开会话并按 AX 读回状态栏、段标签、暂停/继续控件与展开态，采集截图并判定 `TASK-NAT-*` 客观用例。它**不证明**真实用户发起的端到端任务，源变化拒绝与新段推进保留 `BLOCKED`。
+2. 桌面原生 runner 需先无残留 Vinkey 进程、显示器保持唤醒（`.sh` 包装已用 `caffeinate`）；它把真实作业事件播种进隔离 fixture，在真实 Tauri app 中打开会话并按 AX 读回状态栏、段标签、暂停/继续控件与展开态。对 `NT-MAC-003`，runner 以暂停态播种为前置条件，随后修改真实源文件并在真实 app 中 AX 点击「继续处理」，由生产后端复核指纹并写入失败终态与拒绝提示；脚本只读回结果、截图与任务产物。它**不证明**初始任务由真实用户桌面 UI 发起；新段推进与观感/易理解性仍归 §8.5。
 3. 以 `--dump-manual` 生成人工观察回填模板，供 §8.5 主观项统一回填。
 4. 以 `--json` 运行机器核查，核对 stdout 四行与退出码等于 `result.json.exitCode`；`TASK-CHK-*` 只读核查任务产物，不调用模型。
 5. 以 `--manual` 合并人工观察，归档 `result.json`、`SHA256SUMS`、诊断日志与人工观察回填文件；fixture 或浏览器 companion 不得冒充目标平台原生证据。
@@ -62,5 +62,5 @@ npm run test:task-process-acceptance:sh -- --workspace "<WS>" --db "<DB>" --manu
 
 - 归档目录按 [回填模板（macOS）](./UI_ACCEPTANCE_MACOS_TASK_PROCESS_RUN_TEMPLATE.md) §6 命名，原始路径在回填前脱敏；不得上传 API Key、完整作品正文、系统用户名或未脱敏绝对路径。
 - `result.json` 的 `cases[].status` 只用 `PASS` / `FAIL` / `BLOCKED` / `NOT_APPLICABLE`；`DEFERRED_AFTER_ALPHA` 仅是计划层排期状态，不进入 JSON、不参与覆盖率或计数。
-- 判定：本平台 5 项客观断言全部取得 macOS 目标平台证据、`TASK-CHK-*` 机器核查通过、退出码为 0 且 `SHA256SUMS` 可核验，方可关闭 `CF-006` 在 macOS 侧的原生复验风险；否则继续保留「部分参考」状态。
+- 判定：本平台 5 项客观断言全部取得 macOS 目标平台证据、`TASK-CHK-*` 机器核查通过、退出码为 0 且 `SHA256SUMS` 可核验，方可关闭 `CF-006` 在 macOS 侧的原生复验风险；否则继续保留「部分参考」状态。`UI-ACC-TASK-NATIVE-001` 以 `decision.specialityPass=true`、`overallConclusion=专项通过` 表示 Alpha 客观范围达标；`evidencePackage` 中的主观项归 §8.5，不计入该结论。
 - 该结论为 macOS 单平台结论；审核结论以平台专项报告与最新批次 `result.json` 为准。平台边界与整体发布口径见 [共享合同与平台任务分派索引](../TASK_PROCESS_NATIVE_ACCEPTANCE.md) 首部。

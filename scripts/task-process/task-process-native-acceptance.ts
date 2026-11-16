@@ -24,6 +24,8 @@ export const ACCEPTANCE_ID = 'W4-TASK-E'
 export const DOMAIN_ID = 'D-TASK-LOG'
 export const GATE = 'E'
 export const MANUAL_REVIEW_REFERENCE = '§8.5'
+/** 与 src-tauri/src/worker_service.rs::SOURCE_CHANGED_MESSAGE 保持一致（CP-35）。 */
+export const SOURCE_CHANGED_MESSAGE = '原文已变化，无法沿用此前进度。请重新发起分析。'
 
 export type CaseStatus = 'PASS' | 'FAIL' | 'BLOCKED' | 'NOT_APPLICABLE'
 
@@ -44,6 +46,21 @@ export interface SeedEvent {
   status: string
   message: string
   segment: { id: string; label: string; startedAt?: number; endedAt?: number } | null
+}
+
+export interface SourceChangeObservation {
+  documentPath: string
+  fingerprintBefore: string
+  fingerprintAfter: string
+  resumePressed: boolean
+  taskStatusAfter: string | null
+  failureMessage: string | null
+  failureCode: string | null
+  failureRetryable: boolean | null
+  jobJsonCreated: boolean
+  workerOutputCreated: boolean
+  checkpointReuseEvents: number
+  uiMessageVisible: boolean
 }
 
 export interface Observation {
@@ -68,6 +85,8 @@ export interface Observation {
   restartTextsAfter: string[]
   /** 是否成功以同一 fixture 数据目录重启并重新打开会话。 */
   restartSucceeded: boolean
+  /** NT-MAC-003 真实桌面恢复拒绝观测；未执行时为 null，不臆造 PASS。 */
+  sourceChange: SourceChangeObservation | null
   errors: string[]
 }
 
@@ -177,16 +196,52 @@ export function evaluateObjectiveCases(observation: Observation): NativeCase[] {
     }
   }
 
-  // NT-MAC-003：源变化拒绝恢复 —— 需要「真实运行中任务 + 修改源文件 + 恢复」的后端指纹校验，
-  // fixture 播种无法真实触发该校验；只采集指纹读回与截图，客观判定保持 BLOCKED。
-  cases.push({
-    caseId: 'TASK-NAT-003', platformTask: 'NT-MAC-003',
-    title: '源变化拒绝恢复（需真实运行中任务）',
-    category: 'objective', status: 'BLOCKED',
-    detail: '已采集源文件指纹读回与暂停态截图；拒绝提示的真实触发须在目标平台运行中任务上人工执行',
-    evidence: shots,
-    blockedReason: 'fixture 播种不可真实触发后端指纹校验；归 §8.5 人工复核',
-  })
+  // NT-MAC-003：源变化拒绝恢复 —— 暂停态为隔离 fixture 播种的前置条件，
+  // 「修改源文件 → 真实 app 上按继续处理 → 后端复核指纹并拒绝」由生产代码真实触发。
+  {
+    const base = {
+      caseId: 'TASK-NAT-003', platformTask: 'NT-MAC-003',
+      title: '源变化拒绝恢复（真实 app 恢复读回）',
+      category: 'objective' as const,
+      evidence: shots,
+    }
+    const s = observation.sourceChange
+    if (!hasSignal(observation) || !s || !s.resumePressed) {
+      cases.push({
+        ...base,
+        status: 'BLOCKED', detail: null,
+        blockedReason: '未取得真实恢复按压回执与源变化读回，拒绝判定不予放行',
+      })
+    } else {
+      const fingerprintRead = Boolean(s.fingerprintBefore && s.fingerprintAfter)
+      const facts = {
+        fingerprintRead,
+        fingerprintChanged: fingerprintRead && s.fingerprintBefore !== s.fingerprintAfter,
+        statusFailed: s.taskStatusAfter === 'failed',
+        cp35Message: (s.failureMessage ?? '').includes(SOURCE_CHANGED_MESSAGE),
+        compatibilityFailure: s.failureCode === 'worker.compatibility_mismatch',
+        nonRetryable: s.failureRetryable === false,
+        noCheckpointReuse: !s.jobJsonCreated && !s.workerOutputCreated && s.checkpointReuseEvents === 0,
+        uiMessageVisible: s.uiMessageVisible,
+      }
+      const all = Object.values(facts).every(Boolean)
+      const observed = fingerprintRead || facts.statusFailed || Boolean(s.failureMessage)
+      cases.push({
+        ...base,
+        status: all ? 'PASS' : observed ? 'FAIL' : 'BLOCKED',
+        detail: [
+          `document=${s.documentPath}`,
+          `fingerprint=${s.fingerprintBefore.slice(0, 8)}→${s.fingerprintAfter.slice(0, 8)}`,
+          `status=${s.taskStatusAfter ?? 'null'}`,
+          `cp35=${facts.cp35Message}`,
+          `failure=${s.failureCode ?? 'null'}/${s.failureRetryable}`,
+          `checkpointReuse=${s.checkpointReuseEvents}`,
+          `uiVisible=${facts.uiMessageVisible}`,
+        ].join(' '),
+        blockedReason: all || observed ? null : '源变化恢复序列未产生可判定观测',
+      })
+    }
+  }
 
   // NT-MAC-004：两层折叠保持 —— 展开/收起按钮存在、按压生效、段切换按钮展开态翻转。
   {
@@ -302,7 +357,26 @@ export function assembleNativeResult(input: NativeResultInput): NativeResultOutp
   const summary = summarizeCases(objective)
   const provenanceOk = Boolean(input.repository.gitSha) && !input.repository.dirty
   const allPass = summary.passed === summary.caseCount && summary.failed === 0 && summary.blocked === 0
-  const conclusion = allPass && provenanceOk ? 'PASS' : summary.failed > 0 ? 'FAIL' : 'BLOCKED'
+  const specialityPass = allPass && provenanceOk
+  const conclusion = specialityPass ? 'PASS' : summary.failed > 0 ? 'FAIL' : 'BLOCKED'
+  const remainingItems = allPass
+    ? []
+    : objective
+        .filter((c) => c.status !== 'PASS')
+        .map((c) => ({ caseId: c.caseId, platformTask: c.platformTask, status: c.status, reason: c.blockedReason ?? c.detail ?? '客观断言未通过' }))
+  const decision = {
+    specialityPass,
+    overallConclusion: specialityPass ? '专项通过' : summary.failed > 0 ? '不通过' : '未通过',
+    scope: 'Alpha 客观范围',
+    remainingItems,
+    issues: [],
+    humanReview: {
+      reference: MANUAL_REVIEW_REFERENCE,
+      note: '主观/观感/易理解性项只生成证据包，统一归 §8.5 人工复核，不计入 Alpha 客观范围结论，不写成 PASS、不删除。',
+      items: evidence.map((e) => ({ platformTask: e.platformTask, targetCaseId: e.targetCaseId, title: e.title, status: e.status })),
+    },
+    windowsPlatform: 'NOT_EXECUTED',
+  }
 
   mkdirSync(input.outputDir, { recursive: true })
   const resultFile = join(input.outputDir, 'result.json')
@@ -320,11 +394,12 @@ export function assembleNativeResult(input: NativeResultInput): NativeResultOutp
       note: '只判定可机器判定的客观子断言；主观/观感与目标平台人工材料见 evidencePackage 与 §8.5，不改写 UI-ACC-LOGS-001。',
     },
     evidenceBoundary: {
-      fixture: '真实 Tauri app + 隔离数据目录 + fixture 项目',
+      fixture: '真实 Tauri app + 隔离数据目录 + fixture 项目；暂停态为播种前置条件',
       interaction: 'AX 原生自动化（menu-ax-helper.swift）',
       screenshots: 'CoreGraphics 采集',
       events: '真实 Ollama CLI 驱动作业产物，非新造事件',
-      notProven: '非真实用户发起的桌面端到端任务；暂停/恢复的新段推进、源变化拒绝、观感与易理解性未由脚本判定',
+      sourceChange: '修改真实源文件后，在真实 app 中 AX 点击「继续处理」，由生产后端复核指纹并拒绝；脚本只读回结果',
+      notProven: '非真实用户发起的初始端到端任务；暂停恢复后的新段推进、观感与易理解性仍归 §8.5',
     },
     repository: input.repository,
     application: input.application,
@@ -339,6 +414,7 @@ export function assembleNativeResult(input: NativeResultInput): NativeResultOutp
       status: c.status, detail: c.detail, evidence: c.evidence, blockedReason: c.blockedReason,
     })),
     evidencePackage: evidence.map((e) => ({ ...e, manualReviewReference: MANUAL_REVIEW_REFERENCE })),
+    decision,
     summary,
     conclusion,
   }
@@ -406,8 +482,8 @@ export function usage(): string {
     '  --dry-run                  只播种与解析参数，不启动 app、不采集 AX',
     '  --help                     显示帮助',
     '',
-    '证据边界：真实 Tauri app + 隔离 fixture + AX 原生自动化；只判定客观子断言，',
-    '主观/观感保留 BLOCKED 并归 §8.5。非真实用户发起的桌面端到端任务。',
+    '证据边界：真实 Tauri app + 隔离 fixture + AX 原生自动化；NT-MAC-003 以暂停态播种为前置，',
+    '源文件修改与恢复拒绝由生产后端真实触发；主观/观感保留 BLOCKED 并归 §8.5。',
   ].join('\n')
 }
 

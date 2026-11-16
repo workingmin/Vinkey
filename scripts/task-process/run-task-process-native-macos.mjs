@@ -3,6 +3,7 @@
 // 真实 Tauri app + 隔离 fixture + AX 原生自动化；只判定可机器判定的客观子断言，
 // 主观/观感保留 BLOCKED 并归总计划 §8.5。详见 task-process-native-acceptance.ts。
 import { spawn, spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, copyFileSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir, homedir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
@@ -18,8 +19,11 @@ const PROCESS_NAME = 'Vinkey'
 const CAPTURE_HELPER = process.env.VINKEY_CAPTURE_HELPER || join(root, 'artifacts/ui-shell-native-macos/bin/vinkey-capture-helper')
 const HELPER_SRC = join(root, 'scripts/title-bar/menu-ax-helper.swift')
 const OUTPUT_ROOT = resolve(root, process.env.VINKEY_TASK_NATIVE_OUTPUT || 'artifacts/task-process-native')
+// 与 src-tauri/src/worker_service.rs::SOURCE_CHANGED_MESSAGE（CP-35）保持一致。
+const SOURCE_CHANGED_MESSAGE = '原文已变化，无法沿用此前进度。请重新发起分析。'
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+const sha256 = (text) => createHash('sha256').update(text).digest('hex')
 const git = (...args) => {
   try { return spawnSync('git', ['-C', root, ...args], { encoding: 'utf8' }).stdout.trim() } catch { return '' }
 }
@@ -108,13 +112,13 @@ function buildActivityLog(realEvents, jobId) {
   }))
 }
 
-function writeTaskJobs(fixtureJobDir, jobId, workspaceId, conversationId, realTerminalStatus) {
+function writeTaskJobs(fixtureJobDir, jobId, workspaceId, conversationId, realTerminalStatus, sourceFingerprints = {}, instructionHash = 'native-fixture') {
   mkdirSync(fixtureJobDir, { recursive: true })
   const now = Date.now()
   const make = (suffix, status) => ({
     taskId: `${jobId}-${suffix}`, workspaceId, taskType: 'long-text-analysis',
-    instructionHash: 'native-fixture', status, cancelRequested: false,
-    sourceFingerprints: {}, steps: [], events: [], error: null,
+    instructionHash, status, cancelRequested: false,
+    sourceFingerprints: { ...sourceFingerprints }, steps: [], events: [], error: null,
     displayTitle: status === 'paused' ? '分析全文人物关系（暂停态样本）' : '分析全文人物关系',
     conversationId, createdAt: now, updatedAt: now,
   })
@@ -126,6 +130,68 @@ function writeTaskJobs(fixtureJobDir, jobId, workspaceId, conversationId, realTe
   const runningDir = join(fixtureJobDir, `${jobId}-running`)
   mkdirSync(runningDir, { recursive: true })
   writeFileSync(join(runningDir, 'task.json'), JSON.stringify(make('running', 'running'), null, 2))
+}
+
+/** NT-MAC-003：修改真实源文件后，在真实 app 上 AX 恢复，读回生产后端的拒绝结果。 */
+async function collectSourceChange({ helper, capture, jobsRoot, jobId, sourcePath, sourceFile, fingerprintBefore, observation, log }) {
+  const pausedJobDir = join(jobsRoot, `${jobId}-paused`)
+  const result = {
+    documentPath: sourceFile.relativePath,
+    fingerprintBefore,
+    fingerprintAfter: '',
+    resumePressed: false,
+    taskStatusAfter: null,
+    failureMessage: null,
+    failureCode: null,
+    failureRetryable: null,
+    jobJsonCreated: false,
+    workerOutputCreated: false,
+    checkpointReuseEvents: 0,
+    uiMessageVisible: false,
+  }
+  try {
+    const changed = `${readFileSync(sourcePath, 'utf8')}\n\n<!-- NT-MAC-003 源变化探测：恢复时必须拒绝沿用旧检查点 -->\n`
+    writeFileSync(sourcePath, changed, 'utf8')
+    result.fingerprintAfter = sha256(changed)
+    log(`sourceChanged doc=${sourceFile.relativePath} ${fingerprintBefore.slice(0, 8)}→${result.fingerprintAfter.slice(0, 8)}`)
+
+    const press = helper('press-ax', ['AXButton', '继续处理'], 'press-resume-source-change.json')
+    result.resumePressed = Boolean(press?.pressAx?.ok)
+    log(`resumePressed=${result.resumePressed}`)
+    if (!result.resumePressed) observation.errors.push('NT-MAC-003：未读到「继续处理」按钮的 AX 按压回执')
+
+    const taskPath = join(pausedJobDir, 'task.json')
+    for (let i = 0; i < 24; i += 1) {
+      const task = existsSync(taskPath) ? JSON.parse(readFileSync(taskPath, 'utf8')) : null
+      if (task?.status === 'failed' || task?.status === 'running') {
+        result.taskStatusAfter = task.status
+        result.failureMessage = task.error ?? task.failure?.message ?? null
+        result.failureCode = task.failure?.code ?? null
+        result.failureRetryable = typeof task.failure?.retryable === 'boolean' ? task.failure.retryable : null
+        if (task.status === 'failed') break
+      }
+      await sleep(500)
+    }
+    const eventsPath = join(pausedJobDir, 'worker-events.json')
+    const raw = existsSync(eventsPath) ? JSON.parse(readFileSync(eventsPath, 'utf8')) : []
+    const events = Array.isArray(raw) ? raw : (raw.events ?? [])
+    result.checkpointReuseEvents = events.filter((event) => event?.cacheSource === 'checkpoint').length
+    result.jobJsonCreated = existsSync(join(pausedJobDir, 'job.json'))
+    result.workerOutputCreated = existsSync(join(pausedJobDir, 'worker-output.json'))
+
+    const texts = helper('texts', ['400'], 'texts-source-change.json')
+    const treeAfter = helper('ax-tree', [], 'ax-tree-source-change.json')
+    const visible = [
+      ...(Array.isArray(texts?.texts) ? texts.texts.map((item) => String(item?.text ?? '')) : []),
+      ...(Array.isArray(treeAfter?.axTree) ? treeAfter.axTree.filter((node) => node?.role === 'AXButton').map((node) => String(node.title ?? '')) : []),
+    ].join('\n')
+    result.uiMessageVisible = visible.includes(SOURCE_CHANGED_MESSAGE)
+    capture('05-source-change-rejected.png')
+    log(`sourceChangeResult status=${result.taskStatusAfter} cp35=${result.uiMessageVisible} code=${result.failureCode ?? 'null'}`)
+  } catch (error) {
+    observation.errors.push(`NT-MAC-003 采集失败：${(error && error.message) || error}`)
+  }
+  observation.sourceChange = result
 }
 
 async function main() {
@@ -191,14 +257,37 @@ async function main() {
   if (!project) throw new Error('fixture 未生成任何项目')
   log(`activeProject=${project.name} id=${project.id}`)
   const jobsRoot = join(project.root, '.vinkey', 'analysis', 'jobs')
-  writeTaskJobs(jobsRoot, jobId, project.id, project.conversations[0]?.id ?? 'conv-native', terminalStatus)
-  // 复制真实产物作为过程轨迹证据（不复制 worker-input.json，避免启动恢复）。
+  const conversationId = project.conversations[0]?.id ?? 'conv-native'
+  const sourceFile = (project.files ?? []).find((file) => /\.md$/iu.test(file.relativePath)) ?? project.files?.[0]
+  if (!sourceFile) throw new Error('fixture 活动项目无可用源文件，无法执行 NT-MAC-003')
+  const sourcePath = join(project.root, sourceFile.relativePath)
+  const sourceContentBefore = readFileSync(sourcePath, 'utf8')
+  const sourceFingerprintBefore = sha256(sourceContentBefore)
+  const driverSnapshotPath = join(jobDir, 'worker-input.json')
+  const driverSnapshot = existsSync(driverSnapshotPath) ? JSON.parse(readFileSync(driverSnapshotPath, 'utf8')) : null
+  const instructionHash = String(driverSnapshot?.input?.instructionHash ?? 'native-fixture')
+  writeTaskJobs(jobsRoot, jobId, project.id, conversationId, terminalStatus,
+    { [sourceFile.relativePath]: sourceFingerprintBefore }, instructionHash)
+  // 复制真实产物作为过程轨迹证据（canonical 作业不复制 worker-input.json，避免启动恢复）。
   const canonicalJobDir = join(jobsRoot, jobId)
   mkdirSync(canonicalJobDir, { recursive: true })
   for (const name of ['worker-events.json', 'worker-output.json', 'job.json']) {
     const src = join(jobDir, name)
     if (existsSync(src)) copyFileSync(src, join(canonicalJobDir, name))
   }
+  // NT-MAC-003：为 paused 样本写入真实输入快照，恢复时由生产后端复核源指纹。
+  const pausedJobId = `${jobId}-paused`
+  if (driverSnapshot) {
+    const snapshot = JSON.parse(JSON.stringify(driverSnapshot))
+    snapshot.workspaceId = project.id
+    snapshot.input.jobId = pausedJobId
+    snapshot.input.conversationId = conversationId
+    snapshot.input.instructionHash = instructionHash
+    snapshot.input.documents = [{ path: sourceFile.relativePath, sourceFingerprint: sourceFingerprintBefore }]
+    snapshot.input.dispatch = { ...(snapshot.input.dispatch ?? {}), jobId: pausedJobId, workspaceId: project.id }
+    writeFileSync(join(jobsRoot, pausedJobId, 'worker-input.json'), JSON.stringify(snapshot, null, 2), 'utf8')
+  }
+  log(`sourceChangeSeed=${sourceFile.relativePath} fingerprint=${sourceFingerprintBefore.slice(0, 12)}`)
   // 把真实事件轨迹播种进首个会话的消息，令真实 app 渲染「处理过程」。
   const recordPath = (manifest.dbSummary?.projectRecords ?? []).find((r) => r.projectId === project.id)?.path
   if (recordPath && project.conversations[0]) {
@@ -219,7 +308,7 @@ async function main() {
     launched: false, windowReady: false, axTextCount: 0, axTexts: [], axNodeCount: 0, axButtonTitles: [],
     segmentExpanded: null, screenshots: [], realEvents,
     realTerminalStatus: terminalStatus, collapsePress: null, expandPress: null,
-    restartTextsBefore: [], restartTextsAfter: [], restartSucceeded: false, errors: [],
+    restartTextsBefore: [], restartTextsAfter: [], restartSucceeded: false, sourceChange: null, errors: [],
   }
 
   if (options.dryRun) {
@@ -380,6 +469,11 @@ async function main() {
           .filter(Boolean)
         observation.restartTextsAfter = [...afterTexts, ...afterButtons]
         log(`restart textsAfter=${afterTexts.length} buttonsAfter=${afterButtons.length}`)
+        // NT-MAC-003：重启后的真实 app 仍在运行，修改源文件并 AX 点「继续处理」触发生产指纹校验。
+        await collectSourceChange({
+          helper, capture, jobsRoot, jobId, sourcePath, sourceFile,
+          fingerprintBefore: sourceFingerprintBefore, observation, log,
+        })
       } else {
         observation.errors.push('重启后窗口未渲染')
       }
@@ -419,7 +513,7 @@ async function finish(observation, options, outputDir, headSha, dirty, version, 
   })
 
   console.log([
-    `${mod.SUITE_ID} native acceptance: ${output.conclusion} (${output.summary.passed}/${output.summary.caseCount} passed, ${output.summary.failed} failed, ${output.summary.blocked} blocked)`,
+    `${mod.SUITE_ID} native acceptance: ${output.result.decision.overallConclusion} (${output.summary.passed}/${output.summary.caseCount} passed, ${output.summary.failed} failed, ${output.summary.blocked} blocked; specialityPass=${output.result.decision.specialityPass})`,
     `Results: ${output.resultFile}`,
     `SHA256SUMS: ${output.sha256File}`,
     `exit=${output.conclusion === 'FAIL' ? 2 : 0}`,

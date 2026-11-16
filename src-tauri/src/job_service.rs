@@ -191,6 +191,8 @@ fn classify_failure(message: &str, step_id: Option<String>) -> TaskJobFailure {
         || message.contains("版本已过期")
         || message.contains("配置已变化")
         || message.contains("源文档已变化")
+        || message.contains("原文已变化")
+        || message.contains("无法沿用此前进度")
         || message.contains("指纹")
     {
         ("worker.compatibility_mismatch", "compatibility", false)
@@ -649,6 +651,17 @@ mod tests {
         let resumed = start(directory.path(), "work", input("task-1")).unwrap();
         assert_eq!(resumed.status, "running");
         assert_eq!(resumed.events.last().unwrap().event_type, "task.resumed");
+    }
+
+    #[test]
+    fn classifies_cp35_source_change_as_non_retryable_compatibility_failure() {
+        let failure = classify_failure(
+            "原文已变化，无法沿用此前进度。请重新发起分析。",
+            Some("chunking".into()),
+        );
+        assert_eq!(failure.code, "worker.compatibility_mismatch");
+        assert_eq!(failure.category, "compatibility");
+        assert!(!failure.retryable);
     }
 
     #[test]

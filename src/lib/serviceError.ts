@@ -11,7 +11,7 @@ function inferredError(message: string): ServiceError {
   if (/模型.*(?:输出|格式|返回可用内容)/u.test(message)) {
     return { code: 'model.output_invalid', category: 'model', message, retryable: true }
   }
-  if (/兼容|版本已过期|配置已变化|源文档已变化|指纹/u.test(message)) {
+  if (/兼容|版本已过期|配置已变化|源文档已变化|原文已变化|无法沿用此前进度|指纹/u.test(message)) {
     return { code: 'worker.compatibility_mismatch', category: 'compatibility', message, retryable: false }
   }
   if (/Dispatch|授权|权限|策略|工作区/u.test(message)) {

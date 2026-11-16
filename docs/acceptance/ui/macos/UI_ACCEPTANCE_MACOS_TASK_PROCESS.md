@@ -21,7 +21,7 @@
 - 驱动通过 `include!` 编译 `src-tauri/src/worker_service.rs` 原文，产物全部由生产代码写入 `.vinkey/analysis/jobs/<jobId>/`；仅替换桌面 WebView 事件传输（`AppHandle`/`Emitter`）与模型传输。模型传输是真实 Ollama `/api/chat`（非 stub、非 mock、非 fixture 响应），模型配置从真实 Vinkey SQLite 的当前 profile 只读解析。
 - 该证据证明产物清单、事件序列、段标签、段结束事实、任务终态与输出快照的客观契约；**不证明桌面 UI 发起与桌面交互行为**（暂停/恢复、停止确认、折叠/自动跟随、产物预览、重启恢复、源变化拒绝、失败重试、窄栏/键盘）。
 - 桌面 UI 发起的端到端材料与 9 个 `TASK-UI-*` 人工观察统一归 [总计划 §8.5](../UI_ACCEPTANCE_PLAN.md#85-人工复核统一批次自动化验收完成后统一处理) 人工复核统一批次（`DEFER-UI-006`），不写成 `PASS`、不删除；Windows 独立专项 `NOT_EXECUTED`，不计入 macOS 结论；整体不宣称跨平台发布通过 / 完整发布通过。
-- **桌面原生 runner（`UI-ACC-TASK-NATIVE-001`）补足可机器判定的桌面客观子断言**：`npm run test:task-process-native-mac -- --driver-workspace <WS>` 把上述真实作业事件播种进隔离 fixture，在真实 Tauri app 中用 AX 打开会话并读回状态栏、段标签、暂停/继续控件与展开态，采集截图。`TASK-NAT-001`（状态栏/事件顺序）、`TASK-NAT-002`（暂停态控件映射）、`TASK-NAT-004`（批量折叠按压与展开态）、`TASK-NAT-005`（重启恢复读回）判定为 `PASS`；`TASK-NAT-003`（源变化拒绝）因需修改源文件后恢复的真实运行中任务保留 `BLOCKED`。该 runner 仍**非真实用户发起的桌面端到端任务**，源变化提示与新段推进、全部观感与易理解性项仍归 §8.5，不虚标 PASS。运行日志、截图与 `SHA256SUMS` 见 `artifacts/task-process-native/` 最新批次。
+- **桌面原生 runner（`UI-ACC-TASK-NATIVE-001`）补足可机器判定的桌面客观断言**：`npm run test:task-process-native-mac -- --driver-workspace <WS>` 把上述真实作业事件播种进隔离 fixture，在真实 Tauri app 中用 AX 打开会话并读回状态栏、段标签、暂停/继续控件与展开态，采集截图。`TASK-NAT-001`~`005` 全部 `PASS`，`decision.specialityPass=true`：其中 `NT-MAC-003` 以暂停态播种为前置，修改真实源文件后在真实 app 中 AX 点击「继续处理」，由生产后端复核指纹并写入失败终态、CP-35 提示与 `worker.compatibility_mismatch`，无 `checkpoint` 复用事件、无新完整产物。该 runner 仍**不证明初始任务由真实用户桌面 UI 发起**；新段推进、CP-35 文案易理解性与全部观感项仍归 §8.5，不虚标 PASS。运行日志、截图与 `SHA256SUMS` 见 `artifacts/task-process-native/` 最新批次。
 
 | 可证明 | 不能证明 |
 | --- | --- |
@@ -142,7 +142,7 @@ A/B/C 三个阶段均已落地：
 ## 6. 当前结论
 
 - `W4-TASK-E`：macOS 专项达成**专项通过（Alpha 客观范围）**。7 个 `TASK-CHK-*` 机器用例全部 `PASS`，`result.json` 四态与 16 个用例 ID 完整、`exitCode=0`、`provenance=PASS`、`repositoryClean=true`，`SHA256SUMS` 逐文件重算全部校验通过；全量 Rust 与 Worker harness、两份合同测试全绿。
-- 批次级 `conclusion=BLOCKED` 由 9 个未回填的 `TASK-UI-*` 构成，与专项结论不在同一层级。人工/主观项（含桌面 UI 发起的端到端材料、暂停/恢复、停止确认、折叠/自动跟随、产物预览、重启恢复、源变化拒绝、失败重试、窄栏/键盘）统一归 [总计划 §8.5](../UI_ACCEPTANCE_PLAN.md#85-人工复核统一批次自动化验收完成后统一处理) 人工复核统一批次，不写成 `PASS`、不删除、不放宽客观断言。
+- 批次级 `conclusion=BLOCKED` 由 9 个未回填的 `TASK-UI-*` 构成，与专项结论不在同一层级。人工/主观项（含桌面 UI 发起的端到端材料、暂停/恢复、停止确认、折叠/自动跟随、产物预览、重启恢复、CP-35 文案易理解性、失败重试、窄栏/键盘）统一归 [总计划 §8.5](../UI_ACCEPTANCE_PLAN.md#85-人工复核统一批次自动化验收完成后统一处理) 人工复核统一批次，不写成 `PASS`、不删除、不放宽客观断言；源变化拒绝的客观触发已由 `UI-ACC-TASK-NATIVE-001` 在真实 app 上自动读回。
 - 证据边界如实标注：本轮客观证据来自 CLI 驱动 + 真实 Ollama + 生产 pipeline，**非桌面 UI 发起**；不证明桌面交互行为，也不冒充已装安装包内嵌 gitSha 的证明。
 - 暂停安全点回执未实现：只能记录 CP-42 降级结果，不得写 `CP-05`/`已暂停`。
 - Windows 独立专项 `NOT_EXECUTED`，不计入本 macOS 结论；整体仍不宣称跨平台发布通过 / 完整发布通过（Windows 独立专项 + 人工复核统一后置）。

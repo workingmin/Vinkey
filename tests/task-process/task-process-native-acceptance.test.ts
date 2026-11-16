@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 import {
+  SOURCE_CHANGED_MESSAGE,
   SUITE_ID,
   assembleNativeResult,
   buildEvidencePackage,
@@ -33,7 +34,22 @@ function observation(overrides: Partial<Observation> = {}): Observation {
     realEvents: events, realTerminalStatus: 'completed',
     collapsePress: { ok: true }, expandPress: { ok: true },
     restartTextsBefore: ['处理中'], restartTextsAfter: ['已完成', '正在将文本分成可分析的片段…'],
-    restartSucceeded: true, errors: [],
+    restartSucceeded: true,
+    sourceChange: {
+      documentPath: 'README.md',
+      fingerprintBefore: 'a'.repeat(64),
+      fingerprintAfter: 'b'.repeat(64),
+      resumePressed: true,
+      taskStatusAfter: 'failed',
+      failureMessage: `源文档已变化，无法继续 Worker（README.md）：${SOURCE_CHANGED_MESSAGE}`,
+      failureCode: 'worker.compatibility_mismatch',
+      failureRetryable: false,
+      jobJsonCreated: false,
+      workerOutputCreated: false,
+      checkpointReuseEvents: 0,
+      uiMessageVisible: true,
+    },
+    errors: [],
     ...overrides,
   }
 }
@@ -76,24 +92,34 @@ describe('task-process-native-acceptance 纯逻辑', () => {
     expect(cases.map((c) => c.caseId)).toEqual([
       'TASK-NAT-001', 'TASK-NAT-002', 'TASK-NAT-003', 'TASK-NAT-004', 'TASK-NAT-005',
     ])
-    // NAT-003 源变化拒绝需真实运行中任务，恒 BLOCKED，不虚标 PASS。
     expect(cases.find((c) => c.caseId === 'TASK-NAT-001')?.status).toBe('PASS')
     expect(cases.find((c) => c.caseId === 'TASK-NAT-002')?.status).toBe('PASS')
-    expect(cases.find((c) => c.caseId === 'TASK-NAT-003')?.status).toBe('BLOCKED')
+    expect(cases.find((c) => c.caseId === 'TASK-NAT-003')?.status).toBe('PASS')
     expect(cases.find((c) => c.caseId === 'TASK-NAT-004')?.status).toBe('PASS')
     expect(cases.find((c) => c.caseId === 'TASK-NAT-005')?.status).toBe('PASS')
   })
 
   it('未取得窗口/AX 信号时一律 BLOCKED，不虚标 PASS', () => {
     const cases = evaluateObjectiveCases(observation({ windowReady: false, axTextCount: 0, axTexts: [], axButtonTitles: [], restartSucceeded: false }))
-    for (const c of cases.filter((x) => x.caseId !== 'TASK-NAT-003')) {
-      expect(c.status).toBe('BLOCKED')
-    }
+    for (const c of cases) expect(c.status).toBe('BLOCKED')
   })
 
   it('观测到信号但与事实矛盾时 FAIL（事件可见但终态不符）', () => {
     const cases = evaluateObjectiveCases(observation({ axTexts: ['处理失败', '正在将文本分成可分析的片段…'] }))
     expect(cases.find((c) => c.caseId === 'TASK-NAT-001')?.status).toBe('FAIL')
+  })
+
+  it('源变化未采集恢复回执时 NAT-003 保持 BLOCKED', () => {
+    const cases = evaluateObjectiveCases(observation({ sourceChange: null }))
+    expect(cases.find((c) => c.caseId === 'TASK-NAT-003')?.status).toBe('BLOCKED')
+  })
+
+  it('源变化观测到但与拒绝事实矛盾时 NAT-003 判 FAIL', () => {
+    const base = observation().sourceChange!
+    const cases = evaluateObjectiveCases(observation({
+      sourceChange: { ...base, taskStatusAfter: 'running', failureMessage: null, failureCode: null, uiMessageVisible: false },
+    }))
+    expect(cases.find((c) => c.caseId === 'TASK-NAT-003')?.status).toBe('FAIL')
   })
 
   it('证据包全部 BLOCKED 且引用 §8.5，不写成 PASS', () => {
@@ -139,10 +165,14 @@ describe('task-process-native-acceptance 纯逻辑', () => {
       sourceBatch: { driverWorkspace: '/ws', jobId: 'job-1' },
       outputDir: out,
     })
-    // NAT-003 源变化拒绝恒 BLOCKED，故套件结论为 BLOCKED（不虚标 PASS）。
-    expect(result.conclusion).toBe('BLOCKED')
-    expect(result.summary.passed).toBe(4)
-    expect(result.summary.blocked).toBe(1)
+    expect(result.conclusion).toBe('PASS')
+    expect(result.summary.passed).toBe(5)
+    expect(result.summary.blocked).toBe(0)
+    const decision = (result.result as { decision: { specialityPass: boolean; overallConclusion: string; remainingItems: unknown[]; humanReview: { items: unknown[] } } }).decision
+    expect(decision.specialityPass).toBe(true)
+    expect(decision.overallConclusion).toBe('专项通过')
+    expect(decision.remainingItems).toEqual([])
+    expect(decision.humanReview.items).toHaveLength(5)
     const manifest = readFileSync(result.sha256File, 'utf8')
     const resultLine = manifest.split('\n').find((line) => line.endsWith('  result.json'))!
     const actual = createHash('sha256').update(readFileSync(result.resultFile)).digest('hex')
@@ -158,6 +188,7 @@ describe('task-process-native-acceptance 纯逻辑', () => {
       application: {}, sourceBatch: { driverWorkspace: '/ws', jobId: null }, outputDir: out,
     })
     expect((result.result as { provenance: { status: string } }).provenance.status).toBe('BLOCKED')
+    expect((result.result as { decision: { specialityPass: boolean } }).decision.specialityPass).toBe(false)
     expect(result.conclusion).not.toBe('PASS')
   })
 })
