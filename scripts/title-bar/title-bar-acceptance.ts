@@ -1,10 +1,16 @@
-import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve, sep } from 'node:path'
-import { spawnSync } from 'node:child_process'
 import { DatabaseSync } from 'node:sqlite'
 import { createRequire } from 'node:module'
+import {
+  formatSuiteSummary,
+  sha256OfFile,
+  summarizeCases,
+  type CaseResult,
+  type CaseStatus,
+} from '../lib/acceptance'
+import { collectCoreEnvironment as collectEnvironment, collectRepository, type CoreEnvironmentInfo } from '../lib/environment'
 import {
   LEGACY_GLOBAL_MENU_LABELS,
   MACOS_TITLE_BAR_MENU_LABELS,
@@ -14,6 +20,10 @@ import {
   TITLE_BAR_MENU_ORDER,
   WINDOWS_TITLE_BAR_MENU_LABELS,
 } from '../../src/lib/titleBarMenu'
+
+export type { CaseResult, CaseStatus } from '../lib/acceptance'
+export { collectEnvironment, collectRepository }
+export type { RepositoryInfo } from '../lib/environment'
 
 // W0-SHELL-MENU-F / D-SHELL 标题栏与功能菜单 fixture 业务链路验收脚本
 // （UI-ACC-TITLE-BAR-FIXTURE-001）。
@@ -27,20 +37,6 @@ export const ACCEPTANCE_ID = 'W0-SHELL-MENU-F'
 export const DOMAIN_ID = 'D-SHELL'
 export const GATE = 'F'
 
-export type CaseStatus = 'PASS' | 'FAIL' | 'BLOCKED'
-
-export interface CaseResult {
-  caseId: string
-  title: string
-  category: 'machine' | 'manual'
-  status: CaseStatus
-  detail: string | null
-  evidence?: string | null
-  notes?: string | null
-  durationMs?: number
-  blockedReason?: string | null
-}
-
 export interface CliOptions {
   workspace: string | null
   outputDir: string | null
@@ -50,22 +46,7 @@ export interface CliOptions {
   keepFixture: boolean
 }
 
-export interface RepositoryInfo {
-  version: string
-  gitSha: string | null
-  dirty: boolean
-  root: string
-}
-
-export interface EnvironmentInfo {
-  os: string
-  osVersion: string
-  arch: string
-  node: string
-  rust: string
-  tauriCli: string
-  tauriFramework: string
-}
+export type EnvironmentInfo = CoreEnvironmentInfo
 
 export interface FixtureFileSummary {
   name: string
@@ -196,73 +177,6 @@ export function parseArguments(values: string[]): CliOptions | null {
     throw new Error('--tester-id 仅允许 1-64 个字母、数字、点、下划线或连字符。')
   }
   return options
-}
-
-function sha256OfFile(file: string): string {
-  return createHash('sha256').update(readFileSync(file)).digest('hex')
-}
-
-function runCommand(command: string, args: string[]): { ok: boolean; stdout: string; stderr: string; code: number | null } {
-  try {
-    const result = spawnSync(command, args, { encoding: 'utf8', timeout: 5_000, maxBuffer: 1024 * 1024 })
-    return { ok: result.status === 0, stdout: (result.stdout ?? '').trim(), stderr: (result.stderr ?? '').trim(), code: result.status }
-  } catch {
-    return { ok: false, stdout: '', stderr: '', code: null }
-  }
-}
-
-export function collectRepository(root: string): RepositoryInfo {
-  let version = '0.0.0'
-  const packageFile = join(root, 'package.json')
-  if (existsSync(packageFile)) {
-    try {
-      const parsed = JSON.parse(readFileSync(packageFile, 'utf8')) as { version?: string }
-      if (typeof parsed.version === 'string' && parsed.version) version = parsed.version
-    } catch {
-      // 读取失败时保留默认版本，仍可给出可读错误提示
-    }
-  }
-  const shaRun = runCommand('git', ['-C', root, 'rev-parse', 'HEAD'])
-  const statusRun = runCommand('git', ['-C', root, 'status', '--porcelain'])
-  return { version, gitSha: shaRun.ok ? shaRun.stdout : null, dirty: Boolean(statusRun.stdout), root }
-}
-
-export function collectEnvironment(root: string): EnvironmentInfo {
-  const packageFile = join(root, 'package.json')
-  let tauriCli = 'N/A'
-  try {
-    const parsed = JSON.parse(readFileSync(packageFile, 'utf8')) as { devDependencies?: Record<string, string> }
-    tauriCli = parsed.devDependencies?.['@tauri-apps/cli'] ?? 'N/A'
-  } catch {
-    tauriCli = 'N/A'
-  }
-  let tauriFramework = 'N/A'
-  const cargoFile = join(root, 'src-tauri', 'Cargo.toml')
-  if (existsSync(cargoFile)) {
-    const content = readFileSync(cargoFile, 'utf8')
-    const match = content.match(/tauri\s*=\s*\{[^}]*version\s*=\s*"([^"]+)"/u)
-    if (match?.[1]) tauriFramework = match[1]
-    else {
-      const direct = content.match(/^tauri\s*=\s*"([^"]+)"/mu)
-      if (direct?.[1]) tauriFramework = direct[1]
-    }
-  }
-  const rust = runCommand('rustc', ['--version'])
-  let osVersion = 'N/A'
-  if (process.platform === 'win32') osVersion = process.arch
-  else {
-    const swVers = runCommand('sw_vers', ['-productVersion'])
-    if (swVers.ok) osVersion = swVers.stdout
-  }
-  return {
-    os: process.platform === 'darwin' ? 'macOS' : process.platform === 'win32' ? 'Windows' : 'Linux',
-    osVersion,
-    arch: process.arch,
-    node: process.version,
-    rust: rust.ok ? (rust.stdout.match(/rustc[\s/]([0-9]+\.[0-9]+(?:\.[0-9]+)?)/u)?.[1] ?? rust.stdout.split(/\s+/u)[1] ?? rust.stdout) : 'N/A',
-    tauriCli,
-    tauriFramework,
-  }
 }
 
 // 与导航脚本一致的稳定项目 ID 合同：规范化 root 路径的 FNV-1a 16 位十六进制 ID。
@@ -766,15 +680,6 @@ async function runMachineCases(context: TitleBarCaseContext): Promise<CaseResult
   return cases
 }
 
-function summarizeCases(cases: CaseResult[]): { caseCount: number; passed: number; failed: number; blocked: number } {
-  return {
-    caseCount: cases.length,
-    passed: cases.filter((item) => item.status === 'PASS').length,
-    failed: cases.filter((item) => item.status === 'FAIL').length,
-    blocked: cases.filter((item) => item.status === 'BLOCKED').length,
-  }
-}
-
 function computeConclusion(cases: CaseResult[]): CaseStatus {
   const summary = summarizeCases(cases)
   if (summary.failed > 0) return 'FAIL'
@@ -872,16 +777,6 @@ export async function runTitleBarAcceptance(input: AcceptanceRunInput): Promise<
   return { result: finalResult, conclusion, exitCode, outputDir, resultFile, sha256File, logFile }
 }
 
-function stdoutSummary(output: AcceptanceRunOutput): string {
-  const summary = output.result.summary as { caseCount: number; passed: number; failed: number; blocked: number }
-  return [
-    `${SUITE_ID} acceptance: ${output.conclusion} (${summary.passed}/${summary.caseCount} passed, ${summary.failed} failed, ${summary.blocked} blocked)`,
-    `Results: ${output.resultFile}`,
-    `SHA256SUMS: ${output.sha256File}`,
-    `exit=${output.exitCode}`,
-  ].join('\n')
-}
-
 function stderrProgress(cases: CaseResult[]): void {
   for (const item of cases) {
     const suffix = item.status === 'BLOCKED' && item.blockedReason ? `（${item.blockedReason}）` : ''
@@ -924,7 +819,7 @@ export async function main(): Promise<void> {
       if (options.json) {
         console.log(JSON.stringify(output.result, null, 2))
       } else {
-        console.log(stdoutSummary(output))
+        console.log(formatSuiteSummary(SUITE_ID, output))
       }
       process.exitCode = output.exitCode
       completed = true

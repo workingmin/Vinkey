@@ -1,26 +1,17 @@
 use crate::{
+    clock::now_ms,
     database::{self, DatabaseState},
     research_sources::{get_research_source, list_active_research_sources, ResearchSource},
 };
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::{
-    collections::HashMap,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::collections::HashMap;
 use tauri::State;
 
 const MAX_EVIDENCE_ITEMS: usize = 8;
 const MAX_EXCERPT_CHARS: usize = 1_600;
 const MAX_ACTIVE_SOURCES: usize = 5;
-
-fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64
-}
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]

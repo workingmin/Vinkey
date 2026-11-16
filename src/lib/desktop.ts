@@ -16,6 +16,7 @@ import { createTaskExecutionDispatch, validateTaskExecutionInput } from './taskR
 import type { TaskExecutionDispatch, TaskExecutionInput } from './taskRuntime'
 import type { LocalHardware } from './hardwareProfile'
 import { appendWorkerActivity } from './chatActivity'
+import { sha256Hex } from './digest'
 
 export async function getLocalHardware(): Promise<LocalHardware> {
   if (!isDesktop()) return { platform: 'demo', architecture: 'demo', totalMemoryBytes: null, gpuMemoryBytes: null, unifiedMemory: false }
@@ -833,8 +834,7 @@ function demoCredentialFingerprint(apiKey?: string): string {
 }
 
 async function secureDemoCredentialFingerprint(apiKey: string): Promise<string> {
-  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(apiKey.trim()))
-  return `sha256:${Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, '0')).join('')}`
+  return `sha256:${await sha256Hex(apiKey.trim())}`
 }
 
 function demoConnectionIdentity(connection: Pick<ModelConnection, 'id' | 'kind' | 'baseUrl' | 'hasApiKey'> & { apiKey?: string }): string {

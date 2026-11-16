@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import {
   existsSync,
   mkdirSync,
@@ -11,8 +10,18 @@ import {
 import type { Dirent } from 'node:fs'
 import { tmpdir, homedir } from 'node:os'
 import { dirname, join, resolve, sep } from 'node:path'
-import { spawnSync } from 'node:child_process'
 import { DatabaseSync } from 'node:sqlite'
+import {
+  formatSuiteSummary,
+  sha256OfFile,
+  summarizeCases,
+  type CaseResult,
+  type CaseStatus,
+} from '../lib/acceptance'
+import { collectCoreEnvironment as collectEnvironment, collectRepository, type CoreEnvironmentInfo, type RepositoryInfo } from '../lib/environment'
+
+export type { CaseResult, CaseStatus } from '../lib/acceptance'
+export type { RepositoryInfo } from '../lib/environment'
 
 // W0-NAV-F / D-NAV 项目与会话导航本地验收脚本（UI-ACC-NAV-FIXTURE-001）。
 // 在脚本自建的隔离临时目录中生成多项目、多会话与中英文文档 fixture，
@@ -25,20 +34,6 @@ export const ACCEPTANCE_ID = 'W0-NAV-F'
 export const DOMAIN_ID = 'D-NAV'
 export const GATE = 'F'
 
-export type CaseStatus = 'PASS' | 'FAIL' | 'BLOCKED'
-
-export interface CaseResult {
-  caseId: string
-  title: string
-  category: 'machine' | 'manual'
-  status: CaseStatus
-  detail: string | null
-  evidence?: string | null
-  notes?: string | null
-  durationMs?: number
-  blockedReason?: string | null
-}
-
 export interface CliOptions {
   workspace: string | null
   outputDir: string | null
@@ -48,22 +43,7 @@ export interface CliOptions {
   keepFixture: boolean
 }
 
-export interface RepositoryInfo {
-  version: string
-  gitSha: string | null
-  dirty: boolean
-  root: string
-}
-
-export interface EnvironmentInfo {
-  os: string
-  osVersion: string
-  arch: string
-  node: string
-  rust: string
-  tauriCli: string
-  tauriFramework: string
-}
+export type EnvironmentInfo = CoreEnvironmentInfo
 
 export interface FixtureFileSummary {
   name: string
@@ -239,82 +219,6 @@ export function parseArguments(values: string[]): CliOptions | null {
     throw new Error(`未知参数 ${value}。`)
   }
   return options
-}
-
-function sha256OfFile(file: string): string {
-  return createHash('sha256').update(readFileSync(file)).digest('hex')
-}
-
-function runCommand(command: string, args: string[]): { ok: boolean; stdout: string; stderr: string; code: number | null } {
-  try {
-    const result = spawnSync(command, args, { encoding: 'utf8', timeout: 5_000, maxBuffer: 1024 * 1024 })
-    return {
-      ok: result.status === 0,
-      stdout: (result.stdout ?? '').trim(),
-      stderr: (result.stderr ?? '').trim(),
-      code: result.status,
-    }
-  } catch {
-    return { ok: false, stdout: '', stderr: '', code: null }
-  }
-}
-
-function gnuVersion(prefix: string, output: string): string {
-  const match = output.match(new RegExp(`${prefix}[\\s/]([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)`))
-  return (match?.[1] ?? output.split(/\s+/u)[1] ?? output) || 'N/A'
-}
-
-export function collectRepository(root: string): RepositoryInfo {
-  let version = '0.0.0'
-  const packageFile = join(root, 'package.json')
-  if (existsSync(packageFile)) {
-    try {
-      const parsed = JSON.parse(readFileSync(packageFile, 'utf8')) as { version?: string }
-      if (typeof parsed.version === 'string' && parsed.version) version = parsed.version
-    } catch {
-      // 读取失败时保留默认版本，仍可给出可读错误提示
-    }
-  }
-  const shaRun = runCommand('git', ['-C', root, 'rev-parse', 'HEAD'])
-  const statusRun = runCommand('git', ['-C', root, 'status', '--porcelain'])
-  return {
-    version,
-    gitSha: shaRun.ok ? shaRun.stdout : null,
-    dirty: Boolean(statusRun.stdout),
-    root,
-  }
-}
-
-export function collectEnvironment(root: string): EnvironmentInfo {
-  const packageFile = join(root, 'package.json')
-  let tauriCli = 'N/A'
-  try {
-    const parsed = JSON.parse(readFileSync(packageFile, 'utf8')) as { devDependencies?: Record<string, string> }
-    tauriCli = parsed.devDependencies?.['@tauri-apps/cli'] ?? 'N/A'
-  } catch {
-    tauriCli = 'N/A'
-  }
-  let tauriFramework = 'N/A'
-  const cargoFile = join(root, 'src-tauri', 'Cargo.toml')
-  if (existsSync(cargoFile)) {
-    const content = readFileSync(cargoFile, 'utf8')
-    const match = content.match(/tauri\s*=\s*\{[^}]*version\s*=\s*"([^"]+)"/u)
-    if (match?.[1]) tauriFramework = match[1]
-    else {
-      const direct = content.match(/^tauri\s*=\s*"([^"]+)"/mu)
-      if (direct?.[1]) tauriFramework = direct[1]
-    }
-  }
-  const rust = runCommand('rustc', ['--version'])
-  return {
-    os: process.platform === 'darwin' ? 'macOS' : process.platform === 'win32' ? 'Windows' : 'Linux',
-    osVersion: process.platform === 'win32' ? process.arch : (runCommand('sw_vers', ['-productVersion']).ok ? runCommand('sw_vers', ['-productVersion']).stdout : 'N/A'),
-    arch: process.arch,
-    node: process.version,
-    rust: rust.ok ? gnuVersion('rustc', rust.stdout) : 'N/A',
-    tauriCli,
-    tauriFramework,
-  }
 }
 
 // 项目 ID 合同：由规范化 root 路径生成确定性 16 位十六进制 ID（模拟 workspace_from_root
@@ -781,15 +685,6 @@ export function generateFixture(fixtureRoot: string): FixtureManifest {
   }
 }
 
-function summarizeCases(cases: CaseResult[]): { caseCount: number; passed: number; failed: number; blocked: number } {
-  return {
-    caseCount: cases.length,
-    passed: cases.filter((item) => item.status === 'PASS').length,
-    failed: cases.filter((item) => item.status === 'FAIL').length,
-    blocked: cases.filter((item) => item.status === 'BLOCKED').length,
-  }
-}
-
 function computeConclusion(cases: CaseResult[]): CaseStatus {
   const summary = summarizeCases(cases)
   if (summary.failed > 0) return 'FAIL'
@@ -1095,16 +990,6 @@ export function runNavigationAcceptance(input: AcceptanceRunInput): AcceptanceRu
   }
 }
 
-function stdoutSummary(output: AcceptanceRunOutput): string {
-  const summary = output.result.summary as { caseCount: number; passed: number; failed: number; blocked: number }
-  return [
-    `${SUITE_ID} acceptance: ${output.conclusion} (${summary.passed}/${summary.caseCount} passed, ${summary.failed} failed, ${summary.blocked} blocked)`,
-    `Results: ${output.resultFile}`,
-    `SHA256SUMS: ${output.sha256File}`,
-    `exit=${output.exitCode}`,
-  ].join('\n')
-}
-
 function stderrProgress(cases: CaseResult[]): void {
   for (const item of cases) {
     const suffix = item.status === 'BLOCKED' && item.blockedReason ? `（${item.blockedReason}）` : ''
@@ -1152,7 +1037,7 @@ export async function main(): Promise<void> {
       if (options.json) {
         console.log(JSON.stringify(output.result, null, 2))
       } else {
-        console.log(stdoutSummary(output))
+        console.log(formatSuiteSummary(SUITE_ID, output))
       }
       process.exitCode = output.exitCode
       completed = true

@@ -1,10 +1,10 @@
-use crate::database::{self, DatabaseState};
+use crate::{
+    clock::now_ms,
+    database::{self, DatabaseState},
+};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::{HashMap, HashSet},
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::collections::{HashMap, HashSet};
 use tauri::State;
 
 const ORIGINS: [&str; 4] = ["builtin", "catalog", "discovered", "user"];
@@ -25,13 +25,6 @@ const SOURCE_STATUSES: [&str; 5] = [
     "unavailable",
     "retired",
 ];
-
-fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

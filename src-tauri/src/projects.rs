@@ -1,4 +1,5 @@
 use crate::{
+    clock::now_ms_i64,
     database::{self, DatabaseState},
     Workspace,
 };
@@ -6,13 +7,6 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
 use std::path::PathBuf;
 use tauri::State;
-
-fn now_ms() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as i64
-}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -54,7 +48,7 @@ pub fn init(db: &DatabaseState, previous: Option<Workspace>) -> Result<(), Strin
                         workspace.id,
                         workspace.root.to_string_lossy(),
                         workspace.name,
-                        now_ms()
+                        now_ms_i64()
                     ],
                 )
                 .map_err(|e| e.to_string())?;
@@ -84,7 +78,7 @@ pub fn register(db: &DatabaseState, workspace: &Workspace) -> Result<(), String>
                 workspace.id,
                 workspace.root.to_string_lossy(),
                 workspace.name,
-                now_ms()
+                now_ms_i64()
             ],
         )
         .map_err(|e| e.to_string())?;

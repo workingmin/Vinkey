@@ -1,5 +1,6 @@
 import type { AgentId, SkillId } from './registry'
 import type { TaskIntent } from './intent'
+import { AGENT_IDS, SKILL_IDS, TASK_INTENTS, agentVocabulary, intentVocabulary, skillVocabulary } from './intentVocabulary'
 
 export const INTENT_ROUTER_CANDIDATE_OUTPUT_VERSION = 'intent-router-output-2'
 
@@ -15,9 +16,9 @@ export const INTENT_ROUTER_CANDIDATE_JSON_SCHEMA = {
         type: 'object',
         additionalProperties: false,
         properties: {
-          intent: { type: 'string', enum: ['structure-segmentation', 'structure-enhancement', 'document-analysis', 'document-revision', 'character-analysis', 'continuity-review', 'workspace-analysis', 'general-chat'] },
-          agent: { type: 'string', enum: ['GeneralConversation', 'StructureSegmentation', 'StoryDeconstruction', 'RevisionEditor', 'ContinuityReviewer'] },
-          skill: { type: 'string', enum: ['general-conversation', 'chapter-boundary-detect', 'structure-enhancement', 'long-text-analysis', 'character-arc-extraction', 'document-revision', 'continuity-review', 'document-overview', 'workspace-overview', 'workspace-focused-analysis', 'workspace-analysis'] },
+          intent: { type: 'string', enum: [...TASK_INTENTS] },
+          agent: { type: 'string', enum: [...AGENT_IDS] },
+          skill: { type: 'string', enum: [...SKILL_IDS] },
           modelScore: { type: 'number', minimum: 0, maximum: 1 },
           reasonCodes: { type: 'array', minItems: 1, maxItems: 8, items: { type: 'string', minLength: 1, maxLength: 80 } },
         },
@@ -43,19 +44,6 @@ export interface IntentCandidateOutput {
   needsClarification: boolean
   missingFacts: string[]
 }
-
-const intents = new Set<TaskIntent>([
-  'structure-segmentation', 'structure-enhancement', 'document-analysis', 'document-revision',
-  'character-analysis', 'continuity-review', 'workspace-analysis', 'general-chat',
-])
-const agents = new Set<AgentId>([
-  'GeneralConversation', 'StructureSegmentation', 'StoryDeconstruction', 'RevisionEditor', 'ContinuityReviewer',
-])
-const skills = new Set<SkillId>([
-  'general-conversation', 'chapter-boundary-detect', 'structure-enhancement', 'long-text-analysis',
-  'character-arc-extraction', 'document-revision', 'continuity-review', 'document-overview',
-  'workspace-overview', 'workspace-focused-analysis', 'workspace-analysis',
-])
 
 function exactKeys(value: Record<string, unknown>, expected: readonly string[]): boolean {
   const keys = Object.keys(value)
@@ -83,7 +71,9 @@ export function parseIntentCandidateOutput(output: string): IntentCandidateOutpu
     if (!item || typeof item !== 'object' || Array.isArray(item)) throw new Error(`模型候选 ${index + 1} 必须是对象。`)
     const candidate = item as Record<string, unknown>
     if (!exactKeys(candidate, ['intent', 'agent', 'skill', 'modelScore', 'reasonCodes'])) throw new Error(`模型候选 ${index + 1} 字段与分类合同不一致。`)
-    if (!intents.has(candidate.intent as TaskIntent) || !agents.has(candidate.agent as AgentId) || !skills.has(candidate.skill as SkillId)) {
+    if (!intentVocabulary.has(candidate.intent as TaskIntent)
+      || !agentVocabulary.has(candidate.agent as AgentId)
+      || !skillVocabulary.has(candidate.skill as SkillId)) {
       throw new Error(`模型候选 ${index + 1} 包含未注册的分类值。`)
     }
     const routeKey = `${candidate.intent}::${candidate.skill}`

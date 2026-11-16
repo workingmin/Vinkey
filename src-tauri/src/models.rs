@@ -1,4 +1,5 @@
 use crate::{
+    clock::now_ms,
     database::{self, DatabaseState},
     model_output::{strip_thinking_sections, validate_admission_payload},
     runtime_log::RuntimeLogState,
@@ -344,13 +345,6 @@ pub enum ChatStreamEvent {
 
 #[derive(Default)]
 pub struct ChatCancellation(pub Mutex<HashMap<String, Arc<AtomicBool>>>);
-
-fn now_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64
-}
 
 fn validate_id(id: &str) -> Result<(), String> {
     if id.is_empty()

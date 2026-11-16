@@ -1,13 +1,22 @@
 import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve, sep } from 'node:path'
-import { spawnSync } from 'node:child_process'
-import { createHash } from 'node:crypto'
+import {
+  formatSuiteSummary,
+  sha256OfFile,
+  summarizeCases,
+  type CaseResult,
+  type CaseStatus,
+} from '../lib/acceptance'
+import { collectCoreEnvironment as collectEnvironment, collectRepository, type CoreEnvironmentInfo } from '../lib/environment'
 import {
   generateFixture, saveMessage, loadConversation, listConversations,
   activateProject, readProjects, deleteProjectRecord, applyIfMatchesActive,
   type FixtureManifest, type ConversationMessageInput,
 } from './navigation-acceptance.ts'
+
+export type { CaseResult, CaseStatus } from '../lib/acceptance'
+export type { RepositoryInfo } from '../lib/environment'
 
 // W4-NAV-R / D-NAV 项目与会话导航跨域回归验收（UI-ACC-NAV-REGRESSION-001）。
 // 在隔离 fixture/SQLite 上构造生成中会话、运行中后台任务、未保存草稿与延迟搜索响应，
@@ -28,19 +37,6 @@ export const ACCEPTANCE_ID = 'W4-NAV-R'
 export const DOMAIN_ID = 'D-NAV'
 export const GATE = 'R'
 
-export type CaseStatus = 'PASS' | 'FAIL' | 'BLOCKED'
-
-export interface CaseResult {
-  caseId: string
-  title: string
-  category: 'machine' | 'manual'
-  status: CaseStatus
-  detail: string | null
-  evidence?: string | null
-  durationMs?: number
-  blockedReason?: string | null
-}
-
 export interface CliOptions {
   timeoutMs: number
   logFile: string | null
@@ -48,11 +44,7 @@ export interface CliOptions {
   json: boolean
   keepFixture: boolean
 }
-export interface RepositoryInfo { version: string; gitSha: string | null; dirty: boolean; root: string }
-export interface EnvironmentInfo {
-  os: string; osVersion: string; arch: string; node: string
-  rust: string; tauriCli: string; tauriFramework: string
-}
+export type EnvironmentInfo = CoreEnvironmentInfo
 export interface AcceptanceRunInput {
   options: CliOptions
   repository: RepositoryInfo
@@ -112,41 +104,6 @@ export function parseArguments(values: string[]): CliOptions | null {
     else throw new Error(`未知参数 ${value}。`)
   }
   return options
-}
-
-export function collectRepository(root: string): RepositoryInfo {
-  let version = '0.0.0'
-  const packageFile = join(root, 'package.json')
-  if (existsSync(packageFile)) {
-    try { const p = JSON.parse(readFileSync(packageFile, 'utf8')) as { version?: string }; if (p.version) version = p.version } catch { /* 默认 */ }
-  }
-  const sha = spawnSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' })
-  const status = spawnSync('git', ['-C', root, 'status', '--porcelain'], { encoding: 'utf8' })
-  return { version, gitSha: sha.status === 0 ? sha.stdout.trim() : null, dirty: Boolean(status.stdout.trim()), root }
-}
-function gnuVersion(prefix: string, output: string): string {
-  const match = output.match(new RegExp(`${prefix}[\\s/]([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)`))
-  return (match?.[1] ?? output.split(/\s+/u)[1] ?? output) || 'N/A'
-}
-export function collectEnvironment(root: string): EnvironmentInfo {
-  let tauriCli = 'N/A'
-  try { const p = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { devDependencies?: Record<string, string> }; tauriCli = p.devDependencies?.['@tauri-apps/cli'] ?? 'N/A' } catch { /* N/A */ }
-  let tauriFramework = 'N/A'
-  const cargo = join(root, 'src-tauri', 'Cargo.toml')
-  if (existsSync(cargo)) {
-    const c = readFileSync(cargo, 'utf8')
-    const m = c.match(/tauri\s*=\s*\{[^}]*version\s*=\s*"([^"]+)"/u)
-    if (m?.[1]) tauriFramework = m[1]
-    else { const d = c.match(/^tauri\s*=\s*"([^"]+)"/mu); if (d?.[1]) tauriFramework = d[1] }
-  }
-  const rust = spawnSync('rustc', ['--version'], { encoding: 'utf8' })
-  const sw = spawnSync('sw_vers', ['-productVersion'], { encoding: 'utf8' })
-  return {
-    os: process.platform === 'darwin' ? 'macOS' : process.platform === 'win32' ? 'Windows' : 'Linux',
-    osVersion: process.platform === 'win32' ? process.arch : (sw.status === 0 ? sw.stdout.trim() : 'N/A'),
-    arch: process.arch, node: process.version,
-    rust: rust.status === 0 ? gnuVersion('rustc', rust.stdout) : 'N/A', tauriCli, tauriFramework,
-  }
 }
 
 // ---- 交叉状态模型（语义对齐产品实现） ----
@@ -345,14 +302,6 @@ export function runMachineCases(context: RegressionContext): { cases: CaseResult
   return { cases, fixture, preStates }
 }
 
-function summarizeCases(cases: CaseResult[]) {
-  return {
-    caseCount: cases.length,
-    passed: cases.filter((c) => c.status === 'PASS').length,
-    failed: cases.filter((c) => c.status === 'FAIL').length,
-    blocked: cases.filter((c) => c.status === 'BLOCKED').length,
-  }
-}
 function computeConclusion(cases: CaseResult[]): CaseStatus {
   const s = summarizeCases(cases)
   if (s.failed > 0) return 'FAIL'
@@ -417,20 +366,13 @@ export function runNavigationRegression(input: AcceptanceRunInput): AcceptanceRu
   }
   writeFileSync(logFile, JSON.stringify({ schemaVersion: 1, generatedAt: result.generatedAt, suite: { id: SUITE_ID, version: SUITE_VERSION }, cases: allCases.map((c) => ({ caseId: c.caseId, status: c.status, detail: c.detail })) }, null, 2), 'utf8')
   writeFileSync(resultFile, JSON.stringify(result, null, 2), 'utf8')
-  const sha = createHash('sha256').update(readFileSync(resultFile)).digest('hex')
+  const sha = sha256OfFile(resultFile)
   writeFileSync(sha256File, `${sha}  result.json\n`, 'utf8')
   // result.json 不自引用自身 hash：定稿写入后由 SHA256SUMS 记录其最终 hash，保证 shasum -c 通过。
   const finalResult = result
   return { result: finalResult, conclusion, exitCode, resultFile, sha256File, logFile }
 }
 
-function stdoutSummary(output: AcceptanceRunOutput): string {
-  const s = output.result.summary as { caseCount: number; passed: number; failed: number; blocked: number }
-  return [
-    `${SUITE_ID} acceptance: ${output.conclusion} (${s.passed}/${s.caseCount} passed, ${s.failed} failed, ${s.blocked} blocked)`,
-    `Results: ${output.resultFile}`, `SHA256SUMS: ${output.sha256File}`, `exit=${output.exitCode}`,
-  ].join('\n')
-}
 function stderrProgress(cases: CaseResult[]): void {
   for (const c of cases) console.error(`[${c.caseId}] ${c.status} ${c.title}${c.status === 'BLOCKED' && c.blockedReason ? `（${c.blockedReason}）` : ''}`)
 }
@@ -449,7 +391,7 @@ export function main(): void {
     const output = runNavigationRegression({ options, repository, environment, fixture: null })
     stderrProgress(output.result.cases as CaseResult[])
     if (options.json) console.log(JSON.stringify(output.result, null, 2))
-    else console.log(stdoutSummary(output))
+    else console.log(formatSuiteSummary(SUITE_ID, output))
     process.exitCode = output.exitCode
   } catch (cause) { console.error(`导航回归验收失败：${messageOf(cause)}`); process.exitCode = 1 }
 }

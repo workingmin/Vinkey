@@ -1,7 +1,17 @@
 import { mkdtemp, rm, writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve, sep } from 'node:path'
-import { spawnSync } from 'node:child_process'
+import {
+  formatSuiteSummary,
+  sha256OfFile,
+  summarizeCases,
+  type CaseResult,
+  type CaseStatus,
+} from '../lib/acceptance'
+import { collectCoreEnvironment, collectRepository, probeOllamaVersion, type CoreEnvironmentInfo, type RepositoryInfo } from '../lib/environment'
+
+export type { CaseResult, CaseStatus } from '../lib/acceptance'
+export type { RepositoryInfo } from '../lib/environment'
 
 // W1-MODEL-E / D-MODEL 模型设置真实端到端验收脚本（UI-ACC-SETTINGS-001）。
 // 通过 Ollama/兼容服务的 HTTP API 验证服务可达、目录发现、模型检查（/api/show）、
@@ -14,20 +24,6 @@ export const ACCEPTANCE_ID = 'W1-MODEL-E'
 export const DOMAIN_ID = 'D-MODEL'
 export const GATE = 'E'
 
-export type CaseStatus = 'PASS' | 'FAIL' | 'BLOCKED'
-
-export interface CaseResult {
-  caseId: string
-  title: string
-  category: 'machine' | 'manual'
-  status: CaseStatus
-  detail: string | null
-  evidence?: string | null
-  notes?: string | null
-  durationMs?: number
-  blockedReason?: string | null
-}
-
 export interface CliOptions {
   baseUrl: string
   model: string
@@ -39,23 +35,7 @@ export interface CliOptions {
   json: boolean
 }
 
-export interface RepositoryInfo {
-  version: string
-  gitSha: string | null
-  dirty: boolean
-  root: string
-}
-
-export interface EnvironmentInfo {
-  os: string
-  osVersion: string
-  arch: string
-  node: string
-  rust: string
-  tauriCli: string
-  tauriFramework: string
-  ollama: string
-}
+export type EnvironmentInfo = CoreEnvironmentInfo & { ollama: string }
 
 export interface SelectedModel {
   profileId: string
@@ -195,68 +175,8 @@ function deriveProfileId(baseUrl: string, model: string): string {
   return fnvHash(`${baseUrl}|${model}`)
 }
 
-export function collectRepository(root: string): RepositoryInfo {
-  let version = '0.0.0'
-  const packageFile = join(root, 'package.json')
-  if (existsSync(packageFile)) {
-    try {
-      const parsed = JSON.parse(readFileSync(packageFile, 'utf8')) as { version?: string }
-      if (typeof parsed.version === 'string' && parsed.version) version = parsed.version
-    } catch { /* 保留默认版本 */ }
-  }
-  const shaRun = spawnSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' })
-  const statusRun = spawnSync('git', ['-C', root, 'status', '--porcelain'], { encoding: 'utf8' })
-  return {
-    version,
-    gitSha: shaRun.status === 0 ? shaRun.stdout.trim() : null,
-    dirty: Boolean(statusRun.stdout.trim()),
-    root,
-  }
-}
-
-function gnuVersion(prefix: string, output: string): string {
-  const match = output.match(new RegExp(`${prefix}[\\s/]([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)`))
-  return (match?.[1] ?? output.split(/\s+/u)[1] ?? output) || 'N/A'
-}
-
 export function collectEnvironment(root: string, baseUrl: string, timeoutMs: number): EnvironmentInfo {
-  const packageFile = join(root, 'package.json')
-  let tauriCli = 'N/A'
-  try {
-    const parsed = JSON.parse(readFileSync(packageFile, 'utf8')) as { devDependencies?: Record<string, string> }
-    tauriCli = parsed.devDependencies?.['@tauri-apps/cli'] ?? 'N/A'
-  } catch { tauriCli = 'N/A' }
-  let tauriFramework = 'N/A'
-  const cargoFile = join(root, 'src-tauri', 'Cargo.toml')
-  if (existsSync(cargoFile)) {
-    const content = readFileSync(cargoFile, 'utf8')
-    const match = content.match(/tauri\s*=\s*\{[^}]*version\s*=\s*"([^"]+)"/u)
-    if (match?.[1]) tauriFramework = match[1]
-    else {
-      const direct = content.match(/^tauri\s*=\s*"([^"]+)"/mu)
-      if (direct?.[1]) tauriFramework = direct[1]
-    }
-  }
-  const rust = spawnSync('rustc', ['--version'], { encoding: 'utf8' })
-  let ollama = 'N/A'
-  // 环境采集本身不阻断：base url 不可达时记 N/A。
-  const versionRes = spawnSync('curl', ['-s', '-m', String(Math.min(timeoutMs, 5000) / 1000), `${baseUrl}/api/version`], { encoding: 'utf8' })
-  if (versionRes.status === 0 && versionRes.stdout.trim()) {
-    try {
-      const parsed = JSON.parse(versionRes.stdout) as { version?: string }
-      if (parsed.version) ollama = parsed.version
-    } catch { /* 保留 N/A */ }
-  }
-  return {
-    os: process.platform === 'darwin' ? 'macOS' : process.platform === 'win32' ? 'Windows' : 'Linux',
-    osVersion: process.platform === 'win32' ? process.arch : (spawnSync('sw_vers', ['-productVersion'], { encoding: 'utf8' }).status === 0 ? spawnSync('sw_vers', ['-productVersion'], { encoding: 'utf8' }).stdout.trim() : 'N/A'),
-    arch: process.arch,
-    node: process.version,
-    rust: rust.status === 0 ? gnuVersion('rustc', rust.stdout) : 'N/A',
-    tauriCli,
-    tauriFramework,
-    ollama,
-  }
+  return { ...collectCoreEnvironment(root), ollama: probeOllamaVersion(baseUrl, timeoutMs) }
 }
 
 export interface ModelCaseContext {
@@ -337,15 +257,6 @@ export async function runMachineCases(context: ModelCaseContext): Promise<CaseRe
   return cases
 }
 
-function summarizeCases(cases: CaseResult[]): { caseCount: number; passed: number; failed: number; blocked: number } {
-  return {
-    caseCount: cases.length,
-    passed: cases.filter((c) => c.status === 'PASS').length,
-    failed: cases.filter((c) => c.status === 'FAIL').length,
-    blocked: cases.filter((c) => c.status === 'BLOCKED').length,
-  }
-}
-
 function computeConclusion(cases: CaseResult[]): CaseStatus {
   const s = summarizeCases(cases)
   if (s.failed > 0) return 'FAIL'
@@ -415,23 +326,12 @@ export async function runModelAcceptance(input: AcceptanceRunInput): Promise<Acc
   writeFileSync(logFile, JSON.stringify({ schemaVersion: 1, generatedAt: result.generatedAt, suite: { id: SUITE_ID, version: SUITE_VERSION }, cases: allCases.map((c) => ({ caseId: c.caseId, category: c.category, status: c.status, detail: c.detail, blockedReason: c.blockedReason })) }, null, 2), 'utf8')
   writeFileSync(resultFile, JSON.stringify(result, null, 2), 'utf8')
 
-  const { createHash } = await import('node:crypto')
-  const sha = createHash('sha256').update(readFileSync(resultFile)).digest('hex')
+  const sha = sha256OfFile(resultFile)
   writeFileSync(sha256File, `${sha}  result.json\n`, 'utf8')
   // result.json 不自引用自身 hash：定稿写入后由 SHA256SUMS 记录其最终 hash，保证 shasum -c 通过。
   const finalResult = result
 
   return { result: finalResult, conclusion, exitCode, outputDir, resultFile, sha256File, logFile }
-}
-
-function stdoutSummary(output: AcceptanceRunOutput): string {
-  const s = output.result.summary as { caseCount: number; passed: number; failed: number; blocked: number }
-  return [
-    `${SUITE_ID} acceptance: ${output.conclusion} (${s.passed}/${s.caseCount} passed, ${s.failed} failed, ${s.blocked} blocked)`,
-    `Results: ${output.resultFile}`,
-    `SHA256SUMS: ${output.sha256File}`,
-    `exit=${output.exitCode}`,
-  ].join('\n')
 }
 
 function stderrProgress(cases: CaseResult[]): void {
@@ -470,7 +370,7 @@ export async function main(): Promise<void> {
     const output = await runModelAcceptance({ options, repository, environment, selectedModel })
     stderrProgress(output.result.cases as CaseResult[])
     if (options.json) console.log(JSON.stringify(output.result, null, 2))
-    else console.log(stdoutSummary(output))
+    else console.log(formatSuiteSummary(SUITE_ID, output))
     process.exitCode = output.exitCode
   } catch (cause) {
     console.error(`模型验收失败：${messageOf(cause)}`)

@@ -12,6 +12,7 @@ use std::{
 use tauri::{AppHandle, Manager, State, WebviewWindow};
 
 mod character_graph;
+mod clock;
 mod conversation_activity;
 mod database;
 mod hardware;

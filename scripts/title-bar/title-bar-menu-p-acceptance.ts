@@ -1,6 +1,6 @@
-import { createHash } from 'node:crypto'
-import { mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync, existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { formatSuiteSummary, sha256OfFile } from '../lib/acceptance'
 import {
   collectEnvironment,
   collectRepository,
@@ -425,20 +425,6 @@ export async function runPMenuAcceptance(input: AcceptanceRunInput): Promise<Acc
   return { result: finalResult, conclusion, exitCode, outputDir, resultFile, sha256File, logFile }
 }
 
-function sha256OfFile(file: string): string {
-  return createHash('sha256').update(readFileSync(file)).digest('hex')
-}
-
-function stdoutSummary(output: AcceptanceRunOutput): string {
-  const summary = output.result.summary as { caseCount: number; passed: number; failed: number; blocked: number }
-  return [
-    `${SUITE_ID} acceptance: ${output.conclusion} (${summary.passed}/${summary.caseCount} passed, ${summary.failed} failed, ${summary.blocked} blocked)`,
-    `Results: ${output.resultFile}`,
-    `SHA256SUMS: ${output.sha256File}`,
-    `exit=${output.exitCode}`,
-  ].join('\n')
-}
-
 export async function main(): Promise<void> {
   try {
     const parsed = parsePlatformArguments(process.argv.slice(2))
@@ -449,7 +435,7 @@ export async function main(): Promise<void> {
     const output = await runPMenuAcceptance({ options: parsed, repository, environment })
     for (const item of output.result.cases as CaseResult[]) console.error(`[${item.caseId}] ${item.status} ${item.title}`)
     if (parsed.json) console.log(JSON.stringify(output.result, null, 2))
-    else console.log(stdoutSummary(output))
+    else console.log(formatSuiteSummary(SUITE_ID, output))
     process.exitCode = output.exitCode
   } catch (cause) {
     console.error(`标题栏菜单 P 验收失败：${messageOf(cause)}`)

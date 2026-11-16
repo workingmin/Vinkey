@@ -126,7 +126,18 @@ export interface ServiceError {
   stepId?: string | null
 }
 
-export interface TaskJob {
+/** Persisted presentation snapshots; absent on legacy jobs. */
+export interface TaskPresentationSnapshot {
+  displayTitle?: string | null
+  conversationId?: string | null
+  sourceMessageId?: string | null
+  workspaceNameSnapshot?: string | null
+  conversationTitleSnapshot?: string | null
+  modelNameSnapshot?: string | null
+  connectionNameSnapshot?: string | null
+}
+
+export interface TaskJob extends TaskPresentationSnapshot {
   taskId: string
   workspaceId: string
   taskType: string
@@ -138,32 +149,17 @@ export interface TaskJob {
   events: TaskJobEvent[]
   error?: string | null
   failure?: ServiceError | null
-  /** Persisted presentation and execution snapshots; absent on legacy jobs. */
-  displayTitle?: string | null
-  conversationId?: string | null
-  sourceMessageId?: string | null
-  workspaceNameSnapshot?: string | null
-  conversationTitleSnapshot?: string | null
   modelProfileId?: string | null
-  modelNameSnapshot?: string | null
-  connectionNameSnapshot?: string | null
   createdAt: number
   updatedAt: number
 }
 
-export interface StartTaskJobInput {
+export interface StartTaskJobInput extends TaskPresentationSnapshot {
   taskId: string
   taskType: string
   instructionHash: string
   sourceFingerprints: Record<string, string>
-  displayTitle?: string | null
-  conversationId?: string | null
-  sourceMessageId?: string | null
-  workspaceNameSnapshot?: string | null
-  conversationTitleSnapshot?: string | null
   modelProfileId?: string | null
-  modelNameSnapshot?: string | null
-  connectionNameSnapshot?: string | null
 }
 
 export interface UpdateTaskJobInput {
@@ -178,7 +174,7 @@ export interface UpdateTaskJobInput {
   eventFields?: Record<string, unknown>
 }
 
-export interface StartLongTextWorkerInput {
+export interface StartLongTextWorkerInput extends TaskPresentationSnapshot {
   jobId: string
   instruction: string
   instructionHash: string
@@ -198,13 +194,6 @@ export interface StartLongTextWorkerInput {
   documentIndex?: string | null
   documents: Array<{ path: string; sourceFingerprint: string }>
   excludedDocuments: WorkspaceDocumentRef[]
-  displayTitle?: string | null
-  conversationId?: string | null
-  sourceMessageId?: string | null
-  workspaceNameSnapshot?: string | null
-  conversationTitleSnapshot?: string | null
-  modelNameSnapshot?: string | null
-  connectionNameSnapshot?: string | null
 }
 
 export interface LongTextWorkerOutput {
@@ -390,6 +379,7 @@ export interface SearchHit {
 
 export type ProjectMemoryKind = 'summary' | 'fact' | 'character' | 'timeline' | 'foreshadowing' | 'decision'
 export type ProjectMemoryStatus = 'proposed' | 'confirmed' | 'rejected'
+export type ConfidenceLevel = 'low' | 'medium' | 'high'
 
 export interface ProjectMemoryItem {
   id: string
@@ -397,7 +387,7 @@ export interface ProjectMemoryItem {
   title: string
   content: string
   sourcePaths: string[]
-  confidence: 'low' | 'medium' | 'high'
+  confidence: ConfidenceLevel
   status: ProjectMemoryStatus
   createdAt: number
   updatedAt: number
@@ -409,7 +399,7 @@ export interface ProjectMemoryCandidate {
   title: string
   content: string
   sourcePaths: string[]
-  confidence?: 'low' | 'medium' | 'high'
+  confidence?: ConfidenceLevel
 }
 
 export interface CharacterRecord {
@@ -418,7 +408,7 @@ export interface CharacterRecord {
   canonicalName: string
   aliases: string[]
   description: string
-  confidence: 'low' | 'medium' | 'high'
+  confidence: ConfidenceLevel
   status: ProjectMemoryStatus
   createdAt: number
   updatedAt: number

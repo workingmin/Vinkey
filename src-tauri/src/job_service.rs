@@ -1,3 +1,4 @@
+use crate::clock::now_ms;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::{
@@ -6,7 +7,6 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
     sync::{LazyLock, Mutex},
-    time::{SystemTime, UNIX_EPOCH},
 };
 
 const MAX_EVENTS: usize = 500;
@@ -117,13 +117,6 @@ pub struct TaskJob {
     pub connection_name_snapshot: Option<String>,
     pub created_at: u64,
     pub updated_at: u64,
-}
-
-fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64
 }
 
 fn validate_id(value: &str, label: &str) -> Result<(), String> {

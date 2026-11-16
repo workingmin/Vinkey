@@ -1,11 +1,11 @@
-use crate::runtime_log::RuntimeLogState;
+use crate::{clock::now_ms, runtime_log::RuntimeLogState};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashSet,
     fs,
     path::{Path, PathBuf},
-    time::{Instant, SystemTime, UNIX_EPOCH},
+    time::Instant,
 };
 use tauri::State;
 
@@ -171,13 +171,6 @@ pub struct CharacterNeighbor {
     pub directed: bool,
     pub confidence: String,
     pub status: String,
-}
-
-fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64
 }
 
 fn validate_graph_id(value: &str, label: &str) -> Result<(), String> {

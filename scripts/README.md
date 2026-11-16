@@ -12,6 +12,7 @@
 | `title-bar/` | 标题栏与功能菜单：`W0-SHELL-MENU-F` 自建隔离 fixture 验证业务链路；`W0-SHELL-MENU-P` 机器层验证菜单树/查看/主题/设置/帮助/焦点/审计；macOS 原生 AX 入口（`run-title-bar-native-macos.sh`）读取完整菜单树并按压窗口/查看/帮助菜单项 |
 | `editor/` | 基础编辑器（`W0-EDITOR-F`/`UI-ACC-EDITOR-001`）fixture 合同验收：脚本自建隔离工作区的 Markdown/代码/文本/环境文件/二进制文档，复刻文档分类、读取、保存、冲突、新建与越界保护；不覆盖用户文件 |
 | `ui-shell/` | 应用壳层 Playwright 浏览器验收、截图和结果 JSON |
+| `lib/` | 验收脚本共享实现：`acceptance.ts` 提供结果类型、用例汇总、文件 SHA-256、命令执行和 CLI 结论行；`run-acceptance.mjs` 用 esbuild 打包并在临时目录运行专项 TS 入口。各专项目录只保留自己的 ID、fixture 与用例 |
 
 推荐从仓库根目录通过 `package.json` 中的 npm 命令执行脚本，例如：
 

@@ -1,9 +1,10 @@
 import { prepareLongTextWorker, probeModelContext, readAnalysisArtifact, streamChat, updateTaskJob, writeAnalysisArtifact } from './desktop'
-import { estimateTokens } from './context'
+import { sha256Hex } from './digest'
+import { charCount, clipToTokens, estimateTokens, formatCount } from './tokens'
 import { buildDocumentIndexMessage, buildDocumentMetadataCards } from './documentMetadata'
 import { parseEvidenceReferences, verifyEvidenceReferences } from './workspaceAnalysis'
 import { formatServiceError } from './serviceError'
-import type { AnalysisJobManifest, ChatStreamEvent, ContextDocument, EvidenceReference, ModelProfile, ProcessSegment, TaskWorkerEvent, TextChunk, WorkspaceDocumentRef } from '../types'
+import type { AnalysisJobManifest, ChatStreamEvent, ContextDocument, EvidenceReference, ModelProfile, ProcessSegment, TaskPresentationSnapshot, TaskWorkerEvent, TextChunk, WorkspaceDocumentRef } from '../types'
 import type { TaskExecutionDispatch } from './taskRuntime'
 
 export type AnalysisStage = TaskWorkerEvent['stage']
@@ -29,16 +30,7 @@ export interface LongTextAnalysisResult {
   jobCheckpointHits: number
 }
 
-export interface LongTextTaskMetadata {
-  displayTitle?: string | null
-  conversationId?: string | null
-  sourceMessageId?: string | null
-  workspaceNameSnapshot?: string | null
-  conversationTitleSnapshot?: string | null
-  modelProfileId?: string | null
-  modelNameSnapshot?: string | null
-  connectionNameSnapshot?: string | null
-}
+export type LongTextTaskMetadata = TaskPresentationSnapshot & { modelProfileId?: string | null }
 
 /** Stable, local-only title used by the task list; it never requires a model call. */
 export function buildTaskDisplayTitle(instruction: string): string {
@@ -58,14 +50,6 @@ const MIN_CHUNK_TOKENS = 128
 const MAX_CHUNK_TOKENS = 6000
 const cancelledAnalyses = new Set<string>()
 const pausedAnalyses = new Set<string>()
-
-function formatCount(value: number): string {
-  return new Intl.NumberFormat('zh-CN').format(value)
-}
-
-function charCount(value: string): number {
-  return Array.from(value).length
-}
 
 function range(values: number[]): [number, number] {
   if (values.length === 0) return [0, 0]
@@ -156,21 +140,15 @@ function batchBudget(contextWindow: number): number {
   return Math.max(MIN_CHUNK_TOKENS, Math.floor(analysisInputBudget(contextWindow) * 0.7))
 }
 
-function clipToTokens(value: string, limit: number): string {
-  if (estimateTokens(value) <= limit) return value
-  const marker = '\n[该阶段摘要已按上下文预算截断]'
-  let end = Math.min(value.length, Math.max(1, (limit - estimateTokens(marker)) * 2))
-  let clipped = `${value.slice(0, end).trim()}${marker}`
-  while (end > 1 && estimateTokens(clipped) > limit) {
-    end = Math.floor(end * 0.8)
-    clipped = `${value.slice(0, end).trim()}${marker}`
-  }
-  return clipped
+const SUMMARY_CLIP_MARKER = '\n[该阶段摘要已按上下文预算截断]'
+
+function clipSummary(value: string, limit: number): string {
+  return clipToTokens(value, limit, SUMMARY_CLIP_MARKER).value
 }
 
 function effectiveDocumentIndex(indexMessage: string | null | undefined, contextWindow: number): string | null {
   return indexMessage
-    ? clipToTokens(indexMessage, Math.max(64, Math.floor(analysisInputBudget(contextWindow) / 4)))
+    ? clipToTokens(indexMessage, Math.max(64, Math.floor(analysisInputBudget(contextWindow) / 4))).value
     : null
 }
 
@@ -286,8 +264,7 @@ export async function analyzeLongText(
   let jobStarted = false
   try {
     for (const document of documents) {
-      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(document.content))
-      sourceFingerprints[document.path] = [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, '0')).join('')
+      sourceFingerprints[document.path] = await sha256Hex(document.content)
     }
     if (resumeJobId) {
       const previous = await readJsonArtifact<AnalysisJobManifest>(jobId, 'job-failed.json', toolCallGuard)
@@ -305,8 +282,7 @@ export async function analyzeLongText(
         throw new Error('源文档已变化，无法安全恢复旧任务，请重新开始')
       }
     }
-    const instructionDigest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(instruction))
-    const instructionHash = [...new Uint8Array(instructionDigest)].map((value) => value.toString(16).padStart(2, '0')).join('')
+    const instructionHash = await sha256Hex(instruction)
     const overlapTokens = Math.min(128, Math.floor(maxTokens / 8))
     if (!workerDispatch?.jobId || workerDispatch.jobId !== jobId || workerDispatch.serviceId !== 'long-text-analysis') {
       throw new Error('长文本 Worker 缺少匹配的 Service Dispatch')
@@ -391,7 +367,7 @@ export async function analyzeLongText(
         modelInvocationCount += 1
         return collectResponse(requestId, profile.id, [{ role: 'user', content: chunkPrompt(instruction, chunk, indexMessage, effectiveContextWindow) }], toolCallGuard)
       })()
-      if (text) summaries.push({ sourceId: chunk.sourceId, chunkId: chunk.id, heading: chunk.heading, text: clipToTokens(text, summaryClipLimit(effectiveContextWindow, indexMessage)), evidence: verifyEvidenceReferences(parseEvidenceReferences(text), documents) })
+      if (text) summaries.push({ sourceId: chunk.sourceId, chunkId: chunk.id, heading: chunk.heading, text: clipSummary(text, summaryClipLimit(effectiveContextWindow, indexMessage)), evidence: verifyEvidenceReferences(parseEvidenceReferences(text), documents) })
       if (cached === null) {
         const name = `summary-${String(index + 1).padStart(5, '0')}.md`
         await guardedCall('write_analysis_artifact', { jobId, name, content: text }, () => writeAnalysisArtifact(jobId, name, text), toolCallGuard)
@@ -423,7 +399,7 @@ export async function analyzeLongText(
         onProgress?.({ segment: reduceSegment, stage: 'reduce', completed: index, total: batches.length, message: `正在处理第 ${index + 1}/${batches.length} 批汇总…` })
         modelInvocationCount += 1
         const text = await collectResponse(requestId, profile.id, [{ role: 'user', content: summaryPrompt(instruction, batch, false, indexMessage, effectiveContextWindow) }], toolCallGuard)
-        if (text) next.push({ sourceId: 'summary', chunkId: `level-${level}-${index}`, heading: null, text: clipToTokens(text, summaryClipLimit(effectiveContextWindow, indexMessage)), evidence: batch.flatMap((record) => record.evidence ?? []) })
+        if (text) next.push({ sourceId: 'summary', chunkId: `level-${level}-${index}`, heading: null, text: clipSummary(text, summaryClipLimit(effectiveContextWindow, indexMessage)), evidence: batch.flatMap((record) => record.evidence ?? []) })
         const name = `reduce-${level + 1}-${String(index + 1).padStart(4, '0')}.md`
         await guardedCall('write_analysis_artifact', { jobId, name, content: text }, () => writeAnalysisArtifact(jobId, name, text), toolCallGuard)
         onProgress?.({ segment: reduceSegment, stage: 'reduce', completed: index + 1, total: batches.length, message: `已完成第 ${index + 1}/${batches.length} 批汇总` })

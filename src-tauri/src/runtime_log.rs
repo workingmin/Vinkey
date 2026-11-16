@@ -1,3 +1,4 @@
+use crate::clock::now_ms;
 use regex::Regex;
 use serde::Serialize;
 use serde_json::{Map, Value};
@@ -6,7 +7,6 @@ use std::{
     io::{BufWriter, Write},
     path::{Path, PathBuf},
     sync::{Arc, Mutex, OnceLock},
-    time::{SystemTime, UNIX_EPOCH},
 };
 
 const MAX_FIELD_LENGTH: usize = 500;
@@ -111,13 +111,6 @@ impl RuntimeLogState {
             lines,
         }
     }
-}
-
-fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64
 }
 
 fn sanitize_value(value: Value, workspace_root: Option<&Path>) -> Value {

@@ -1,4 +1,7 @@
-use crate::{database, job_service, long_text, models, read_document_at, task_runtime, Workspace};
+use crate::{
+    clock::now_ms, database, job_service, long_text, models, read_document_at, task_runtime,
+    Workspace,
+};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
@@ -11,7 +14,6 @@ use std::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc, Mutex,
     },
-    time::{SystemTime, UNIX_EPOCH},
 };
 use tauri::{AppHandle, Emitter};
 
@@ -359,13 +361,6 @@ struct MapCacheEntry {
     created_at: u64,
     validation_status: String,
     validator_version: String,
-}
-
-fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64
 }
 
 fn valid_id(value: &str) -> bool {

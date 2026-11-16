@@ -1,4 +1,5 @@
 use crate::{
+    clock::now_ms,
     database::{self, DatabaseState},
     research_evidence::{ResearchEvidenceInput, ResearchSearchRequest},
     research_sources::{get_research_source, list_active_research_sources},
@@ -8,20 +9,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
     net::ToSocketAddrs,
-    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant},
 };
 use tauri::State;
 
 const MAX_SOURCES: usize = 5;
 const MAX_RESULTS_PER_SOURCE: usize = 5;
 const MAX_RESPONSE_BYTES: usize = 1_500_000;
-
-fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64
-}
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]

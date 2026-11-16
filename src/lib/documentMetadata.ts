@@ -1,4 +1,5 @@
 import type { ContextDocument } from '../types'
+import { charCount, estimateTokens, utf8ByteLength } from './tokens'
 
 export interface DocumentMetadataCard {
   path: string
@@ -20,20 +21,6 @@ const STOPWORDS = new Set([
   '然后', '因为', '所以', '但是', '如果', '可以', '没有', '不是', '以及', '已经',
   '第一', '第二', '第三', '人物', '章节', '故事', '小说', '内容',
 ])
-
-function estimateTokens(value: string): number {
-  let cjk = 0
-  let other = 0
-  for (const character of value) {
-    if (/\p{Script=Han}|\p{Script=Hiragana}|\p{Script=Katakana}|\p{Script=Hangul}/u.test(character)) cjk += 1
-    else other += 1
-  }
-  return cjk + Math.ceil(other / 4)
-}
-
-function byteLength(value: string): number {
-  return new TextEncoder().encode(value).length
-}
 
 function documentType(path: string): string {
   const extension = path.split('.').at(-1)?.toLocaleLowerCase() ?? ''
@@ -106,8 +93,8 @@ export function buildDocumentMetadata(document: ContextDocument): DocumentMetada
     path: document.path,
     name: document.name,
     documentType: documentType(document.path),
-    sizeBytes: document.sizeBytes ?? byteLength(document.content),
-    contentChars: Array.from(document.content).length,
+    sizeBytes: document.sizeBytes ?? utf8ByteLength(document.content),
+    contentChars: charCount(document.content),
     lineCount: document.content ? document.content.split(/\r?\n/u).length : 0,
     estimatedTokens: estimateTokens(document.content),
     headings,

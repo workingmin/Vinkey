@@ -8,6 +8,7 @@ import {
   type IntentCandidate,
   type IntentCandidateOutput,
 } from './intentCandidates'
+import { AGENT_IDS, SKILL_IDS, TASK_INTENTS, agentVocabulary, intentVocabulary, skillVocabulary } from './intentVocabulary'
 import type { ChatRequest, ChatStreamEvent, ModelConnection, ModelProfile } from '../types'
 import { isLoopbackModelEndpoint } from './modelPrivacy'
 
@@ -93,18 +94,6 @@ export interface IntentModelEvaluationDependencies {
   getActiveProfileId: () => string | null | Promise<string | null>
 }
 
-const intents = new Set<TaskIntent>([
-  'structure-segmentation', 'structure-enhancement', 'document-analysis', 'document-revision',
-  'character-analysis', 'continuity-review', 'workspace-analysis', 'general-chat',
-])
-const agents = new Set<AgentId>([
-  'GeneralConversation', 'StructureSegmentation', 'StoryDeconstruction', 'RevisionEditor', 'ContinuityReviewer',
-])
-const skills = new Set<SkillId>([
-  'general-conversation', 'chapter-boundary-detect', 'structure-enhancement', 'long-text-analysis',
-  'character-arc-extraction', 'document-revision', 'continuity-review', 'document-overview',
-  'workspace-overview', 'workspace-focused-analysis', 'workspace-analysis',
-])
 const scopes = new Set<TaskScope>(['editor-selection', 'selected-documents', 'current-document', 'workspace', 'conversation'])
 const documentSelections = new Set<DocumentSelectionMode>(['none', 'single', 'multiple'])
 const predictionFields: Array<keyof IntentClassificationPrediction> = [
@@ -203,9 +192,9 @@ export function buildIntentClassificationMessages(testCase: IntentClassification
       content: [
         `你是 Vinkey IntentRouter 的轻量分类器（提示合同 ${INTENT_ROUTER_PROMPT_VERSION}）。只能根据指令和目标元数据分类，不得读取或假设文件正文。`,
         '只返回一个 JSON 对象，不要 Markdown 或解释。输出 candidates（最多 3 个）及 needsClarification、missingFacts，不要输出其他字段。',
-        `intent 可选值：${[...intents].join(', ')}`,
-        `agent 可选值：${[...agents].join(', ')}`,
-        `skill 可选值：${[...skills].join(', ')}`,
+        `intent 可选值：${TASK_INTENTS.join(', ')}`,
+        `agent 可选值：${AGENT_IDS.join(', ')}`,
+        `skill 可选值：${SKILL_IDS.join(', ')}`,
         '每个 candidate 必须包含 intent、agent、skill、modelScore（0 到 1 的排序分数）和 reasonCodes（词元或边界代码数组）。',
         'modelScore 不是校准概率，只用于候选排序；不要伪造精确概率。',
         '',
@@ -245,9 +234,9 @@ export function parseIntentClassificationPrediction(output: string): IntentClass
   if (keys.length !== predictionFields.length || keys.some((key) => !predictionFields.includes(key as keyof IntentClassificationPrediction))) {
     throw new Error('模型输出字段与分类合同不一致。')
   }
-  if (!intents.has(record.intent as TaskIntent)
-    || !agents.has(record.agent as AgentId)
-    || !skills.has(record.skill as SkillId)
+  if (!intentVocabulary.has(record.intent as TaskIntent)
+    || !agentVocabulary.has(record.agent as AgentId)
+    || !skillVocabulary.has(record.skill as SkillId)
     || !scopes.has(record.scope as TaskScope)
     || !documentSelections.has(record.documentSelection as DocumentSelectionMode)) {
     throw new Error('模型输出包含缺失或未注册的分类值。')

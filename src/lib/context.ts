@@ -1,5 +1,8 @@
 import type { ChatMessage, ContextDocument } from '../types'
 import { buildDocumentIndexMessage } from './documentMetadata'
+import { clipToTokens, estimateTokens } from './tokens'
+
+export { estimateTokens } from './tokens'
 
 export interface ContextBudget {
   estimatedTokens: number
@@ -13,16 +16,6 @@ export interface RoutingDocument {
   name: string
   size: number
   estimatedTokens: number
-}
-
-export function estimateTokens(value: string): number {
-  let cjk = 0
-  let other = 0
-  for (const character of value) {
-    if (/\p{Script=Han}|\p{Script=Hiragana}|\p{Script=Katakana}|\p{Script=Hangul}/u.test(character)) cjk += 1
-    else other += 1
-  }
-  return cjk + Math.ceil(other / 4)
 }
 
 export function buildContextMessage(documents: ContextDocument[]): string | null {
@@ -39,17 +32,7 @@ export function buildRevisionContextMessage(documents: ContextDocument[], maxTok
     const header = `来源文件：${document.path}\n`
     const headerTokens = estimateTokens(header) + 32
     const allowance = Math.max(128, remaining - headerTokens)
-    let body = document.content
-    if (estimateTokens(body) > allowance) {
-      let lower = 0
-      let upper = body.length
-      while (lower < upper) {
-        const middle = Math.ceil((lower + upper) / 2)
-        if (estimateTokens(body.slice(0, middle)) <= allowance) lower = middle
-        else upper = middle - 1
-      }
-      body = `${body.slice(0, lower).trimEnd()}\n[原文已按任务预算截断]`
-    }
+    const body = clipToTokens(document.content, allowance, '\n[原文已按任务预算截断]').value
     sections.push(`${header}<source-document>\n${body}\n</source-document>`)
     remaining -= estimateTokens(header) + estimateTokens(body) + 32
   }

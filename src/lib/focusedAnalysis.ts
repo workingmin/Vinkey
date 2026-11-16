@@ -1,21 +1,9 @@
 import type { ContextDocument, WorkspaceSnapshot } from '../types'
-import { estimateTokens } from './context'
+import { clipToTokens, estimateTokens } from './tokens'
 import { buildWorkspaceProfile } from './workspaceOverview'
 
 const MAX_FOCUSED_CONTEXT_TOKENS = 12_000
 const PROFILE_FILE_LIMIT = 40
-
-function clipToTokens(value: string, limit: number): { value: string; truncated: boolean } {
-  if (estimateTokens(value) <= limit) return { value, truncated: false }
-  let lower = 0
-  let upper = value.length
-  while (lower < upper) {
-    const middle = Math.ceil((lower + upper) / 2)
-    if (estimateTokens(value.slice(0, middle)) <= limit) lower = middle
-    else upper = middle - 1
-  }
-  return { value: value.slice(0, lower).trimEnd(), truncated: true }
-}
 
 export function buildFocusedWorkspaceMessage(
   workspace: WorkspaceSnapshot,

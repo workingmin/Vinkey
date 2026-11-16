@@ -107,6 +107,22 @@ function mergeRunMessages(messages: ChatMessage[], run: ChatRun | undefined): Ch
   return merged
 }
 
+/** Replace one live run and mirror it into the visible message list. */
+function withChatRun(state: AppState, conversationId: string, nextRun: ChatRun): Pick<AppState, 'chatRuns' | 'messages'> {
+  return {
+    chatRuns: { ...state.chatRuns, [conversationId]: nextRun },
+    messages: state.conversationId === conversationId ? mergeRunMessages(state.messages, nextRun) : state.messages,
+  }
+}
+
+/** Close the trailing open activity interval, leaving worker rows untouched. */
+function closeTrailingActivity(log: ChatActivity[], completedAt: number): ChatActivity[] {
+  const previous = log.at(-1)
+  return previous && !previous.worker && previous.completedAt === undefined
+    ? [...log.slice(0, -1), { ...previous, completedAt }]
+    : log
+}
+
 export const useAppStore = create<AppState>((set, get) => ({
   workspace: null,
   projects: [],
@@ -178,12 +194,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       activityLog,
       assistantMessage: { ...run.assistantMessage, activityLog },
     }
-    return {
-      chatRuns: { ...state.chatRuns, [run.conversationId]: nextRun },
-      messages: state.conversationId === run.conversationId
-        ? mergeRunMessages(state.messages, nextRun)
-        : state.messages,
-    }
+    return withChatRun(state, run.conversationId, nextRun)
   }),
   beginChatSegment: (conversationId, label) => {
     get().setChatRunStatus(conversationId, 'thinking', label, { id: crypto.randomUUID(), label, startedAt: Date.now() })
@@ -192,10 +203,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const run = state.chatRuns[conversationId]
     if (!run || (run.status === status && run.statusMessage === statusMessage && (!segment || segment.id === run.processSegment?.id))) return state
     const completedAt = Date.now()
-    const previous = run.activityLog.at(-1)
-    const closedLog = previous && !previous.worker && !previous.completedAt
-      ? [...run.activityLog.slice(0, -1), { ...previous, completedAt }]
-      : run.activityLog
+    const closedLog = closeTrailingActivity(run.activityLog, completedAt)
     const processSegment = segment ?? run.processSegment
     const activity: ChatActivity = { id: crypto.randomUUID(), segment: processSegment, status, message: statusMessage, timestamp: completedAt }
     const activityLog = [...closedLog, activity]
@@ -207,12 +215,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       activityLog,
       assistantMessage: { ...run.assistantMessage, activityLog },
     }
-    return {
-      chatRuns: { ...state.chatRuns, [conversationId]: nextRun },
-      messages: state.conversationId === conversationId
-        ? mergeRunMessages(state.messages, nextRun)
-        : state.messages,
-    }
+    return withChatRun(state, conversationId, nextRun)
   }),
   recordWorkerEvent: (conversationId, event) => set((state) => {
     const run = state.chatRuns[conversationId]
@@ -222,8 +225,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const latest = activityLog.at(-1)
     const nextRun = { ...run, activityLog, status: 'tool_calling' as const,
       statusMessage: latest?.message ?? null, assistantMessage: { ...run.assistantMessage, activityLog } }
-    return { chatRuns: { ...state.chatRuns, [conversationId]: nextRun },
-      messages: state.conversationId === conversationId ? mergeRunMessages(state.messages, nextRun) : state.messages }
+    return withChatRun(state, conversationId, nextRun)
   }),
   appendChatRunChunk: (conversationId, chunk) => set((state) => {
     const run = state.chatRuns[conversationId]
@@ -232,12 +234,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       ...run,
       assistantMessage: { ...run.assistantMessage, content: run.assistantMessage.content + chunk },
     }
-    return {
-      chatRuns: { ...state.chatRuns, [conversationId]: nextRun },
-      messages: state.conversationId === conversationId
-        ? mergeRunMessages(state.messages, nextRun)
-        : state.messages,
-    }
+    return withChatRun(state, conversationId, nextRun)
   }),
   resetChatRunResponse: (conversationId) => set((state) => {
     const run = state.chatRuns[conversationId]
@@ -253,12 +250,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       activityLog,
       assistantMessage: { ...run.assistantMessage, content: '', activityLog },
     }
-    return {
-      chatRuns: { ...state.chatRuns, [conversationId]: nextRun },
-      messages: state.conversationId === conversationId
-        ? mergeRunMessages(state.messages, nextRun)
-        : state.messages,
-    }
+    return withChatRun(state, conversationId, nextRun)
   }),
   endChatRun: (conversationId, discardAssistant, result = { status: 'completed' }) => set((state) => {
     const run = state.chatRuns[conversationId]
@@ -266,10 +258,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const chatRuns = { ...state.chatRuns }
     delete chatRuns[conversationId]
     const completedAt = Date.now()
-    const previous = run.activityLog.at(-1)
-    const activityLog = previous && !previous.worker && !previous.completedAt
-      ? [...run.activityLog.slice(0, -1), { ...previous, completedAt }]
-      : run.activityLog
+    const activityLog = closeTrailingActivity(run.activityLog, completedAt)
     const completedAssistant = { ...run.assistantMessage, completedAt, activityLog, runResult: result }
     const completedChatMessages = { ...state.completedChatMessages }
     const discard = discardAssistant && activityLog.length === 0 && !completedAssistant.content.trim()

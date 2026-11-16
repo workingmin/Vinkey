@@ -1,6 +1,6 @@
+use crate::clock::now_ms;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use std::time::{SystemTime, UNIX_EPOCH};
 use std::{
     collections::{HashMap, HashSet},
     sync::{Arc, Mutex},
@@ -135,13 +135,6 @@ struct SkillPolicy {
     side_effects: &'static [&'static str],
     tools: &'static [&'static str],
     requires_model: bool,
-}
-
-fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64
 }
 
 fn valid_id(value: &str) -> bool {

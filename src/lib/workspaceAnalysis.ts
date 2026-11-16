@@ -1,5 +1,6 @@
 import type { ContextDocument, DocumentKind, EvidenceReference, WorkspaceDocumentRef, WorkspaceEntry, WorkspaceSnapshot } from '../types'
 import { getDocumentKind } from './fileTypes'
+import { utf8ByteLength } from './tokens'
 import { flattenWorkspaceFiles } from './tree'
 
 const ANALYZABLE_KINDS = new Set<DocumentKind>(['markdown', 'text', 'code'])
@@ -46,19 +47,38 @@ export function buildWorkspaceInventory(workspace: WorkspaceSnapshot): Workspace
   }
 }
 
+function mentionedDocuments(
+  supported: WorkspaceDocumentRef[],
+  normalized: string,
+  preferPathMatches: boolean,
+): WorkspaceDocumentRef[] {
+  const pathMatches = supported.filter((document) => normalized.includes(document.path.toLocaleLowerCase()))
+  if (preferPathMatches && pathMatches.length > 0) return pathMatches
+  return supported.filter((document) => {
+    const path = document.path.toLocaleLowerCase()
+    const name = document.name.toLocaleLowerCase()
+    const stem = name.replace(/\.[^.]+$/u, '')
+    return normalized.includes(path) || normalized.includes(name) || (stem.length >= 2 && normalized.includes(stem))
+  })
+}
+
+function selectByPriority(
+  supported: WorkspaceDocumentRef[],
+  priority: (document: WorkspaceDocumentRef) => number,
+  limit: number,
+): WorkspaceDocumentRef[] {
+  return [...supported]
+    .sort((left, right) => priority(right) - priority(left) || left.path.localeCompare(right.path, 'zh-CN'))
+    .slice(0, limit)
+}
+
 export function selectWorkspaceAnalysisTargets(
   supported: WorkspaceDocumentRef[],
   prompt: string,
   coverage: 'targeted' | 'exhaustive',
 ): WorkspaceDocumentRef[] {
   if (coverage === 'exhaustive') return supported
-  const normalized = prompt.toLocaleLowerCase()
-  const pathMatches = supported.filter((document) => normalized.includes(document.path.toLocaleLowerCase()))
-  const mentioned = pathMatches.length > 0 ? pathMatches : supported.filter((document) => {
-    const name = document.name.toLocaleLowerCase()
-    const stem = name.replace(/\.[^.]+$/u, '')
-    return normalized.includes(name) || (stem.length >= 2 && normalized.includes(stem))
-  })
+  const mentioned = mentionedDocuments(supported, prompt.toLocaleLowerCase(), true)
   if (mentioned.length > 0) return mentioned.slice(0, MAX_TARGETED_DOCUMENTS)
   const priority = (document: WorkspaceDocumentRef): number => {
     const value = document.path.toLocaleLowerCase()
@@ -67,22 +87,14 @@ export function selectWorkspaceAnalysisTargets(
     if (document.kind === 'markdown' || document.kind === 'text') return 1
     return 0
   }
-  return [...supported]
-    .sort((left, right) => priority(right) - priority(left) || left.path.localeCompare(right.path, 'zh-CN'))
-    .slice(0, MAX_TARGETED_DOCUMENTS)
+  return selectByPriority(supported, priority, MAX_TARGETED_DOCUMENTS)
 }
 
 export function selectWorkspaceFocusedTargets(
   supported: WorkspaceDocumentRef[],
   prompt: string,
 ): WorkspaceDocumentRef[] {
-  const normalized = prompt.toLocaleLowerCase()
-  const mentioned = supported.filter((document) => {
-    const path = document.path.toLocaleLowerCase()
-    const name = document.name.toLocaleLowerCase()
-    const stem = name.replace(/\.[^.]+$/u, '')
-    return normalized.includes(path) || normalized.includes(name) || (stem.length >= 2 && normalized.includes(stem))
-  })
+  const mentioned = mentionedDocuments(supported, prompt.toLocaleLowerCase(), false)
   if (mentioned.length > 0) return mentioned.slice(0, MAX_FOCUSED_DOCUMENTS)
 
   const priority = (document: WorkspaceDocumentRef): number => {
@@ -94,9 +106,7 @@ export function selectWorkspaceFocusedTargets(
     if (document.kind === 'markdown' || document.kind === 'text') return 1
     return 0
   }
-  return [...supported]
-    .sort((left, right) => priority(right) - priority(left) || left.path.localeCompare(right.path, 'zh-CN'))
-    .slice(0, MAX_FOCUSED_DOCUMENTS)
+  return selectByPriority(supported, priority, MAX_FOCUSED_DOCUMENTS)
 }
 
 export async function readWorkspaceDocuments(
@@ -130,7 +140,7 @@ export async function readWorkspaceDocuments(
         excluded.push({ ...reference, reason: 'unsupported' })
         continue
       }
-      const sizeBytes = document.sizeBytes ?? new TextEncoder().encode(document.content).byteLength
+      const sizeBytes = document.sizeBytes ?? utf8ByteLength(document.content)
       if (sizeBytes > maxDocumentBytes || totalBytes + sizeBytes > maxWorkspaceBytes) {
         excluded.push({ ...reference, reason: 'too-large' })
         continue
