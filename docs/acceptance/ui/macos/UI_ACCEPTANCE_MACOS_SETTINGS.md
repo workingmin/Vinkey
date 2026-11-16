@@ -1,15 +1,15 @@
 # 模型设置专项验收报告（macOS）
 
-> **平台说明**：本文档是 macOS 平台版；Windows 平台验收见 [UI_ACCEPTANCE_WINDOWS_SETTINGS.md](../windows/UI_ACCEPTANCE_WINDOWS_SETTINGS.md)。两版共享同一验收合同、测试矩阵与设计断言，仅平台真机执行与证据按平台分别记录。**Windows 独立专项未执行（`NOT_EXECUTED`）**，本报告只给 macOS 结论，不得据此宣称跨平台发布通过。
+> 平台说明：本文档是 macOS 平台版；Windows 平台验收见 [UI_ACCEPTANCE_WINDOWS_SETTINGS.md](../windows/UI_ACCEPTANCE_WINDOWS_SETTINGS.md)。两版共享同一验收合同、测试矩阵与设计断言，仅平台真机执行与证据按平台分别记录。Windows 独立专项未执行（`NOT_EXECUTED`），本报告只给 macOS 结论，不得据此宣称跨平台发布通过。
 
 - 功能域：`D-MODEL` 模型设置与本地模型准入
 - 验收标识：`W1-MODEL-E`（真实端到端门槛）
 - 验收对象：[UI_DESIGN_SETTINGS.md](../../../design/ui/UI_DESIGN_SETTINGS.md)
 - 验收计划：[UI 验收工作计划](../UI_ACCEPTANCE_PLAN.md)、[UI 验收脚本编写计划](../UI_ACCEPTANCE_SCRIPT_PLAN.md)
 - 版本：`0.1.0`（Alpha）；执行日期：2026-11-13
-- 结论：**专项通过（Alpha 客观范围）**
+- 结论：专项通过（Alpha 客观范围）
 
-「专项通过」只指 **Alpha 客观自动化范围**：下列客观用例全部 `PASS`，机器证据链（`result.json`、`SHA256SUMS`、`provenance`、退出码）可核验；需要人工观察、专家判断或用户意见的验收项已按 [总计划 §8.5](../UI_ACCEPTANCE_PLAN.md#85-人工复核统一批次自动化验收完成后统一处理) 摘除并集中后置，Windows 独立专项不计入本 macOS 结论。本报告**不代表视觉/体验已验收、功能完备、完整发布通过或跨平台发布通过**。
+「专项通过（Alpha 客观范围）」只指 Alpha 客观自动化范围：下列客观用例全部 `PASS`，机器证据链（`result.json`、`SHA256SUMS`、`provenance`、退出码）可核验；需要人工观察、专家判断或用户意见的验收项已按 [总计划 §8.5](../UI_ACCEPTANCE_PLAN.md#85-人工复核统一批次自动化验收完成后统一处理) 摘除并集中后置，Windows 独立专项不计入本 macOS 结论。本报告不代表视觉/体验已验收、功能完备、整体发布通过或跨平台发布通过。
 
 ## 1. 功能范围与业务入口
 
@@ -107,12 +107,12 @@
 
 ### 6.1 证据边界（如实标注，不得外推）
 
-- **OpenAI-compatible 协议证据**取自本机 Ollama 的 `/v1` 兼容层（`/v1/models`、`/v1/chat/completions`），是真实服务与真实模型推理，**不是独立第三方 OpenAI-compatible 服务**；外部独立服务的真实验收仍按 [总计划 §8.2](../UI_ACCEPTANCE_PLAN.md) 如实列为客观遗留，见 §6.2。
-- `MODEL-E-003`/`005` 与 `MODEL-E-OAI-003`/`005` 是 blackhole 地址**注入**的连接失败与超时用例，验证脚本优雅降级，**不是真实服务故障恢复**。
-- **系统凭据库证据**是 macOS Keychain 在 Vinkey 生产代码同一 service/account 命名空间下的**通道级**写入、读回、删除与删除后不可读；脚本不通过 Vinkey UI 或 Rust command 调用，也不读取真实用户凭据。Rust 生产路径（`keyring` apple-native）由 `models.rs` 实现、凭据指纹/唯一索引/迁移测试与前端 `clearApiKey` 断言共同覆盖；真实 app 内端到端删除连接→删除密钥的人工确认归 §8.5。
-- 组件自动化测试运行于 jsdom + 浏览器演示桥接层，**不冒充** Tauri 原生窗口、系统菜单栏或物理 DPI 证据。
+- OpenAI-compatible 协议证据取自本机 Ollama 的 `/v1` 兼容层（`/v1/models`、`/v1/chat/completions`），是真实服务与真实模型推理，不是独立第三方 OpenAI-compatible 服务；外部独立服务的真实验收仍按 [总计划 §8.2](../UI_ACCEPTANCE_PLAN.md) 如实列为客观遗留，见 §6.2。
+- `MODEL-E-003`/`005` 与 `MODEL-E-OAI-003`/`005` 是 blackhole 地址注入的连接失败与超时用例，验证脚本优雅降级，不是真实服务故障恢复。
+- 系统凭据库证据是 macOS Keychain 在 Vinkey 生产代码同一 service/account 命名空间下的通道级写入、读回、删除与删除后不可读；脚本不通过 Vinkey UI 或 Rust command 调用，也不读取真实用户凭据。Rust 生产路径（`keyring` apple-native）由 `models.rs` 实现、凭据指纹/唯一索引/迁移测试与前端 `clearApiKey` 断言共同覆盖；真实 app 内端到端删除连接→删除密钥的人工确认归 §8.5。
+- 组件自动化测试运行于 jsdom + 浏览器演示桥接层，不冒充 Tauri 原生窗口、系统菜单栏或物理 DPI 证据。
 
-### 6.2 客观遗留项（逐项列出，不因专项通过而消失）
+### 6.2 客观遗留项（逐项列出，不因专项通过（Alpha 客观范围）而消失）
 
 | 项目 | 归属 | 状态 |
 | --- | --- | --- |
@@ -127,7 +127,7 @@
 
 ### 6.4 发布口径
 
-本专项仅达成 macOS 单平台的 **专项通过（Alpha 客观范围）**。整体仍不宣称跨平台发布通过 / 完整发布通过（Windows 独立专项 `NOT_EXECUTED` + 人工复核统一后置 + §6.2 客观遗留项）。
+本专项仅达成 macOS 单平台的 专项通过（Alpha 客观范围）。整体仍不宣称跨平台发布通过 / 整体发布通过（Windows 独立专项 `NOT_EXECUTED` + 人工复核统一后置 + §6.2 客观遗留项）。
 
 ## 7. 测试人员本地执行结果
 
@@ -155,10 +155,10 @@
 
 ### 7.3 人工 UI 观察
 
-人工 UI 观察表（设置页打开并返回、键盘与窗口缩放、截图目视确认等主观/人工项）**不在本报告回填**，已按 [总计划 §8.5](../UI_ACCEPTANCE_PLAN.md#85-人工复核统一批次自动化验收完成后统一处理) 集中至人工复核统一批次，由测试人员在所有自动化验收脚本跑完后统一处理。客观部分（Escape/返回确认、运行态禁用、密钥显式删除、Keychain 读写删）已在 §4/§5 由机器判据完成，不以人工观察代替。
+人工 UI 观察表（设置页打开并返回、键盘与窗口缩放、截图目视确认等主观/人工项）不在本报告回填，已按 [总计划 §8.5](../UI_ACCEPTANCE_PLAN.md#85-人工复核统一批次自动化验收完成后统一处理) 集中至人工复核统一批次，由测试人员在所有自动化验收脚本跑完后统一处理。客观部分（Escape/返回确认、运行态禁用、密钥显式删除、Keychain 读写删）已在 §4/§5 由机器判据完成，不以人工观察代替。
 
 ## 8. 结论
 
 「功能域 → 竞品证据 → 设计决策 → 前后端实现 → 自动化测试代码 → 本地环境验收脚本 → 测试人员执行与证据回传 → 验收报告 → 遗留项复审」继续作为各功能域的统一验收流程。模型设置专项证明：真实模型链路必须区分协议与证据边界，系统凭据库必须有目标平台的客观证据，人工/主观判断必须与客观机器判据分层归口。
 
-本专项在 **Alpha 客观自动化范围**内达成**专项通过**：`W1-MODEL-E` 双协议 10/10 `PASS`、系统凭据库 5/5 `PASS`、组件与脚本合同测试全绿、Rust 模型域数据层全绿、构建溯源 `provenance=PASS`、`SHA256SUMS` 全部校验通过；人工复核项已集中至 §8.5，Windows 独立专项 `NOT_EXECUTED` 不计入本 macOS 结论。整体仍不宣称跨平台发布通过 / 完整发布通过，§6.2 的客观遗留项继续按原门槛逐项跟踪。
+本专项在 Alpha 客观自动化范围内达成专项通过（Alpha 客观范围）：`W1-MODEL-E` 双协议 10/10 `PASS`、系统凭据库 5/5 `PASS`、组件与脚本合同测试全绿、Rust 模型域数据层全绿、构建溯源 `provenance=PASS`、`SHA256SUMS` 全部校验通过；人工复核项已集中至 §8.5，Windows 独立专项 `NOT_EXECUTED` 不计入本 macOS 结论。整体仍不宣称跨平台发布通过 / 整体发布通过，§6.2 的客观遗留项继续按原门槛逐项跟踪。

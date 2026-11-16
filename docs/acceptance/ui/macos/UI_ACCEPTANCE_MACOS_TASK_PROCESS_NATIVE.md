@@ -1,6 +1,6 @@
 # 长任务过程原生复验清单（macOS）
 
-> **平台说明**：本文档是 `NT-001..NT-005` 的 macOS 平台执行清单；Windows 平台见 [长任务过程原生复验清单（Windows）](../windows/UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_NATIVE.md)。共享合同、原用例编号与通过标准见 [共享合同与平台任务分派索引](../TASK_PROCESS_NATIVE_ACCEPTANCE.md)；平台边界、结论范围与人工复核统一后置等共性口径统一在该索引首部说明，本文档不重复。
+> 平台说明：本文档是 `NT-001..NT-005` 的 macOS 平台执行清单；Windows 平台见 [长任务过程原生复验清单（Windows）](../windows/UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_NATIVE.md)。共享合同、原用例编号与通过标准见 [共享合同与平台任务分派索引](../TASK_PROCESS_NATIVE_ACCEPTANCE.md)；平台边界、结论范围与人工复核统一后置等共性口径统一在该索引首部说明，本文档不重复。
 
 - 功能域：`D-TASK-LOG` 日志中心与长任务
 - 归属门槛：`W4-TASK-E`；竞品证据 [`CF-006`](../../../competitors/FEATURE_DECISIONS.md)
@@ -53,7 +53,7 @@ npm run test:task-process-acceptance:sh -- --workspace "<WS>" --db "<DB>" --manu
 ```
 
 1. 以 `--list-profiles` 只读确认模型 profile；缺失或不可读时按前置条件记 `BLOCKED`。CLI 驱动只覆盖 `TASK-CHK-*` 客观机器证据。
-2. 桌面原生 runner 需先无残留 Vinkey 进程、显示器保持唤醒（`.sh` 包装已用 `caffeinate`）；它把真实作业事件播种进隔离 fixture，在真实 Tauri app 中打开会话并按 AX 读回状态栏、段标签、暂停/继续控件与展开态。对 `NT-MAC-003`，runner 以暂停态播种为前置条件，随后修改真实源文件并在真实 app 中 AX 点击「继续处理」，由生产后端复核指纹并写入失败终态与拒绝提示；脚本只读回结果、截图与任务产物。它**不证明**初始任务由真实用户桌面 UI 发起；新段推进与观感/易理解性仍归 §8.5。
+2. 桌面原生 runner 需先无残留 Vinkey 进程、显示器保持唤醒（`.sh` 包装已用 `caffeinate`）；它把真实作业事件播种进隔离 fixture，在真实 Tauri app 中打开会话并按 AX 读回状态栏、段标签、暂停/继续控件与展开态。对 `NT-MAC-003`，runner 以暂停态播种为前置条件，随后修改真实源文件并在真实 app 中 AX 点击「继续处理」，由生产后端复核指纹并写入失败终态与拒绝提示；脚本只读回结果、截图与任务产物。它不证明初始任务由真实用户桌面 UI 发起；新段推进与观感/易理解性仍归 §8.5。
 3. 以 `--dump-manual` 生成人工观察回填模板，供 §8.5 主观项统一回填。
 4. 以 `--json` 运行机器核查，核对 stdout 四行与退出码等于 `result.json.exitCode`；`TASK-CHK-*` 只读核查任务产物，不调用模型。
 5. 以 `--manual` 合并人工观察，归档 `result.json`、`SHA256SUMS`、诊断日志与人工观察回填文件；fixture 或浏览器 companion 不得冒充目标平台原生证据。

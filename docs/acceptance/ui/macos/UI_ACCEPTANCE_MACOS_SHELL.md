@@ -1,21 +1,21 @@
 # 应用壳层与入口专项验收报告（macOS）
 
-> **平台说明**：本文档是 macOS 平台版；Windows 平台验收见 [UI_ACCEPTANCE_WINDOWS_SHELL.md](../windows/UI_ACCEPTANCE_WINDOWS_SHELL.md)。验收合同（设计断言与判定规则）与脚本规范跨平台一致，执行入口和证据按平台分别记录。
+> 平台说明：本文档是 macOS 平台版；Windows 平台验收见 [UI_ACCEPTANCE_WINDOWS_SHELL.md](../windows/UI_ACCEPTANCE_WINDOWS_SHELL.md)。验收合同（设计断言与判定规则）与脚本规范跨平台一致，执行入口和证据按平台分别记录。
 
-> **审核范围说明**：本报告只保留**当前最新版本的一次验收记录**。历史批次的过程记录、升级注记和复核说明已从本文件移除；对应原始归档仍按受控方式留存于 `artifacts/ui-shell-native-macos/`，不纳入本次管理层审核清单。唯一有效证据以「本版本最终构建 HEAD 下重跑产生的最新 `run-*.tar.gz`」为准，其 `result.json` 记录批次号、生成时间与 Git SHA。由于验收批次号和 HEAD SHA 由脚本在运行时写入归档，本报告不硬编码这两项数值，避免报告提交再次改变 HEAD 导致 `SHELL-P-BUILD-PROVENANCE` 失配。
+> 审核范围说明：本报告只保留当前最新版本的一次验收记录。历史批次的过程记录、升级注记和复核说明已从本文件移除；对应原始归档仍按受控方式留存于 `artifacts/ui-shell-native-macos/`，不纳入本次管理层审核清单。唯一有效证据以「本版本最终构建 HEAD 下重跑产生的最新 `run-*.tar.gz`」为准，其 `result.json` 记录批次号、生成时间与 Git SHA。由于验收批次号和 HEAD SHA 由脚本在运行时写入归档，本报告不硬编码这两项数值，避免报告提交再次改变 HEAD 导致 `SHELL-P-BUILD-PROVENANCE` 失配。
 
 - 功能域：`D-SHELL` 应用壳层与入口承载
 - 验收标识：`W0-SHELL-P`
 - 关联设计：[UI_DESIGN_SHELL.md](../../../design/ui/UI_DESIGN_SHELL.md)、[TITLE_BAR_DESIGN.md](../../../design/ui/TITLE_BAR_DESIGN.md)
 - 标题栏菜单专项计划：[UI_ACCEPTANCE_MACOS_TITLE_BAR_PLAN.md](./UI_ACCEPTANCE_MACOS_TITLE_BAR_PLAN.md)，拆分为 `W0-SHELL-MENU-P`（平台/结构）与 `W0-SHELL-MENU-F`（fixture 业务入口链路）
-- 标题栏菜单专项报告：[UI_ACCEPTANCE_MACOS_TITLE_BAR.md](./UI_ACCEPTANCE_MACOS_TITLE_BAR.md)；macOS 已执行，结论为 `P` PASS、`F` PASS（独立脚本 `UI-ACC-TITLE-BAR-FIXTURE-001`）、`provenance=PASS`、专项整体**专项通过（Alpha 客观范围）**、Windows 独立专项未执行，均不计入 `W0-SHELL-P`
+- 标题栏菜单专项报告：[UI_ACCEPTANCE_MACOS_TITLE_BAR.md](./UI_ACCEPTANCE_MACOS_TITLE_BAR.md)；macOS 已执行，结论为 `P` PASS、`F` PASS（独立脚本 `UI-ACC-TITLE-BAR-FIXTURE-001`）、`provenance=PASS`、专项整体专项通过（Alpha 客观范围）、Windows 独立专项未执行，均不计入 `W0-SHELL-P`
 - 导航业务报告：[UI_ACCEPTANCE_MACOS_NAVIGATION.md](./UI_ACCEPTANCE_MACOS_NAVIGATION.md)
 - 回填模板：[UI_ACCEPTANCE_MACOS_SHELL_RUN_TEMPLATE.md](./UI_ACCEPTANCE_MACOS_SHELL_RUN_TEMPLATE.md)
 - 自动化入口：[Playwright 脚本](../../../../scripts/ui-shell/run-ui-shell-acceptance.mjs)，命令为 `npm run test:ui-shell-acceptance`
 - macOS 原生入口：[原生 AX / CoreGraphics 脚本](../../../../scripts/ui-shell/run-ui-shell-native-macos.sh)，命令为 `npm run test:ui-shell-native-mac`
 - 当前平台批次：`macOS 15+`
 - 最新证据批次：`artifacts/ui-shell-native-macos/` 下最新 `run-*.tar.gz`（唯一有效批次）
-- 报告状态：**macOS 完整通过**（`W0-SHELL-P` 子门槛），24/24 用例通过、0 失败、0 阻断
+- 报告状态：`通过（功能域单平台范围）`（macOS，`W0-SHELL-P` 子门槛），24/24 用例通过、0 失败、0 阻断
 - 更新日期：`2026-11-04`
 
 ## 1. 验收边界
@@ -95,7 +95,7 @@ Playwright 自动化入口支持按平台运行，并在状态变化后等待双
 
 ### 4.5 子门槛结论
 
-原生窗口用例、批次文件完整性、应用构建可追溯性、系统环境元数据（含物理 DPI）、上传材料脱敏、WebView/人工 UI 链路六项前置条件在 macOS 侧全部满足。`W0-SHELL-P` macOS 子门槛结论为 **通过（完整）**。Windows 桌面平台验收见 [UI_ACCEPTANCE_WINDOWS_SHELL.md](../windows/UI_ACCEPTANCE_WINDOWS_SHELL.md)，属独立验收范围；标题栏菜单专项 `W0-SHELL-MENU-P/F` 与 `D-NAV` 业务链路不在本报告结论内。
+原生窗口用例、批次文件完整性、应用构建可追溯性、系统环境元数据（含物理 DPI）、上传材料脱敏、WebView/人工 UI 链路六项前置条件在 macOS 侧全部满足。`W0-SHELL-P` macOS 子门槛结论为 通过（功能域单平台范围）。Windows 桌面平台验收见 [UI_ACCEPTANCE_WINDOWS_SHELL.md](../windows/UI_ACCEPTANCE_WINDOWS_SHELL.md)，属独立验收范围；标题栏菜单专项 `W0-SHELL-MENU-P/F` 与 `D-NAV` 业务链路不在本报告结论内。
 
 ## 5. 复核材料清单（本批次全部满足）
 
@@ -120,14 +120,14 @@ Playwright 自动化入口支持按平台运行，并在状态变化后等待双
 
 ## 6. 判定规则与当前综合结论
 
-- **通过**：目标平台窗口/容器/响应式/键盘材料齐全，所有适用 `SHELL-P-*` 关键断言通过；菜单专项不计入本报告。
-- **条件通过**：代码和结构证据充分，但平台人工材料或直接渲染覆盖未齐；不得宣称壳层完整发布通过。
-- **不通过**：窗口控制、内容容器、焦点、错误恢复或平台语义不满足设计断言。
-- **阻断**：桌面运行环境或构建依赖使结论不可得；记录复现信息。
+- 通过：目标平台窗口/容器/响应式/键盘材料齐全，所有适用 `SHELL-P-*` 关键断言通过；菜单专项不计入本报告。
+- 条件通过：代码和结构证据充分，但平台人工材料或直接渲染覆盖未齐；不得宣称壳层整体发布通过。
+- 不通过：窗口控制、内容容器、焦点、错误恢复或平台语义不满足设计断言。
+- 阻断：桌面运行环境或构建依赖使结论不可得；记录复现信息。
 
-标题栏菜单不是本报告的通过条件；若菜单设计或菜单实现存在缺口，应在 [标题栏与功能菜单专项验收报告](./UI_ACCEPTANCE_MACOS_TITLE_BAR.md) 中记录（该报告的 `P=PASS`、`F=PASS`、`TB-MENU-003-GLOBAL-SEARCH=PASS`、`TB-MENU-008=PASS`、`provenance=PASS`，`W0-EDITOR-F` 目标平台 WebView 客观证据已采集、目录取消保态已客观判定为 `preserved`；`W0-EDITOR-F` 人工 UI 观察与帮助弹窗低保真 `DEFER-UI-001` 等主观项已集中至总计划 §8.5 人工复核事项、Windows 独立专项未执行不计入本 macOS 结论，专项整体在 Alpha 客观范围达成**专项通过**），不得反向改写 `W0-SHELL-P` 的窗口/容器结论。
+标题栏菜单不是本报告的通过条件；若菜单设计或菜单实现存在缺口，应在 [标题栏与功能菜单专项验收报告](./UI_ACCEPTANCE_MACOS_TITLE_BAR.md) 中记录（该报告的 `P=PASS`、`F=PASS`、`TB-MENU-003-GLOBAL-SEARCH=PASS`、`TB-MENU-008=PASS`、`provenance=PASS`，`W0-EDITOR-F` 目标平台 WebView 客观证据已采集、目录取消保态已客观判定为 `preserved`；`W0-EDITOR-F` 人工 UI 观察与帮助弹窗低保真 `DEFER-UI-001` 等主观项已集中至总计划 §8.5 人工复核事项、Windows 独立专项未执行不计入本 macOS 结论，专项整体在 Alpha 客观范围达成专项通过（Alpha 客观范围）），不得反向改写 `W0-SHELL-P` 的窗口/容器结论。
 
-当前综合结论：**macOS 完整通过**（`W0-SHELL-P` 子门槛）。本版本唯一有效证据批次在最终构建 HEAD 下重跑，机器层 24/24 PASS、0 失败、0 阻断、`exitCode=0`；原生窗口控制、WebView companion、构建溯源、隔离 Profile、显示探针（物理 DPI `133`）与隐私扫描全部通过，6 张 CoreGraphics 窗口截图有效，两级哈希清单与归档脱敏通过，应用与仓库 Git SHA 一致且工作树 clean。Windows 平台验收见 [UI_ACCEPTANCE_WINDOWS_SHELL.md](../windows/UI_ACCEPTANCE_WINDOWS_SHELL.md)；本报告不覆盖 `D-NAV` 真实业务链路或标题栏菜单专项。
+当前综合结论：`通过（功能域单平台范围）`（macOS，`W0-SHELL-P` 子门槛）。本版本唯一有效证据批次在最终构建 HEAD 下重跑，机器层 24/24 PASS、0 失败、0 阻断、`exitCode=0`；原生窗口控制、WebView companion、构建溯源、隔离 Profile、显示探针（物理 DPI `133`）与隐私扫描全部通过，6 张 CoreGraphics 窗口截图有效，两级哈希清单与归档脱敏通过，应用与仓库 Git SHA 一致且工作树 clean。Windows 平台验收见 [UI_ACCEPTANCE_WINDOWS_SHELL.md](../windows/UI_ACCEPTANCE_WINDOWS_SHELL.md)；本报告不覆盖 `D-NAV` 真实业务链路或标题栏菜单专项。
 
 ## 7. 测试人员回填区
 
@@ -140,5 +140,5 @@ Playwright 自动化入口支持按平台运行，并在状态变化后等待双
 - 材料脱敏：`PASS（窗口级截图、隔离 Profile、相对路径、privacy-audit 10 文件 0 暴露、固定 owner tar，可作为受控分发附件）`
 - 导航域材料：`另行提交，使用 UI_ACCEPTANCE_MACOS_NAVIGATION_RUN_TEMPLATE.md`
 - 问题列表：`本批次无未关闭问题；标题栏菜单专项为独立后续工作`
-- 综合结论：`macOS 完整通过（W0-SHELL-P 子门槛）`
+- 综合结论：`通过（功能域单平台范围）（macOS，W0-SHELL-P 子门槛）`
 - 下一次复审：`ui-shell-native-macos / 构建脚本 / 壳层源码再次变更需重建重跑时复审`

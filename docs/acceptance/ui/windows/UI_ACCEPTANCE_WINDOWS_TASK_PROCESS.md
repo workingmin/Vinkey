@@ -1,6 +1,6 @@
 # 长任务/日志中心专项验收报告（Windows）
 
-> **平台说明**：本文档是 Windows 平台版；macOS 平台验收见 [UI_ACCEPTANCE_MACOS_TASK_PROCESS.md](../macos/UI_ACCEPTANCE_MACOS_TASK_PROCESS.md)。验收合同、用例矩阵与设计断言跨平台一致，仅执行入口（`.sh` / PowerShell）、脚本命令和平台证据按平台分别记录。
+> 平台说明：本文档是 Windows 平台版；macOS 平台验收见 [UI_ACCEPTANCE_MACOS_TASK_PROCESS.md](../macos/UI_ACCEPTANCE_MACOS_TASK_PROCESS.md)。验收合同、用例矩阵与设计断言跨平台一致，仅执行入口（`.sh` / PowerShell）、脚本命令和平台证据按平台分别记录。
 
 - 功能域：`D-TASK-LOG` 日志中心与长任务
 - 验收标识：`W4-TASK-E`
@@ -127,7 +127,7 @@ A/B/C 三个阶段均已落地（提交 `97c4e18`、`6f6990e`、`a30c80f`）：
 ## 6. 当前结论
 
 - `W4-TASK-E`（Windows）：独立平台专项 `NOT_EXECUTED`。`NT-WIN-001`~`005` 与 `TASK-CHK-*`/`TASK-UI-*` 均需在本平台真实桌面环境执行，不得用 macOS 证据替代；不计入 macOS 专项结论，也不宣称跨平台发布通过。
-- macOS 专项已在 Alpha 客观范围达成专项通过，其客观证据由 CLI 驱动 + 真实 Ollama + 生产 pipeline 产出（非桌面 UI 发起）；该结论不迁移到 Windows，见 [macOS 报告](../macos/UI_ACCEPTANCE_MACOS_TASK_PROCESS.md)。
+- macOS 专项已在 Alpha 客观范围达成专项通过（Alpha 客观范围），其客观证据由 CLI 驱动 + 真实 Ollama + 生产 pipeline 产出（非桌面 UI 发起）；该结论不迁移到 Windows，见 [macOS 报告](../macos/UI_ACCEPTANCE_MACOS_TASK_PROCESS.md)。
 - 暂停安全点回执未实现：只能记录 CP-42 降级结果，不得写 `CP-05`/`已暂停`。
 - 主观/人工观察项按 `DEFER-UI-006` 集中至 [总计划 §8.5](../UI_ACCEPTANCE_PLAN.md#85-人工复核统一批次自动化验收完成后统一处理)，待全部自动化验收脚本跑完后统一回填，不写成 `PASS`、不删除。
 - 源码与组件测试只作为脚本设计的实现基线，不替代平台验收。

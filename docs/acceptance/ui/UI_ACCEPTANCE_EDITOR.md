@@ -5,7 +5,7 @@
 - 验收对象：[UI_DESIGN_EDITOR.md](../../design/ui/UI_DESIGN_EDITOR.md)
 - 脚本入口：`UI-ACC-EDITOR-001`，命令 `npm run test:editor-acceptance`（macOS/Linux 加 `:sh`、Windows 加 `:win`）
 - 目标平台 WebView 客观证据入口：`UI-ACC-EDITOR-WEBVIEW-001`，命令 `npm run test:editor-webview-native-mac`（`scripts/editor/run-editor-webview-native-macos.mjs`）
-- 报告状态：**fixture / 文件桥接合同层本机已通过；目标平台 WebView 客观证据已采集**（CLI `EDIT-F-001`~`006` 6/6、合同测试 10/10；`EDIT-WV-001`~`006` 6/6）；人工 UI 观察已集中至 [总计划 §8.5](./UI_ACCEPTANCE_PLAN.md) 人工复核事项（待所有自动化验收脚本跑完后统一处理），**机器通过不等于人工观察或平台层综合通过**
+- 报告状态：fixture / 文件桥接合同层本机已通过；目标平台 WebView 客观证据已采集（CLI `EDIT-F-001`~`006` 6/6、合同测试 10/10；`EDIT-WV-001`~`006` 6/6）；人工 UI 观察已集中至 [总计划 §8.5](./UI_ACCEPTANCE_PLAN.md) 人工复核事项（待所有自动化验收脚本跑完后统一处理），机器通过不等于人工观察或平台层综合通过
 - 更新日期：`2026-11-12`
 
 ## 1. 验收边界
@@ -43,9 +43,9 @@
 
 ## 4. 当前结论
 
-- `W0-EDITOR-F` 机器层：**PASS（fixture / 文件桥接合同）**。该结论已作为 `W0-SHELL-MENU-F` 的硬依赖，被 `UI-ACC-TITLE-BAR-FIXTURE-001` 从最新 `result.json` 真实读取，用于解锁 F 子门槛。
-- `W0-EDITOR-F` 目标平台 WebView 客观证据：**PASS（`UI-ACC-EDITOR-WEBVIEW-001` 6/6）**，见 §3.1；文件树、`AXTextArea` 编辑器、保存状态栏、文档视图与原生截图均由真实目标应用窗口读回。
-- **人工 UI 观察已集中至 [总计划 §8.5](./UI_ACCEPTANCE_PLAN.md) 人工复核事项**：视觉质量、交互手感、无障碍观感不由机器判定，待自动化全部完成后统一处理；`W0-EDITOR-F` 平台层综合结论（含 `platformPass`）在人工复核事项回填前保持未判定。机器通过不等于人工观察或目标平台综合通过，也不代表 `W3-REVISION-E` / `W3-CONTEXT-E` 通过。
+- `W0-EDITOR-F` 机器层：PASS（fixture / 文件桥接合同）。该结论已作为 `W0-SHELL-MENU-F` 的硬依赖，被 `UI-ACC-TITLE-BAR-FIXTURE-001` 从最新 `result.json` 真实读取，用于解锁 F 子门槛。
+- `W0-EDITOR-F` 目标平台 WebView 客观证据：PASS（`UI-ACC-EDITOR-WEBVIEW-001` 6/6），见 §3.1；文件树、`AXTextArea` 编辑器、保存状态栏、文档视图与原生截图均由真实目标应用窗口读回。
+- 人工 UI 观察已集中至 [总计划 §8.5](./UI_ACCEPTANCE_PLAN.md) 人工复核事项：视觉质量、交互手感、无障碍观感不由机器判定，待自动化全部完成后统一处理；`W0-EDITOR-F` 平台层综合结论（含 `platformPass`）在人工复核事项回填前保持未判定。机器通过不等于人工观察或目标平台综合通过，也不代表 `W3-REVISION-E` / `W3-CONTEXT-E` 通过。
 - `DEFER-UI-001` 按总计划 §8.3 登记并集中至 [总计划 §8.5](./UI_ACCEPTANCE_PLAN.md) 人工复核事项，Alpha 内不判定、不写成 PASS、不删除。
 
 ## 5. 测试人员回填区

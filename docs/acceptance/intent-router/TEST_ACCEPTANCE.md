@@ -284,13 +284,13 @@ Vinkey IntentRouter 本地模型专项评测 - 配置检查
 
 ## 9. 常见问题
 
-- **找不到数据库**：确认至少启动过一次安装版 Vinkey，或用 `--db` 指向实际文件。
-- **选错模型**：运行 `--list-profiles`，再传 `--profile-id`。
-- **连接被拒绝**：先启动 Ollama/兼容服务，并确认配置地址是 `localhost`、`127.x.x.x` 或 `::1`。
-- **需要 API Key**：设置 `VINKEY_MODEL_API_KEY`；脚本不会读取操作系统凭据库。
-- **模型返回 Markdown**：按严格合同记为失败，完整原始输出可在 `--json` 结果中查看。
-- **Node SQLite 警告**：Node 22 可能显示 experimental warning，不影响只读执行；脚本使用 Node 内置 `node:sqlite`，各支持版本都不依赖外部 sqlite3 CLI。
-- **单个用例超时**：用 `--timeout-ms` 增大到合理值，并记录模型和硬件信息。
+- 找不到数据库：确认至少启动过一次安装版 Vinkey，或用 `--db` 指向实际文件。
+- 选错模型：运行 `--list-profiles`，再传 `--profile-id`。
+- 连接被拒绝：先启动 Ollama/兼容服务，并确认配置地址是 `localhost`、`127.x.x.x` 或 `::1`。
+- 需要 API Key：设置 `VINKEY_MODEL_API_KEY`；脚本不会读取操作系统凭据库。
+- 模型返回 Markdown：按严格合同记为失败，完整原始输出可在 `--json` 结果中查看。
+- Node SQLite 警告：Node 22 可能显示 experimental warning，不影响只读执行；脚本使用 Node 内置 `node:sqlite`，各支持版本都不依赖外部 sqlite3 CLI。
+- 单个用例超时：用 `--timeout-ms` 增大到合理值，并记录模型和硬件信息。
 
 ## 10. 验收记录
 

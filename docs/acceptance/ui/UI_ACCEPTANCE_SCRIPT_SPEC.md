@@ -44,7 +44,7 @@
 
 应用壳层的 `W0-SHELL-P` 只覆盖窗口/Overlay、窗口控制、侧栏与内容容器、设置替换、诊断/错误承载、主题/焦点和响应式基线。标题栏菜单树、菜单项动作、中文审计、菜单 Escape/外部点击和编辑命令焦点分派属于 `W0-SHELL-MENU-P/F`。壳层脚本可在截图前只读核对一级菜单合同，防止旧菜单污染视觉证据；除明确标记且不计作菜单证据的系统窗口恢复回退外，不得展开或执行菜单，也不得用该守卫结果扩大 `W0-SHELL-P` 的结论范围。桌面脚本必须分别等待进程和可访问窗口；进程存在但窗口未在限定时间进入 Accessibility/UI Automation 树时应输出独立 `BLOCKED`，不能依赖固定延时后笼统中断。
 
-当前版本的 macOS 桌面验收基线收敛为 **macOS 15+**。原生截图只能由 `swiftc` 构建的 ScreenCaptureKit helper 调用 `SCScreenshotManager` 产生，不得回退到 `screencapture` 或把浏览器截图冒充原生窗口证据。系统版本、`swiftc` 或 helper 编译不满足时属于执行前置条件不成立，必须在启动待测应用前终止；运行批次的 `result.json.environment` 应记录最低系统版本、Swift 版本、helper target 和截图机制。
+当前版本的 macOS 桌面验收基线收敛为 macOS 15+。原生截图只能由 `swiftc` 构建的 ScreenCaptureKit helper 调用 `SCScreenshotManager` 产生，不得回退到 `screencapture` 或把浏览器截图冒充原生窗口证据。系统版本、`swiftc` 或 helper 编译不满足时属于执行前置条件不成立，必须在启动待测应用前终止；运行批次的 `result.json.environment` 应记录最低系统版本、Swift 版本、helper target 和截图机制。
 
 ## 3. 目录与职责边界
 
@@ -52,7 +52,7 @@
 
 | 位置 | 放置内容 | 禁止内容 |
 | --- | --- | --- |
-| `src/**/*.test.ts(x)` | 与单个模块紧密相关的 Vitest 测试 | 依赖真实 Ollama 的长时间验收 |
+| `src//*.test.ts(x)` | 与单个模块紧密相关的 Vitest 测试 | 依赖真实 Ollama 的长时间验收 |
 | `tests/<domain>/` | 跨模块合同测试、CLI 测试、测试素材和 harness | 面向测试人员的命令行入口 |
 | `scripts/<domain>/` | 可执行验收脚本、跨平台包装器和结果格式化 | `*.test.*`、永久 API Key、业务 fixture 正文 |
 | `docs/acceptance/ui/` | 报告、回填模板和人工观察记录 | 未脱敏的原始日志或凭据 |
@@ -154,7 +154,7 @@ JSON 顶层字段保持稳定，新增字段只能向后兼容地追加：
 
 每个 `cases[]` 元素至少包含 `caseId`、`title`、`status`；自动计时用例还应包含 `durationMs` 和 `error`（无错误时为 `null`），平台原始事件可使用 `detail` 和 `source`。真实模型用例还应记录模型原始结果、工程化结果、提示/套件版本和失败归因。桌面安装包验收必须区分 `application.gitSha` 与 `repository.gitSha`，不能用当前仓库 SHA 推定安装包来源；无法取得嵌入 SHA 时将 provenance 标为 `BLOCKED`。字段名称沿用 IntentRouter 的 `schemaVersion`、`selectedModel`、`summary`、`logFile` 和 `cases`，避免不同功能域出现 `model`/`modelName` 等同义字段。新增脚本不得省略 `acceptance.id`、`acceptance.domainId` 或 `acceptance.gate`；旧脚本迁移期间可由报告适配器根据命令参数补齐，但不能猜测门槛。
 
-**现有脚本迁移说明**：当前 IntentRouter 的 `--json` 输出已经提供 `selectedModel`、`logFile`、评测 `summary` 和逐用例结果；其诊断日志也有 `schemaVersion`。但它尚未把 `repository`、`environment`、`artifacts` 和顶层 `conclusion` 放入同一个 JSON 外层。新功能域应直接使用本节完整结构；IntentRouter 后续按兼容方式补齐字段，在迁移完成前由验收报告适配器根据退出码和 `effectiveSummary.passed` 推导 `conclusion`，不得把缺少元数据误写成“规范已完全实现”。
+现有脚本迁移说明：当前 IntentRouter 的 `--json` 输出已经提供 `selectedModel`、`logFile`、评测 `summary` 和逐用例结果；其诊断日志也有 `schemaVersion`。但它尚未把 `repository`、`environment`、`artifacts` 和顶层 `conclusion` 放入同一个 JSON 外层。新功能域应直接使用本节完整结构；IntentRouter 后续按兼容方式补齐字段，在迁移完成前由验收报告适配器根据退出码和 `effectiveSummary.passed` 推导 `conclusion`，不得把缺少元数据误写成“规范已完全实现”。
 
 ### 5.2 人类可读输出
 

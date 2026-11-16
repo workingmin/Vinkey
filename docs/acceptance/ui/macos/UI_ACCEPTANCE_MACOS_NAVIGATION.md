@@ -1,15 +1,15 @@
 # 项目与会话导航专项验收报告（macOS）
 
-> **平台说明**：本文档是 macOS 平台版；Windows 平台验收见 [UI_ACCEPTANCE_WINDOWS_NAVIGATION.md](../windows/UI_ACCEPTANCE_WINDOWS_NAVIGATION.md)。验收合同、用例矩阵与设计断言跨平台一致，仅执行入口、脚本命令和平台证据按平台分别记录。
+> 平台说明：本文档是 macOS 平台版；Windows 平台验收见 [UI_ACCEPTANCE_WINDOWS_NAVIGATION.md](../windows/UI_ACCEPTANCE_WINDOWS_NAVIGATION.md)。验收合同、用例矩阵与设计断言跨平台一致，仅执行入口、脚本命令和平台证据按平台分别记录。
 
 - 功能域：`D-NAV` 项目与会话导航
 - 验收标识：`W0-NAV-F`、`W2-NAV-E`、`W4-NAV-R`
 - 验收对象：[UI_DESIGN_NAVIGATION.md](../../../design/ui/UI_DESIGN_NAVIGATION.md)、[UI_ENTRY_POINTS.md](../../../design/ui/UI_ENTRY_POINTS.md)
 - 回填模板：[UI_ACCEPTANCE_MACOS_NAVIGATION_RUN_TEMPLATE.md](./UI_ACCEPTANCE_MACOS_NAVIGATION_RUN_TEMPLATE.md)
-- 报告状态：**完整通过**——三档门槛的机器断言、真实模型证据、Playwright UI 截图，以及真实运行 `/Applications/Vinkey.app` 的 CoreGraphics 原生窗口截图均已在本机 macOS 采集并归档
+- 报告状态：通过（功能域单平台范围）——三档门槛的机器断言、真实模型证据、Playwright UI 截图，以及真实运行 `/Applications/Vinkey.app` 的 CoreGraphics 原生窗口截图均已在本机 macOS 采集并归档
 - 更新日期：`2026-11-04`
 
-> **证据定位约定**：本报告不硬编码批次号与 Git SHA。`artifacts/navigation-acceptance/` 下最新的 `run-*`（W0）、`e2e-run-*`（W2）、`regression-run-*`（W4）、`ui-run-*`（UI 截图）、`native-run-*`（原生窗口）目录中的 `result.json` 为该门槛的权威机器记录，环境、Git SHA、`provenance` 与 `SHA256SUMS` 均以该文件为准。提交报告不改变证据结论，但发布前应按最终 HEAD 复跑一次以保持 provenance 一致。
+> 证据定位约定：本报告不硬编码批次号与 Git SHA。`artifacts/navigation-acceptance/` 下最新的 `run-*`（W0）、`e2e-run-*`（W2）、`regression-run-*`（W4）、`ui-run-*`（UI 截图）、`native-run-*`（原生窗口）目录中的 `result.json` 为该门槛的权威机器记录，环境、Git SHA、`provenance` 与 `SHA256SUMS` 均以该文件为准。提交报告不改变证据结论，但发布前应按最终 HEAD 复跑一次以保持 provenance 一致。
 
 ## 1. 验收边界
 
@@ -53,7 +53,7 @@
 
 > 机器证据：`npm run test:navigation-acceptance:sh`（`UI-ACC-NAV-FIXTURE-001`），`NAV-F-001`~`NAV-F-006` 六用例全部 PASS、退出码 0；隔离 fixture 自动清理、7 个边界文件 SHA-256 无变化。
 > UI 材料：`01`~`10` 号截图（项目列表、切换前后、会话恢复、删除项目两步确认、删除会话确认、搜索结果与分组、无结果态、错误与重试）见最新 `ui-run-*` 批次。
-> 结论依据：§3 通过条件为「六项均有机器结果**或**可审计人工证据」，机器结果已满足；此次又补齐了全部截图材料，两项证据同时具备。
+> 结论依据：§3 通过条件为「六项均有机器结果或可审计人工证据」，机器结果已满足；此次又补齐了全部截图材料，两项证据同时具备。
 
 通过条件：六项均有机器结果或可审计人工证据，无跨项目串写、用户文件删除或不可恢复状态。只完成 UI 截图不得判定 fixture 合同通过。
 
@@ -72,7 +72,7 @@
 
 > 机器证据：`npm run test:navigation-e2e-acceptance:sh`（`UI-ACC-NAV-E2E-001`），`NAV-E-001`~`NAV-E-006` 6/6 PASS、退出码 0；真实模型固定参数 `temperature=0 / num_predict=64 / think=false`，结果中记录 `selectedModel`、`inferenceParams` 与 `sessionManifest`。
 > UI 材料：`11`~`18` 号截图（侧栏展开/折叠入口、标题栏菜单、⌘K 键盘入口、结果分组与文档跳转、Escape 返回、重命名、刷新持久化）。
-> 平台说明：macOS 使用系统原生菜单栏（`TitleBar` 在 `isMac` 时返回 `null`），浏览器演示层不渲染自绘标题栏；标题栏菜单截图为 Windows 自绘标题栏的跨平台 UI 对照。macOS 系统原生菜单项动作属于独立 `W0-SHELL-MENU-P/F` 专项范围；该专项现已在 macOS 执行，结论为 `W0-SHELL-MENU-P` **PASS**、`W0-SHELL-MENU-F` **PASS**（由独立脚本 `UI-ACC-TITLE-BAR-FIXTURE-001` 解锁；见 [标题栏与功能菜单专项验收报告](./UI_ACCEPTANCE_MACOS_TITLE_BAR.md) 与脚本计划矩阵），但专项整体**仍为「条件通过」、不是「已通过」**；**本报告不以其作为证据来源，也不把它计入 `D-NAV` 结论**。本专项覆盖的全局搜索入口为侧栏入口与 ⌘K 键盘入口；键盘入口已由 `ui-run-*` 批次断言聚焦生效，侧栏/折叠入口与结果分组、跳转、Escape 返回均有截图。
+> 平台说明：macOS 使用系统原生菜单栏（`TitleBar` 在 `isMac` 时返回 `null`），浏览器演示层不渲染自绘标题栏；标题栏菜单截图为 Windows 自绘标题栏的跨平台 UI 对照。macOS 系统原生菜单项动作属于独立 `W0-SHELL-MENU-P/F` 专项范围；该专项现已在 macOS 执行，结论为 `W0-SHELL-MENU-P` PASS、`W0-SHELL-MENU-F` PASS（由独立脚本 `UI-ACC-TITLE-BAR-FIXTURE-001` 解锁；见 [标题栏与功能菜单专项验收报告](./UI_ACCEPTANCE_MACOS_TITLE_BAR.md) 与脚本计划矩阵），但专项整体仍为「条件通过」、不是「已通过」；本报告不以其作为证据来源，也不把它计入 `D-NAV` 结论。本专项覆盖的全局搜索入口为侧栏入口与 ⌘K 键盘入口；键盘入口已由 `ui-run-*` 批次断言聚焦生效，侧栏/折叠入口与结果分组、跳转、Escape 返回均有截图。
 
 ## 5. `W4-NAV-R` 验收矩阵
 
@@ -135,22 +135,22 @@
 
 ## 8. 当前结论
 
-- `W0-NAV-F`：**PASS**。`UI-ACC-NAV-FIXTURE-001` 6/6，隔离 fixture 自动清理、7 个边界文件 SHA-256 不变；§7.1 截图材料已补齐。
-- `W2-NAV-E`：**PASS**。上游 `W1-MODEL-E`（5/5）、`W2-CHAT-E`（4/4）真实模型链路通过；`UI-ACC-NAV-E2E-001` 在本机真实 Ollama 上 6/6，覆盖多项目多会话、标题生命周期、持久化、搜索分组跳转与跨项目恢复。
-- `W4-NAV-R`：**PASS**。`UI-ACC-NAV-REGRESSION-001` 5/5，覆盖生成中/运行任务/未保存草稿/过期响应/失败恢复五类交叉状态。
-- UI 材料：**PASS**。`UI-ACC-NAV-UI-001` 19/19，产出 21 张截图、UI 观察表与完整 `SHA256SUMS`。
-- 原生窗口：**PASS**。`UI-ACC-NAV-NATIVE-001` 4/4，真实启动 `/Applications/Vinkey.app`，CoreGraphics 捕获 4 张原生窗口截图；双项目、切换、删除边界与空态四种窗口状态均已目视核对，构建溯源与源码一致性已记录。
-- `D-NAV` 综合结论：**完整通过**。三档门槛的机器断言、真实模型证据、交互截图与真实应用原生窗口证据均已齐备并在本机 macOS 归档；适用范围边界见下。
+- `W0-NAV-F`：PASS。`UI-ACC-NAV-FIXTURE-001` 6/6，隔离 fixture 自动清理、7 个边界文件 SHA-256 不变；§7.1 截图材料已补齐。
+- `W2-NAV-E`：PASS。上游 `W1-MODEL-E`（5/5）、`W2-CHAT-E`（4/4）真实模型链路通过；`UI-ACC-NAV-E2E-001` 在本机真实 Ollama 上 6/6，覆盖多项目多会话、标题生命周期、持久化、搜索分组跳转与跨项目恢复。
+- `W4-NAV-R`：PASS。`UI-ACC-NAV-REGRESSION-001` 5/5，覆盖生成中/运行任务/未保存草稿/过期响应/失败恢复五类交叉状态。
+- UI 材料：PASS。`UI-ACC-NAV-UI-001` 19/19，产出 21 张截图、UI 观察表与完整 `SHA256SUMS`。
+- 原生窗口：PASS。`UI-ACC-NAV-NATIVE-001` 4/4，真实启动 `/Applications/Vinkey.app`，CoreGraphics 捕获 4 张原生窗口截图；双项目、切换、删除边界与空态四种窗口状态均已目视核对，构建溯源与源码一致性已记录。
+- `D-NAV` 综合结论：通过（功能域单平台范围）。三档门槛的机器断言、真实模型证据、交互截图与真实应用原生窗口证据均已齐备并在本机 macOS 归档；适用范围边界见下。
 
 ### 证据层级边界（不得扩大解释）
 
-1. **机器断言**：来自隔离 fixture/SQLite 与本机真实 Ollama 的 `result.json`，是三档门槛结论的主要依据。
-2. **交互 UI 截图**：`UI-ACC-NAV-UI-001` 产出的是 **Playwright 浏览器演示层页面级截图**（21 张），证明交互链路、分组与视觉状态，**不是** Tauri 原生窗口证据。
-3. **原生窗口截图**：`UI-ACC-NAV-NATIVE-001` 是真实启动已安装 Tauri 应用后，由 `ui-shell-native-macos` 的 CoreGraphics helper 按窗口 ID 捕获的原生窗口（4 张），证明真实应用能正确渲染导航状态。两层截图互补，任何一层都不得冒充另一层。
-4. **不覆盖范围**：macOS 系统原生菜单栏的菜单项动作属于独立 `W0-SHELL-MENU-P/F` 专项。该专项已在 macOS 执行，[专项报告](./UI_ACCEPTANCE_MACOS_TITLE_BAR.md) 记录为 `P=PASS`、`F=PASS`、`provenance=PASS`、专项整体**专项通过（Alpha 客观范围）**、Windows 独立专项未执行，**不得当作跨平台发布通过证据，也不计入 `D-NAV` 结论**。本报告不把它计入 `D-NAV` 结论；本专项验证的全局搜索入口为侧栏/折叠入口与 ⌘K 键盘入口。
-5. **人工目视复核**：截图与 `ui-observations.md` 已随批次归档，测试人员发布前目视确认作为最后一道手续，不阻断本批次自动化结论。
-6. **provenance**：以最新批次 `result.json.provenance` 为准；若工作树存在未提交改动，该字段为 `REVIEW`/`BLOCKED`，需提交后按最终 HEAD 复跑。
-7. **`CF-023` 口径边界**：本报告 §2 与 `NAV-E-005` 的 PASS 只指当前工作区「项目/会话/文档」三类分组搜索、中文查询、工作区边界、100 条上限与跳转（见 `navigation-e2e-acceptance.ts` 的 `grouped` 断言），**不**代替 `CF-023` 统一全局搜索面板的专项判定；该面板由标题栏专项的 `TB-MENU-003-GLOBAL-SEARCH` 独立判为客观 `PASS`。跨文档描述一致性由 `DEFER-UI-011` 登记产品/设计复核，本报告不借此扩大 `D-NAV` 结论。
+1. 机器断言：来自隔离 fixture/SQLite 与本机真实 Ollama 的 `result.json`，是三档门槛结论的主要依据。
+2. 交互 UI 截图：`UI-ACC-NAV-UI-001` 产出的是 Playwright 浏览器演示层页面级截图（21 张），证明交互链路、分组与视觉状态，不是 Tauri 原生窗口证据。
+3. 原生窗口截图：`UI-ACC-NAV-NATIVE-001` 是真实启动已安装 Tauri 应用后，由 `ui-shell-native-macos` 的 CoreGraphics helper 按窗口 ID 捕获的原生窗口（4 张），证明真实应用能正确渲染导航状态。两层截图互补，任何一层都不得冒充另一层。
+4. 不覆盖范围：macOS 系统原生菜单栏的菜单项动作属于独立 `W0-SHELL-MENU-P/F` 专项。该专项已在 macOS 执行，[专项报告](./UI_ACCEPTANCE_MACOS_TITLE_BAR.md) 记录为 `P=PASS`、`F=PASS`、`provenance=PASS`、专项整体专项通过（Alpha 客观范围）、Windows 独立专项未执行，不得当作跨平台发布通过证据，也不计入 `D-NAV` 结论。本报告不把它计入 `D-NAV` 结论；本专项验证的全局搜索入口为侧栏/折叠入口与 ⌘K 键盘入口。
+5. 人工目视复核：截图与 `ui-observations.md` 已随批次归档，测试人员发布前目视确认作为最后一道手续，不阻断本批次自动化结论。
+6. provenance：以最新批次 `result.json.provenance` 为准；若工作树存在未提交改动，该字段为 `REVIEW`/`BLOCKED`，需提交后按最终 HEAD 复跑。
+7. `CF-023` 口径边界：本报告 §2 与 `NAV-E-005` 的 PASS 只指当前工作区「项目/会话/文档」三类分组搜索、中文查询、工作区边界、100 条上限与跳转（见 `navigation-e2e-acceptance.ts` 的 `grouped` 断言），不代替 `CF-023` 统一全局搜索面板的专项判定；该面板由标题栏专项的 `TB-MENU-003-GLOBAL-SEARCH` 独立判为客观 `PASS`。跨文档描述一致性由 `DEFER-UI-011` 登记产品/设计复核，本报告不借此扩大 `D-NAV` 结论。
 
 ## 9. 测试人员回填区
 
@@ -159,5 +159,5 @@
 - `W4-NAV-R`：`PASS`；证据见最新 `regression-run-*` 批次；截图见 `ui-run-*` 批次 `19`~`21`。
 - 原生窗口：`PASS`；证据见 `artifacts/navigation-acceptance/` 最新 `native-run-*` 批次的 `result.json` + `SHA256SUMS` + `ui-observations.md` + `screenshots/` 四张 CoreGraphics 原生窗口截图。
 - 问题列表：`<ISSUES>`（无新增；范围边界见 §8「不覆盖范围」）
-- 综合结论：`<完整通过 — 三档门槛、交互截图与真实应用原生窗口证据均已在本机 macOS 采集，证据层级见 §8>`
+- 综合结论：`通过（功能域单平台范围）— 三档门槛、交互截图与真实应用原生窗口证据均已在本机 macOS 采集，证据层级见 §8`
 - 下一次复审版本/日期：`<Vinkey 版本发布、模型/提示合同变更，或 CF-022/CF-023 设计变化时>`

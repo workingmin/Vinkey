@@ -2,7 +2,7 @@
 
 本模板供测试人员在 macOS 桌面环境执行 `W4-TASK-E` / `UI-ACC-LOGS-001`。所有 `<...>` 均为待填占位符；未执行或缺少必要证据时不得填写 `PASS`。原生复验任务按 [长任务过程原生复验清单（macOS）](./UI_ACCEPTANCE_MACOS_TASK_PROCESS_NATIVE.md)（`NT-MAC-001`~`005`）分派，共享合同见 [TASK_PROCESS_NATIVE_ACCEPTANCE.md](../TASK_PROCESS_NATIVE_ACCEPTANCE.md)。Windows 平台请使用 [UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_RUN_TEMPLATE.md](../windows/UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_RUN_TEMPLATE.md)。
 
-> 客观机器证据可由 `npm run test:task-process-ollama-driver` 前置产出：CLI 驱动复用生产 `worker_service.rs` pipeline 并调用真实 Ollama，写出 `.vinkey/analysis/jobs/<jobId>/` 真实产物。该证据**非桌面 UI 发起**，只覆盖 `TASK-CHK-*` 客观断言；`TASK-UI-*` 人工观察与桌面 UI 发起的端到端材料仍按 [总计划 §8.5](../UI_ACCEPTANCE_PLAN.md#85-人工复核统一批次自动化验收完成后统一处理) 统一回填，不得写成 `PASS`。
+> 客观机器证据可由 `npm run test:task-process-ollama-driver` 前置产出：CLI 驱动复用生产 `worker_service.rs` pipeline 并调用真实 Ollama，写出 `.vinkey/analysis/jobs/<jobId>/` 真实产物。该证据非桌面 UI 发起，只覆盖 `TASK-CHK-*` 客观断言；`TASK-UI-*` 人工观察与桌面 UI 发起的端到端材料仍按 [总计划 §8.5](../UI_ACCEPTANCE_PLAN.md#85-人工复核统一批次自动化验收完成后统一处理) 统一回填，不得写成 `PASS`。
 
 ## 1. 执行元数据
 

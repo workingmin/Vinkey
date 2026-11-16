@@ -1,8 +1,8 @@
 # 应用壳层与入口专项验收报告（Windows）
 
-> **平台说明**：本文档是 Windows 平台版；macOS 平台验收见 [UI_ACCEPTANCE_MACOS_SHELL.md](../macos/UI_ACCEPTANCE_MACOS_SHELL.md)。验收合同（设计断言与判定规则）与脚本规范跨平台一致，执行入口和证据按平台分别记录。
+> 平台说明：本文档是 Windows 平台版；macOS 平台验收见 [UI_ACCEPTANCE_MACOS_SHELL.md](../macos/UI_ACCEPTANCE_MACOS_SHELL.md)。验收合同（设计断言与判定规则）与脚本规范跨平台一致，执行入口和证据按平台分别记录。
 
-> **审核范围说明**：本报告只保留**当前最新版本的一次验收记录**。历史批次的过程记录、升级注记和复核说明已从本文件移除；对应原始归档仍按受控方式留存于 `artifacts/ui-shell-native-windows/`（目录待建立），不纳入管理层审核清单。唯一有效证据以「本版本最终构建 HEAD 下重跑产生的最新 `run-*.tar.gz`」为准，其 `result.json` 记录批次号、生成时间与 Git SHA。Windows 平台尚未执行，本报告当前只维护验收合同与执行计划，不包含通过结论。
+> 审核范围说明：本报告只保留当前最新版本的一次验收记录。历史批次的过程记录、升级注记和复核说明已从本文件移除；对应原始归档仍按受控方式留存于 `artifacts/ui-shell-native-windows/`（目录待建立），不纳入管理层审核清单。唯一有效证据以「本版本最终构建 HEAD 下重跑产生的最新 `run-*.tar.gz`」为准，其 `result.json` 记录批次号、生成时间与 Git SHA。Windows 平台尚未执行，本报告当前只维护验收合同与执行计划，不包含通过结论。
 
 - 功能域：`D-SHELL` 应用壳层与入口承载
 - 验收标识：`W0-SHELL-P`
@@ -14,7 +14,7 @@
 - Windows 原生入口：待建设；当前以 Playwright 实机 + Tauri 自绘窗口人工证据为主，原生窗口自动化可比对 macOS 版 `run-ui-shell-native-macos.sh` / `ax-shell-helper.swift` 规划
 - 当前平台批次：`Windows`（待执行）
 - 最新证据批次：`artifacts/ui-shell-native-windows/` 下最新 `run-*.tar.gz`（待建立）
-- 报告状态：**待独立执行**（`W0-SHELL-P` Windows 子门槛未开始），不构成通过结论
+- 平台专项状态：`NOT_EXECUTED`（`W0-SHELL-P` Windows 子门槛未开始），不构成通过结论
 - 更新日期：`2026-11-04`
 
 ## 1. 验收边界
@@ -95,7 +95,7 @@ Windows 原生窗口自动化入口尚未建设：macOS 侧的 `run-ui-shell-nat
 
 ### 4.5 子门槛结论
 
-Windows 平台尚未执行，`W0-SHELL-P` Windows 子门槛结论为 **待执行**，不构成通过。完成条件：原生/实机窗口证据、批次文件完整性、应用构建可追溯性、系统环境元数据（含显示缩放/DPI）、上传材料脱敏、WebView/人工 UI 链路全部满足后，方可与 macOS 结论合并为完整跨平台结论。标题栏菜单专项 `W0-SHELL-MENU-P/F` 与 `D-NAV` 业务链路不属于本报告结论。
+Windows 平台尚未执行，`W0-SHELL-P` Windows 子门槛结论为 待执行，不构成通过。完成条件：原生/实机窗口证据、批次文件完整性、应用构建可追溯性、系统环境元数据（含显示缩放/DPI）、上传材料脱敏、WebView/人工 UI 链路全部满足后，方可与 macOS 结论合并为完整跨平台结论。标题栏菜单专项 `W0-SHELL-MENU-P/F` 与 `D-NAV` 业务链路不属于本报告结论。
 
 ## 5. 复核材料清单（本批次待执行）
 
@@ -118,14 +118,14 @@ Windows 平台尚未执行，`W0-SHELL-P` Windows 子门槛结论为 **待执行
 
 ## 6. 判定规则与当前综合结论
 
-- **通过**：目标平台窗口/容器/响应式/键盘材料齐全，所有适用 `SHELL-P-*` 关键断言通过；菜单专项不计入本报告。
-- **条件通过**：代码和结构证据充分，但平台人工材料或直接渲染覆盖未齐；不得宣称壳层完整发布通过。
-- **不通过**：窗口控制、内容容器、焦点、错误恢复或平台语义不满足设计断言。
-- **阻断**：桌面运行环境或构建依赖使结论不可得；记录复现信息。
+- 通过：目标平台窗口/容器/响应式/键盘材料齐全，所有适用 `SHELL-P-*` 关键断言通过；菜单专项不计入本报告。
+- 条件通过：代码和结构证据充分，但平台人工材料或直接渲染覆盖未齐；不得宣称壳层整体发布通过。
+- 不通过：窗口控制、内容容器、焦点、错误恢复或平台语义不满足设计断言。
+- 阻断：桌面运行环境或构建依赖使结论不可得；记录复现信息。
 
 标题栏菜单不是本报告的通过条件；若菜单设计或菜单实现存在缺口，应在 `W0-SHELL-MENU-P/F` 报告中记录，不得反向改写 `W0-SHELL-P` 的窗口/容器结论。
 
-当前综合结论：**Windows 待执行**（`W0-SHELL-P` Windows 子门槛未开始）。macOS 平台结论见 [UI_ACCEPTANCE_MACOS_SHELL.md](../macos/UI_ACCEPTANCE_MACOS_SHELL.md)（macOS 完整通过）。本报告不覆盖 `D-NAV` 真实业务链路或标题栏菜单专项。
+当前平台专项状态：`NOT_EXECUTED`（`W0-SHELL-P` Windows 子门槛未开始）。macOS 平台结论见 [UI_ACCEPTANCE_MACOS_SHELL.md](../macos/UI_ACCEPTANCE_MACOS_SHELL.md)（`通过（功能域单平台范围）`）。本报告不覆盖 `D-NAV` 真实业务链路或标题栏菜单专项。
 
 ## 7. 测试人员回填区
 
@@ -138,5 +138,5 @@ Windows 平台尚未执行，`W0-SHELL-P` Windows 子门槛结论为 **待执行
 - 材料脱敏：`<PASS/FAIL/BLOCKED/待回填（隔离 Profile、相对路径、privacy-audit、固定 owner tar）>`
 - 导航域材料：`另行提交，使用 UI_ACCEPTANCE_WINDOWS_NAVIGATION_RUN_TEMPLATE.md`
 - 问题列表：`<ISSUES>`
-- 综合结论：`<通过/条件通过/不通过/阻断/待执行>`
+- 平台专项状态：`<NOT_EXECUTED/通过/条件通过/不通过/阻断>`
 - 下一次复审：`Windows 原生脚本落地并首次执行后`

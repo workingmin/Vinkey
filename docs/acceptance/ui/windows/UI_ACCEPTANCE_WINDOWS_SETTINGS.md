@@ -1,14 +1,14 @@
 # 模型设置专项验收报告（Windows）
 
-> **平台说明**：本文档是 Windows 平台版；macOS 平台验收见 [UI_ACCEPTANCE_MACOS_SETTINGS.md](../macos/UI_ACCEPTANCE_MACOS_SETTINGS.md)。验收合同、测试矩阵与设计断言跨平台一致，仅平台真机执行与证据按平台分别记录。
+> 平台说明：本文档是 Windows 平台版；macOS 平台验收见 [UI_ACCEPTANCE_MACOS_SETTINGS.md](../macos/UI_ACCEPTANCE_MACOS_SETTINGS.md)。验收合同、测试矩阵与设计断言跨平台一致，仅平台真机执行与证据按平台分别记录。
 
 - 功能域：模型设置
 - 验收对象：[UI_DESIGN_SETTINGS.md](../../../design/ui/UI_DESIGN_SETTINGS.md)
 - 执行日期：2026-09-22
 - 代码基线：`main`，版本 `0.1.0`
-- 结论：**条件通过（平台执行结果待测试人员回填）**
+- 平台专项状态：`NOT_EXECUTED`（平台执行结果待测试人员回填）
 
-条件通过的含义是：模型设置的前端、桌面桥接、浏览器演示存储和自动化测试链路已通过；Windows 真机上的系统凭据库、窗口尺寸和真实服务连接仍需要发布前手工执行。测试人员执行后请使用[本地验收执行回填模板](./UI_ACCEPTANCE_WINDOWS_SETTINGS_RUN_TEMPLATE.md)补充机器结果和人工 UI 观察；在回填完成前，本报告不能升级为完整平台通过。
+平台专项状态 `NOT_EXECUTED` 的含义是：模型设置的前端、桌面桥接、浏览器演示存储和自动化测试链路已通过；Windows 真机上的系统凭据库、窗口尺寸和真实服务连接仍需要发布前手工执行。测试人员执行后请使用[本地验收执行回填模板](./UI_ACCEPTANCE_WINDOWS_SETTINGS_RUN_TEMPLATE.md)补充机器结果和人工 UI 观察；在回填完成前，本报告不能升级为 `通过（功能域单平台范围）`。
 
 ## 1. 功能范围与业务入口
 

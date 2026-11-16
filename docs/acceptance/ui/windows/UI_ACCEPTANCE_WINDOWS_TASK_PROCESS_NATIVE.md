@@ -1,6 +1,6 @@
 # 长任务过程原生复验清单（Windows）
 
-> **平台说明**：本文档是 `NT-001..NT-005` 的 Windows 平台执行清单；macOS 平台见 [长任务过程原生复验清单（macOS）](../macos/UI_ACCEPTANCE_MACOS_TASK_PROCESS_NATIVE.md)。共享合同、原用例编号与通过标准见 [共享合同与平台任务分派索引](../TASK_PROCESS_NATIVE_ACCEPTANCE.md)；平台边界、结论范围与人工复核统一后置等共性口径统一在该索引首部说明，本文档不重复。
+> 平台说明：本文档是 `NT-001..NT-005` 的 Windows 平台执行清单；macOS 平台见 [长任务过程原生复验清单（macOS）](../macos/UI_ACCEPTANCE_MACOS_TASK_PROCESS_NATIVE.md)。共享合同、原用例编号与通过标准见 [共享合同与平台任务分派索引](../TASK_PROCESS_NATIVE_ACCEPTANCE.md)；平台边界、结论范围与人工复核统一后置等共性口径统一在该索引首部说明，本文档不重复。
 
 - 功能域：`D-TASK-LOG` 日志中心与长任务
 - 归属门槛：`W4-TASK-E`；竞品证据 [`CF-006`](../../../competitors/FEATURE_DECISIONS.md)
