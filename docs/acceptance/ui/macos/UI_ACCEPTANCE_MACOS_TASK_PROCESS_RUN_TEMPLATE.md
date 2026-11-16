@@ -35,8 +35,12 @@ npm run test:task-process-ollama-driver -- --db "<DB>"
 npm run test:task-process-acceptance -- --list-profiles --db "<DB>"
 npm run test:task-process-acceptance -- --dump-manual "<man.json>"
 npm run test:task-process-acceptance -- --workspace "<WS>" --db "<DB>" --tester-id "<ID>" --json
+# 桌面原生 runner（NT-MAC-* 客观子断言，真实 app + AX；需无残留进程、显示器唤醒）
+npm run test:task-process-native-mac -- --driver-workspace "<WS>"
 npm run test:task-process-acceptance -- --workspace "<WS>" --db "<DB>" --manual "<man.json>" --output "<OUT_DIR>" --json
 ```
+
+- 桌面原生 runner 归档 `artifacts/task-process-native/<timestamp>-macos/`：`result.json`（`TASK-NAT-*` 客观用例 + `evidencePackage`）、`observation.json`、`automation.log`、`fixture-manifest.json`、`native-automation.swift`、截图与 `SHA256SUMS`；`TASK-NAT-003` 与全部观感项保留 `BLOCKED` 归 §8.5，不虚标 PASS。
 
 - 退出码：`<EXIT_CODE>`（应与 `result.json.exitCode` 一致）
 - stdout 最终四行：`<CAPTURE_OR_TERMINAL_REFERENCE>`

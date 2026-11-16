@@ -683,6 +683,7 @@ case "ax-tree":
             "title": title(of: el) ?? "",
             "description": description(of: el) ?? "",
             "value": valueAttr(el, kAXValueAttribute) ?? "",
+            "expanded": boolAttr(el, kAXExpandedAttribute) ?? NSNull(),
         ])
         for c in children(of: el) { walk(c, depth + 1) }
     }

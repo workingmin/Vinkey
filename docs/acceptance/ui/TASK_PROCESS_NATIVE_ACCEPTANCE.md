@@ -7,9 +7,9 @@
 > - **证据边界**：源码存在、组件测试、Playwright/浏览器 companion 与隔离 fixture 均不代替目标平台原生证据；未执行或阻断项必须逐项说明原因。各平台清单只写该平台自身结论与证据。
 > - **CLI 驱动证据边界**：`npm run test:task-process-ollama-driver` 通过 `include!` 复用生产 `worker_service.rs` pipeline 并调用真实 Ollama，产出 `TASK-CHK-*` 客观机器证据；该证据**非桌面 UI 发起**，不代替 `NT-MAC-*` / `NT-WIN-*` 的桌面执行，也不证明暂停/停止/折叠/自动跟随/产物预览/重启恢复等交互行为；桌面 UI 发起材料统一归 [§8.5 人工复核统一批次](./UI_ACCEPTANCE_PLAN.md#85-人工复核统一批次自动化验收完成后统一处理)。
 
-- 状态：macOS 侧 `TASK-CHK-*` 客观机器证据已定稿，`NT-MAC-*` 桌面 UI 执行待办；Windows 独立专项 `NOT_EXECUTED`
+- 状态：macOS 侧 `TASK-CHK-*` 客观机器证据已定稿，`NT-MAC-*` 中可机器判定的客观子断言由桌面原生 runner 自动化判定（`UI-ACC-TASK-NATIVE-001`），需真实运行中任务/人工判断的项归 §8.5；Windows 独立专项 `NOT_EXECUTED`
 - 归属门槛：`W4-TASK-E` / `D-TASK-LOG`；竞品证据 [`CF-006`](../../competitors/FEATURE_DECISIONS.md)
-- 验收脚本：`UI-ACC-LOGS-001`（`scripts/task-process/`）；前置驱动 `npm run test:task-process-ollama-driver`
+- 验收脚本：`UI-ACC-LOGS-001`（`scripts/task-process/`）；前置驱动 `npm run test:task-process-ollama-driver`；桌面原生 runner `npm run test:task-process-native-mac`（`UI-ACC-TASK-NATIVE-001`）
 - 更新日期：`2026-11-16`
 
 ## 1. 共享复验合同
@@ -28,7 +28,7 @@
 
 | 平台 | 平台任务 | 执行入口 | 证据归档 | 状态 | 平台清单 |
 | --- | --- | --- | --- | --- | --- |
-| macOS | `NT-MAC-001`~`NT-MAC-005` | `npm run test:task-process-ollama-driver` → `npm run test:task-process-acceptance:sh` | `task-process-<date>-macos-<profile-safe-name>/` | `NT-MAC-*` 桌面 UI 执行待办；`TASK-CHK-*` 客观机器证据已定稿 | [长任务过程原生复验清单（macOS）](./macos/UI_ACCEPTANCE_MACOS_TASK_PROCESS_NATIVE.md) |
+| macOS | `NT-MAC-001`~`NT-MAC-005` | `npm run test:task-process-ollama-driver` → `npm run test:task-process-acceptance:sh`；客观子断言 `npm run test:task-process-native-mac` | `task-process-<date>-macos-<profile-safe-name>/`；`artifacts/task-process-native/` | 客观子断言已自动化判定；需真实运行中任务/人工判断的项归 §8.5；`TASK-CHK-*` 已定稿 | [长任务过程原生复验清单（macOS）](./macos/UI_ACCEPTANCE_MACOS_TASK_PROCESS_NATIVE.md) |
 | Windows | `NT-WIN-001`~`NT-WIN-005` | `npm run test:task-process-acceptance:win` | `task-process-<date>-windows-<profile-safe-name>/` | `NOT_EXECUTED`（独立 Windows 专项，客观后置） | [长任务过程原生复验清单（Windows）](./windows/UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_NATIVE.md) |
 
 ## 3. 前置条件与执行
