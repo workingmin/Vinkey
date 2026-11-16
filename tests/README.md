@@ -6,6 +6,7 @@
 | --- | --- |
 | `fixtures/` | 可复用的固定测试素材、清单及素材完整性测试 |
 | `intent-router/` | IntentRouter CLI、SQLite 配置读取和跨模块验收合同测试 |
+| `lib/` | `scripts/lib/` 共享契约测试（用例汇总、文件摘要、命令执行、仓库/工具链探测与验收 runner 的打包/环境传递/清理） |
 | `navigation/` | 项目/会话导航验收 CLI 合同测试（`W0-NAV-F`：参数、fixture 生成、去重/切换/CRUD、删除边界、搜索复刻、退出码与 `--json` 单文档） |
 | `task-process/` | 长任务/日志中心验收 CLI 合同测试（参数、退出码、`--json` 单文档、事件/段/终态核查与人工回填合并） |
 | `title-bar/` | 标题栏菜单验收 CLI 合同测试（`W0-SHELL-MENU-F` 与 `W0-SHELL-MENU-P`：参数、fixture/页面切换/主题/帮助/焦点/审计、原生阻断计数、退出码与 `--json` 单文档） |
