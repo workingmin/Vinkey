@@ -198,6 +198,8 @@ pub mod models {
     }
 }
 
+#[path = "../../../src-tauri/src/clock.rs"]
+mod clock;
 #[path = "../../../src-tauri/src/conversation_activity.rs"]
 mod conversation_activity;
 #[path = "../../../src-tauri/src/job_service.rs"]
