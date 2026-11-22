@@ -13,6 +13,10 @@ import Foundation
 import ImageIO
 import UniformTypeIdentifiers
 
+// macOS 26 SDK 起 ApplicationServices 不再导出 kAXFullScreenAttribute；
+// 该常量的值恒为 "AXFullScreen"，在此提供同值兼容别名，保持判定语义不变。
+private let kAXFullScreenAttribute: String = "AXFullScreen"
+
 let args = CommandLine.arguments
 let command = args.count > 1 ? args[1] : ""
 
