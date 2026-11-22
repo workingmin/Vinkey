@@ -679,8 +679,8 @@ export async function runFixtureGate(input: {
       overallConclusion,
       windowsPlatform: 'NOT_EXECUTED',
       reason: specialityPass
-        ? 'Alpha 客观范围内所有适用用例 PASS、构建溯源已定稿、无客观遗留项；人工 UI 观察、帮助/诊断弹窗低保真实现（DEFER-UI-001）与 Windows 独立专项等主观/跨平台项已摘除至总计划 §8.5 人工复核事项统一后置，不阻断本 macOS 专项，专项在 Alpha 客观范围达成专项通过。'
-        : `按计划 §6：P 原生批次 9/9 全 PASS、F 归属 4 用例均 PASS（TB-MENU-003-GLOBAL-SEARCH 与 TB-MENU-004 已在 W0-NAV-F / W0-EDITOR-F 前置依赖真实 PASS 后客观判定为 PASS）；${provenanceSentence}但人工 UI 观察、帮助/诊断弹窗低保真实现（DEFER-UI-001）与 Windows 独立专项等主观/跨平台项已从本 macOS 专项验收范围摘除，集中至总计划 §8.5 人工复核事项统一后置处理，不作为本专项的遗留项或阻断项${dirCancelPreserved ? '；目录选择取消保态已由 P 批次 AX/CG 双信号客观判定为 preserved，不再作为遗留项' : '；目录选择取消保态的 AX/CG 双信号客观判据未达成'}。F 门槛通过不自动升级专项，也不得宣称跨平台发布通过 / 完整发布通过。`,
+        ? 'Alpha 客观范围内所有适用用例 PASS、构建溯源已定稿、无客观遗留项；人工 UI 观察、帮助/诊断弹窗的视觉与无障碍评审（DEFER-UI-001，弹窗已升级为应用内模态）与 Windows 独立专项等主观/跨平台项已摘除至总计划 §8.5 人工复核事项统一后置，不阻断本 macOS 专项，专项在 Alpha 客观范围达成专项通过。'
+        : `按计划 §6：P 原生批次 9/9 全 PASS、F 归属 4 用例均 PASS（TB-MENU-003-GLOBAL-SEARCH 与 TB-MENU-004 已在 W0-NAV-F / W0-EDITOR-F 前置依赖真实 PASS 后客观判定为 PASS）；${provenanceSentence}但人工 UI 观察、帮助/诊断弹窗的视觉与无障碍评审（DEFER-UI-001，弹窗已升级为应用内模态）与 Windows 独立专项等主观/跨平台项已从本 macOS 专项验收范围摘除，集中至总计划 §8.5 人工复核事项统一后置处理，不作为本专项的遗留项或阻断项${dirCancelPreserved ? '；目录选择取消保态已由 P 批次 AX/CG 双信号客观判定为 preserved，不再作为遗留项' : '；目录选择取消保态的 AX/CG 双信号客观判据未达成'}。F 门槛通过不自动升级专项，也不得宣称跨平台发布通过 / 完整发布通过。`,
       info: '人工 UI 观察、DEFER-UI-001 与 Windows 独立专项等主观/跨平台验收项已集中至总计划 §8.5 人工复核统一批次，在所有自动化验收脚本跑完后再统一处理，不计入本 macOS 专项判定或专项通过的阻断项。',
       editorWebViewEvidence: {
         suite: EDITOR_WEBVIEW_SUITE_ID,
@@ -697,7 +697,7 @@ export async function runFixtureGate(input: {
         note: '下列主观/专家/用户判断项已从各功能域与本 macOS 专项验收范围摘除，集中至总计划 §8.5 人工复核事项，在所有自动化验收脚本跑完后再统一处理；不计入本 macOS 专项判定或专项通过的阻断项，也不得写成 PASS。',
         items: [
           'W0-EDITOR-F 目标平台 WebView 人工 UI 观察（客观证据已由 UI-ACC-EDITOR-WEBVIEW-001 采集，人工观察仍待测试人员回传）',
-          '标题栏与功能菜单诊断/帮助弹窗低保真实现升级与视觉质量复核（DEFER-UI-001）',
+          '标题栏与功能菜单诊断/帮助弹窗的视觉与无障碍评审（DEFER-UI-001，弹窗已升级为应用内模态，机器只验收触发/关闭/焦点/脱敏）',
           'Windows M5 独立专项执行（跨平台，不计入本 macOS 专项判定）',
           '各功能域其它自动化脚本不能完成、需人工/专家/用户判断的 UI 交互验证项（见总计划 §8.5 清单）',
         ],

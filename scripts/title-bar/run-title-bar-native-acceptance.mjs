@@ -100,7 +100,7 @@ const CASE_DEFS = [
   { id: 'TB-MENU-006', subset: 'P', scene: '主题菜单', expected: '切换浅色/深色后菜单、侧栏和窗口主题同步；业务选择保持' },
   { id: 'TB-MENU-007', subset: 'P', scene: '设置归属', expected: 'Vinkey 应用菜单有「设置…」；Cmd+, 可达；「查看」中不存在设置' },
   { id: 'TB-MENU-008', subset: 'P', scene: '窗口控制', expected: '最小化、缩放窗口、全屏、关闭隐藏及 Reopen 恢复真实改变窗口状态' },
-  { id: 'TB-MENU-009', subset: 'P', scene: '帮助和诊断', expected: '快捷键、窗口诊断、应用诊断日志可触发、关闭、焦点返回、脱敏；alert 只计动作可触发；关于在 Vinkey 应用菜单' },
+  { id: 'TB-MENU-009', subset: 'P', scene: '帮助和诊断', expected: '快捷键、窗口诊断、应用诊断日志以应用内模态承载，可触发、关闭、焦点返回、脱敏；模态视觉/无障碍完成度归 §8.5 人工复核；关于在 Vinkey 应用菜单' },
   { id: 'TB-MENU-010', subset: 'P', scene: '菜单关闭与焦点', expected: '原生菜单关闭后 WebView 焦点恢复，不残留展开菜单；不能仅凭脚本无条件写 PASS' },
   { id: 'TB-MENU-011', subset: 'P', scene: '中文菜单审计', expected: '自有菜单和快捷键说明无 File/View/Settings 等英文残留；系统注入服务项单独标记' },
   { id: 'TB-MENU-012', subset: 'P', scene: '首版菜单减法审计', expected: '不出现全局停止生成、侧栏折叠、文档保存/关闭；降级入口仍可从对话/侧栏/文件页到达' },
@@ -611,7 +611,7 @@ async function runWithProjectPhase(temporaryDirectory) {
       const s = helper('state', [], `help-${index}-state.json`)
       const shot = await capture(`14-help-${index}.png`, 'window')
       helper('key', ['escape'], `help-${index}-escape.json`)
-      // 低保真诊断弹窗有时 Escape 不关闭，残留弹窗会抢走后续用例的 WebView 焦点
+      // 弹窗兼容：先 Escape 关闭应用内模态；若仍有残留则按关闭按钮兜底，避免抢走后续用例焦点
       const dismissed = helper('dismiss', [], `help-${index}-dismiss.json`)
       activateApp(`help-${index}`)
       helpObservations.push(`${label}:trigger=${r.ok},windows=${s.state?.windowCount ?? '?'},dialogDismissed=${dismissed.ok}`)
@@ -621,11 +621,11 @@ async function runWithProjectPhase(temporaryDirectory) {
     setCase('TB-MENU-009', {
       status: helpItems.length === 3 && aboutInApp ? 'PASS' : 'FAIL',
       action: '依次点击帮助三项，采集窗口状态与截图并 Escape 关闭；核对「关于 Vinkey」位于 Vinkey 应用菜单',
-      actual: `${helpObservations.join('；')}；关于在 Vinkey 应用菜单=${aboutInApp}。按计划 §3 与 TITLE_BAR_DESIGN.md §7，window.alert 仅计「动作可触发」；诊断弹窗的视觉质量/交互完成度属 DEFER-UI-001，已集中至总计划 §8.5 人工复核事项，不作为本 macOS 专项遗留项或条件通过原因。`,
+      actual: `${helpObservations.join('；')}；关于在 Vinkey 应用菜单=${aboutInApp}。按计划 §3 与 TITLE_BAR_DESIGN.md §7，帮助/诊断信息由应用内模态承载，客观验收只到触发、关闭、焦点返回与脱敏；模态的视觉质量/交互完成度属 DEFER-UI-001，已集中至总计划 §8.5 人工复核事项，不作为本 macOS 专项遗留项或条件通过原因。`,
       evidence: [...helpEvidence, 'menu-tree.json'],
       exitCode: 0,
     })
-    issues.push('帮助与诊断入口由 window.alert / 简易弹窗承载，按计划 §6 属低保真实现，只证明动作可触发；其视觉质量/交互完成度属 DEFER-UI-001，已集中至总计划 §8.5 人工复核事项，不作为本 macOS 专项遗留项或条件通过原因。')
+    issues.push('帮助与诊断入口由应用内模态承载（已替换 window.alert），客观验收只证明触发、关闭与焦点返回；其视觉质量/交互完成度属 DEFER-UI-001，已集中至总计划 §8.5 人工复核事项，不作为本 macOS 专项遗留项或条件通过原因。')
 
     // ---- TB-MENU-010 ----
     // 先切回对话页并显式建立 WebView 输入焦点，才能验证「菜单关闭后焦点恢复」

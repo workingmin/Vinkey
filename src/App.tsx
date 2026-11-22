@@ -1476,6 +1476,11 @@ export function App() {
   const [runtimeCopyState, setRuntimeCopyState] = useState<'idle' | 'copied'>('idle')
   const runtimeDiagnosticsCloseRef = useRef<HTMLButtonElement>(null)
   const runtimeDiagnosticsReturnFocus = useRef<HTMLElement | null>(null)
+  const [helpDialog, setHelpDialog] = useState<'shortcuts' | 'windowDiagnostics' | 'about' | null>(null)
+  const [helpDialogText, setHelpDialogText] = useState('')
+  const [helpDialogLoading, setHelpDialogLoading] = useState(false)
+  const helpDialogCloseRef = useRef<HTMLButtonElement>(null)
+  const helpDialogReturnFocus = useRef<HTMLElement | null>(null)
   const macMenuInstalled = useRef(false)
   const macRefreshProjectItem = useRef<MenuItem | null>(null)
 
@@ -1581,19 +1586,60 @@ export function App() {
     } catch (cause) { setError(String(cause)) }
   }, [selectProject, changeContentPage, setError])
 
-  const showShortcuts = useCallback(() => {
-    window.alert('快捷键\n\n⌘/Ctrl + K  全局搜索\n⌘/Ctrl + O  添加本地项目\n⌘/Ctrl + N  新建会话\n⌘/Ctrl + R  刷新当前项目\n⌘/Ctrl + ,  打开设置\n⌘/Ctrl + S  保存当前文档\n⌘/Ctrl + W  关闭窗口\nEnter  发送消息\nShift + Enter  换行')
+  const openHelpDialog = useCallback((kind: 'shortcuts' | 'windowDiagnostics' | 'about') => {
+    if (document.activeElement instanceof HTMLElement) {
+      helpDialogReturnFocus.current = document.activeElement
+    }
+    setHelpDialogText('')
+    setHelpDialogLoading(true)
+    setHelpDialog(kind)
   }, [])
+
+  const showShortcuts = useCallback(() => {
+    openHelpDialog('shortcuts')
+    setHelpDialogText('⌘/Ctrl + K  全局搜索\n⌘/Ctrl + O  添加本地项目\n⌘/Ctrl + N  新建会话\n⌘/Ctrl + R  刷新当前项目\n⌘/Ctrl + ,  打开设置\n⌘/Ctrl + S  保存当前文档\n⌘/Ctrl + W  关闭窗口\nEnter  发送消息\nShift + Enter  换行')
+    setHelpDialogLoading(false)
+  }, [openHelpDialog])
 
   const showAbout = useCallback(() => {
+    openHelpDialog('about')
     void getRuntimeDiagnostics()
-      .then(({ version }) => window.alert(`Vinkey ${version}\n\n本地优先的 AI 文学创作工作台\n文档和会话数据保存在本机。`))
-      .catch(() => window.alert('Vinkey\n\n本地优先的 AI 文学创作工作台\n文档和会话数据保存在本机。'))
-  }, [])
+      .then(({ version }) => setHelpDialogText(`Vinkey ${version}\n\n本地优先的 AI 文学创作工作台\n文档和会话数据保存在本机。`))
+      .catch(() => setHelpDialogText('Vinkey\n\n本地优先的 AI 文学创作工作台\n文档和会话数据保存在本机。'))
+      .finally(() => setHelpDialogLoading(false))
+  }, [openHelpDialog])
 
   const showWindowDiagnostics = useCallback(() => {
-    void getWindowDiagnostics().then((diagnostics) => window.alert(diagnostics)).catch((cause) => setError(`读取窗口诊断失败：${String(cause)}`))
-  }, [setError])
+    openHelpDialog('windowDiagnostics')
+    void getWindowDiagnostics()
+      .then(setHelpDialogText)
+      .catch((cause) => { setError(`读取窗口诊断失败：${String(cause)}`); setHelpDialog(null) })
+      .finally(() => setHelpDialogLoading(false))
+  }, [openHelpDialog, setError])
+
+  const closeHelpDialog = useCallback(() => {
+    setHelpDialog(null)
+    const returnFocus = helpDialogReturnFocus.current
+    helpDialogReturnFocus.current = null
+    window.requestAnimationFrame(() => {
+      if (returnFocus?.isConnected) returnFocus.focus()
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!helpDialog) return
+    const animationFrame = window.requestAnimationFrame(() => helpDialogCloseRef.current?.focus())
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      closeHelpDialog()
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => {
+      window.cancelAnimationFrame(animationFrame)
+      window.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [closeHelpDialog, helpDialog])
 
   const showRuntimeDiagnostics = useCallback(async (preserveReturnFocus = false) => {
     if (!preserveReturnFocus && document.activeElement instanceof HTMLElement) {
@@ -1892,6 +1938,17 @@ export function App() {
           <pre className="runtime-diagnostics-log">{runtimeDiagnostics.lines.length > 0 ? runtimeDiagnostics.lines.join('\n') : '暂无运行日志。'}</pre>
           <footer><button className="secondary-button" onClick={() => void showRuntimeDiagnostics(true)}><RefreshCw />刷新</button><button className="primary-button" onClick={() => void copyRuntimeDiagnostics()}><Copy />{runtimeCopyState === 'copied' ? '已复制' : '复制日志'}</button></footer>
         </>}
+      </section>
+    </div>}
+    {helpDialog && <div className="runtime-diagnostics-backdrop" role="presentation" onClick={closeHelpDialog}>
+      <section className="runtime-diagnostics-modal help-dialog-modal" role="dialog" aria-modal="true" aria-labelledby="help-dialog-title" onClick={(event) => event.stopPropagation()}>
+        <header><div><h2 id="help-dialog-title">
+          {helpDialog === 'shortcuts' && <><Keyboard />快捷键</>}
+          {helpDialog === 'windowDiagnostics' && <><Settings />窗口诊断信息</>}
+          {helpDialog === 'about' && <><Bot />关于 Vinkey</>}
+        </h2><p>{helpDialog === 'shortcuts' ? '当前平台的键盘操作说明' : helpDialog === 'windowDiagnostics' ? '只读窗口与平台信息' : '应用信息'}</p></div><button ref={helpDialogCloseRef} className="icon-button" aria-label={helpDialog === 'shortcuts' ? '关闭快捷键说明' : helpDialog === 'windowDiagnostics' ? '关闭窗口诊断信息' : '关闭关于 Vinkey'} title="关闭" onClick={closeHelpDialog}><X /></button></header>
+        {helpDialogLoading ? <div className="runtime-diagnostics-empty">正在读取…</div> : <pre className="runtime-diagnostics-help-body">{helpDialogText}</pre>}
+        <footer><button className="primary-button" onClick={closeHelpDialog}>知道了</button></footer>
       </section>
     </div>}
     <UnifiedSearchPanel

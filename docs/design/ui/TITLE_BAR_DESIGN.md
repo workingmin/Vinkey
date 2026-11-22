@@ -239,7 +239,7 @@ macOS 的“关于 Vinkey”放在 `Vinkey` 应用菜单，不在“帮助”重
 | 窗口 > 最大化/还原 | 自绘菜单和双击标题栏已实现 | 原生 `Maximize`（显示为“缩放窗口”）已实现 | 保留；统一“最大化/还原”语义，验证恢复上次尺寸 | 是，平台证据缺失时阻断 |
 | 窗口 > 进入全屏 | 自绘菜单无全屏项 | 自定义菜单项（固定标题「进入全屏」）挂接 `getCurrentWindow().setFullscreen()`；Tauri 预定义 `Fullscreen` 项映射的 `toggleFullScreen:` 对当前窗口为 no-op，已替换 | 仅 macOS 保留；Windows 不强行补齐 | 否，平台差异允许 |
 | 窗口 > 关闭窗口 | 自绘菜单和按钮调用 `win.close()` | 原生 `CloseWindow` 触发关闭请求，Tauri 隐藏主窗口；Reopen 恢复 | 保留；验证关闭后无可见窗口、进程保留和再次打开恢复 | 是，平台证据缺失时阻断 |
-| 帮助 > 查看快捷键/窗口诊断/应用诊断日志 | 三项均已实现；快捷键和窗口诊断使用 `alert` | 三项均已接入原生菜单 | 保留；验收触发、脱敏、可关闭和焦点返回；`alert` 仅算可触发，不算最终 UI 完成 | 是，诊断脱敏或焦点失败 |
+| 帮助 > 查看快捷键/窗口诊断/应用诊断日志 | 三项均已实现；快捷键、窗口诊断与关于共用应用内模态，替换了原 `window.alert` | 三项均已接入原生菜单 | 保留；验收触发、脱敏、可关闭和焦点返回；模态的视觉/无障碍完成度由 `DEFER-UI-001` 在 §8.5 人工复核，不计入客观 PASS | 是，诊断脱敏或焦点失败 |
 | 关于 Vinkey | `帮助 > 关于 Vinkey` 使用运行时版本信息 | `Vinkey > 关于 Vinkey` 使用同一运行时版本信息 | 平台归属已实现；构建号/Git SHA 继续由验收脚本溯源 | 是，待 `TB-MENU-009` |
 
 ### 8.1 源码证据索引
@@ -251,7 +251,7 @@ macOS 的“关于 Vinkey”放在 `Vinkey` 应用菜单，不在“帮助”重
 | `src/App.tsx` 的 `TitleBar` `menus` | Windows 注册“项目/会话/编辑/查看/窗口/帮助”，提供稳定 ID、键盘导航和 Escape/外部点击关闭 | 核对 Windows 自绘菜单状态 |
 | `src/lib/editCommands.ts` 和 `src/components/CodeEditor.tsx` | 标准输入控件与 CodeMirror 分别执行命令，暴露可撤销/重做/选区状态 | 支持 `TB-GAP-004` 的焦点与禁用态验收 |
 | `src/App.tsx` 的 `openWorkspaceFromMenu`、`refreshWorkspaceFromMenu`、`newConversationFromMenu`、`saveActive` | 项目/会话动作进入全局菜单；文档保存只保留局部入口与快捷键 | 区分全局对象和文档局部操作 |
-| `src/App.tsx` 的 `changeContentPage`、`showShortcuts`、`showAbout`、`showWindowDiagnostics`、`showRuntimeDiagnostics` | 页面切换、快捷键、关于和诊断动作已按目标菜单归属接线；部分帮助界面仍使用 `alert` | 核对查看/帮助菜单是否可触发及其完成度 |
+| `src/App.tsx` 的 `changeContentPage`、`showShortcuts`、`showAbout`、`showWindowDiagnostics`、`showRuntimeDiagnostics` | 页面切换、快捷键、关于和诊断动作已按目标菜单归属接线；帮助/诊断信息由可关闭、可返回焦点的应用内模态承载 | 核对查看/帮助菜单是否可触发及其完成度 |
 | `src/App.tsx` 的 `stop` 与对话发送按钮 | 停止生成已有对话输入区入口，但没有全局菜单项 | 支持将停止生成降级为 `D-CHAT` 局部入口 |
 | `src/components/ProjectSessionSidebar.tsx` 的侧栏头部和 footer | 主题、折叠、项目搜索、添加/刷新和设置入口已有实现 | 支持侧栏入口不重复进全局菜单的结论 |
 
@@ -260,7 +260,7 @@ macOS 的“关于 Vinkey”放在 `Vinkey` 应用菜单，不在“帮助”重
 1. 当前源码已实现目标菜单树、平台设置归属、快捷键和 Windows 焦点桥接；当前版本仍不能在缺少桌面专项证据时签署目标菜单通过。
 2. “停止当前生成”和“查看 > 展开/折叠项目与会话栏”属于重复或高状态同步成本入口，降级为对话/侧栏入口，不作为首版全局菜单项。
 3. 全局搜索已由 `CF-023` 实现（`UnifiedSearchPanel`：⌘/Ctrl+K 与“会话”菜单项打开、项目/会话/当前项目文档分组、`Escape` 返回）；设置快捷键、macOS `Vinkey > 设置…`、Windows 编辑焦点分派和项目/会话菜单迁移已进入待验收状态。
-4. `window.alert` 能证明动作被触发，不能证明最终视觉、无障碍和焦点质量；帮助菜单验收必须区分“动作可触发”和“交互完成”。
+4. 帮助/诊断信息现由应用内模态承载，可触发、可关闭、可返回焦点；模态的视觉质量、无障碍观感和交互完成度仍须设计/产品评审，按 `DEFER-UI-001` 在总计划 §8.5 人工复核，客观验收不写成最终 UI 完成。
 
 标题栏专项只有在 Windows/macOS 两个平台的核心菜单命令均有真实桌面证据、编辑焦点和中文审计通过后，才能把 `W0-SHELL-MENU-P/F` 标记为通过。壳层脚本在截图前只执行菜单合同守卫；若 Accessibility 在绿色交通灯切换后丢失按钮，只允许调用“窗口”菜单恢复窗口并标记 `menu-recovery`，不得把该恢复动作当作菜单命令验收证据。`CF-023` 已实现（`UnifiedSearchPanel`），其验收按 `TB-GAP-006` 的分组结果、跳转、`Escape` 返回和焦点证据进行，不得为了标题栏结构验收而伪造通过。
 
