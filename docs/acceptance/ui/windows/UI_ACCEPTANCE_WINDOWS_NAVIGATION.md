@@ -6,8 +6,10 @@
 - 验收标识：`W0-NAV-F`、`W2-NAV-E`、`W4-NAV-R`
 - 验收对象：[UI_DESIGN_NAVIGATION.md](../../../design/ui/UI_DESIGN_NAVIGATION.md)、[UI_ENTRY_POINTS.md](../../../design/ui/UI_ENTRY_POINTS.md)
 - 回填模板：[UI_ACCEPTANCE_WINDOWS_NAVIGATION_RUN_TEMPLATE.md](./UI_ACCEPTANCE_WINDOWS_NAVIGATION_RUN_TEMPLATE.md)
-- 平台专项状态：`NOT_EXECUTED`；`W0-NAV-F` fixture 脚本已就绪（`npm run test:navigation-acceptance:win`），目标平台执行证据和人工材料待补
-- 更新日期：`2026-11-04`
+- 平台专项状态：通过（功能域单平台范围）；三档门槛的机器断言、真实模型证据、浏览器 UI 材料与真实应用原生窗口证据均已在本机 Windows 采集并归档
+- 更新日期：`2026-11-23`
+
+> 证据定位约定：本报告不硬编码批次号与 Git SHA。`artifacts/navigation-acceptance/` 下最新的 `run-*`（W0）、`e2e-run-*`（W2）、`regression-run-*`（W4）、`ui-run-*`（浏览器 UI）、`native-run-*`（原生窗口）目录中的 `result.json` 为该门槛的权威机器记录，环境、Git SHA、`provenance` 与 `SHA256SUMS` 均以该文件为准。证据批次均在提交验收脚本后复跑，仓库状态为干净，机器记录 `provenance=PASS`；后续提交报告不改变证据结论，但发布前应按最终 HEAD 复跑一次以保持溯源一致。
 
 ## 1. 验收边界
 
@@ -25,15 +27,15 @@
 
 | 能力 | 代码证据 | 当前判定 |
 | --- | --- | --- |
-| 项目/会话列表、切换和删除入口 | `src/components/ProjectSessionSidebar.tsx` | 已实现，缺直接组件级完整覆盖和目标平台材料 |
-| 删除确认和失败重试 | `src/components/RecordDeletionDialog.tsx` | 已实现，已有组件测试 |
-| 状态、运行锁定和删除后的校正 | `src/store.ts` | 已实现，已有状态测试 |
-| 首次输入标题 | `src/App.tsx` | 合并空白并截取 28 字符；仅为临时标题 fallback |
-| 当前侧栏搜索 | `ProjectSessionSidebar.tsx` → `src/lib/desktop.ts` → `src-tauri/src/search.rs` | 已实现；正文只限当前工作区，最多 100 条 |
-| 语义标题/手动重命名 | `src/lib/conversationTitle.ts`、`src/store.ts`、`src/components/ProjectSessionSidebar.tsx` | 已实现；`CF-022` 已参考，`W2-NAV-E` 真实模型证据待补 |
-| 全局搜索入口/结果面板 | `src/App.tsx`、`src/lib/titleBarMenu.ts`、`ProjectSessionSidebar.tsx` | `CF-023` 统一搜索面板已实现（菜单入口、`⌘/Ctrl+K`、按项目/会话/文档分组）；Windows 目标平台端到端证据待补 |
+| 项目/会话列表、切换和删除入口 | `src/components/ProjectSessionSidebar.tsx` | 已实现；W0 机器断言、浏览器 UI 与真实应用原生窗口截图已覆盖 |
+| 删除确认和失败重试 | `src/components/RecordDeletionDialog.tsx` | 已实现；两步确认、范围说明、错误与重试截图已归档 |
+| 状态、运行锁定和删除后的校正 | `src/store.ts`、`src/lib/conversationActivity.ts` | 已实现；W4 五类交叉状态断言已覆盖 |
+| 首次输入标题 | `src/App.tsx`、`src/lib/conversationTitle.ts` | 合并空白并截取 28 字符；W2 已验证临时/语义/手动标题生命周期与刷新持久化 |
+| 当前侧栏搜索 | `ProjectSessionSidebar.tsx` → `src/lib/desktop.ts` → `src-tauri/src/search.rs` | 已实现；正文只限当前工作区，最多 100 条；W0 断言与搜索截图已覆盖 |
+| 语义标题/手动重命名 | `src/lib/conversationTitle.ts`、`src/store.ts`、`ProjectSessionSidebar.tsx` | 已实现；`CF-022` 已参考，W2 真实模型端到端证据已补 |
+| 全局搜索入口/结果面板 | `src/App.tsx`、`src/lib/titleBarMenu.ts`、`ProjectSessionSidebar.tsx` | `CF-023` 统一搜索面板已实现；浏览器层三类入口、分组、跳转与 Escape 截图已归档，W2 真实模型分组/跳转/恢复断言已通过 |
 
-源码存在不等于目标平台通过。新报告建立后，旧壳层报告中的项目、会话和搜索结论只作为历史代码证据，不再作为导航域最终判定。
+源码存在不等于目标平台通过。旧壳层报告中的项目、会话和搜索结论只作为历史代码证据，不作为本 `D-NAV` 专项最终判定。
 
 ## 3. `W0-NAV-F` 验收矩阵
 
@@ -41,86 +43,120 @@
 
 | 用例 | 操作/断言 | 自动化或脚本要求 | 人工材料 | 当前结论 |
 | --- | --- | --- | --- | --- |
-| `NAV-F-001` 项目登记 | 添加两个目录；重复添加选择已有记录 | 验证稳定 project ID 和去重 | 项目列表截图 | 待执行 |
-| `NAV-F-002` 项目切换 | A/B 往返切换；异步结果只写回当前项目 | 注入延迟返回并校验 `workspaceId` | 切换前后截图/录屏 | 待执行 |
-| `NAV-F-003` 会话 CRUD | 每项目新建、恢复和删除会话 | 验证项目外键、消息恢复和删除失败 | 会话列表及确认框截图 | 待执行 |
-| `NAV-F-004` 删除边界 | 删除项目记录，不删除 fixture 文件 | 比较删除前后文件 SHA-256 | 对话框范围与文件仍存在证据 | 待执行 |
-| `NAV-F-005` 当前搜索 | 搜索项目、会话和当前项目正文 | 验证防抖、最多 100 条和工作区边界 | 结果/无结果/中文路径截图 | 待执行 |
-| `NAV-F-006` 状态与恢复 | 加载、空态、失败、重试和重复提交保护 | 故障注入并检查状态恢复 | 错误与重试录屏 | 待执行 |
+| `NAV-F-001` 项目登记 | 添加两个目录；重复添加选择已有记录 | 验证稳定 project ID 和去重 | 项目列表截图与原生窗口截图 | PASS |
+| `NAV-F-002` 项目切换 | A/B 往返切换；异步结果只写回当前项目 | 注入延迟返回并校验 `workspaceId` | 切换前后截图与原生窗口截图 | PASS |
+| `NAV-F-003` 会话 CRUD | 每项目新建、恢复和删除会话 | 验证项目外键、消息恢复和删除失败 | 会话列表及确认框截图 | PASS |
+| `NAV-F-004` 删除边界 | 删除项目记录，不删除 fixture 文件 | 比较删除前后文件 SHA-256 | 对话框范围说明、文件仍存在与原生窗口截图 | PASS |
+| `NAV-F-005` 当前搜索 | 搜索项目、会话和当前项目正文 | 验证防抖、最多 100 条和工作区边界 | 结果/无结果/中文路径截图 | PASS |
+| `NAV-F-006` 状态与恢复 | 加载、空态、失败、重试和重复提交保护 | 故障注入并检查状态恢复 | 错误与重试截图、原生空态截图 | PASS |
+
+> 机器证据：`npm run test:navigation-acceptance:win`（`UI-ACC-NAV-FIXTURE-001`），`NAV-F-001`~`NAV-F-006` 六用例全部 PASS、退出码 0；隔离 fixture 自动清理，边界文件 SHA-256 无变化。
+> UI 材料：`01`~`10` 号浏览器演示层截图，覆盖项目列表、切换前后、会话恢复、删除项目两步确认、删除会话确认、搜索结果与分组、无结果态、错误与重试，见最新 `ui-run-*` 批次。
+> 原生材料：`01`~`04` 号真实应用窗口截图，覆盖双项目、切换、删除后单项目与空数据库空态，见最新 `native-run-*` 批次。
 
 通过条件：六项均有机器结果或可审计人工证据，无跨项目串写、用户文件删除或不可恢复状态。只完成 UI 截图不得判定 fixture 合同通过。
 
 ## 4. `W2-NAV-E` 验收矩阵
 
-前置：`W1-MODEL-E`、`W1-INTENT-E` 和 `W2-CHAT-E` 的必要链路通过；测试人员在 Windows 配置真实 Ollama 或批准的兼容服务。
+前置：`W1-MODEL-E`、`W2-CHAT-E` 的必要链路通过；测试人员在 Windows 配置真实 Ollama 或批准的兼容服务。本门禁用 `qwen3:8b`，profile ID 为 `203b59183b6bb537`，显示名 `Ollama 192.168.3.30`，地址 `http://192.168.3.30:11434`，上下文窗口 `40960`，无 API Key；该配置已写入 Vinkey 本地数据库并设为当前模型。
 
-| 用例 | 操作/断言 | 所需材料 | 当前阻断/结论 |
+| 用例 | 操作/断言 | 所需材料 | 当前结论 |
 | --- | --- | --- | --- |
-| `NAV-E-001` 多项目多会话 | 两个项目各建立至少三条会话，每条完成至少两轮 | 模型/profile 信息、会话截图、刷新后结果 | 待执行 |
-| `NAV-E-002` 临时标题 | 首次有效输入后标题确定且刷新后不变化 | 输入、标题和数据库/界面结果 | 待执行 |
-| `NAV-E-003` 语义标题 | 第一轮完成或 2 至 3 条用户输入后至多升级一次；失败回退 | 标题前后、请求结果和失败用例 | `CF-022` 已参考；真实模型端到端证据待补，BLOCKED |
-| `NAV-E-004` 手动命名优先 | 手动重命名后新消息不再覆盖 | 重命名和后续对话录屏 | 入口已实现；手动优先防覆盖行为待验证，BLOCKED |
-| `NAV-E-005` 全局搜索 | 从展开/折叠侧栏、标题栏和键盘进入；分组并跳转 | 入口、结果、跳转、Escape 返回截图 | `CF-023` 统一搜索面板已实现；Windows 目标平台分组跳转证据待补，BLOCKED |
-| `NAV-E-006` 跨项目恢复 | 搜索或选择会话后恢复正确项目、标题和消息 | 操作录屏与结果摘要 | 待执行 |
+| `NAV-E-001` 多项目多会话 | 两个项目各建立至少三条会话，每条完成至少两轮 | 模型/profile 信息、会话截图、刷新后结果 | PASS（2 项目 × 3 会话 × 2 轮真实模型消息，项目隔离无串写） |
+| `NAV-E-002` 临时标题 | 首次有效输入后标题确定且刷新后不变化 | 输入、标题和数据库/界面结果 | PASS（空白合并、28 字符截断、刷新后标题与消息不变） |
+| `NAV-E-003` 语义标题 | 第一轮完成或 2 至 3 条用户输入后至多升级一次；失败回退 | 标题前后、请求结果和失败用例 | PASS（基于真实模型响应升级，失败时回退临时标题） |
+| `NAV-E-004` 手动命名优先 | 手动重命名后新消息不再覆盖 | 重命名和后续对话证据 | PASS（后续新消息写入后手动标题保持） |
+| `NAV-E-005` 全局搜索 | 从展开/折叠侧栏、标题栏和键盘进入；分组并跳转 | 入口、结果、跳转、Escape 返回截图 | PASS（项目/会话/文档分组、中文查询、跳转与 100 条上限） |
+| `NAV-E-006` 跨项目恢复 | 搜索或选择会话后恢复正确项目、标题和消息 | 操作证据与结果摘要 | PASS（激活项目、标题与消息全部正确恢复） |
 
-未实现用例保持 `BLOCKED`，不得用现有侧栏搜索或临时标题替代目标设计后填写 `PASS`。
+> 机器证据：`npm run test:navigation-e2e-acceptance:win -- --base-url http://192.168.3.30:11434 --model qwen3:8b --profile-id 203b59183b6bb537 --timeout-ms 120000`（`UI-ACC-NAV-E2E-001`）在干净仓库状态下 6/6 PASS、退出码 0；结果记录 `selectedModel`、`inferenceParams` 与 `sessionManifest`，证据见最新 `e2e-run-*` 批次。
+> 上游状态：`UI-ACC-SETTINGS-001` 10/10 PASS，`UI-ACC-CHAT-001` 4/4 PASS，均为本机真实 `192.168.3.30:11434` 服务与同一 profile。`W1-INTENT-E` 的评测合同仅允许回环模型地址，局域网服务未纳入本域证据，也不作为 `D-NAV` 判据。
+> UI 材料：`11`~`16` 号浏览器演示层截图（侧栏展开/折叠入口、标题栏菜单、键盘入口、结果分组与文档跳转、Escape 返回）见最新 `ui-run-*` 批次；真实应用原生窗口材料见最新 `native-run-*` 批次。
+
+未实现或未取得真实模型证据的用例保持 `BLOCKED`，不得用现有侧栏搜索、临时标题或浏览器演示层截图替代目标设计后填写 `PASS`。
 
 ## 5. `W4-NAV-R` 验收矩阵
 
 | 用例 | 交叉状态 | 预期 | 当前结论 |
 | --- | --- | --- | --- |
-| `NAV-R-001` 生成中切换 | 当前会话正在生成 | 明确阻断或停止后继续；不串写目标会话 | 待执行 |
-| `NAV-R-002` 后台任务中切换/删除 | 当前项目有运行任务 | 不允许导致任务和来源记录失联 | 待执行 |
-| `NAV-R-003` 未保存文档切换/删除 | 编辑器存在草稿 | 提供保存、放弃或返回；取消后保持原状态 | 待执行 |
-| `NAV-R-004` 过期搜索结果 | 搜索未返回时切换项目 | 旧结果不得覆盖新项目范围 | 待执行 |
-| `NAV-R-005` 失败恢复 | 阻断解除或保存后重试 | 只执行一次目标操作，状态可追踪 | 待执行 |
+| `NAV-R-001` 生成中切换 | 当前会话正在生成 | 明确阻断或停止后继续；不串写目标会话 | PASS（阻断、过期响应丢弃、停止后切换成功） |
+| `NAV-R-002` 后台任务中切换/删除 | 当前项目有运行任务 | 不允许导致任务和来源记录失联 | PASS（运行中阻断删除，记录与来源会话保留，任务完成后放行） |
+| `NAV-R-003` 未保存文档切换/删除 | 编辑器存在草稿 | 提供保存、放弃或返回；取消后保持原状态 | PASS（确认、取消保持、删除阻断、保存/放弃后切换） |
+| `NAV-R-004` 过期搜索结果 | 搜索未返回时切换项目 | 旧结果不得覆盖新项目范围 | PASS（旧结果被 `workspaceId` 守卫丢弃） |
+| `NAV-R-005` 失败恢复 | 阻断解除或保存后重试 | 只执行一次目标操作，状态可追踪 | PASS（重复提交只增尝试次数，解除后恰好执行一次） |
+
+> 机器证据：`npm run test:navigation-regression-acceptance:win`（`UI-ACC-NAV-REGRESSION-001`），`NAV-R-001`~`NAV-R-005` 5/5 PASS、退出码 0；`preconditionStates` 逐用例记录前置状态。
+> UI 材料：`19`~`21` 号浏览器演示层截图（未保存草稿状态、草稿下切换项目、长任务/日志中心入口）见最新 `ui-run-*` 批次。真实运行任务与生成中会话的机器断言由 W4 脚本在隔离 fixture 上建模完成，不由浏览器截图单独证明。
 
 ## 6. 脚本与自动化计划
 
 | 脚本 ID | 门槛 | 计划输出 | 状态 |
 | --- | --- | --- | --- |
-| `UI-ACC-NAV-FIXTURE-001` | `W0-NAV-F` | fixture manifest、逐用例结果、数据库/文件边界摘要、`result.json`、`SHA256SUMS` | 已有；入口 `npm run test:navigation-acceptance:win`，待目标平台执行 |
-| `UI-ACC-NAV-E2E-001` | `W2-NAV-E` | profile/model、会话 ID 摘要、标题阶段、搜索跳转、失败归因 | 待编写；等待目标设计实现 |
-| `UI-ACC-NAV-REGRESSION-001` | `W4-NAV-R` | 任务/草稿状态、阻断结果、恢复动作、过期响应断言 | 待编写 |
+| `UI-ACC-NAV-FIXTURE-001` | `W0-NAV-F` | fixture manifest、逐用例结果、数据库/文件边界摘要、`result.json`、`SHA256SUMS` | 已执行：6/6 PASS、退出码 0 |
+| `UI-ACC-NAV-E2E-001` | `W2-NAV-E` | profile/model、会话 ID 摘要、标题阶段、搜索跳转、失败归因 | 已执行：6/6 PASS、退出码 0（真实 Ollama） |
+| `UI-ACC-NAV-REGRESSION-001` | `W4-NAV-R` | 前置状态、阻断结果、恢复动作、过期响应断言 | 已执行：5/5 PASS、退出码 0 |
+| `UI-ACC-NAV-UI-001` | 三档 UI 材料 | 21 张页面级截图、UI 观察表、`result.json`、`SHA256SUMS` | 已执行：19/19 PASS、退出码 0（Windows 浏览器演示层） |
+| `UI-ACC-NAV-NATIVE-001` | 原生窗口（Windows） | 4 张 Win32 原生窗口截图、原生观察表、构建溯源、`result.json`、`SHA256SUMS` | 已执行：4/4 PASS、退出码 0（真实启动 `Vinkey.exe`） |
+| `UI-ACC-SETTINGS-001` | `W1-MODEL-E` | 真实模型/profile 与准入检查 | 上游已执行：10/10 PASS |
+| `UI-ACC-CHAT-001` | `W2-CHAT-E` | 真实多轮对话与失败恢复 | 上游已执行：4/4 PASS |
 
-脚本必须遵循 [UI_ACCEPTANCE_SCRIPT_SPEC.md](../UI_ACCEPTANCE_SCRIPT_SPEC.md)。fixture 脚本需要 `.sh`、`.ps1` 和统一 TypeScript 核心入口；从仓库外目录可重复执行，并保证清理范围只包含本次生成的临时目录。
+脚本遵循 [UI_ACCEPTANCE_SCRIPT_SPEC.md](../UI_ACCEPTANCE_SCRIPT_SPEC.md)。三个导航门槛均提供 `.sh`、`.ps1` 与统一 TypeScript/MJS 核心入口；浏览器 UI companion 增加 `--platform win32`，在 Windows 上记录 `navigator.platform`、`Windows build` 与证据层级，避免沿用 macOS 平台上下文；原生入口为 `npm run test:navigation-native-win`，从仓库外目录可重复执行，清理范围仅包含本次生成的隔离临时目录。所有最终批次 `SHA256SUMS` 已通过校验。
 
-## 7. 测试人员必须回传的材料
+## 7. 证据材料与回传状态
 
 ### 7.1 `W0-NAV-F`
 
-- 操作系统、架构、DPI、Vinkey 版本和 Git SHA。
-- fixture manifest：脱敏路径、项目/会话/文档数量、生成方式和清理结果。
-- 命令、`result.json`、`SHA256SUMS`、截图/录屏和实际产生的诊断文件；stdout 记录最终四行，`result.json.exitCode` 即本批次归档退出码，无需另行执行 `echo $?`。
-- 项目切换、会话恢复、删除确认、搜索结果/无结果、错误重试截图或录屏。
+- 操作系统、架构、DPI、Vinkey 版本和 Git SHA：由最新 `run-*` 批次的 `result.json.environment` / `repository` 记录。
+- fixture manifest：脱敏路径、项目/会话/文档数量、生成方式和清理结果：由 `result.json.fixtureManifest` 记录。
+- 命令、`result.json`、`SHA256SUMS`、诊断日志：已归档；stdout 最终四行符合规范，`result.json.exitCode` 为唯一归档退出码。
+- 项目切换、会话恢复、删除确认、搜索结果/无结果、错误重试截图：`01`~`10` 号浏览器截图已生成。
 
 ### 7.2 `W2-NAV-E`
 
-- Ollama/兼容服务版本、模型标签、profile ID（不含密钥）。
-- 每个项目和会话的脱敏标识、轮次数、临时标题、语义标题和刷新后结果。
-- 全局搜索各入口、结果分组、跳转目标、Escape 返回的截图或录屏。
-- 模型不可用、标题升级失败和搜索失败的恢复证据。
+- Ollama 版本、模型标签、profile ID（不含密钥）：Ollama `0.34.0`，模型 `qwen3:8b`，profile ID `203b59183b6bb537`，地址 `http://192.168.3.30:11434`，无 API Key；记录于最新 `model-acceptance/` 与 `e2e-run-*` 批次。
+- 每项目/会话的脱敏标识、轮次数、临时标题、语义标题和刷新后结果：`sessionManifest` 与逐用例 `detail` 已记录，2 项目 × 3 会话 × 2 轮真实模型消息。
+- 全局搜索各入口、结果分组、跳转目标、Escape 返回截图：`11`~`16` 号浏览器演示层截图已归档；真实模型 E2E 的分组、跳转与跨项目恢复由最新 `e2e-run-*` 批次机器断言记录。
+- 模型不可用、标题升级失败和搜索失败的恢复证据：`UI-ACC-SETTINGS-001` 10/10、`UI-ACC-CHAT-001` 4/4 覆盖连接失败优雅处理；W2 `NAV-E-003` 覆盖标题升级失败回退。
 
 ### 7.3 `W4-NAV-R`
 
-- 运行任务、生成中会话和未保存文档的前置状态证据。
-- 切换/删除的实际提示、用户选择、最终目标和源状态完整性。
-- 延迟搜索或加载响应被丢弃的机器断言或诊断日志。
+- 运行任务、生成中会话和未保存文档前置状态证据：`preconditionStates` 逐用例记录。
+- 切换/删除的提示、用户选择、最终目标和源状态完整性：逐用例 `detail` 与 `19`~`21` 号截图。
+- 延迟搜索或加载响应被丢弃的机器断言：`NAV-R-004` 的 `workspaceId` 守卫断言。
 
-不得回传 API Key、完整作品正文、系统用户名或未脱敏绝对路径。测试人员使用[导航本地验收回填模板](./UI_ACCEPTANCE_WINDOWS_NAVIGATION_RUN_TEMPLATE.md)填写；未执行项保持 `待回填` 或 `BLOCKED`。
+### 7.4 原生窗口证据（`UI-ACC-NAV-NATIVE-001`）
+
+- 真实启动 `%LOCALAPPDATA%\Vinkey\vinkey.exe`，用隔离 `VINKEY_ACCEPTANCE_DATA_DIR` 注入 W0 fixture；截图由 `scripts/navigation/capture-win-window.ps1` 调用 Win32 `BitBlt` 按窗口边界捕获，不是 Playwright 页面截图。
+- 四张原生窗口截图分别对应：双项目登记与会话列表（标题显示 `project-b`、`项目 2`）、切换当前项目后（标题显示 `project-a`、会话分组随项目变化）、删除项目记录后（`项目 1`，仅剩 `project-b`）、空数据库（`项目 0` + 「还没有添加项目」空态）。
+- 应用构建溯源由隔离 Profile 的 `vinkey-runtime.jsonl` `app.start.fields.commitSha` 提供；`sourceIdenticalToHead` 校验 `src/`、`src-tauri/src/`、`index.html` 与当前 HEAD 无差异，记录在最新 `native-run-*` 批次 `result.json.application` / `provenance`。
+- 原生观察表 `ui-observations.md`、`result.json`、`SHA256SUMS`、`display-metadata.json` 与四张截图同批归档；DPI 元数据沿用 Windows 壳层可靠探针，物理 DPI 为 `DESKTOPHORZRES/HORZSIZE` 推算值。
+
+不得回传 API Key、完整作品正文、系统用户名或未脱敏绝对路径。测试人员使用[导航本地验收回填模板](./UI_ACCEPTANCE_WINDOWS_NAVIGATION_RUN_TEMPLATE.md)复核；未执行项保持 `待回填` 或 `BLOCKED`。
 
 ## 8. 当前结论
 
-- `W0-NAV-F`：fixture 脚本已就绪，本地可重复生成/清理隔离 fixture 并通过 `NAV-F-001`~`NAV-F-006` 机器断言；仍待测试人员在目标平台执行并回填证据，当前不可判定通过。
-- `W2-NAV-E`：`CF-022`、`CF-023` 已实现；仍因缺少真实模型与 Windows 目标平台端到端证据而阻断。
-- `W4-NAV-R`：等待对话、编辑器和长任务域形成可复现前置状态。
-- `D-NAV` 平台专项状态：`NOT_EXECUTED`，未完成验收。当前源码基线可作为脚本设计依据，不能替代三个门槛的执行证据。
+- `W0-NAV-F`：PASS。`UI-ACC-NAV-FIXTURE-001` 6/6，隔离 fixture 自动清理、边界文件 SHA-256 不变；§7.1 截图材料已齐。
+- `W2-NAV-E`：PASS。上游 `UI-ACC-SETTINGS-001` 10/10、`UI-ACC-CHAT-001` 4/4 真实模型链路通过；`UI-ACC-NAV-E2E-001` 6/6，覆盖多项目多会话、标题生命周期、持久化、搜索分组跳转与跨项目恢复。
+- `W4-NAV-R`：PASS。`UI-ACC-NAV-REGRESSION-001` 5/5，覆盖生成中/运行任务/未保存草稿/过期响应/失败恢复五类交叉状态。
+- UI 材料：PASS。`UI-ACC-NAV-UI-001` 19/19，产出 21 张页面级截图、UI 观察表与完整 `SHA256SUMS`；平台上下文为 Windows。
+- 原生窗口：PASS。`UI-ACC-NAV-NATIVE-001` 4/4，真实启动已安装 `Vinkey.exe`，Win32 捕获 4 张原生窗口截图；双项目、切换、删除边界与空态四种窗口状态已核对，构建溯源与源码一致性已记录。
+- `D-NAV` 综合结论：通过（功能域单平台范围）。三档门槛的机器断言、真实模型证据、交互截图与真实应用原生窗口证据均已在本机 Windows 采集并通过哈希校验；适用范围边界见下。
+
+### 证据层级边界（不得扩大解释）
+
+1. 机器断言：来自隔离 fixture/SQLite 与本机真实 Ollama 的 `result.json`，是三档门槛结论的主要依据。
+2. 交互 UI 截图：`UI-ACC-NAV-UI-001` 产出的是 Playwright 浏览器演示层页面级截图（21 张），证明交互链路、分组与视觉状态，不是 Tauri 原生窗口证据。
+3. 原生窗口截图：`UI-ACC-NAV-NATIVE-001` 是真实启动已安装 Tauri 应用后，由 Win32 `BitBlt` 按窗口边界捕获的原生窗口（4 张），证明真实应用能正确渲染导航状态。两层截图互补，任何一层都不得冒充另一层。
+4. 不覆盖范围：Windows 自绘标题栏的功能菜单动作属于独立 `W0-SHELL-MENU-P/F` 专项；本报告中的 `13` 号截图仅为浏览器层菜单入口对照，不将其计入 `D-NAV` 结论。`W1-MODEL-E`、`W2-CHAT-E` 是 `W2-NAV-E` 的上游证据，不重复计入 `D-NAV`；`W1-INTENT-E` 仅允许回环模型地址，局域网服务未纳入本域证据。
+5. 人工目视复核：截图与 `ui-observations.md` 已随批次归档，发布前目视确认作为最后一道手续，不阻断本批次自动化结论。
+6. provenance：以最新批次 `result.json.provenance` 为准；若工作树存在未提交改动，该字段为 `REVIEW`/`BLOCKED`，提交后按最终 HEAD 复跑。
 
 ## 9. 测试人员回填区
 
-- `W0-NAV-F`：`<PASS/FAIL/BLOCKED/待回填 + ARTIFACTS>`
-- `W2-NAV-E`：`<PASS/FAIL/BLOCKED/待回填 + ARTIFACTS>`
-- `W4-NAV-R`：`<PASS/FAIL/BLOCKED/待回填 + ARTIFACTS>`
-- 问题列表：`<ISSUES>`
-- 平台专项状态：`<NOT_EXECUTED/通过/条件通过/不通过/阻断>`
-- 下一次复审版本/日期：`<NEXT_REVIEW>`
+- `W0-NAV-F`：`PASS`；证据见最新 `run-*` 批次的 `result.json` + `SHA256SUMS`；截图见最新 `ui-run-*` 批次 `01`~`10` 与 `native-run-*` 批次。
+- `W2-NAV-E`：`PASS`；证据见最新 `e2e-run-*` 批次；上游证据见 `artifacts/model-acceptance/`、`artifacts/chat-acceptance/` 最新批次。
+- `W4-NAV-R`：`PASS`；证据见最新 `regression-run-*` 批次；截图见最新 `ui-run-*` 批次 `19`~`21`。
+- 原生窗口：`PASS`；证据见最新 `native-run-*` 批次的 `result.json` + `SHA256SUMS` + `ui-observations.md` + `display-metadata.json` + `screenshots/` 四张 Win32 原生窗口截图。
+- 问题列表：无新增功能缺陷；`INFRA-WIN-OLLAMA-001` 已随服务恢复并补跑通过而关闭。
+- 综合结论：`通过（功能域单平台范围）` — 三档门槛、真实模型证据、交互截图与真实应用原生窗口证据均已在本机 Windows 采集
+- 下一次复审版本/日期：`<Vinkey 版本发布、模型/提示合同变更，或 CF-022/CF-023 设计变化时>`

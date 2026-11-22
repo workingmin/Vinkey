@@ -1,4 +1,4 @@
-param(
+﻿param(
   [string]$Output,
   [string]$BaseUrl,
   [switch]$Help

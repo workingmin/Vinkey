@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 $RootDirectory = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 
 if ([System.Environment]::OSVersion.Platform -ne [System.PlatformID]::Win32NT) {

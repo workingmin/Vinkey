@@ -1,9 +1,20 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TitleBar } from './App'
 import { useAppStore } from './store'
+
+const windowMock = vi.hoisted(() => ({
+  minimize: vi.fn().mockResolvedValue(undefined),
+  toggleMaximize: vi.fn().mockResolvedValue(undefined),
+  isMaximized: vi.fn().mockResolvedValue(false),
+  close: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('@tauri-apps/api/window', () => ({
+  getCurrentWindow: () => windowMock,
+}))
 
 function renderTitleBar() {
   const callbacks = {
@@ -22,6 +33,8 @@ function renderTitleBar() {
 
 beforeEach(() => {
   localStorage.clear()
+  vi.clearAllMocks()
+  Object.defineProperty(window, '__TAURI_INTERNALS__', { configurable: true, value: {} })
   Object.defineProperty(navigator, 'platform', { configurable: true, value: 'Win32' })
   Object.defineProperty(navigator, 'clipboard', {
     configurable: true,
@@ -104,5 +117,25 @@ describe('Windows title-bar menu', () => {
     fireEvent.click(screen.getByRole('button', { name: /^编辑$/ }))
     expect((screen.getByRole('menuitem', { name: /^全选/ }) as HTMLButtonElement).disabled).toBe(true)
     expect((screen.getByRole('menuitem', { name: /^剪切/ }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('does not render a brand icon or workspace/model label in the title bar', () => {
+    renderTitleBar()
+    expect(document.querySelector('.title-bar-brand')).toBeNull()
+    expect(document.querySelector('.title-bar-mark')).toBeNull()
+    expect(screen.queryByText('Vinkey')).toBeNull()
+    expect(screen.queryByText('本地工作台')).toBeNull()
+  })
+
+  it('routes the window controls to the Tauri window commands', async () => {
+    renderTitleBar()
+    fireEvent.click(screen.getByRole('button', { name: '最小化窗口' }))
+    fireEvent.click(screen.getByRole('button', { name: '最大化窗口' }))
+    fireEvent.click(screen.getByRole('button', { name: '关闭窗口' }))
+    await waitFor(() => {
+      expect(windowMock.minimize).toHaveBeenCalledTimes(1)
+      expect(windowMock.toggleMaximize).toHaveBeenCalledTimes(1)
+      expect(windowMock.close).toHaveBeenCalledTimes(1)
+    })
   })
 })
