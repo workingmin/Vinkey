@@ -72,7 +72,7 @@
 | --- | --- | --- |
 | [应用壳层与入口专项验收（macOS）](ui/macos/UI_ACCEPTANCE_MACOS_SHELL.md) | `D-SHELL` / `W0-SHELL-P`；macOS；平台与结构验收报告 | `通过（功能域单平台范围）` |
 | [标题栏与功能菜单专项验收（macOS）](ui/macos/UI_ACCEPTANCE_MACOS_TITLE_BAR.md) | `D-SHELL` / `W0-SHELL-MENU-P/F`；macOS；原生菜单与窗口命令验收报告 | `专项通过（Alpha 客观范围）` |
-| [应用壳层与入口专项验收（Windows）](ui/windows/UI_ACCEPTANCE_WINDOWS_SHELL.md) | `D-SHELL` / `W0-SHELL-P`；Windows；平台与结构验收报告 | `NOT_EXECUTED` |
+| [应用壳层与入口专项验收（Windows）](ui/windows/UI_ACCEPTANCE_WINDOWS_SHELL.md) | `D-SHELL` / `W0-SHELL-P`；Windows；原生窗口 + 结构验收报告 | `通过（功能域单平台范围）` |
 | [项目与会话导航专项验收（macOS）](ui/macos/UI_ACCEPTANCE_MACOS_NAVIGATION.md) | `D-NAV` / `W0-NAV-F`、`W2-NAV-E`、`W4-NAV-R`；macOS；合同、端到端与回归验收报告 | `通过（功能域单平台范围）` |
 | [项目与会话导航专项验收（Windows）](ui/windows/UI_ACCEPTANCE_WINDOWS_NAVIGATION.md) | `D-NAV` / `W0-NAV-F`、`W2-NAV-E`、`W4-NAV-R`；Windows；合同、端到端与回归验收报告 | `NOT_EXECUTED` |
 | [模型设置专项验收（macOS）](ui/macos/UI_ACCEPTANCE_MACOS_SETTINGS.md) | `D-MODEL` / `W1-MODEL-E`；macOS；设置与真实模型服务验收报告 | `专项通过（Alpha 客观范围）` |
