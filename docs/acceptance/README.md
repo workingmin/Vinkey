@@ -78,9 +78,9 @@
 | [模型设置专项验收（macOS）](ui/macos/UI_ACCEPTANCE_MACOS_SETTINGS.md) | `D-MODEL` / `W1-MODEL-E`；macOS；设置与真实模型服务验收报告 | `专项通过（Alpha 客观范围）` |
 | [模型设置专项验收（Windows）](ui/windows/UI_ACCEPTANCE_WINDOWS_SETTINGS.md) | `D-MODEL` / `W1-MODEL-E`；Windows；设置与真实模型服务验收报告 | `专项通过（Alpha 客观范围）` |
 | [长任务/日志中心专项验收（macOS）](ui/macos/UI_ACCEPTANCE_MACOS_TASK_PROCESS.md) | `D-TASK-LOG` / `UI-ACC-LOGS-001`；macOS；长任务端到端机器证据报告 | `专项通过（Alpha 客观范围）` |
-| [长任务/日志中心专项验收（Windows）](ui/windows/UI_ACCEPTANCE_WINDOWS_TASK_PROCESS.md) | `D-TASK-LOG` / `UI-ACC-LOGS-001`；Windows；长任务端到端机器证据报告 | `NOT_EXECUTED` |
+| [长任务/日志中心专项验收（Windows）](ui/windows/UI_ACCEPTANCE_WINDOWS_TASK_PROCESS.md) | `D-TASK-LOG` / `UI-ACC-LOGS-001`；Windows；长任务端到端机器证据报告 | `专项通过（Alpha 客观范围）` |
 | [长任务过程原生复验清单（macOS）](ui/macos/UI_ACCEPTANCE_MACOS_TASK_PROCESS_NATIVE.md) | `NT-MAC-001`~`005` / `UI-ACC-TASK-NATIVE-001`；macOS；桌面原生 AX 复验清单 | `专项通过（Alpha 客观范围）` |
-| [长任务过程原生复验清单（Windows）](ui/windows/UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_NATIVE.md) | `NT-WIN-001`~`005`；Windows；桌面原生复验清单 | `NOT_EXECUTED` |
+| [长任务过程原生复验清单（Windows）](ui/windows/UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_NATIVE.md) | `NT-WIN-001`~`005`；Windows；桌面原生复验清单 | `部分参考`（`TASK-CHK-*` 已定稿；无 Windows 原生 runner） |
 | [长任务过程原生复验清单（共享合同与平台任务分派索引）](ui/TASK_PROCESS_NATIVE_ACCEPTANCE.md) | `NT-001`~`NT-005`；全平台；通过标准与任务分派索引 | 不适用（合同文档） |
 
 > 标题栏与功能菜单专项的 Windows 报告尚未建立；macOS 侧客观证据包括全局搜索、全屏与 Reopen、原生菜单覆盖、WebView 结构证据及目录取消保态，具体用例结论见专项报告。
