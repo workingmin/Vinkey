@@ -400,7 +400,7 @@ if (Test-Path (Join-Path $WEBVIEW_DIR 'result.json')) {
         $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant()
         $lines += "$hash  $rel"
     }
-    $lines | Out-File -FilePath $wvManifest -Encoding ascii
+    [System.IO.File]::WriteAllText($wvManifest, (($lines -join "`n") + "`n"), (New-Object System.Text.UTF8Encoding($false)))
 }
 
 # ---- privacy redaction + audit (inline Node) ----
@@ -475,7 +475,7 @@ Get-ChildItem -Path $OUTPUT_DIR -Recurse -File | Where-Object { $_.FullName -ne 
     $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant()
     $manLines += "$hash  $rel"
 }
-$manLines | Out-File -FilePath $manifest -Encoding ascii
+[System.IO.File]::WriteAllText($manifest, (($manLines -join "`n") + "`n"), (New-Object System.Text.UTF8Encoding($false)))
 
 # ---- archive (tar.gz) ----
 $archiveName = ''
