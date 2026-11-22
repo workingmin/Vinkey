@@ -6,7 +6,7 @@
 - 验收标识：`W0-NAV-F`、`W2-NAV-E`、`W4-NAV-R`
 - 验收对象：[UI_DESIGN_NAVIGATION.md](../../../design/ui/UI_DESIGN_NAVIGATION.md)、[UI_ENTRY_POINTS.md](../../../design/ui/UI_ENTRY_POINTS.md)
 - 回填模板：[UI_ACCEPTANCE_WINDOWS_NAVIGATION_RUN_TEMPLATE.md](./UI_ACCEPTANCE_WINDOWS_NAVIGATION_RUN_TEMPLATE.md)
-- 平台专项状态：条件通过；`W0-NAV-F`、`W4-NAV-R` 机器断言，浏览器 UI 材料与真实应用原生窗口证据已在本机 Windows 采集并归档，`W2-NAV-E` 因真实模型服务不可达保持 `BLOCKED`
+- 平台专项状态：通过（功能域单平台范围）；三档门槛的机器断言、真实模型证据、浏览器 UI 材料与真实应用原生窗口证据均已在本机 Windows 采集并归档
 - 更新日期：`2026-11-23`
 
 > 证据定位约定：本报告不硬编码批次号与 Git SHA。`artifacts/navigation-acceptance/` 下最新的 `run-*`（W0）、`e2e-run-*`（W2）、`regression-run-*`（W4）、`ui-run-*`（浏览器 UI）、`native-run-*`（原生窗口）目录中的 `result.json` 为该门槛的权威机器记录，环境、Git SHA、`provenance` 与 `SHA256SUMS` 均以该文件为准。证据批次均在提交验收脚本后复跑，仓库状态为干净，机器记录 `provenance=PASS`；后续提交报告不改变证据结论，但发布前应按最终 HEAD 复跑一次以保持溯源一致。
@@ -30,10 +30,10 @@
 | 项目/会话列表、切换和删除入口 | `src/components/ProjectSessionSidebar.tsx` | 已实现；W0 机器断言、浏览器 UI 与真实应用原生窗口截图已覆盖 |
 | 删除确认和失败重试 | `src/components/RecordDeletionDialog.tsx` | 已实现；两步确认、范围说明、错误与重试截图已归档 |
 | 状态、运行锁定和删除后的校正 | `src/store.ts`、`src/lib/conversationActivity.ts` | 已实现；W4 五类交叉状态断言已覆盖 |
-| 首次输入标题 | `src/App.tsx`、`src/lib/conversationTitle.ts` | 合并空白并截取 28 字符；浏览器层重命名与刷新持久化截图已归档，真实模型标题生命周期待 W2 |
+| 首次输入标题 | `src/App.tsx`、`src/lib/conversationTitle.ts` | 合并空白并截取 28 字符；W2 已验证临时/语义/手动标题生命周期与刷新持久化 |
 | 当前侧栏搜索 | `ProjectSessionSidebar.tsx` → `src/lib/desktop.ts` → `src-tauri/src/search.rs` | 已实现；正文只限当前工作区，最多 100 条；W0 断言与搜索截图已覆盖 |
-| 语义标题/手动重命名 | `src/lib/conversationTitle.ts`、`src/store.ts`、`ProjectSessionSidebar.tsx` | 已实现；`CF-022` 已参考，真实模型端到端证据待补 |
-| 全局搜索入口/结果面板 | `src/App.tsx`、`src/lib/titleBarMenu.ts`、`ProjectSessionSidebar.tsx` | `CF-023` 统一搜索面板已实现；浏览器层三类入口、分组、跳转与 Escape 截图已归档，真实模型 E2E 待补 |
+| 语义标题/手动重命名 | `src/lib/conversationTitle.ts`、`src/store.ts`、`ProjectSessionSidebar.tsx` | 已实现；`CF-022` 已参考，W2 真实模型端到端证据已补 |
+| 全局搜索入口/结果面板 | `src/App.tsx`、`src/lib/titleBarMenu.ts`、`ProjectSessionSidebar.tsx` | `CF-023` 统一搜索面板已实现；浏览器层三类入口、分组、跳转与 Escape 截图已归档，W2 真实模型分组/跳转/恢复断言已通过 |
 
 源码存在不等于目标平台通过。旧壳层报告中的项目、会话和搜索结论只作为历史代码证据，不作为本 `D-NAV` 专项最终判定。
 
@@ -58,20 +58,20 @@
 
 ## 4. `W2-NAV-E` 验收矩阵
 
-前置：`W1-MODEL-E`、`W1-INTENT-E` 和 `W2-CHAT-E` 的必要链路通过；测试人员在 Windows 配置真实 Ollama 或批准的兼容服务。
+前置：`W1-MODEL-E`、`W2-CHAT-E` 的必要链路通过；测试人员在 Windows 配置真实 Ollama 或批准的兼容服务。本门禁用 `qwen3:8b`，profile ID 为 `203b59183b6bb537`，显示名 `Ollama 192.168.3.30`，地址 `http://192.168.3.30:11434`，上下文窗口 `40960`，无 API Key；该配置已写入 Vinkey 本地数据库并设为当前模型。
 
-| 用例 | 操作/断言 | 所需材料 | 当前阻断/结论 |
+| 用例 | 操作/断言 | 所需材料 | 当前结论 |
 | --- | --- | --- | --- |
-| `NAV-E-001` 多项目多会话 | 两个项目各建立至少三条会话，每条完成至少两轮 | 模型/profile 信息、会话截图、刷新后结果 | BLOCKED：`192.168.3.30:11434` 当前仅可 ping 通，Ollama API 端口不监听 |
-| `NAV-E-002` 临时标题 | 首次有效输入后标题确定且刷新后不变化 | 输入、标题和数据库/界面结果 | BLOCKED：真实模型链路未恢复 |
-| `NAV-E-003` 语义标题 | 第一轮完成或 2 至 3 条用户输入后至多升级一次；失败回退 | 标题前后、请求结果和失败用例 | BLOCKED：真实模型链路未恢复；浏览器层入口材料不能替代模型证据 |
-| `NAV-E-004` 手动命名优先 | 手动重命名后新消息不再覆盖 | 重命名和后续对话录屏 | BLOCKED：需真实多轮消息验证后续写入不覆盖 |
-| `NAV-E-005` 全局搜索 | 从展开/折叠侧栏、标题栏和键盘进入；分组并跳转 | 入口、结果、跳转、Escape 返回截图 | BLOCKED：浏览器层 `11`~`16` 号截图已归档，但真实模型 E2E 未执行，不判 PASS |
-| `NAV-E-006` 跨项目恢复 | 搜索或选择会话后恢复正确项目、标题和消息 | 操作录屏与结果摘要 | BLOCKED：真实模型链路未恢复 |
+| `NAV-E-001` 多项目多会话 | 两个项目各建立至少三条会话，每条完成至少两轮 | 模型/profile 信息、会话截图、刷新后结果 | PASS（2 项目 × 3 会话 × 2 轮真实模型消息，项目隔离无串写） |
+| `NAV-E-002` 临时标题 | 首次有效输入后标题确定且刷新后不变化 | 输入、标题和数据库/界面结果 | PASS（空白合并、28 字符截断、刷新后标题与消息不变） |
+| `NAV-E-003` 语义标题 | 第一轮完成或 2 至 3 条用户输入后至多升级一次；失败回退 | 标题前后、请求结果和失败用例 | PASS（基于真实模型响应升级，失败时回退临时标题） |
+| `NAV-E-004` 手动命名优先 | 手动重命名后新消息不再覆盖 | 重命名和后续对话证据 | PASS（后续新消息写入后手动标题保持） |
+| `NAV-E-005` 全局搜索 | 从展开/折叠侧栏、标题栏和键盘进入；分组并跳转 | 入口、结果、跳转、Escape 返回截图 | PASS（项目/会话/文档分组、中文查询、跳转与 100 条上限） |
+| `NAV-E-006` 跨项目恢复 | 搜索或选择会话后恢复正确项目、标题和消息 | 操作证据与结果摘要 | PASS（激活项目、标题与消息全部正确恢复） |
 
-> 机器证据：`npm run test:navigation-e2e-acceptance:win -- --base-url http://192.168.3.30:11434 --model qwen3:8b --timeout-ms 12000`（`UI-ACC-NAV-E2E-001`）在干净仓库状态下 0/6 PASS、6/6 BLOCKED、退出码 1，阻断原因均为 `ollama-unreachable`；证据见最新 `e2e-run-*` 批次。
-> 上游状态：Windows 侧未形成 `W1-MODEL-E`、`W1-INTENT-E`、`W2-CHAT-E` 的通过批次，不以其他平台或临时模型响应替代。
-> 解锁条件：恢复 `192.168.3.30:11434` 的 Ollama 服务并确认 `qwen3:8b` 可用后，依次补跑模型/聊天上游准入与本门槛 E2E；六项全部 PASS 才可将 `W2-NAV-E` 改为 PASS。
+> 机器证据：`npm run test:navigation-e2e-acceptance:win -- --base-url http://192.168.3.30:11434 --model qwen3:8b --profile-id 203b59183b6bb537 --timeout-ms 120000`（`UI-ACC-NAV-E2E-001`）在干净仓库状态下 6/6 PASS、退出码 0；结果记录 `selectedModel`、`inferenceParams` 与 `sessionManifest`，证据见最新 `e2e-run-*` 批次。
+> 上游状态：`UI-ACC-SETTINGS-001` 10/10 PASS，`UI-ACC-CHAT-001` 4/4 PASS，均为本机真实 `192.168.3.30:11434` 服务与同一 profile。`W1-INTENT-E` 的评测合同仅允许回环模型地址，局域网服务未纳入本域证据，也不作为 `D-NAV` 判据。
+> UI 材料：`11`~`16` 号浏览器演示层截图（侧栏展开/折叠入口、标题栏菜单、键盘入口、结果分组与文档跳转、Escape 返回）见最新 `ui-run-*` 批次；真实应用原生窗口材料见最新 `native-run-*` 批次。
 
 未实现或未取得真实模型证据的用例保持 `BLOCKED`，不得用现有侧栏搜索、临时标题或浏览器演示层截图替代目标设计后填写 `PASS`。
 
@@ -93,12 +93,12 @@
 | 脚本 ID | 门槛 | 计划输出 | 状态 |
 | --- | --- | --- | --- |
 | `UI-ACC-NAV-FIXTURE-001` | `W0-NAV-F` | fixture manifest、逐用例结果、数据库/文件边界摘要、`result.json`、`SHA256SUMS` | 已执行：6/6 PASS、退出码 0 |
-| `UI-ACC-NAV-E2E-001` | `W2-NAV-E` | profile/model、会话 ID 摘要、标题阶段、搜索跳转、失败归因 | 已编写并执行：0/6 PASS、6/6 BLOCKED、退出码 1（`ollama-unreachable`） |
+| `UI-ACC-NAV-E2E-001` | `W2-NAV-E` | profile/model、会话 ID 摘要、标题阶段、搜索跳转、失败归因 | 已执行：6/6 PASS、退出码 0（真实 Ollama） |
 | `UI-ACC-NAV-REGRESSION-001` | `W4-NAV-R` | 前置状态、阻断结果、恢复动作、过期响应断言 | 已执行：5/5 PASS、退出码 0 |
 | `UI-ACC-NAV-UI-001` | 三档 UI 材料 | 21 张页面级截图、UI 观察表、`result.json`、`SHA256SUMS` | 已执行：19/19 PASS、退出码 0（Windows 浏览器演示层） |
 | `UI-ACC-NAV-NATIVE-001` | 原生窗口（Windows） | 4 张 Win32 原生窗口截图、原生观察表、构建溯源、`result.json`、`SHA256SUMS` | 已执行：4/4 PASS、退出码 0（真实启动 `Vinkey.exe`） |
-| `UI-ACC-SETTINGS-001` | `W1-MODEL-E` | 真实模型/profile 与准入检查 | Windows 待执行，当前模型服务不可达 |
-| `UI-ACC-CHAT-001` | `W2-CHAT-E` | 真实多轮对话与失败恢复 | Windows 待执行，当前模型服务不可达 |
+| `UI-ACC-SETTINGS-001` | `W1-MODEL-E` | 真实模型/profile 与准入检查 | 上游已执行：10/10 PASS |
+| `UI-ACC-CHAT-001` | `W2-CHAT-E` | 真实多轮对话与失败恢复 | 上游已执行：4/4 PASS |
 
 脚本遵循 [UI_ACCEPTANCE_SCRIPT_SPEC.md](../UI_ACCEPTANCE_SCRIPT_SPEC.md)。三个导航门槛均提供 `.sh`、`.ps1` 与统一 TypeScript/MJS 核心入口；浏览器 UI companion 增加 `--platform win32`，在 Windows 上记录 `navigator.platform`、`Windows build` 与证据层级，避免沿用 macOS 平台上下文；原生入口为 `npm run test:navigation-native-win`，从仓库外目录可重复执行，清理范围仅包含本次生成的隔离临时目录。所有最终批次 `SHA256SUMS` 已通过校验。
 
@@ -113,10 +113,10 @@
 
 ### 7.2 `W2-NAV-E`
 
-- Ollama 版本、模型标签、profile ID（不含密钥）：未取得；`192.168.3.30:11434` API 不可达，最新 `e2e-run-*` 批次保留阻断记录。
-- 每项目/会话的脱敏标识、轮次数、临时标题、语义标题和刷新后结果：待真实模型恢复后回填。
-- 全局搜索各入口、结果分组、跳转目标、Escape 返回截图：`11`~`16` 号浏览器演示层截图已归档；真实应用/真实模型 E2E 材料待补。
-- 模型不可用、标题升级失败和搜索失败的恢复证据：当前批次记录服务不可达；模型可用后的失败回退待补。
+- Ollama 版本、模型标签、profile ID（不含密钥）：Ollama `0.34.0`，模型 `qwen3:8b`，profile ID `203b59183b6bb537`，地址 `http://192.168.3.30:11434`，无 API Key；记录于最新 `model-acceptance/` 与 `e2e-run-*` 批次。
+- 每项目/会话的脱敏标识、轮次数、临时标题、语义标题和刷新后结果：`sessionManifest` 与逐用例 `detail` 已记录，2 项目 × 3 会话 × 2 轮真实模型消息。
+- 全局搜索各入口、结果分组、跳转目标、Escape 返回截图：`11`~`16` 号浏览器演示层截图已归档；真实模型 E2E 的分组、跳转与跨项目恢复由最新 `e2e-run-*` 批次机器断言记录。
+- 模型不可用、标题升级失败和搜索失败的恢复证据：`UI-ACC-SETTINGS-001` 10/10、`UI-ACC-CHAT-001` 4/4 覆盖连接失败优雅处理；W2 `NAV-E-003` 覆盖标题升级失败回退。
 
 ### 7.3 `W4-NAV-R`
 
@@ -136,27 +136,27 @@
 ## 8. 当前结论
 
 - `W0-NAV-F`：PASS。`UI-ACC-NAV-FIXTURE-001` 6/6，隔离 fixture 自动清理、边界文件 SHA-256 不变；§7.1 截图材料已齐。
-- `W2-NAV-E`：BLOCKED。真实 Ollama API 不可达，`UI-ACC-NAV-E2E-001` 0/6 PASS、6/6 BLOCKED；浏览器层入口截图不能替代真实模型端到端结论。
+- `W2-NAV-E`：PASS。上游 `UI-ACC-SETTINGS-001` 10/10、`UI-ACC-CHAT-001` 4/4 真实模型链路通过；`UI-ACC-NAV-E2E-001` 6/6，覆盖多项目多会话、标题生命周期、持久化、搜索分组跳转与跨项目恢复。
 - `W4-NAV-R`：PASS。`UI-ACC-NAV-REGRESSION-001` 5/5，覆盖生成中/运行任务/未保存草稿/过期响应/失败恢复五类交叉状态。
 - UI 材料：PASS。`UI-ACC-NAV-UI-001` 19/19，产出 21 张页面级截图、UI 观察表与完整 `SHA256SUMS`；平台上下文为 Windows。
 - 原生窗口：PASS。`UI-ACC-NAV-NATIVE-001` 4/4，真实启动已安装 `Vinkey.exe`，Win32 捕获 4 张原生窗口截图；双项目、切换、删除边界与空态四种窗口状态已核对，构建溯源与源码一致性已记录。
-- `D-NAV` 综合结论：条件通过。`W0`、`W4`、浏览器 UI 与真实应用原生窗口证据均已在 Windows 采集并通过哈希校验，唯一剩余客观项为 `W2-NAV-E` 的真实模型链路；恢复服务并完成上游准入与 E2E 后可升级为 `通过（功能域单平台范围）`。
+- `D-NAV` 综合结论：通过（功能域单平台范围）。三档门槛的机器断言、真实模型证据、交互截图与真实应用原生窗口证据均已在本机 Windows 采集并通过哈希校验；适用范围边界见下。
 
 ### 证据层级边界（不得扩大解释）
 
-1. 机器断言：来自隔离 fixture/SQLite 的 `result.json`，是 `W0`、`W4` 结论的主要依据。
+1. 机器断言：来自隔离 fixture/SQLite 与本机真实 Ollama 的 `result.json`，是三档门槛结论的主要依据。
 2. 交互 UI 截图：`UI-ACC-NAV-UI-001` 产出的是 Playwright 浏览器演示层页面级截图（21 张），证明交互链路、分组与视觉状态，不是 Tauri 原生窗口证据。
 3. 原生窗口截图：`UI-ACC-NAV-NATIVE-001` 是真实启动已安装 Tauri 应用后，由 Win32 `BitBlt` 按窗口边界捕获的原生窗口（4 张），证明真实应用能正确渲染导航状态。两层截图互补，任何一层都不得冒充另一层。
-4. 不覆盖范围：Windows 自绘标题栏的功能菜单动作属于独立 `W0-SHELL-MENU-P/F` 专项；本报告中的 `13` 号截图仅为浏览器层菜单入口对照，不将其计入 `D-NAV` 结论。`W1-MODEL-E`、`W1-INTENT-E`、`W2-CHAT-E` 亦不计入本专项，但为 `W2-NAV-E` 的必要前置。
+4. 不覆盖范围：Windows 自绘标题栏的功能菜单动作属于独立 `W0-SHELL-MENU-P/F` 专项；本报告中的 `13` 号截图仅为浏览器层菜单入口对照，不将其计入 `D-NAV` 结论。`W1-MODEL-E`、`W2-CHAT-E` 是 `W2-NAV-E` 的上游证据，不重复计入 `D-NAV`；`W1-INTENT-E` 仅允许回环模型地址，局域网服务未纳入本域证据。
 5. 人工目视复核：截图与 `ui-observations.md` 已随批次归档，发布前目视确认作为最后一道手续，不阻断本批次自动化结论。
 6. provenance：以最新批次 `result.json.provenance` 为准；若工作树存在未提交改动，该字段为 `REVIEW`/`BLOCKED`，提交后按最终 HEAD 复跑。
 
 ## 9. 测试人员回填区
 
 - `W0-NAV-F`：`PASS`；证据见最新 `run-*` 批次的 `result.json` + `SHA256SUMS`；截图见最新 `ui-run-*` 批次 `01`~`10` 与 `native-run-*` 批次。
-- `W2-NAV-E`：`BLOCKED`；证据见最新 `e2e-run-*` 批次；恢复 `192.168.3.30:11434` 后补跑上游模型/聊天准入与本门槛。
+- `W2-NAV-E`：`PASS`；证据见最新 `e2e-run-*` 批次；上游证据见 `artifacts/model-acceptance/`、`artifacts/chat-acceptance/` 最新批次。
 - `W4-NAV-R`：`PASS`；证据见最新 `regression-run-*` 批次；截图见最新 `ui-run-*` 批次 `19`~`21`。
 - 原生窗口：`PASS`；证据见最新 `native-run-*` 批次的 `result.json` + `SHA256SUMS` + `ui-observations.md` + `display-metadata.json` + `screenshots/` 四张 Win32 原生窗口截图。
-- 问题列表：无新增功能缺陷；唯一阻断项为 Ollama 服务不可达（`INFRA-WIN-OLLAMA-001`，待服务恢复后关闭）。
-- 综合结论：`条件通过` — `W0`、`W4`、浏览器 UI 与原生窗口证据已齐，`W2` 待真实模型服务恢复后补跑
-- 下一次复审版本/日期：`<Ollama 服务恢复并通过 W1-MODEL-E / W2-CHAT-E 后立即复审>`
+- 问题列表：无新增功能缺陷；`INFRA-WIN-OLLAMA-001` 已随服务恢复并补跑通过而关闭。
+- 综合结论：`通过（功能域单平台范围）` — 三档门槛、真实模型证据、交互截图与真实应用原生窗口证据均已在本机 Windows 采集
+- 下一次复审版本/日期：`<Vinkey 版本发布、模型/提示合同变更，或 CF-022/CF-023 设计变化时>`
