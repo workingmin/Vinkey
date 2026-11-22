@@ -11,6 +11,7 @@ import { spawn, spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
+import { release } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
@@ -22,14 +23,18 @@ const SUITE_ID = 'UI-ACC-NAV-UI-001'
 const SUITE_VERSION = 'navigation-ui-1'
 
 function parseArgs(argv) {
-  const options = { output: defaultOutput, baseUrl: null, help: false, outputExact: false }
+  const options = { output: defaultOutput, baseUrl: null, help: false, outputExact: false, platform: process.platform }
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index]
     if (value === '--help' || value === '-h') options.help = true
     else if (value === '--output') options.output = path.resolve(argv[++index] ?? '')
     else if (value === '--base-url') options.baseUrl = argv[++index] ?? null
     else if (value === '--output-exact') options.outputExact = true
-    else throw new Error(`未知参数：${value}`)
+    else if (value === '--platform') {
+      const platform = argv[++index]
+      if (platform !== 'darwin' && platform !== 'win32' && platform !== 'linux') throw new Error(`不支持的平台：${platform}`)
+      options.platform = platform
+    } else throw new Error(`未知参数：${value}`)
   }
   return options
 }
@@ -43,6 +48,7 @@ function printHelp() {
   --output <目录>     证据归档目录（默认 artifacts/navigation-acceptance）
   --base-url <URL>    使用已运行的 Vite 服务，不启动/停止服务
   --output-exact      将 --output 作为本次批次目录，不追加 run-*
+  --platform <name>   浏览器演示的 navigator.platform 上下文（darwin/win32/linux，默认当前系统）
   --help              显示帮助
 
 说明：产出浏览器演示层页面级截图，不是 Tauri 原生窗口证据。
@@ -98,7 +104,7 @@ function fixtureInitScript() {
 
 const FIXTURE = { a: PROJECT_A, b: PROJECT_B, conversationsA: null, conversationsB: null }
 
-async function newPage(browser, fixture, outputDir, platform = 'darwin') {
+async function newPage(browser, fixture, outputDir, platform = process.platform) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, reducedMotion: 'reduce' })
   await context.addInitScript((platformName) => {
     Object.defineProperty(navigator, 'platform', { configurable: true, value: platformName === 'darwin' ? 'MacIntel' : 'Win32' })
@@ -145,7 +151,14 @@ async function main() {
   const statusRun = spawnSync('git', ['-C', repositoryRoot, 'status', '--porcelain'], { encoding: 'utf8' })
   const repositoryClean = statusRun.status === 0 && !statusRun.stdout.trim()
   const nodeVersion = process.version
-  const osVersionRun = spawnSync('sw_vers', ['-productVersion'], { encoding: 'utf8' })
+  const osVersionRun = options.platform === 'darwin'
+    ? spawnSync('sw_vers', ['-productVersion'], { encoding: 'utf8' })
+    : null
+  const osVersion = options.platform === 'win32'
+    ? `Windows build ${release()}`
+    : options.platform === 'darwin' && osVersionRun?.status === 0
+      ? `macOS ${osVersionRun.stdout.trim()}`
+      : release()
 
   const fixture = {
     ...FIXTURE,
@@ -160,7 +173,7 @@ async function main() {
     ],
   }
 
-  const runCase = async (caseId, title, gate, fn, platform = 'darwin') => {
+  const runCase = async (caseId, title, gate, fn, platform = options.platform) => {
     let session = null
     try {
       session = await newPage(browser, { ...fixture, baseUrl: baseUrl }, outputDir, platform)
@@ -429,14 +442,14 @@ async function main() {
     },
     execution: { testerId: 'local-tester', testerIdBasis: 'explicit non-personal identifier' },
     environment: {
-      os: process.platform === 'darwin' ? 'macOS' : process.platform === 'win32' ? 'Windows' : 'Linux',
-      osVersion: osVersionRun.status === 0 ? osVersionRun.stdout.trim() : 'N/A',
+      os: options.platform === 'darwin' ? 'macOS' : options.platform === 'win32' ? 'Windows' : 'Linux',
+      osVersion,
       arch: process.arch, node: nodeVersion,
     },
     evidenceLayer: {
       kind: 'browser-demo-playwright',
       note: '页面级浏览器演示层截图，不是 Tauri 原生窗口证据；不得冒充 ui-shell-native-macos 的 CoreGraphics 窗口截图。',
-      platform: 'darwin',
+      platform: options.platform,
       viewport: { width: 1440, height: 900 },
       deviceScaleFactor: 1,
     },
