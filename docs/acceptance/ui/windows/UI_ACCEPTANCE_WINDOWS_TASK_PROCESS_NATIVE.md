@@ -5,9 +5,10 @@
 - 功能域：`D-TASK-LOG` 日志中心与长任务
 - 归属门槛：`W4-TASK-E`；竞品证据 [`CF-006`](../../../competitors/FEATURE_DECISIONS.md)
 - 验收脚本：`UI-ACC-LOGS-001`（`scripts/task-process/`）
+- 桌面原生 runner：`npm run test:task-process-native-win -- --driver-workspace <WS>`（`scripts/task-process/run-task-process-native-windows.mjs`，真实 Tauri app + 隔离 fixture + Windows UI Automation，判定可机器判定的客观子断言；套件 `UI-ACC-TASK-NATIVE-001`）
 - 平台专项报告：[长任务/日志中心专项验收（Windows）](./UI_ACCEPTANCE_WINDOWS_TASK_PROCESS.md)
 - 回填模板：[长任务/日志中心回填模板（Windows）](./UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_RUN_TEMPLATE.md)
-- 平台状态：部分参考。`TASK-CHK-*` 机器核查已在 Windows 定稿（7/7 PASS）；`NT-WIN-001`~`005` 桌面原生客观断言因无 Windows 自动化 runner（macOS AX runner 不适用）未逐项自动读回，保留「部分参考」并随人工复核统一批次跟踪。
+- 平台状态：桌面原生客观断言专项通过（Alpha 客观范围）。`TASK-CHK-*` 机器核查已定稿（7/7 PASS）；`NT-WIN-001`~`005` 的客观断言已由 Windows 桌面原生 runner 以 UIA 逐项自动读回并判定（`UI-ACC-TASK-NATIVE-001` 最新批次 `decision.specialityPass=true`，5/5 PASS）；观感/易理解性随人工复核统一批次跟踪。
 - 更新日期：`2026-11-23`
 
 ## 1. 平台前置条件
@@ -28,11 +29,11 @@
 
 | 平台任务 | 原用例 | 平台执行动作 | 留在 Alpha 的客观断言 | 证据入口 | 平台状态 |
 | --- | --- | --- | --- | --- | --- |
-| `NT-WIN-001` | `NT-001` 执行中事件记录 | 在真实长文本分析执行中观察事件顺序与任务状态栏；脚本只读核查 `.vinkey/analysis/jobs/<jobId>/` 产物 | 每个真实事件按顺序显示：sequence 从 1 连续递增、段标签与阶段映射一致、已完成段带 `endedAt`；任务状态栏常显且与 Worker 状态一致（状态读回） | `TASK-CHK-005`；状态栏与 Worker 状态读回、截图 | `部分参考` |
-| `NT-WIN-002` | `NT-002` 暂停/恢复快照 | 暂停后恢复，保存暂停与恢复前后截图/录屏及事件对照 | 恢复后出现新推进段、不覆盖暂停前记录；暂停文案为 CP-42「已暂停后续步骤」降级，不得写成 CP-05「已暂停」 | `TASK-UI-001`（`-Manual` 回填）；暂停/恢复事件对照 | `部分参考` |
-| `NT-WIN-003` | `NT-003` 源变化拒绝恢复 | 修改源文件后恢复，记录源文件指纹、恢复提示与检查点状态 | 提示「原文已变化，无法沿用此前进度。请重新发起分析。」且不沿用旧检查点（指纹与检查点读回） | `TASK-UI-006`；源文件前后指纹、检查点与终态读回 | `部分参考` |
-| `NT-WIN-004` | `NT-004` 两层折叠保持 | 执行第一层批量展开/收起，检查第二层详情选择与公开响应位置 | 第一层批量操作不重置第二层详情选择；公开响应位于折叠外 | `TASK-UI-003`；折叠前后选择状态读回、截图/录屏 | `部分参考` |
-| `NT-WIN-005` | `NT-005` 重启恢复历史 | 重启应用并重开会话，对照重启前后任务记录 | 原任务事件、产物与终态完整可见（产物清单与终态读回） | `TASK-UI-008`；`TASK-CHK-006` 终态与产物快照 | `部分参考` |
+| `NT-WIN-001` | `NT-001` 执行中事件记录 | 在真实长文本分析执行中观察事件顺序与任务状态栏；脚本只读核查 `.vinkey/analysis/jobs/<jobId>/` 产物 | 每个真实事件按顺序显示：sequence 从 1 连续递增、段标签与阶段映射一致、已完成段带 `endedAt`；任务状态栏常显且与 Worker 状态一致（状态读回） | `TASK-NAT-001`（状态栏/段标签 UIA 读回、事件顺序与 `endedAt` 机器判定）、截图；`TASK-CHK-005` | 客观项已自动化判定；观感归 §8.5 |
+| `NT-WIN-002` | `NT-002` 暂停/恢复快照 | 暂停后恢复，保存暂停与恢复前后截图/录屏及事件对照 | 恢复后出现新推进段、不覆盖暂停前记录；暂停文案为 CP-42「已暂停后续步骤」降级，不得写成 CP-05「已暂停」 | `TASK-NAT-002`（暂停态控件映射客观判定）；新段推进与 CP-42 易理解性归 `TASK-UI-001` §8.5 | 控件映射已自动化；新段推进归 §8.5 |
+| `NT-WIN-003` | `NT-003` 源变化拒绝恢复 | 修改源文件后恢复，记录源文件指纹、恢复提示与检查点状态 | 提示「原文已变化，无法沿用此前进度。请重新发起分析。」且不沿用旧检查点（指纹变化、`failed` 终态、`worker.compatibility_mismatch`、无检查点复用、UIA 提示可见） | `TASK-NAT-003`（真实 app 恢复 UIA 读回）+ 截图；CP-35 文案易理解性仍归 `TASK-UI-006` §8.5 | 客观项已自动化判定；易理解性归 §8.5 |
+| `NT-WIN-004` | `NT-004` 两层折叠保持 | 执行第一层批量展开/收起，检查第二层详情选择与公开响应位置 | 第一层批量操作不重置第二层详情选择；公开响应位于折叠外 | `TASK-NAT-004`（批量按钮 UIA 按压回执与段展开态读回）；第二层选择/交互手感归 `TASK-UI-003` §8.5 | 客观项已自动化判定；观感归 §8.5 |
+| `NT-WIN-005` | `NT-005` 重启恢复历史 | 重启应用并重开会话，对照重启前后任务记录 | 原任务事件、产物与终态完整可见（产物清单与终态读回） | `TASK-CHK-006`；`TASK-NAT-005`（重启前后状态栏与段标签读回）、截图；目视确认归 `TASK-UI-008` §8.5 | 客观项已自动化判定；目视归 §8.5 |
 
 ## 3. 执行步骤（Windows）
 
@@ -40,14 +41,16 @@
 npm run test:task-process-acceptance:win -ListProfiles -Db "<DB>"
 npm run test:task-process-acceptance:win -DumpManual "<man.json>"
 npm run test:task-process-acceptance:win -Workspace "<WS>" -Db "<DB>" -TesterId "<ID>" -Json
-npm run test:task-process-acceptance:win -Workspace "<WS>" -Db "<DB>" -Manual "<man.json>" -Output "<OUT_DIR>" -Json
+
+# 桌面原生 runner：真实 app + 隔离 fixture + Windows UI Automation，判定 NT-WIN-* 客观子断言
+npm run test:task-process-native-win -- --driver-workspace "<WS>"
 ```
 
-参数名与平台专项报告 §4 一致（`-Workspace`、`-Db`、`-TesterId`、`-Manual`、`-Output`、`-ListProfiles`、`-DumpManual`、`-Json`）。
+参数名与平台专项报告 §4 一致（`-Workspace`、`-Db`、`-TesterId`、`-Manual`、`-Output`、`-ListProfiles`、`-DumpManual`、`-Json`）；原生 runner 参数见 `npm run test:task-process-native-win -- --help`（`--driver-workspace` 为真实 Ollama CLI 驱动工作区，另有 `--job-id`、`--app`、`--output`、`--dry-run`）。
 
 1. 以 `-ListProfiles` 只读确认模型 profile；缺失或不可读时按前置条件记 `BLOCKED`。
 2. 以 `-DumpManual` 生成人工观察回填模板。
-3. 在 Windows 桌面端按 §2 逐项执行 `NT-WIN-*`，保存截图/录屏、状态读回与源文件指纹；未执行项写明原因。
+3. 以 `--driver-workspace` 运行桌面原生 runner：它把真实作业事件播种进隔离 fixture，在真实 Tauri app 中以 `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--force-renderer-accessibility` 启动，用 Windows UI Automation（`uia-helper.ps1`）读回状态栏、段标签、暂停/继续控件、展开态与重启后历史；对 `NT-WIN-003`，runner 修改真实源文件后在真实 app 中 UIA 点击「继续处理」，由生产后端复核指纹并写入失败终态与拒绝提示，脚本只读回结果、截图与任务产物。它不证明初始任务由真实用户桌面 UI 发起；新段推进与观感/易理解性仍归 §8.5。runner 前置要求无残留 vinkey 进程。
 4. 以 `-Json` 运行机器核查，核对 stdout 四行与退出码等于 `result.json.exitCode`；`TASK-CHK-*` 只读核查任务产物，不调用模型。
 5. 以 `-Manual` 合并人工观察，归档 `result.json`、`SHA256SUMS`、诊断日志与人工观察回填文件；fixture 或浏览器 companion 不得冒充目标平台原生证据。
 
@@ -55,6 +58,6 @@ npm run test:task-process-acceptance:win -Workspace "<WS>" -Db "<DB>" -Manual "<
 
 - 归档目录按 [回填模板（Windows）](./UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_RUN_TEMPLATE.md) §6 命名，原始路径在回填前脱敏；不得上传 API Key、完整作品正文、系统用户名或未脱敏绝对路径。
 - `result.json` 的 `cases[].status` 只用 `PASS` / `FAIL` / `BLOCKED` / `NOT_APPLICABLE`；`DEFERRED_AFTER_ALPHA` 仅是计划层排期状态，不进入 JSON、不参与覆盖率或计数。
-- 判定：本平台 5 项客观断言全部取得 Windows 目标平台证据、`TASK-CHK-*` 机器核查通过、退出码为 0 且 `SHA256SUMS` 可核验，方可关闭 `CF-006` 在 Windows 侧的原生复验风险；否则继续保留「部分参考」状态。macOS 批次不得顶替 Windows 目标平台证据。
-- 本轮状态：`TASK-CHK-*` 机器核查已在 Windows 定稿（7/7 PASS，`artifacts/task-process-acceptance/run-2026-11-22T22-00-19-029Z`，provenance=PASS、SHA256SUMS 校验通过），但 `NT-WIN-001`~`005` 尚无 Windows 桌面原生自动化 runner 逐项读回状态栏/段标签/暂停控件/展开态/指纹与重启恢复，故 `CF-006` Windows 侧原生复验风险继续保持「部分参考」，不写成已关闭；该部分与观感项一并随 [总计划 §8.5](../UI_ACCEPTANCE_PLAN.md#85-人工复核统一批次自动化验收完成后统一处理) 跟踪。
+- 判定：本平台 5 项客观断言全部取得 Windows 目标平台证据、`TASK-CHK-*` 机器核查通过、退出码为 0 且 `SHA256SUMS` 可核验，方可关闭 `CF-006` 在 Windows 侧的原生复验风险；否则继续保留「部分参考」状态。macOS 批次不得顶替 Windows 目标平台证据。`UI-ACC-TASK-NATIVE-001` 以 `decision.specialityPass=true`、`overallConclusion=专项通过` 表示 Alpha 客观范围达标；`evidencePackage` 中的主观项归 §8.5，不计入该结论。
+- 本轮状态：`TASK-CHK-*` 机器核查已在 Windows 定稿（7/7 PASS，`artifacts/task-process-acceptance/run-2026-11-22T22-00-19-029Z`，provenance=PASS、SHA256SUMS 校验通过）。`NT-WIN-001`~`005` 的客观断言已由 Windows 桌面原生 runner 逐项读回并判定（最新批次 `artifacts/task-process-native/20261122T222109Z-win32`，5/5 PASS、`specialityPass=true`、`overallConclusion=专项通过`、provenance=PASS、SHA256SUMS 逐文件校验通过、6 张 Win32 窗口截图）。其中 `NT-WIN-003` 由生产后端真实复核源指纹，返回 `worker.compatibility_mismatch` + CP-35 文案 + 无检查点复用 + UIA 提示可见。`CF-006` Windows 侧原生复验风险据此关闭；观感/易理解性项仍随 [总计划 §8.5](../UI_ACCEPTANCE_PLAN.md#85-人工复核统一批次自动化验收完成后统一处理) 跟踪，不写成 PASS。
 - 该结论为 Windows 单平台结论；审核结论以平台专项报告与最新批次 `result.json` 为准。平台边界与整体发布口径见 [共享合同与平台任务分派索引](../TASK_PROCESS_NATIVE_ACCEPTANCE.md) 首部。

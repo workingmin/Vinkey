@@ -21,7 +21,7 @@
 - 驱动通过 `include!` 编译 `src-tauri/src/worker_service.rs` 原文，产物全部由生产代码写入 `.vinkey/analysis/jobs/<jobId>/`；仅替换桌面 WebView 事件传输（`AppHandle`/`Emitter`）与模型传输。模型传输是真实 Ollama `/api/chat`（非 stub、非 mock、非 fixture 响应），模型配置从真实 Vinkey SQLite 的当前 profile 只读解析。
 - 该证据证明产物清单、事件序列、段标签、段结束事实、任务终态与输出快照的客观契约；不证明桌面 UI 发起与桌面交互行为（暂停/恢复、停止确认、折叠/自动跟随、产物预览、重启恢复、源变化拒绝、失败重试、窄栏/键盘）。
 - 桌面 UI 发起的端到端材料与 9 个 `TASK-UI-*` 人工观察统一归 [总计划 §8.5](../UI_ACCEPTANCE_PLAN.md#85-人工复核统一批次自动化验收完成后统一处理) 人工复核统一批次（`DEFER-UI-006`），不写成 `PASS`、不删除；整体不宣称跨平台发布通过 / 整体发布通过。
-- 桌面原生 runner（`UI-ACC-TASK-NATIVE-001`）在 macOS 侧补足可机器判定的桌面客观断言；Windows 侧无对应自动化 runner，其 `NT-WIN-001..005` 桌面原生断言保留「部分参考」并归 [Windows 原生复验清单](./UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_NATIVE.md) 跟踪，不因本轮机器核查通过而虚标为已关闭。
+- 桌面原生 runner（`UI-ACC-TASK-NATIVE-001`）已在 Windows 侧以 UI Automation 补足可机器判定的桌面客观断言：其 `NT-WIN-001..005` 客观断言由 `npm run test:task-process-native-win` 逐项判定并通过（5/5、`specialityPass=true`），详见 [Windows 原生复验清单](./UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_NATIVE.md)；观感/易理解性仍归 §8.5。
 
 | 可证明 | 不能证明 |
 | --- | --- |
@@ -147,8 +147,8 @@ A/B/C 三个阶段均已落地（提交 `97c4e18`、`6f6990e`、`a30c80f`）：
 - 批次级 `conclusion=BLOCKED` 由 9 个未回填的 `TASK-UI-*` 构成，与专项结论不在同一层级。人工/主观项（含桌面 UI 发起的端到端材料、暂停/恢复、停止确认、折叠/自动跟随、产物预览、重启恢复、CP-35 文案易理解性、失败重试、窄栏/键盘）统一归 [总计划 §8.5](../UI_ACCEPTANCE_PLAN.md#85-人工复核统一批次自动化验收完成后统一处理) 人工复核统一批次，不写成 `PASS`、不删除、不放宽客观断言。
 - 证据边界如实标注：本轮客观证据来自 CLI 驱动 + 真实 Ollama + 生产 pipeline，非桌面 UI 发起；不证明桌面交互行为，也不冒充已装安装包内嵌 gitSha 的证明。
 - 暂停安全点回执未实现：只能记录 CP-42 降级结果，不得写 `CP-05`/`已暂停`。
-- Windows 桌面原生复验 `NT-WIN-001`~`005` 尚无对应自动化 runner（macOS 的 AX 桌面 runner 不适用 Windows），保留「部分参考」并归 [Windows 原生复验清单](./UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_NATIVE.md)，不因本轮机器核查通过而虚标关闭。
-- 整体仍不宣称跨平台发布通过 / 整体发布通过（人工复核统一后置 + Windows 桌面原生断言部分参考）。
+- Windows 桌面原生复验 `NT-WIN-001`~`005` 的客观断言已由 Windows UI Automation 桌面原生 runner 逐项判定并通过（最新批次 `artifacts/task-process-native/20261122T222109Z-win32`，5/5 PASS、`specialityPass=true`、provenance=PASS、SHA256SUMS 校验通过；`NT-WIN-003` 由生产后端真实复核源指纹并返回 `worker.compatibility_mismatch` + CP-35 文案 + 无检查点复用）。观感/易理解性仍归 §8.5，不写成 PASS。
+- 整体仍不宣称跨平台发布通过 / 整体发布通过（人工复核统一后置；macOS 与 Windows 各自为独立单平台结论）。
 
 ## 7. 证据与归口
 
@@ -159,4 +159,4 @@ A/B/C 三个阶段均已落地（提交 `97c4e18`、`6f6990e`、`a30c80f`）：
 | 机器核查结果 | `artifacts/task-process-acceptance/run-2026-11-22T22-00-19-029Z/result.json` 与 `SHA256SUMS` | `UI-ACC-LOGS-001` 最终 HEAD `8664cbe` 定稿批次；7/7 机器用例 PASS、provenance=PASS |
 | 人工观察模板 | `artifacts/task-process-acceptance/manual-template-win.json` | 9 个 `TASK-UI-*` 回填模板，统一归 §8.5 |
 | 人工 UI 观察 | `--manual` 回填文件、截图/录屏索引 | 统一归 [总计划 §8.5](../UI_ACCEPTANCE_PLAN.md#85-人工复核统一批次自动化验收完成后统一处理)，待全部自动化验收脚本跑完后回填 |
-| 平台边界 | [Windows 原生复验清单](./UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_NATIVE.md) | `NT-WIN-001`~`005` 部分参考，无自动化 runner |
+| 平台边界 | [Windows 原生复验清单](./UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_NATIVE.md) | `NT-WIN-001`~`005` 桌面原生客观断言专项通过（UIA runner，5/5；观感归 §8.5） |
