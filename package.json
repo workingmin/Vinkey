@@ -54,6 +54,7 @@
     "test:model-keychain-acceptance": "node scripts/model/keychain-acceptance.mjs",
     "test:model-keychain-acceptance:win": "powershell -ExecutionPolicy Bypass -File scripts/model/run-model-keychain-acceptance.ps1",
     "test:model-keychain-acceptance:sh": "bash scripts/model/run-model-keychain-acceptance.sh",
+    "test:model-credential-acceptance:win": "powershell -ExecutionPolicy Bypass -File scripts/model/run-model-credential-acceptance.ps1",
     "test:chat-acceptance": "node scripts/chat/run-chat-acceptance.mjs",
     "test:chat-acceptance:win": "powershell -ExecutionPolicy Bypass -File scripts/chat/run-chat-acceptance.ps1",
     "test:chat-acceptance:sh": "bash scripts/chat/run-chat-acceptance.sh",
