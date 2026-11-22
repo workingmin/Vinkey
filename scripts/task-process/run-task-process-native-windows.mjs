@@ -370,6 +370,23 @@ async function main() {
   }
   log(`sourceChangeSeed=${sourceFile.relativePath} fingerprint=${sourceFingerprintBefore.slice(0, 12)}`)
 
+  // Windows 失真修正：真实 app 通过 workspace_from_root(canonicalize()) 把工作区
+  // root 以 \\?\ 前缀写入 projects 表；generateFixture 写的是普通路径。resume 时
+  // resolve_existing 用 canonicalize 结果做 starts_with(root) 校验，普通路径会被
+  // 「路径超出已授权工作区」提前拦截，使 NT-WIN-003 无法到达指纹复核。这里把
+  // fixture 的 root 更新为 canonicalize 形式，贴近真实 app 行为（不改 project id）。
+  {
+    const mainDb = new DatabaseSync(manifest.dbPath)
+    try {
+      const rows = mainDb.prepare('SELECT id, root FROM projects').all()
+      for (const row of rows) {
+        const canonical = `\\\\?\\${String(row.root).replace(/\//gu, '\\')}`
+        mainDb.prepare('UPDATE projects SET root = ? WHERE id = ?').run(canonical, row.id)
+      }
+      log(`canonicalized project roots (${rows.length}) to \\\\?\\ form for Windows policy check`)
+    } finally { mainDb.close() }
+  }
+
   const recordPath = (manifest.dbSummary?.projectRecords ?? []).find((r) => r.projectId === project.id)?.path
   if (recordPath && project.conversations[0]) {
     const database = new DatabaseSync(recordPath)
