@@ -207,6 +207,19 @@ async function stopApp(child, stream, waitedMs = 1500) {
   try { stream?.end() } catch { /* ignore */ }
 }
 
+/** 轮询等待目标按钮出现在 UIA 树中，避免 WebView2 内容尚未渲染时按压落空。 */
+async function waitForButton(uiaBin, outputDir, title, attempts = 30) {
+  for (let i = 0; i < attempts; i += 1) {
+    const tree = uia(uiaBin, outputDir, 'ax-tree', '.wait-button-tree.json')
+    const buttons = Array.isArray(tree?.axTree)
+      ? tree.axTree.filter((n) => n.role === 'ControlType.Button').map((n) => String(n.title ?? ''))
+      : []
+    if (buttons.includes(title)) return true
+    await sleep(600)
+  }
+  return false
+}
+
 /** NT-WIN-003：修改真实源文件后，在真实 app 上 UIA 点「继续处理」，读回生产后端拒绝结果。 */
 async function collectSourceChange({ outputDir, uiaBin, captureBin, jobsRoot, jobId, sourcePath, sourceFile, fingerprintBefore, observation, log }) {
   const pausedJobDir = join(jobsRoot, `${jobId}-paused`)
@@ -222,6 +235,8 @@ async function collectSourceChange({ outputDir, uiaBin, captureBin, jobsRoot, jo
     result.fingerprintAfter = sha256(changed)
     log(`sourceChanged doc=${sourceFile.relativePath} ${fingerprintBefore.slice(0, 8)}->${result.fingerprintAfter.slice(0, 8)}`)
 
+    const resumeAppeared = await waitForButton(uiaBin, outputDir, '继续处理')
+    log(`resumeButtonAppeared=${resumeAppeared}`)
     const press = uia(uiaBin, outputDir, 'press-ax', 'press-resume-source-change.json', ['role', '*', 'title', '继续处理'])
     result.resumePressed = Boolean(press?.pressAx?.ok)
     log(`resumePressed=${result.resumePressed}`)
@@ -414,9 +429,11 @@ async function main() {
       const conv = project.conversations[0]
       if (conv) {
         const buttonTitle = `${conv.title} ${conv.messageCount} 条消息`
+        const appeared = await waitForButton(UIA_HELPER, outputDir, buttonTitle)
+        log(`openConversation buttonAppeared=${appeared} title=${buttonTitle}`)
         const opened = uia(UIA_HELPER, outputDir, 'press-ax', 'press-conversation.json', ['role', '*', 'title', buttonTitle])
-        log(`openConversation title=${buttonTitle} ok=${Boolean(opened?.pressAx?.ok)}`)
-        await sleep(1600)
+        log(`openConversation ok=${Boolean(opened?.pressAx?.ok)}`)
+        await sleep(2000)
       }
       const shot0 = capture(outputDir, CAPTURE_SCRIPT, '00-conversation-open.png')
       if (shot0) observation.screenshots.push(shot0)
@@ -436,6 +453,7 @@ async function main() {
         .map((n) => n.expanded === 'Expanded')
       observation.segmentExpanded = expanded.length > 0 ? expanded : null
 
+      await waitForButton(UIA_HELPER, outputDir, '收起全部过程')
       const collapse = uia(UIA_HELPER, outputDir, 'press-ax', 'press-collapse.json', ['role', '*', 'title', '收起全部过程'])
       observation.collapsePress = { ok: Boolean(collapse?.pressAx?.ok) }
       await sleep(500)
@@ -469,8 +487,9 @@ async function main() {
         const conv = project.conversations[0]
         if (conv) {
           const buttonTitle = `${conv.title} ${conv.messageCount} 条消息`
+          await waitForButton(UIA_HELPER, outputDir, buttonTitle)
           uia(UIA_HELPER, outputDir, 'press-ax', 'press-conversation-after-restart.json', ['role', '*', 'title', buttonTitle])
-          await sleep(1500)
+          await sleep(2000)
         }
         const textsAfter = uia(UIA_HELPER, outputDir, 'texts', 'texts-after-restart.json', ['limit', '500'])
         const treeAfter = uia(UIA_HELPER, outputDir, 'ax-tree', 'ax-tree-after-restart.json')
