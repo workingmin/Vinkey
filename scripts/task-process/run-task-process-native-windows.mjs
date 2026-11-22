@@ -222,7 +222,7 @@ async function collectSourceChange({ outputDir, uiaBin, captureBin, jobsRoot, jo
     result.fingerprintAfter = sha256(changed)
     log(`sourceChanged doc=${sourceFile.relativePath} ${fingerprintBefore.slice(0, 8)}->${result.fingerprintAfter.slice(0, 8)}`)
 
-    const press = uia(uiaBin, outputDir, 'press-ax', 'press-resume-source-change.json', ['-Arg1', '*', '-Arg2', '继续处理'])
+    const press = uia(uiaBin, outputDir, 'press-ax', 'press-resume-source-change.json', ['role', '*', 'title', '继续处理'])
     result.resumePressed = Boolean(press?.pressAx?.ok)
     log(`resumePressed=${result.resumePressed}`)
     if (!result.resumePressed) observation.errors.push('NT-WIN-003: 未读到「继续处理」按钮的 UIA 按压回执')
@@ -246,7 +246,7 @@ async function collectSourceChange({ outputDir, uiaBin, captureBin, jobsRoot, jo
     result.jobJsonCreated = existsSync(join(pausedJobDir, 'job.json'))
     result.workerOutputCreated = existsSync(join(pausedJobDir, 'worker-output.json'))
 
-    const texts = uia(uiaBin, outputDir, 'texts', 'texts-source-change.json', ['-Arg1', '500'])
+    const texts = uia(uiaBin, outputDir, 'texts', 'texts-source-change.json', ['limit', '500'])
     const tree = uia(uiaBin, outputDir, 'ax-tree', 'ax-tree-source-change.json')
     const visible = [
       ...(Array.isArray(texts?.texts) ? texts.texts.map((t) => String(t)) : []),
@@ -414,14 +414,14 @@ async function main() {
       const conv = project.conversations[0]
       if (conv) {
         const buttonTitle = `${conv.title} ${conv.messageCount} 条消息`
-        const opened = uia(UIA_HELPER, outputDir, 'press-ax', 'press-conversation.json', ['-Arg1', '*', '-Arg2', buttonTitle])
+        const opened = uia(UIA_HELPER, outputDir, 'press-ax', 'press-conversation.json', ['role', '*', 'title', buttonTitle])
         log(`openConversation title=${buttonTitle} ok=${Boolean(opened?.pressAx?.ok)}`)
         await sleep(1600)
       }
       const shot0 = capture(outputDir, CAPTURE_SCRIPT, '00-conversation-open.png')
       if (shot0) observation.screenshots.push(shot0)
 
-      const texts = uia(UIA_HELPER, outputDir, 'texts', 'texts-initial.json', ['-Arg1', '500'])
+      const texts = uia(UIA_HELPER, outputDir, 'texts', 'texts-initial.json', ['limit', '500'])
       observation.axTexts = Array.isArray(texts?.texts) ? texts.texts.map((t) => String(t)) : []
       observation.axTextCount = observation.axTexts.length
       const tree = uia(UIA_HELPER, outputDir, 'ax-tree', 'ax-tree-initial.json')
@@ -436,12 +436,12 @@ async function main() {
         .map((n) => n.expanded === 'Expanded')
       observation.segmentExpanded = expanded.length > 0 ? expanded : null
 
-      const collapse = uia(UIA_HELPER, outputDir, 'press-ax', 'press-collapse.json', ['-Arg1', '*', '-Arg2', '收起全部过程'])
+      const collapse = uia(UIA_HELPER, outputDir, 'press-ax', 'press-collapse.json', ['role', '*', 'title', '收起全部过程'])
       observation.collapsePress = { ok: Boolean(collapse?.pressAx?.ok) }
       await sleep(500)
       const shot2 = capture(outputDir, CAPTURE_SCRIPT, '02-collapsed.png')
       if (shot2) observation.screenshots.push(shot2)
-      const expand = uia(UIA_HELPER, outputDir, 'press-ax', 'press-expand.json', ['-Arg1', '*', '-Arg2', '展开全部过程'])
+      const expand = uia(UIA_HELPER, outputDir, 'press-ax', 'press-expand.json', ['role', '*', 'title', '展开全部过程'])
       observation.expandPress = { ok: Boolean(expand?.pressAx?.ok) }
       await sleep(500)
       const shot3 = capture(outputDir, CAPTURE_SCRIPT, '03-expanded.png')
@@ -469,10 +469,10 @@ async function main() {
         const conv = project.conversations[0]
         if (conv) {
           const buttonTitle = `${conv.title} ${conv.messageCount} 条消息`
-          uia(UIA_HELPER, outputDir, 'press-ax', 'press-conversation-after-restart.json', ['-Arg1', '*', '-Arg2', buttonTitle])
+          uia(UIA_HELPER, outputDir, 'press-ax', 'press-conversation-after-restart.json', ['role', '*', 'title', buttonTitle])
           await sleep(1500)
         }
-        const textsAfter = uia(UIA_HELPER, outputDir, 'texts', 'texts-after-restart.json', ['-Arg1', '500'])
+        const textsAfter = uia(UIA_HELPER, outputDir, 'texts', 'texts-after-restart.json', ['limit', '500'])
         const treeAfter = uia(UIA_HELPER, outputDir, 'ax-tree', 'ax-tree-after-restart.json')
         const afterTexts = Array.isArray(textsAfter?.texts) ? textsAfter.texts.map((t) => String(t)) : []
         const afterButtons = (Array.isArray(treeAfter?.axTree) ? treeAfter.axTree : [])
