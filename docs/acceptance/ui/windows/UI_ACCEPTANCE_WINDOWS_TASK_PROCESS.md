@@ -147,7 +147,7 @@ A/B/C 三个阶段均已落地（提交 `97c4e18`、`6f6990e`、`a30c80f`）：
 - 批次级 `conclusion=BLOCKED` 由 9 个未回填的 `TASK-UI-*` 构成，与专项结论不在同一层级。人工/主观项（含桌面 UI 发起的端到端材料、暂停/恢复、停止确认、折叠/自动跟随、产物预览、重启恢复、CP-35 文案易理解性、失败重试、窄栏/键盘）统一归 [总计划 §8.5](../UI_ACCEPTANCE_PLAN.md#85-人工复核统一批次自动化验收完成后统一处理) 人工复核统一批次，不写成 `PASS`、不删除、不放宽客观断言。
 - 证据边界如实标注：本轮客观证据来自 CLI 驱动 + 真实 Ollama + 生产 pipeline，非桌面 UI 发起；不证明桌面交互行为，也不冒充已装安装包内嵌 gitSha 的证明。
 - 暂停安全点回执未实现：只能记录 CP-42 降级结果，不得写 `CP-05`/`已暂停`。
-- Windows 桌面原生复验 `NT-WIN-001`~`005` 的客观断言已由 Windows UI Automation 桌面原生 runner 逐项判定并通过（最新批次 `artifacts/task-process-native/20261122T222109Z-win32`，5/5 PASS、`specialityPass=true`、provenance=PASS、SHA256SUMS 校验通过；`NT-WIN-003` 由生产后端真实复核源指纹并返回 `worker.compatibility_mismatch` + CP-35 文案 + 无检查点复用）。观感/易理解性仍归 §8.5，不写成 PASS。
+- Windows 桌面原生复验 `NT-WIN-001`~`005` 的客观断言已由 Windows UI Automation 桌面原生 runner 逐项判定并通过（最新批次 `artifacts/task-process-native/20261122T222418Z-win32`，5/5 PASS、`specialityPass=true`、provenance=PASS、SHA256SUMS 校验通过；`NT-WIN-003` 由生产后端真实复核源指纹并返回 `worker.compatibility_mismatch` + CP-35 文案 + 无检查点复用）。观感/易理解性仍归 §8.5，不写成 PASS。
 - 整体仍不宣称跨平台发布通过 / 整体发布通过（人工复核统一后置；macOS 与 Windows 各自为独立单平台结论）。
 
 ## 7. 证据与归口
