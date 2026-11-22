@@ -194,12 +194,12 @@ describe('task process acceptance CLI', () => {
     try {
       const options = parseArguments(['--workspace', '/tmp/ws', '--job-id', 'job-1', '--manual', '/tmp/m.json', '--output', '/tmp/out', '--json', '--timeout-ms', '3000'])
       expect(options).toMatchObject({
-        dbPath: '/tmp/from-env.sqlite3',
+        dbPath: resolve('/tmp/from-env.sqlite3'),
         profileId: 'router',
-        workspace: '/tmp/ws',
+        workspace: resolve('/tmp/ws'),
         jobId: 'job-1',
-        manualFile: '/tmp/m.json',
-        outputDir: '/tmp/out',
+        manualFile: resolve('/tmp/m.json'),
+        outputDir: resolve('/tmp/out'),
         json: true,
         timeoutMs: 3000,
       })
