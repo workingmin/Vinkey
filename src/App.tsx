@@ -193,8 +193,6 @@ export function TitleBar({ onPageChange, onOpenWorkspace, onNewConversation, onR
   onShowRuntimeDiagnostics: () => void
 }) {
   const workspace = useAppStore((state) => state.workspace)
-  const activeModelId = useAppStore((state) => state.activeModelId)
-  const modelProfiles = useAppStore((state) => state.modelProfiles)
   const theme = useAppStore((state) => state.theme)
   const setTheme = useAppStore((state) => state.setTheme)
   const setError = useAppStore((state) => state.setError)
@@ -204,7 +202,6 @@ export function TitleBar({ onPageChange, onOpenWorkspace, onNewConversation, onR
   const [maximized, setMaximized] = useState(false)
   const editTargetRef = useRef<EditCommandTarget | null>(null)
   const triggerRefs = useRef<Partial<Record<TitleBarMenuId, HTMLButtonElement | null>>>({})
-  const activeModel = modelProfiles.find((profile) => profile.id === activeModelId)
   const isMac = isMacPlatform()
   const mod = isMac ? '⌘' : 'Ctrl'
 
@@ -328,7 +325,6 @@ export function TitleBar({ onPageChange, onOpenWorkspace, onNewConversation, onR
 
   if (isMac) return null
   return <header className="title-bar" data-tauri-drag-region onDoubleClick={() => void windowAction('toggle')}>
-    <div className="title-bar-brand" data-tauri-drag-region><span className="title-bar-mark">V</span><strong>Vinkey</strong><span className="title-bar-context">{workspace?.name ?? '本地工作台'}{activeModel ? ` · ${activeModel.name}` : ''}</span></div>
     <nav className="app-menus" aria-label="应用菜单" data-menu-contract={TITLE_BAR_MENU_CONTRACT_VERSION} onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
       {menus.map((menu) => <div className="app-menu" key={menu.id} data-menu-id={menu.id}>
         <button
@@ -359,10 +355,10 @@ export function TitleBar({ onPageChange, onOpenWorkspace, onNewConversation, onR
       </div>)}
     </nav>
     <div className="title-bar-spacer" data-tauri-drag-region />
-    <div className="window-controls" onClick={(event) => event.stopPropagation()}>
-      <button aria-label="最小化窗口" title="最小化" onClick={() => void windowAction('minimize')}><Minus /></button>
-      <button aria-label={maximized ? '还原窗口' : '最大化窗口'} title={maximized ? '还原' : '最大化'} onClick={() => void windowAction('toggle')}>{maximized ? <Minimize2 /> : <Maximize2 />}</button>
-      <button className="close-window" aria-label="关闭窗口" title="关闭" onClick={() => void windowAction('close')}><X /></button>
+    <div className="window-controls" onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
+      <button aria-label="最小化窗口" title="最小化" onMouseDown={(event) => event.preventDefault()} onClick={() => void windowAction('minimize')}><Minus /></button>
+      <button aria-label={maximized ? '还原窗口' : '最大化窗口'} title={maximized ? '还原' : '最大化'} onMouseDown={(event) => event.preventDefault()} onClick={() => void windowAction('toggle')}>{maximized ? <Minimize2 /> : <Maximize2 />}</button>
+      <button className="close-window" aria-label="关闭窗口" title="关闭" onMouseDown={(event) => event.preventDefault()} onClick={() => void windowAction('close')}><X /></button>
     </div>
   </header>
 }
