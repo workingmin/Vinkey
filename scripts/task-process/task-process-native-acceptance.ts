@@ -130,14 +130,14 @@ function observedBlocked(reason: string): NativeCase {
  * 严格客观判定：只有观测到信号且与目标事实一致才 PASS；
  * 观测到信号但与事实矛盾才 FAIL；信号不可得一律 BLOCKED，绝不虚标 PASS。
  */
-export function evaluateObjectiveCases(observation: Observation): NativeCase[] {
+export function evaluateObjectiveCases(observation: Observation, platformTaskPrefix = 'NT-MAC'): NativeCase[] {
   const cases: NativeCase[] = []
   const shots = observation.screenshots
 
   // NT-MAC-001：执行中事件记录 —— 状态栏与 Worker 状态一致、事件顺序与段标签读回。
   {
     const base = {
-      caseId: 'TASK-NAT-001', platformTask: 'NT-MAC-001',
+      caseId: 'TASK-NAT-001', platformTask: `${platformTaskPrefix}-001`,
       title: '执行中事件记录（状态栏一致性 / 事件顺序 / 段标签）',
       category: 'objective' as const,
       evidence: shots,
@@ -171,7 +171,7 @@ export function evaluateObjectiveCases(observation: Observation): NativeCase[] {
   // 「恢复后出现新推进段且保留暂停前记录」需要真实运行中任务，归证据包与 §8.5。
   {
     const base = {
-      caseId: 'TASK-NAT-002', platformTask: 'NT-MAC-002',
+      caseId: 'TASK-NAT-002', platformTask: `${platformTaskPrefix}-002`,
       title: '暂停/恢复控件映射与 CP-42 文案（客观部分）',
       category: 'objective' as const,
       evidence: shots,
@@ -200,7 +200,7 @@ export function evaluateObjectiveCases(observation: Observation): NativeCase[] {
   // 「修改源文件 → 真实 app 上按继续处理 → 后端复核指纹并拒绝」由生产代码真实触发。
   {
     const base = {
-      caseId: 'TASK-NAT-003', platformTask: 'NT-MAC-003',
+      caseId: 'TASK-NAT-003', platformTask: `${platformTaskPrefix}-003`,
       title: '源变化拒绝恢复（真实 app 恢复读回）',
       category: 'objective' as const,
       evidence: shots,
@@ -246,7 +246,7 @@ export function evaluateObjectiveCases(observation: Observation): NativeCase[] {
   // NT-MAC-004：两层折叠保持 —— 展开/收起按钮存在、按压生效、段切换按钮展开态翻转。
   {
     const base = {
-      caseId: 'TASK-NAT-004', platformTask: 'NT-MAC-004',
+      caseId: 'TASK-NAT-004', platformTask: `${platformTaskPrefix}-004`,
       title: '两层折叠（批量按压与展开态读回）',
       category: 'objective' as const,
       evidence: shots,
@@ -271,7 +271,7 @@ export function evaluateObjectiveCases(observation: Observation): NativeCase[] {
   // NT-MAC-005：重启恢复历史 —— 同一 fixture 数据目录重启后，真实作业的状态栏与首条事件仍可见。
   {
     const base = {
-      caseId: 'TASK-NAT-005', platformTask: 'NT-MAC-005',
+      caseId: 'TASK-NAT-005', platformTask: `${platformTaskPrefix}-005`,
       title: '重启恢复历史（重启前后事件与终态对照）',
       category: 'objective' as const,
       evidence: shots,
@@ -309,14 +309,14 @@ export interface EvidenceItem {
 }
 
 /** 主观/观感子项：只生成证据包，保留 BLOCKED，不在本套件内写成 PASS。 */
-export function buildEvidencePackage(observation: Observation): EvidenceItem[] {
+export function buildEvidencePackage(observation: Observation, platformTaskPrefix = 'NT-MAC'): EvidenceItem[] {
   const shots = observation.screenshots
   return [
-    { platformTask: 'NT-MAC-001', targetCaseId: 'TASK-UI-004', title: '状态栏常显与视觉一致性（观感）', reason: '观感判断需人，归 §8.5', evidence: shots, status: 'BLOCKED' },
-    { platformTask: 'NT-MAC-002', targetCaseId: 'TASK-UI-001', title: '恢复后出现新推进段且不覆盖暂停前记录', reason: '需真实运行中任务，归 §8.5', evidence: shots, status: 'BLOCKED' },
-    { platformTask: 'NT-MAC-003', targetCaseId: 'TASK-UI-006', title: '源变化提示文案「原文已变化…」易理解性', reason: '文案易理解性属主观判断（DEFER-UI-006），归 §8.5', evidence: shots, status: 'BLOCKED' },
-    { platformTask: 'NT-MAC-004', targetCaseId: 'TASK-UI-003', title: '两层折叠交互手感 / 自动跟随观感', reason: '观感判断需人，归 §8.5', evidence: shots, status: 'BLOCKED' },
-    { platformTask: 'NT-MAC-005', targetCaseId: 'TASK-UI-008', title: '重启后会话完整性的目视确认', reason: '目视确认需人，归 §8.5', evidence: shots, status: 'BLOCKED' },
+    { platformTask: `${platformTaskPrefix}-001`, targetCaseId: 'TASK-UI-004', title: '状态栏常显与视觉一致性（观感）', reason: '观感判断需人，归 §8.5', evidence: shots, status: 'BLOCKED' },
+    { platformTask: `${platformTaskPrefix}-002`, targetCaseId: 'TASK-UI-001', title: '恢复后出现新推进段且不覆盖暂停前记录', reason: '需真实运行中任务，归 §8.5', evidence: shots, status: 'BLOCKED' },
+    { platformTask: `${platformTaskPrefix}-003`, targetCaseId: 'TASK-UI-006', title: '源变化提示文案「原文已变化…」易理解性', reason: '文案易理解性属主观判断（DEFER-UI-006），归 §8.5', evidence: shots, status: 'BLOCKED' },
+    { platformTask: `${platformTaskPrefix}-004`, targetCaseId: 'TASK-UI-003', title: '两层折叠交互手感 / 自动跟随观感', reason: '观感判断需人，归 §8.5', evidence: shots, status: 'BLOCKED' },
+    { platformTask: `${platformTaskPrefix}-005`, targetCaseId: 'TASK-UI-008', title: '重启后会话完整性的目视确认', reason: '目视确认需人，归 §8.5', evidence: shots, status: 'BLOCKED' },
   ]
 }
 
@@ -337,6 +337,14 @@ export interface NativeResultInput {
   outputDir: string
   objectiveCases?: NativeCase[]
   evidencePackage?: ReturnType<typeof buildEvidencePackage>
+  /** 默认 macos；Windows runner 传 win32。 */
+  platform?: 'macos' | 'win32'
+  /** 默认 NT-MAC；Windows runner 传 NT-WIN。 */
+  platformTaskPrefix?: string
+  /** 默认 NT-MAC-001..005；Windows runner 传 NT-WIN-001..005。 */
+  platformTasks?: string[]
+  /** 证据边界说明；缺省时用 macOS 文案。 */
+  evidenceBoundaryText?: Partial<Record<'fixture' | 'interaction' | 'screenshots' | 'events' | 'sourceChange' | 'notProven', string>>
 }
 
 export interface NativeResultOutput {
@@ -352,8 +360,10 @@ export function sha256OfFile(file: string): string {
 }
 
 export function assembleNativeResult(input: NativeResultInput): NativeResultOutput {
-  const objective = input.objectiveCases ?? evaluateObjectiveCases(input.observation)
-  const evidence = input.evidencePackage ?? buildEvidencePackage(input.observation)
+  const platform = input.platform ?? 'macos'
+  const platformTaskPrefix = input.platformTaskPrefix ?? 'NT-MAC'
+  const objective = input.objectiveCases ?? evaluateObjectiveCases(input.observation, platformTaskPrefix)
+  const evidence = input.evidencePackage ?? buildEvidencePackage(input.observation, platformTaskPrefix)
   const summary = summarizeCases(objective)
   const provenanceOk = Boolean(input.repository.gitSha) && !input.repository.dirty
   const allPass = summary.passed === summary.caseCount && summary.failed === 0 && summary.blocked === 0
@@ -364,6 +374,7 @@ export function assembleNativeResult(input: NativeResultInput): NativeResultOutp
     : objective
         .filter((c) => c.status !== 'PASS')
         .map((c) => ({ caseId: c.caseId, platformTask: c.platformTask, status: c.status, reason: c.blockedReason ?? c.detail ?? '客观断言未通过' }))
+  const siblingKey = platform === 'win32' ? 'macOSPlatform' : 'windowsPlatform'
   const decision = {
     specialityPass,
     overallConclusion: specialityPass ? '专项通过' : summary.failed > 0 ? '不通过' : '未通过',
@@ -375,7 +386,9 @@ export function assembleNativeResult(input: NativeResultInput): NativeResultOutp
       note: '主观/观感/易理解性项只生成证据包，统一归 §8.5 人工复核，不计入 Alpha 客观范围结论，不写成 PASS、不删除。',
       items: evidence.map((e) => ({ platformTask: e.platformTask, targetCaseId: e.targetCaseId, title: e.title, status: e.status })),
     },
-    windowsPlatform: 'NOT_EXECUTED',
+    // 默认（macOS）保留 windowsPlatform='NOT_EXECUTED' 字段，兼容既有测试；
+    // Windows runner 传 platform='win32'，此处改为 macOSPlatform 独立结论字段。
+    [siblingKey]: platform === 'win32' ? 'INDEPENDENT_SPECIALITY' : 'NOT_EXECUTED',
   }
 
   mkdirSync(input.outputDir, { recursive: true })
@@ -388,18 +401,18 @@ export function assembleNativeResult(input: NativeResultInput): NativeResultOutp
     acceptance: { id: ACCEPTANCE_ID, domainId: DOMAIN_ID, gate: GATE },
     suite: { id: SUITE_ID, version: SUITE_VERSION },
     scope: {
-      platform: 'macos',
-      platformTasks: ['NT-MAC-001', 'NT-MAC-002', 'NT-MAC-003', 'NT-MAC-004', 'NT-MAC-005'],
+      platform,
+      platformTasks: input.platformTasks ?? ['NT-MAC-001', 'NT-MAC-002', 'NT-MAC-003', 'NT-MAC-004', 'NT-MAC-005'],
       objectiveOnly: true,
       note: '只判定可机器判定的客观子断言；主观/观感与目标平台人工材料见 evidencePackage 与 §8.5，不改写 UI-ACC-LOGS-001。',
     },
     evidenceBoundary: {
-      fixture: '真实 Tauri app + 隔离数据目录 + fixture 项目；暂停态为播种前置条件',
-      interaction: 'AX 原生自动化（menu-ax-helper.swift）',
-      screenshots: 'CoreGraphics 采集',
-      events: '真实 Ollama CLI 驱动作业产物，非新造事件',
-      sourceChange: '修改真实源文件后，在真实 app 中 AX 点击「继续处理」，由生产后端复核指纹并拒绝；脚本只读回结果',
-      notProven: '非真实用户发起的初始端到端任务；暂停恢复后的新段推进、观感与易理解性仍归 §8.5',
+      fixture: input.evidenceBoundaryText?.fixture ?? '真实 Tauri app + 隔离数据目录 + fixture 项目；暂停态为播种前置条件',
+      interaction: input.evidenceBoundaryText?.interaction ?? 'AX 原生自动化（menu-ax-helper.swift）',
+      screenshots: input.evidenceBoundaryText?.screenshots ?? 'CoreGraphics 采集',
+      events: input.evidenceBoundaryText?.events ?? '真实 Ollama CLI 驱动作业产物，非新造事件',
+      sourceChange: input.evidenceBoundaryText?.sourceChange ?? '修改真实源文件后，在真实 app 中 AX 点击「继续处理」，由生产后端复核指纹并拒绝；脚本只读回结果',
+      notProven: input.evidenceBoundaryText?.notProven ?? '非真实用户发起的初始端到端任务；暂停恢复后的新段推进、观感与易理解性仍归 §8.5',
     },
     repository: input.repository,
     application: input.application,
