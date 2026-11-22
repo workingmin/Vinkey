@@ -135,14 +135,30 @@ function vinkeyRunning() {
   } catch { return false }
 }
 
-/** 调用 UIA helper；把 JSON 结果写入 states/ 并返回解析对象。 */
+/** 调用 UIA helper；把 JSON 结果写入 states/ 并返回解析对象。
+ *  非 ASCII 参数（会话/按钮中文标题）经 UTF-8 ArgFile 传递，避免 PS 5.1 GBK 命令行污染。 */
 function uia(helperBin, outputDir, command, outName, args = [], timeout = 30000) {
   const outPath = join(outputDir, 'states', outName)
   mkdirSync(dirname(outPath), { recursive: true })
-  const result = spawnSync('powershell', [
+  let binary = []
+  for (let i = 0; i < args.length; i += 2) {
+    const key = args[i].replace(/^-/, '').toLowerCase()
+    const value = args[i + 1]
+    binary.push([key, value])
+  }
+  let argFile = null
+  if (binary.length > 0) {
+    const argObj = {}
+    for (const [key, value] of binary) argObj[key] = value
+    argFile = join(outputDir, 'states', `.args-${outName.replace(/\.json$/u, '')}.json`)
+    writeFileSync(argFile, JSON.stringify(argObj), 'utf8')
+  }
+  const cmd = [
     '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', helperBin,
-    '-Command', command, '-OutJson', outPath, ...args,
-  ], { encoding: 'utf8', timeout })
+    '-Command', command, '-OutJson', outPath,
+  ]
+  if (argFile) cmd.push('-ArgFile', argFile)
+  const result = spawnSync('powershell', cmd, { encoding: 'utf8', timeout })
   try { return JSON.parse(readFileSync(outPath, 'utf8')) } catch {
     return { ok: false, command, exit: result.status, stderr: String(result.stderr || '').slice(0, 200) }
   }

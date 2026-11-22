@@ -16,8 +16,19 @@ param(
     [Parameter(Mandatory=$true)][string]$Command,
     [string]$OutJson = "",
     [string]$Arg1 = "",
-    [string]$Arg2 = ""
+    [string]$Arg2 = "",
+    [string]$ArgFile = ""
 )
+
+# UTF-8 argument file avoids PowerShell 5.1 GBK command-line mangling of
+# non-ASCII titles. Expected JSON: {"role":"*","title":"..."} or {"limit":500}.
+$fileArgs = $null
+if ($ArgFile -and (Test-Path $ArgFile)) {
+    try {
+        $fileText = [System.IO.File]::ReadAllText($ArgFile, (New-Object System.Text.UTF8Encoding($false)))
+        $fileArgs = $fileText | ConvertFrom-Json
+    } catch { $fileArgs = $null }
+}
 
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName UIAutomationClient
@@ -77,7 +88,8 @@ $payload = [ordered]@{ ok = $false; platform = 'win32'; command = $Command; proc
 switch ($Command) {
     'texts' {
         $limit = 500
-        if ($Arg1 -match '^\d+$') { $limit = [int]$Arg1 }
+        if ($null -ne $fileArgs -and $fileArgs.limit) { $limit = [int]$fileArgs.limit }
+        elseif ($Arg1 -match '^\d+$') { $limit = [int]$Arg1 }
         $els = Get-AllElements $windows
         $texts = New-Object System.Collections.ArrayList
         foreach ($el in $els) {
@@ -113,6 +125,10 @@ switch ($Command) {
     'press-ax' {
         $wantedRole = $Arg1
         $wantedTitle = $Arg2
+        if ($null -ne $fileArgs -and $fileArgs.title) {
+            $wantedRole = if ($fileArgs.role) { [string]$fileArgs.role } else { '*' }
+            $wantedTitle = [string]$fileArgs.title
+        }
         if ([string]::IsNullOrEmpty($wantedTitle)) {
             $payload.error = 'usage: press-ax <out> <role|*> <exact-title>'
         } else {
