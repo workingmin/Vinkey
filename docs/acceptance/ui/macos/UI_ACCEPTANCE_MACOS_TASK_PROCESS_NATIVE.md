@@ -9,7 +9,7 @@
 - 桌面原生 runner：`npm run test:task-process-native-mac -- --driver-workspace <WS>`（`scripts/task-process/`，真实 Tauri app + 隔离 fixture + AX 原生自动化，判定可机器判定的客观子断言；套件 `UI-ACC-TASK-NATIVE-001`）
 - 平台专项报告：[长任务/日志中心专项验收（macOS）](./UI_ACCEPTANCE_MACOS_TASK_PROCESS.md)
 - 回填模板：[长任务/日志中心回填模板（macOS）](./UI_ACCEPTANCE_MACOS_TASK_PROCESS_RUN_TEMPLATE.md)
-- 平台状态：`NT-MAC-001`~`005` 的客观断言已由桌面原生 runner 采集并判定（见 `UI-ACC-TASK-NATIVE-001` 最新批次，`decision.specialityPass=true`）；源变化拒绝恢复由真实 app 恢复读回，观感/易理解性与新段推进仍归 [总计划 §8.5](../UI_ACCEPTANCE_PLAN.md#85-人工复核统一批次自动化验收完成后统一处理)；`TASK-CHK-*` 客观机器证据已在 [专项报告](./UI_ACCEPTANCE_MACOS_TASK_PROCESS.md) 定稿（证据边界见共享合同首部）
+- 平台状态：`NT-MAC-001`~`005` 的客观断言已由桌面原生 runner 采集并判定（`UI-ACC-TASK-NATIVE-001` 最新批次，`decision.specialityPass=true`，专项通过（Alpha 客观范围））；源变化拒绝恢复由真实 app 恢复读回，观感/易理解性与新段推进仍归 [总计划 §8.5](../UI_ACCEPTANCE_PLAN.md#85-人工复核统一批次自动化验收完成后统一处理)；`TASK-CHK-*` 客观机器证据已在 [专项报告](./UI_ACCEPTANCE_MACOS_TASK_PROCESS.md) 定稿（证据边界见共享合同首部）
 - 更新日期：`2026-11-16`
 
 ## 1. 平台前置条件

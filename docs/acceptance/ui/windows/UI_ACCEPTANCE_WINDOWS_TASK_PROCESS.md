@@ -67,7 +67,7 @@ A/B/C 三个阶段均已落地（提交 `97c4e18`、`6f6990e`、`a30c80f`）：
 | `TASK-CHK-006` 任务终态与产物快照 | completed 任务：`worker-output.json` 存在、`pipelineCompleted=true`、内容非空；非 completed 任务 BLOCKED | `PASS` |
 | `TASK-CHK-007` 结果与 SHA-256 清单写入 | `result.json` 与 `SHA256SUMS` 成功写入且逐文件重算全部校验通过 | `PASS` |
 
-机器证据概要：真实任务 `cli-ollama-1795384464201` 终态 `completed`（终态来源 `job.json`）、事件数 17、真实模型调用 4 次、`worker-output.json`/`analysis.md`/`evidence.json`/checkpoint 清单齐备；事件 sequence 自 1 连续递增，已完成段带 `endedAt`。证据批次见 §7。
+机器证据概要：真实任务终态 `completed`（终态来源 `job.json`）、`pipelineCompleted=true`、`worker-output.json` 内容非空、真实模型调用次数大于零（次数以 `driver-summary.json` / `result.json` 为准，随输出重试浮动）；事件 sequence 自 1 连续递增，已完成段均带 `endedAt`；checkpoint 清单、证据结果与分析正文齐备。证据批次见 §7。
 
 ### 3.2 人工 UI 用例（统一归 §8.5，待测试人员回填）
 
@@ -147,16 +147,16 @@ A/B/C 三个阶段均已落地（提交 `97c4e18`、`6f6990e`、`a30c80f`）：
 - 批次级 `conclusion=BLOCKED` 由 9 个未回填的 `TASK-UI-*` 构成，与专项结论不在同一层级。人工/主观项（含桌面 UI 发起的端到端材料、暂停/恢复、停止确认、折叠/自动跟随、产物预览、重启恢复、CP-35 文案易理解性、失败重试、窄栏/键盘）统一归 [总计划 §8.5](../UI_ACCEPTANCE_PLAN.md#85-人工复核统一批次自动化验收完成后统一处理) 人工复核统一批次，不写成 `PASS`、不删除、不放宽客观断言。
 - 证据边界如实标注：本轮客观证据来自 CLI 驱动 + 真实 Ollama + 生产 pipeline，非桌面 UI 发起；不证明桌面交互行为，也不冒充已装安装包内嵌 gitSha 的证明。
 - 暂停安全点回执未实现：只能记录 CP-42 降级结果，不得写 `CP-05`/`已暂停`。
-- Windows 桌面原生复验 `NT-WIN-001`~`005` 的客观断言已由 Windows UI Automation 桌面原生 runner 逐项判定并通过（最新批次 `artifacts/task-process-native/20261122T222418Z-win32`，5/5 PASS、`specialityPass=true`、provenance=PASS、SHA256SUMS 校验通过；`NT-WIN-003` 由生产后端真实复核源指纹并返回 `worker.compatibility_mismatch` + CP-35 文案 + 无检查点复用）。观感/易理解性仍归 §8.5，不写成 PASS。
+- Windows 桌面原生复验 `NT-WIN-001`~`005` 的客观断言已由 Windows UI Automation 桌面原生 runner 逐项读回并判定，达成专项通过（Alpha 客观范围）（最新批次 `artifacts/task-process-native/20261122T222418Z-win32`，`decision.specialityPass=true`、provenance=PASS、SHA256SUMS 逐文件重算全部校验通过；`NT-WIN-003` 由生产后端真实复核源指纹并返回 `worker.compatibility_mismatch` + CP-35 文案 + 无检查点复用）。观感/易理解性仍归 §8.5，不写成 PASS。
 - 整体仍不宣称跨平台发布通过 / 整体发布通过（人工复核统一后置；macOS 与 Windows 各自为独立单平台结论）。
 
 ## 7. 证据与归口
 
 | 证据 | 位置 | 说明 |
 | --- | --- | --- |
-| CLI 驱动摘要 | `artifacts/task-process-acceptance/driver-2026-11-22T21-54-22-537Z/driver-summary.json` | 真实模型配置、端点、协议、任务 ID、产物清单与证据边界；`status=completed`、事件 17、真实模型调用 4 |
+| CLI 驱动摘要 | `artifacts/task-process-acceptance/driver-2026-11-22T21-54-22-537Z/driver-summary.json` | 真实模型配置、端点、协议、任务 ID、产物清单与证据边界 |
 | 真实任务产物 | `artifacts/task-process-acceptance/workspace-ollama-cli-2026-11-22T21-54-22-537Z/.vinkey/analysis/jobs/cli-ollama-1795384464201/` | `job-start.json`、`job.json`、`worker-input.json`、`worker-events.json`、`worker-checkpoints.json`、`worker-output.json`、`analysis.md`、`evidence.json`、`manifest-*.json`、`task.json` |
-| 机器核查结果 | `artifacts/task-process-acceptance/run-2026-11-22T22-00-19-029Z/result.json` 与 `SHA256SUMS` | `UI-ACC-LOGS-001` 最终 HEAD `8664cbe` 定稿批次；7/7 机器用例 PASS、provenance=PASS |
+| 机器核查结果 | `artifacts/task-process-acceptance/run-2026-11-22T22-00-19-029Z/result.json` 与 `SHA256SUMS` | `UI-ACC-LOGS-001` 定稿批次；机器用例全部 `PASS`、`provenance=PASS`、`SHA256SUMS` 逐文件重算全部校验通过 |
 | 人工观察模板 | `artifacts/task-process-acceptance/manual-template-win.json` | 9 个 `TASK-UI-*` 回填模板，统一归 §8.5 |
 | 人工 UI 观察 | `--manual` 回填文件、截图/录屏索引 | 统一归 [总计划 §8.5](../UI_ACCEPTANCE_PLAN.md#85-人工复核统一批次自动化验收完成后统一处理)，待全部自动化验收脚本跑完后回填 |
-| 平台边界 | [Windows 原生复验清单](./UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_NATIVE.md) | `NT-WIN-001`~`005` 桌面原生客观断言专项通过（UIA runner，5/5；观感归 §8.5） |
+| 平台边界 | [Windows 原生复验清单](./UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_NATIVE.md) | 专项通过（Alpha 客观范围） |

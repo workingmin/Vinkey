@@ -7,7 +7,7 @@
 > - 证据边界：源码存在、组件测试、Playwright/浏览器 companion 与隔离 fixture 均不代替目标平台原生证据；未执行或阻断项必须逐项说明原因。各平台清单只写该平台自身结论与证据。
 > - CLI 驱动证据边界：`npm run test:task-process-ollama-driver` 通过 `include!` 复用生产 `worker_service.rs` pipeline 并调用真实 Ollama，产出 `TASK-CHK-*` 客观机器证据；该证据非桌面 UI 发起，不代替 `NT-MAC-*` / `NT-WIN-*` 的桌面执行，也不证明暂停/停止/折叠/自动跟随/产物预览/重启恢复等交互行为。`NT-MAC-003` 的源变化拒绝另由桌面原生 runner 修改真实源文件并在真实 app 中按「继续处理」，由生产后端复核指纹后写入失败状态与拒绝提示；初始任务由真实用户桌面 UI 发起的材料仍统一归 [§8.5 人工复核统一批次](./UI_ACCEPTANCE_PLAN.md#85-人工复核统一批次自动化验收完成后统一处理)。
 
-- 状态：macOS 侧 `TASK-CHK-*` 客观机器证据已定稿，`NT-MAC-001`~`005` 的客观断言均由桌面原生 runner 自动化判定（`UI-ACC-TASK-NATIVE-001`，套件结果 `decision.specialityPass=true`），观感/易理解性归 §8.5；Windows 侧 `TASK-CHK-*` 机器核查已定稿（7/7 PASS），`NT-WIN-001`~`005` 客观断言已由 Windows UI Automation 桌面原生 runner 逐项判定并达成 Alpha 客观范围专项通过（5/5 PASS，`decision.specialityPass=true`），观感/易理解性归 §8.5
+- 状态：macOS 侧 `TASK-CHK-*` 客观机器证据已定稿，`NT-MAC-001`~`005` 的客观断言均由桌面原生 runner 自动化判定，达成专项通过（Alpha 客观范围）（`UI-ACC-TASK-NATIVE-001`，`decision.specialityPass=true`）；Windows 侧 `TASK-CHK-*` 机器核查已定稿，`NT-WIN-001`~`005` 的客观断言均由 Windows UI Automation 桌面原生 runner 逐项判定，达成专项通过（Alpha 客观范围）（`UI-ACC-TASK-NATIVE-001`，`decision.specialityPass=true`）；两平台观感/易理解性归 §8.5
 - 归属门槛：`W4-TASK-E` / `D-TASK-LOG`；竞品证据 [`CF-006`](../../competitors/FEATURE_DECISIONS.md)
 - 验收脚本：`UI-ACC-LOGS-001`（`scripts/task-process/`）；前置驱动 `npm run test:task-process-ollama-driver`；桌面原生 runner `npm run test:task-process-native-mac` / `npm run test:task-process-native-win`（`UI-ACC-TASK-NATIVE-001`）
 - 更新日期：`2026-11-23`
@@ -28,8 +28,8 @@
 
 | 平台 | 平台任务 | 执行入口 | 证据归档 | 状态 | 平台清单 |
 | --- | --- | --- | --- | --- | --- |
-| macOS | `NT-MAC-001`~`NT-MAC-005` | `npm run test:task-process-ollama-driver` → `npm run test:task-process-acceptance:sh`；客观子断言 `npm run test:task-process-native-mac` | `task-process-<date>-macos-<profile-safe-name>/`；`artifacts/task-process-native/` | macOS 原生客观断言专项通过（Alpha 客观范围）；观感/易理解性归 §8.5；`TASK-CHK-*` 已定稿 | [长任务过程原生复验清单（macOS）](./macos/UI_ACCEPTANCE_MACOS_TASK_PROCESS_NATIVE.md) |
-| Windows | `NT-WIN-001`~`NT-WIN-005` | `npm run test:task-process-acceptance:win`；客观子断言 `npm run test:task-process-native-win` | `task-process-<date>-windows-<profile-safe-name>/`；`artifacts/task-process-native/` | `TASK-CHK-*` 定稿（7/7 PASS）；`NT-WIN-*` 桌面原生客观断言专项通过（5/5，Alpha 客观范围）；观感/易理解性归 §8.5 | [长任务过程原生复验清单（Windows）](./windows/UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_NATIVE.md) |
+| macOS | `NT-MAC-001`~`NT-MAC-005` | `npm run test:task-process-ollama-driver` → `npm run test:task-process-acceptance:sh`；客观子断言 `npm run test:task-process-native-mac` | `task-process-<date>-macos-<profile-safe-name>/`；`artifacts/task-process-native/` | 专项通过（Alpha 客观范围） | [长任务过程原生复验清单（macOS）](./macos/UI_ACCEPTANCE_MACOS_TASK_PROCESS_NATIVE.md) |
+| Windows | `NT-WIN-001`~`NT-WIN-005` | `npm run test:task-process-acceptance:win`；客观子断言 `npm run test:task-process-native-win` | `task-process-<date>-windows-<profile-safe-name>/`；`artifacts/task-process-native/` | 专项通过（Alpha 客观范围） | [长任务过程原生复验清单（Windows）](./windows/UI_ACCEPTANCE_WINDOWS_TASK_PROCESS_NATIVE.md) |
 
 ## 3. 前置条件与执行
 
